@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import (
@@ -247,9 +247,34 @@ def stats() -> dict[str, int]:
 def list_books(
     book_status: BookStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, max_length=200),
+    sort_by: Literal[
+        "title",
+        "author",
+        "physical",
+        "acquisition_date",
+        "reading_started_date",
+        "read_date",
+        "created_at",
+    ] = "title",
+    sort_order: Literal["asc", "desc"] = "asc",
+    bookcase_id: int | None = None,
+    shelf_id: int | None = None,
+    container_id: int | None = None,
+    date_field: Literal[
+        "acquisition_date",
+        "reading_started_date",
+        "read_date",
+    ] = "acquisition_date",
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> list[dict[str, Any]]:
     where: list[str] = []
     params: list[Any] = []
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(
+            status_code=422,
+            detail="Date from must be earlier than or equal to date to",
+        )
     if book_status:
         where.append("b.status = ?")
         params.append(book_status.value)
@@ -257,11 +282,63 @@ def list_books(
         where.append("(b.title LIKE ? OR b.author LIKE ?)")
         term = f"%{search.strip()}%"
         params.extend((term, term))
+    if bookcase_id is not None:
+        where.append("bc.id = ?")
+        params.append(bookcase_id)
+    if shelf_id is not None:
+        where.append("s.id = ?")
+        params.append(shelf_id)
+    if container_id is not None:
+        where.append("c.id = ?")
+        params.append(container_id)
+    if date_from is not None:
+        where.append(f"b.{date_field} >= ?")
+        params.append(date_from.isoformat())
+    if date_to is not None:
+        where.append(f"b.{date_field} <= ?")
+        params.append(date_to.isoformat())
 
     query = BOOK_SELECT
     if where:
         query += " WHERE " + " AND ".join(where)
-    query += " ORDER BY b.title COLLATE NOCASE, b.author COLLATE NOCASE"
+
+    direction = "ASC" if sort_order == "asc" else "DESC"
+    if sort_by == "physical":
+        physical_columns = [
+            "CASE WHEN b.container_id IS NULL THEN 1 ELSE 0 END ASC",
+            f"bc.name COLLATE NOCASE {direction}",
+            f"s.shelf_number {direction}",
+            f"CASE c.layer WHEN 'BACKGROUND' THEN 0 ELSE 1 END {direction}",
+            f"CASE c.container_type WHEN 'ROW' THEN 0 ELSE 1 END {direction}",
+            f"c.container_number {direction}",
+            f"b.position {direction}",
+            f"b.title COLLATE NOCASE {direction}",
+        ]
+        query += " ORDER BY " + ", ".join(physical_columns)
+    elif sort_by in {
+        "acquisition_date",
+        "reading_started_date",
+        "read_date",
+    }:
+        query += (
+            f" ORDER BY CASE WHEN b.{sort_by} IS NULL THEN 1 ELSE 0 END ASC,"
+            f" b.{sort_by} {direction}, b.title COLLATE NOCASE ASC"
+        )
+    elif sort_by == "author":
+        query += (
+            f" ORDER BY b.author COLLATE NOCASE {direction},"
+            f" b.title COLLATE NOCASE {direction}"
+        )
+    elif sort_by == "created_at":
+        query += (
+            f" ORDER BY b.created_at {direction},"
+            " b.title COLLATE NOCASE ASC"
+        )
+    else:
+        query += (
+            f" ORDER BY b.title COLLATE NOCASE {direction},"
+            f" b.author COLLATE NOCASE {direction}"
+        )
 
     with connect() as connection:
         rows = connection.execute(query, params).fetchall()

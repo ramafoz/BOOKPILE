@@ -22,6 +22,19 @@ export interface RestoreInspection {
   validated_at: string;
 }
 
+export interface BookQuery {
+  status: string;
+  search: string;
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+  bookcaseId: string;
+  shelfId: string;
+  containerId: string;
+  dateField: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -41,10 +54,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   downloadUrl: (path: string) => `${API_URL}${path}`,
   coverUrl: (filename: string) => `${API_URL}/covers/${filename}`,
-  books: (status: string, search: string) => {
+  books: (query: BookQuery) => {
     const params = new URLSearchParams();
-    if (status !== "ALL") params.set("status", status);
-    if (search.trim()) params.set("search", search.trim());
+    if (query.status !== "ALL") params.set("status", query.status);
+    if (query.search.trim()) params.set("search", query.search.trim());
+    params.set("sort_by", query.sortBy);
+    params.set("sort_order", query.sortOrder);
+    if (query.bookcaseId) params.set("bookcase_id", query.bookcaseId);
+    if (query.shelfId) params.set("shelf_id", query.shelfId);
+    if (query.containerId) params.set("container_id", query.containerId);
+    if (query.dateFrom || query.dateTo) {
+      params.set("date_field", query.dateField);
+      if (query.dateFrom) params.set("date_from", query.dateFrom);
+      if (query.dateTo) params.set("date_to", query.dateTo);
+    }
     return request<Book[]>(`/books?${params}`);
   },
   stats: () => request<Stats>("/stats"),

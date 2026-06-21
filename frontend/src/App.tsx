@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRightLeft,
   BookOpen,
@@ -10,11 +10,13 @@ import {
   ExternalLink,
   FileSpreadsheet,
   LibraryBig,
+  ListPlus,
   MapPin,
   Pencil,
   Plus,
   Search,
   Settings2,
+  SlidersHorizontal,
   Trash2,
   Upload,
   X,
@@ -58,18 +60,39 @@ function App() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
+  const [batchAdding, setBatchAdding] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReorganize, setShowReorganize] = useState(false);
   const [showData, setShowData] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [sortBy, setSortBy] = useState("title");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [bookcaseFilter, setBookcaseFilter] = useState("");
+  const [shelfFilter, setShelfFilter] = useState("");
+  const [containerFilter, setContainerFilter] = useState("");
+  const [dateField, setDateField] = useState("acquisition_date");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const [nextBooks, nextStats, nextLibrary] = await Promise.all([
-        api.books(filter, debouncedSearch),
+        api.books({
+          status: filter,
+          search: debouncedSearch,
+          sortBy,
+          sortOrder,
+          bookcaseId: bookcaseFilter,
+          shelfId: shelfFilter,
+          containerId: containerFilter,
+          dateField,
+          dateFrom,
+          dateTo,
+        }),
         api.stats(),
         api.library(),
       ]);
@@ -81,7 +104,47 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [filter, debouncedSearch]);
+  }, [
+    filter,
+    debouncedSearch,
+    sortBy,
+    sortOrder,
+    bookcaseFilter,
+    shelfFilter,
+    containerFilter,
+    dateField,
+    dateFrom,
+    dateTo,
+  ]);
+
+  const filterShelves = useMemo(
+    () =>
+      library
+        .filter((bookcase) => !bookcaseFilter || bookcase.id === Number(bookcaseFilter))
+        .flatMap((bookcase) =>
+          bookcase.shelves.map((shelf) => ({
+            ...shelf,
+            bookcaseName: bookcase.name,
+          })),
+        ),
+    [library, bookcaseFilter],
+  );
+  const filterContainers = useMemo(
+    () =>
+      filterShelves
+        .filter((shelf) => !shelfFilter || shelf.id === Number(shelfFilter))
+        .flatMap((shelf) =>
+          shelf.containers.map((container) => ({
+            ...container,
+            label: `${shelf.bookcaseName} · Shelf ${shelf.shelf_number} · ${
+              container.layer === "BACKGROUND" ? "Background" : "Foreground"
+            } ${container.container_type === "ROW" ? "Row" : "Pile"} ${
+              container.container_number
+            }`,
+          })),
+        ),
+    [filterShelves, shelfFilter],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
@@ -152,6 +215,9 @@ function App() {
             <h2>Your books</h2>
           </div>
           <div className="heading-actions">
+            <button className="outline-button" onClick={() => setBatchAdding(true)}>
+              <ListPlus size={17} /> Batch add
+            </button>
             <button className="outline-button" onClick={() => setShowReorganize(true)}>
               <ArrowRightLeft size={17} /> Reorganize books
             </button>
@@ -182,7 +248,101 @@ function App() {
               </button>
             ))}
           </div>
+          <button
+            className={`advanced-toggle ${showAdvanced ? "active" : ""}`}
+            onClick={() => setShowAdvanced(!showAdvanced)}
+          >
+            <SlidersHorizontal size={17} /> Sort & filter
+          </button>
         </div>
+        {showAdvanced && (
+          <div className="advanced-filters">
+            <label>Sort by
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="title">Title</option>
+                <option value="author">Author</option>
+                <option value="physical">Physical position</option>
+                <option value="acquisition_date">Acquisition date</option>
+                <option value="reading_started_date">Reading started</option>
+                <option value="read_date">Finished reading</option>
+                <option value="created_at">Added to BOOKPILE</option>
+              </select>
+            </label>
+            <label>Direction
+              <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "asc" | "desc")}>
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </label>
+            <label>Bookcase
+              <select
+                value={bookcaseFilter}
+                onChange={(event) => {
+                  setBookcaseFilter(event.target.value);
+                  setShelfFilter("");
+                  setContainerFilter("");
+                }}
+              >
+                <option value="">All bookcases</option>
+                {library.map((bookcase) => (
+                  <option key={bookcase.id} value={bookcase.id}>{bookcase.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>Shelf
+              <select
+                value={shelfFilter}
+                onChange={(event) => {
+                  setShelfFilter(event.target.value);
+                  setContainerFilter("");
+                }}
+              >
+                <option value="">All shelves</option>
+                {filterShelves.map((shelf) => (
+                  <option key={shelf.id} value={shelf.id}>
+                    {shelf.bookcaseName} · Shelf {shelf.shelf_number}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="wide-filter">Container
+              <select value={containerFilter} onChange={(event) => setContainerFilter(event.target.value)}>
+                <option value="">All containers</option>
+                {filterContainers.map((container) => (
+                  <option key={container.id} value={container.id}>{container.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>Date type
+              <select value={dateField} onChange={(event) => setDateField(event.target.value)}>
+                <option value="acquisition_date">Acquisition</option>
+                <option value="reading_started_date">Reading started</option>
+                <option value="read_date">Finished reading</option>
+              </select>
+            </label>
+            <label>From
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            </label>
+            <label>To
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            </label>
+            <button
+              className="clear-filters"
+              onClick={() => {
+                setSortBy("title");
+                setSortOrder("asc");
+                setBookcaseFilter("");
+                setShelfFilter("");
+                setContainerFilter("");
+                setDateField("acquisition_date");
+                setDateFrom("");
+                setDateTo("");
+              }}
+            >
+              Clear advanced filters
+            </button>
+          </div>
+        )}
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -262,6 +422,15 @@ function App() {
           }}
         />
       )}
+      {batchAdding && (
+        <BookDialog
+          book={null}
+          library={library}
+          batchMode
+          onClose={() => setBatchAdding(false)}
+          onSaved={refresh}
+        />
+      )}
       {showLibrary && (
         <LibraryDialog
           library={library}
@@ -335,11 +504,13 @@ function StatCard({
 function BookDialog({
   book,
   library,
+  batchMode = false,
   onClose,
   onSaved,
 }: {
   book: Book | null;
   library: Bookcase[];
+  batchMode?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -367,6 +538,8 @@ function BookDialog({
   const [coverPreview, setCoverPreview] = useState<string | null>(
     book?.cover_filename ? api.coverUrl(book.cover_filename) : null,
   );
+  const [batchMessage, setBatchMessage] = useState("");
+  const titleInput = useRef<HTMLInputElement>(null);
   const containers = useMemo(
     () =>
       library.flatMap((bookcase) =>
@@ -410,6 +583,29 @@ function BookDialog({
         await api.deleteCover(savedBook.id);
       }
       await onSaved();
+      if (batchMode && !book) {
+        setForm((current) => ({
+          ...current,
+          title: "",
+          author: "",
+          goodreads_url: null,
+          notes: null,
+          reading_started_date: null,
+          read_date: null,
+          position: current.position === null ? null : current.position + 1,
+        }));
+        setCoverFile(null);
+        setCoverPreview(null);
+        setRemoveCover(false);
+        setBatchMessage(
+          `Added “${savedBook.title}”. Container retained${
+            savedBook.position === null
+              ? "."
+              : `; next position is ${savedBook.position + 1}.`
+          }`,
+        );
+        window.setTimeout(() => titleInput.current?.focus(), 0);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save book");
     } finally {
@@ -421,11 +617,17 @@ function BookDialog({
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <div className="dialog" onMouseDown={(event) => event.stopPropagation()}>
         <div className="dialog-header">
-          <div><p className="eyebrow dark">{book ? "Update catalogue" : "New arrival"}</p>
-          <h2>{book ? "Edit book" : "Add a book"}</h2></div>
+          <div><p className="eyebrow dark">{book ? "Update catalogue" : batchMode ? "Rapid cataloguing" : "New arrival"}</p>
+          <h2>{book ? "Edit book" : batchMode ? "Batch add" : "Add a book"}</h2></div>
           <button className="icon-button" onClick={onClose}><X /></button>
         </div>
         <form onSubmit={(event) => void submit(event)}>
+          {batchMode && (
+            <div className="batch-banner">
+              Container, position sequence, status, acquisition date, and
+              original-collection setting stay ready for the next book.
+            </div>
+          )}
           <div className="form-grid">
             <fieldset className="wide cover-field">
               <legend>Cover image</legend>
@@ -467,7 +669,7 @@ function BookDialog({
               </div>
             </fieldset>
             <label className="wide">Title
-              <input required autoFocus value={form.title}
+              <input ref={titleInput} required autoFocus value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </label>
             <label className="wide">Author
@@ -572,10 +774,19 @@ function BookDialog({
             </label>
           </div>
           {error && <div className="form-error">{error}</div>}
+          {batchMessage && <div className="batch-success">{batchMessage}</div>}
           <div className="dialog-actions">
-            <button type="button" className="text-button" onClick={onClose}>Cancel</button>
+            <button type="button" className="text-button" onClick={onClose}>
+              {batchMode ? "Finish batch" : "Cancel"}
+            </button>
             <button className="primary-button" disabled={saving}>
-              {saving ? "Saving…" : book ? "Save changes" : "Add to BOOKPILE"}
+              {saving
+                ? "Saving…"
+                : book
+                  ? "Save changes"
+                  : batchMode
+                    ? "Add & continue"
+                    : "Add to BOOKPILE"}
             </button>
           </div>
         </form>
@@ -783,7 +994,18 @@ function ReorganizeDialog({
 
   const loadBooks = useCallback(async () => {
     try {
-      setAllBooks(await api.books("ALL", ""));
+      setAllBooks(await api.books({
+        status: "ALL",
+        search: "",
+        sortBy: "title",
+        sortOrder: "asc",
+        bookcaseId: "",
+        shelfId: "",
+        containerId: "",
+        dateField: "acquisition_date",
+        dateFrom: "",
+        dateTo: "",
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load books");
     }

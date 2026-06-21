@@ -614,3 +614,131 @@ def test_restore_rechecks_staged_checksums() -> None:
         assert response.status_code == 409
         assert "checksum changed" in response.json()["detail"]
         assert len(client.get("/books").json()) == 1
+
+
+def test_books_can_be_sorted_and_filtered_by_location_and_dates() -> None:
+    with TestClient(app) as client:
+        office = client.post("/bookcases", json={"name": "Office"}).json()
+        lounge = client.post("/bookcases", json={"name": "Lounge"}).json()
+        office_shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": office["id"], "shelf_number": 2},
+        ).json()
+        lounge_shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": lounge["id"], "shelf_number": 1},
+        ).json()
+        office_container = client.post(
+            "/containers",
+            json={
+                "shelf_id": office_shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        lounge_container = client.post(
+            "/containers",
+            json={
+                "shelf_id": lounge_shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 2,
+            },
+        ).json()
+
+        books = [
+            {
+                "title": "Zulu",
+                "author": "Alpha Writer",
+                "acquisition_date": "2025-01-10",
+                "read_date": "2025-02-01",
+                "container_id": office_container["id"],
+                "position": 2,
+            },
+            {
+                "title": "Alpha",
+                "author": "Zulu Writer",
+                "acquisition_date": "2024-01-10",
+                "read_date": "2024-02-01",
+                "container_id": office_container["id"],
+                "position": 1,
+            },
+            {
+                "title": "Middle",
+                "author": "Middle Writer",
+                "acquisition_date": "2026-01-10",
+                "container_id": lounge_container["id"],
+                "position": 1,
+            },
+        ]
+        for book in books:
+            assert client.post("/books", json=book).status_code == 201
+
+        title_desc = client.get(
+            "/books",
+            params={"sort_by": "title", "sort_order": "desc"},
+        ).json()
+        assert [book["title"] for book in title_desc] == [
+            "Zulu",
+            "Middle",
+            "Alpha",
+        ]
+
+        author_asc = client.get(
+            "/books",
+            params={"sort_by": "author", "sort_order": "asc"},
+        ).json()
+        assert [book["author"] for book in author_asc] == [
+            "Alpha Writer",
+            "Middle Writer",
+            "Zulu Writer",
+        ]
+
+        physical = client.get(
+            "/books",
+            params={"sort_by": "physical", "sort_order": "asc"},
+        ).json()
+        assert [book["title"] for book in physical] == [
+            "Middle",
+            "Alpha",
+            "Zulu",
+        ]
+
+        office_books = client.get(
+            "/books",
+            params={"bookcase_id": office["id"], "sort_by": "physical"},
+        ).json()
+        assert [book["title"] for book in office_books] == ["Alpha", "Zulu"]
+
+        exact_container = client.get(
+            "/books",
+            params={"container_id": lounge_container["id"]},
+        ).json()
+        assert [book["title"] for book in exact_container] == ["Middle"]
+
+        acquired_2025 = client.get(
+            "/books",
+            params={
+                "date_field": "acquisition_date",
+                "date_from": "2025-01-01",
+                "date_to": "2025-12-31",
+            },
+        ).json()
+        assert [book["title"] for book in acquired_2025] == ["Zulu"]
+
+        read_desc = client.get(
+            "/books",
+            params={"sort_by": "read_date", "sort_order": "desc"},
+        ).json()
+        assert [book["title"] for book in read_desc] == [
+            "Zulu",
+            "Alpha",
+            "Middle",
+        ]
+
+        invalid_dates = client.get(
+            "/books",
+            params={"date_from": "2026-01-01", "date_to": "2025-01-01"},
+        )
+        assert invalid_dates.status_code == 422

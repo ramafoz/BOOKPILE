@@ -19,6 +19,33 @@
 - [ ] Reorganize books using drag and drop.
 - [ ] Show empty positions and physical gaps.
 - [ ] Detect duplicate or conflicting positions visually.
+- [ ] Let the user position bookcases/furniture relative to one another.
+- [ ] Scale furniture to preserve approximate relative physical size.
+- [ ] Reorder and resize shelves within a bookcase.
+- [ ] Reorder and resize containers within a shelf.
+- [ ] Render containers as grey rectangles that fill with books.
+- [ ] Colour books according to reading status.
+
+## Batch catalogue entry
+
+- [x] Add a dedicated batch-add workflow.
+- [x] Keep the selected container between consecutive books.
+- [x] Advance the physical position automatically after each saved book.
+- [x] Keep useful repeated catalogue values while clearing title/author-specific
+  fields.
+- [x] Allow leaving batch mode without affecting normal single-book entry.
+
+## Catalogue sorting and filtering
+
+- [x] Sort by physical position.
+- [x] Sort alphabetically by title.
+- [x] Sort alphabetically by author.
+- [x] Sort by acquisition date.
+- [x] Sort by reading-started date.
+- [x] Sort by finished-reading date.
+- [x] Support ascending and descending order.
+- [x] Filter by date ranges.
+- [x] Filter by bookcase, shelf, or container.
 
 ## Loans
 

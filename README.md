@@ -22,6 +22,10 @@ exact physical location.
 - Export all books, dates, and physical locations as an Excel-friendly CSV.
 - Inspect and restore validated BOOKPILE backups with an automatic pre-restore
   safety backup and rollback protection.
+- Add books rapidly in batches while retaining the physical container and
+  advancing positions.
+- Sort by title, author, physical position, or lifecycle dates and filter by
+  date ranges and physical location.
 
 ## Stack
 
