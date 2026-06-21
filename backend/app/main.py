@@ -357,6 +357,58 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
         read_date = read_date or date.today()
     try:
         with connect() as connection:
+            if container_id is not None and position is not None:
+                connection.execute("BEGIN IMMEDIATE")
+                occupied_rows = connection.execute(
+                    """
+                    SELECT id, title, author, position
+                    FROM books
+                    WHERE container_id = ? AND position >= ?
+                    ORDER BY position ASC
+                    """,
+                    (container_id, position),
+                ).fetchall()
+                if occupied_rows and occupied_rows[0]["position"] == position:
+                    contiguous = []
+                    expected_position = position
+                    for row in occupied_rows:
+                        if row["position"] != expected_position:
+                            break
+                        contiguous.append(row)
+                        expected_position += 1
+
+                    if not payload.shift_existing:
+                        occupant = contiguous[0]
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "code": "POSITION_OCCUPIED",
+                                "message": (
+                                    f'Position {position} is occupied by '
+                                    f'“{occupant["title"]}”'
+                                ),
+                                "occupant": {
+                                    "id": occupant["id"],
+                                    "title": occupant["title"],
+                                    "author": occupant["author"],
+                                },
+                                "container_id": container_id,
+                                "position": position,
+                                "shift_count": len(contiguous),
+                                "last_position": contiguous[-1]["position"],
+                            },
+                        )
+
+                    for row in reversed(contiguous):
+                        connection.execute(
+                            """
+                            UPDATE books
+                            SET position = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                            """,
+                            (row["position"] + 1, row["id"]),
+                        )
+
             cursor = connection.execute(
                 """
                 INSERT INTO books (

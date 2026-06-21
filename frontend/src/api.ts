@@ -37,6 +37,18 @@ export interface BookQuery {
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
+export class ApiError extends Error {
+  code?: string;
+  detail?: Record<string, unknown>;
+
+  constructor(message: string, detail?: Record<string, unknown>) {
+    super(message);
+    this.name = "ApiError";
+    this.detail = detail;
+    this.code = typeof detail?.code === "string" ? detail.code : undefined;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
   const response = await fetch(`${API_URL}${path}`, {
@@ -45,7 +57,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail ?? "Something went wrong");
+    const detail =
+      error.detail && typeof error.detail === "object"
+        ? error.detail as Record<string, unknown>
+        : undefined;
+    const message =
+      typeof error.detail === "string"
+        ? error.detail
+        : typeof detail?.message === "string"
+          ? detail.message
+          : "Something went wrong";
+    throw new ApiError(message, detail);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -72,8 +94,11 @@ export const api = {
   },
   stats: () => request<Stats>("/stats"),
   library: () => request<Bookcase[]>("/library"),
-  createBook: (book: BookPayload) =>
-    request<Book>("/books", { method: "POST", body: JSON.stringify(book) }),
+  createBook: (book: BookPayload, shiftExisting = false) =>
+    request<Book>("/books", {
+      method: "POST",
+      body: JSON.stringify({ ...book, shift_existing: shiftExisting }),
+    }),
   updateBook: (id: number, book: BookPayload) =>
     request<Book>(`/books/${id}`, {
       method: "PATCH",

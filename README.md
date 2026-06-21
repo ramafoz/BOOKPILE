@@ -26,6 +26,8 @@ exact physical location.
   advancing positions.
 - Sort by title, author, physical position, or lifecycle dates and filter by
   date ranges and physical location.
+- Insert a new book into an occupied container position by shifting the
+  contiguous books one place after explicit confirmation.
 
 ## Stack
 

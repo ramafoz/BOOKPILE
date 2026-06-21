@@ -21,7 +21,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { api, type RestoreInspection } from "./api";
+import { ApiError, api, type RestoreInspection } from "./api";
 import type {
   Book,
   BookPayload,
@@ -574,9 +574,46 @@ function BookDialog({
         goodreads_url: form.goodreads_url || null,
         notes: form.notes || null,
       };
-      const savedBook = book
-        ? await api.updateBook(book.id, payload)
-        : await api.createBook(payload);
+      let savedBook: Book;
+      if (book) {
+        savedBook = await api.updateBook(book.id, payload);
+      } else {
+        try {
+          savedBook = await api.createBook(payload);
+        } catch (err) {
+          if (err instanceof ApiError && err.code === "POSITION_OCCUPIED") {
+            const detail = err.detail ?? {};
+            const occupant = detail.occupant as
+              | { title?: string; author?: string }
+              | undefined;
+            const shiftCount =
+              typeof detail.shift_count === "number" ? detail.shift_count : 1;
+            const position =
+              typeof detail.position === "number" ? detail.position : form.position;
+            const lastPosition =
+              typeof detail.last_position === "number"
+                ? detail.last_position
+                : position;
+            const approved = window.confirm(
+              `Position ${position} is occupied by “${
+                occupant?.title ?? "another book"
+              }”${occupant?.author ? ` — ${occupant.author}` : ""}.\n\n` +
+              `Make room by moving ${shiftCount} ${
+                shiftCount === 1 ? "book" : "books"
+              } one position (${position}–${lastPosition} → ${
+                Number(lastPosition) + 1
+              })?`,
+            );
+            if (!approved) {
+              setError("The book was not added. Choose another position.");
+              return;
+            }
+            savedBook = await api.createBook(payload, true);
+          } else {
+            throw err;
+          }
+        }
+      }
       if (coverFile) {
         await api.uploadCover(savedBook.id, coverFile);
       } else if (removeCover && savedBook.cover_filename) {

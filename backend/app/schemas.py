@@ -68,7 +68,7 @@ class BookBase(BaseModel):
 
 
 class BookCreate(BookBase):
-    pass
+    shift_existing: bool = False
 
 
 class BookUpdate(BaseModel):

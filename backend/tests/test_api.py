@@ -742,3 +742,160 @@ def test_books_can_be_sorted_and_filtered_by_location_and_dates() -> None:
             params={"date_from": "2026-01-01", "date_to": "2025-01-01"},
         )
         assert invalid_dates.status_code == 422
+
+
+def test_occupied_position_can_shift_contiguous_books_to_make_room() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Shift Test"}).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        other_container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+
+        for position in (1, 2, 3, 5):
+            response = client.post(
+                "/books",
+                json={
+                    "title": f"Existing {position}",
+                    "author": "Author",
+                    "container_id": container["id"],
+                    "position": position,
+                },
+            )
+            assert response.status_code == 201
+        other = client.post(
+            "/books",
+            json={
+                "title": "Other container",
+                "author": "Author",
+                "container_id": other_container["id"],
+                "position": 2,
+            },
+        ).json()
+
+        conflict = client.post(
+            "/books",
+            json={
+                "title": "Inserted",
+                "author": "New Author",
+                "container_id": container["id"],
+                "position": 2,
+            },
+        )
+        assert conflict.status_code == 409
+        detail = conflict.json()["detail"]
+        assert detail["code"] == "POSITION_OCCUPIED"
+        assert detail["occupant"]["title"] == "Existing 2"
+        assert detail["shift_count"] == 2
+        assert detail["last_position"] == 3
+
+        before_retry = client.get(
+            "/books",
+            params={"container_id": container["id"], "sort_by": "physical"},
+        ).json()
+        assert [(book["title"], book["position"]) for book in before_retry] == [
+            ("Existing 1", 1),
+            ("Existing 2", 2),
+            ("Existing 3", 3),
+            ("Existing 5", 5),
+        ]
+
+        inserted = client.post(
+            "/books",
+            json={
+                "title": "Inserted",
+                "author": "New Author",
+                "container_id": container["id"],
+                "position": 2,
+                "shift_existing": True,
+            },
+        )
+        assert inserted.status_code == 201
+
+        shifted = client.get(
+            "/books",
+            params={"container_id": container["id"], "sort_by": "physical"},
+        ).json()
+        assert [(book["title"], book["position"]) for book in shifted] == [
+            ("Existing 1", 1),
+            ("Inserted", 2),
+            ("Existing 2", 3),
+            ("Existing 3", 4),
+            ("Existing 5", 5),
+        ]
+
+        untouched = next(
+            book
+            for book in client.get(
+                "/books",
+                params={"container_id": other_container["id"]},
+            ).json()
+            if book["id"] == other["id"]
+        )
+        assert untouched["position"] == 2
+
+
+def test_shift_at_end_extends_container_positions() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "End Shift"}).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        for position in range(1, 9):
+            client.post(
+                "/books",
+                json={
+                    "title": f"Book {position}",
+                    "author": "Author",
+                    "container_id": container["id"],
+                    "position": position,
+                },
+            )
+
+        inserted = client.post(
+            "/books",
+            json={
+                "title": "New Seven",
+                "author": "Author",
+                "container_id": container["id"],
+                "position": 7,
+                "shift_existing": True,
+            },
+        )
+        assert inserted.status_code == 201
+        books = client.get(
+            "/books",
+            params={"container_id": container["id"], "sort_by": "physical"},
+        ).json()
+        positions = {book["title"]: book["position"] for book in books}
+        assert positions["New Seven"] == 7
+        assert positions["Book 7"] == 8
+        assert positions["Book 8"] == 9
