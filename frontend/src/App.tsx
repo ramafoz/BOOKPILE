@@ -358,6 +358,9 @@ function App() {
           ) : (
             books.map((book) => (
               <article className="book-row" key={book.id}>
+                <span className={`status ${book.status.toLowerCase()}`}>
+                  {statusLabel(book.status)}
+                </span>
                 {book.cover_filename ? (
                   <img
                     className="book-cover-thumb"
@@ -371,39 +374,38 @@ function App() {
                 )}
                 <div className="book-main">
                   <div>
-                    <h3>{book.title}</h3>
+                    <h3 title={book.title}>{book.title}</h3>
                     <p>{book.author}</p>
                     <BookDates book={book} />
                   </div>
-                  <span className={`status ${book.status.toLowerCase()}`}>
-                    {statusLabel(book.status)}
-                  </span>
                 </div>
-                <div className="location">
-                  <MapPin size={16} />
-                  <span>
-                    {book.status === "CURRENTLY_READING"
-                      ? "Currently reading · outside library"
-                      : book.location_label ?? "Location not assigned"}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  {book.goodreads_url && (
-                    <a
-                      aria-label="Open Goodreads"
-                      href={book.goodreads_url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink size={17} />
-                    </a>
-                  )}
-                  <button aria-label="Edit book" onClick={() => setEditing(book)}>
-                    <Pencil size={17} />
-                  </button>
-                  <button aria-label="Delete book" onClick={() => void removeBook(book)}>
-                    <Trash2 size={17} />
-                  </button>
+                <div className="book-side">
+                  <div className="location">
+                    <MapPin size={16} />
+                    <span>
+                      {book.status === "CURRENTLY_READING"
+                        ? "Currently reading · outside library"
+                        : book.location_label ?? "Location not assigned"}
+                    </span>
+                  </div>
+                  <div className="row-actions">
+                    {book.goodreads_url && (
+                      <a
+                        aria-label="Open Goodreads"
+                        href={book.goodreads_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink size={17} />
+                      </a>
+                    )}
+                    <button aria-label="Edit book" onClick={() => setEditing(book)}>
+                      <Pencil size={17} />
+                    </button>
+                    <button aria-label="Delete book" onClick={() => void removeBook(book)}>
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
                 </div>
               </article>
             ))
@@ -453,7 +455,7 @@ function App() {
 function statusLabel(status: "ALL" | BookStatus) {
   if (status === "ALL") return "All";
   if (status === "PENDING") return "Pending";
-  if (status === "CURRENTLY_READING") return "Currently reading";
+  if (status === "CURRENTLY_READING") return "Reading…";
   return "Read";
 }
 
