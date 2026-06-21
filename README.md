@@ -21,6 +21,18 @@ exact physical location.
 
 ## Run locally
 
+### One-command start
+
+From the project root:
+
+```powershell
+.\start-bookpile.ps1
+```
+
+This opens the backend and frontend in separate PowerShell windows and prints
+both the desktop URL and the URL to use from another device on the same Wi-Fi.
+Keep both windows open while using BOOKPILE.
+
 ### Backend
 
 ```powershell
@@ -28,7 +40,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API runs at <http://localhost:8000> and its interactive documentation at
@@ -45,6 +57,19 @@ npm run dev
 ```
 
 Open <http://localhost:5173>.
+
+## Use from a phone on the same Wi-Fi
+
+Run `.\start-bookpile.ps1`, then open the displayed LAN URL on the phone, for
+example:
+
+```text
+http://192.168.1.50:5173
+```
+
+The frontend proxies API requests to FastAPI on the host computer, so no mobile
+configuration is required. Windows may ask once whether Node.js or Python may
+communicate on private networks; allow access for **private networks only**.
 
 ## Data
 
