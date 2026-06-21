@@ -1,4 +1,4 @@
-export type BookStatus = "PENDING" | "READ";
+export type BookStatus = "PENDING" | "CURRENTLY_READING" | "READ";
 export type ContainerType = "ROW" | "PILE";
 export type Layer = "BACKGROUND" | "FOREGROUND";
 
@@ -8,6 +8,7 @@ export interface Container {
   container_type: ContainerType;
   layer: Layer;
   container_number: number;
+  book_count: number;
 }
 
 export interface Shelf {
@@ -41,6 +42,7 @@ export interface Book {
 export interface Stats {
   total: number;
   pending: number;
+  currently_reading: number;
   read: number;
 }
 
@@ -53,4 +55,3 @@ export interface BookPayload {
   container_id: number | null;
   position: number | null;
 }
-

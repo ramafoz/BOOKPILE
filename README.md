@@ -6,11 +6,13 @@ exact physical location.
 ## Version 1
 
 - Create, edit, delete, search, and filter books.
-- Track `PENDING` and `READ` status.
-- Show total, pending, and read counts.
+- Track `PENDING`, `CURRENTLY_READING`, and `READ` status.
+- Show total, pending, currently-reading, and read counts.
 - Model the library as `Bookcase → Shelf → Container → Book`.
 - Locate a book by bookcase, shelf, layer, row/pile, container number, and
   position.
+- Inspect and safely delete shelves and containers without deleting books.
+- Reorganize books quickly, swapping positions when the destination is occupied.
 
 ## Stack
 
@@ -57,4 +59,3 @@ excluded from Git. Back up that file to preserve your catalogue.
 4. Goodreads metadata.
 5. Cover images.
 6. OCR/camera recognition.
-

@@ -9,6 +9,7 @@ from .database import connect, init_database
 from .schemas import (
     Book,
     BookCreate,
+    BookMove,
     BookStatus,
     BookUpdate,
     BookcaseCreate,
@@ -106,11 +107,17 @@ def stats() -> dict[str, int]:
             SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) AS pending,
+                SUM(
+                    CASE WHEN status = 'CURRENTLY_READING' THEN 1 ELSE 0 END
+                ) AS currently_reading,
                 SUM(CASE WHEN status = 'READ' THEN 1 ELSE 0 END) AS read
             FROM books
             """
         ).fetchone()
-    return {key: row[key] or 0 for key in ("total", "pending", "read")}
+    return {
+        key: row[key] or 0
+        for key in ("total", "pending", "currently_reading", "read")
+    }
 
 
 @app.get("/books", response_model=list[Book])
@@ -141,6 +148,8 @@ def list_books(
 @app.post("/books", response_model=Book, status_code=status.HTTP_201_CREATED)
 def create_book(payload: BookCreate) -> dict[str, Any]:
     container_id, position = location_values(payload)
+    if payload.status == BookStatus.currently_reading:
+        container_id, position = None, None
     try:
         with connect() as connection:
             cursor = connection.execute(
@@ -193,6 +202,11 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["container_id"] = container_id
         changes["position"] = position
 
+    next_status = changes.get("status", existing["status"])
+    if next_status == BookStatus.currently_reading.value:
+        changes["container_id"] = None
+        changes["position"] = None
+
     assignments = ", ".join(f"{column} = ?" for column in changes)
     values = list(changes.values())
     try:
@@ -200,6 +214,64 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
             connection.execute(
                 f"UPDATE books SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (*values, book_id),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return fetch_book(book_id)
+
+
+@app.post("/books/{book_id}/move", response_model=Book)
+def move_book(book_id: int, payload: BookMove) -> dict[str, Any]:
+    moving = fetch_book(book_id)
+    if moving["status"] == BookStatus.currently_reading.value:
+        raise HTTPException(
+            status_code=409,
+            detail="A currently-reading book must remain outside the library map",
+        )
+
+    try:
+        with connect() as connection:
+            container_exists = connection.execute(
+                "SELECT 1 FROM containers WHERE id = ?", (payload.container_id,)
+            ).fetchone()
+            if container_exists is None:
+                raise HTTPException(status_code=404, detail="Container not found")
+
+            occupant = connection.execute(
+                """
+                SELECT id
+                FROM books
+                WHERE container_id = ? AND position = ? AND id != ?
+                """,
+                (payload.container_id, payload.position, book_id),
+            ).fetchone()
+            if occupant and not payload.swap_if_occupied:
+                raise HTTPException(status_code=409, detail="Position is already occupied")
+
+            connection.execute(
+                "UPDATE books SET container_id = NULL, position = NULL WHERE id = ?",
+                (book_id,),
+            )
+            if occupant:
+                connection.execute(
+                    """
+                    UPDATE books
+                    SET container_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        moving["container_id"],
+                        moving["position"],
+                        occupant["id"],
+                    ),
+                )
+            connection.execute(
+                """
+                UPDATE books
+                SET container_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (payload.container_id, payload.position, book_id),
             )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -234,8 +306,11 @@ def library() -> list[dict[str, Any]]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT * FROM containers
-                ORDER BY shelf_id, layer, container_number
+                SELECT c.*, COUNT(b.id) AS book_count
+                FROM containers c
+                LEFT JOIN books b ON b.container_id = c.id
+                GROUP BY c.id
+                ORDER BY c.shelf_id, c.layer, c.container_type, c.container_number
                 """
             )
         ]
@@ -309,7 +384,51 @@ def create_container(payload: ContainerCreate) -> dict[str, Any]:
     except sqlite3.IntegrityError as exc:
         raise HTTPException(
             status_code=409,
-            detail="Container number already exists in this shelf/layer or shelf is invalid",
+            detail=(
+                "This row or pile number already exists in the selected shelf/layer, "
+                "or the shelf is invalid"
+            ),
         ) from exc
     return dict(row)
 
+
+@app.delete("/containers/{container_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_container(container_id: int) -> Response:
+    with connect() as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM containers WHERE id = ?", (container_id,)
+        ).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Container not found")
+        connection.execute(
+            """
+            UPDATE books
+            SET container_id = NULL, position = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE container_id = ?
+            """,
+            (container_id,),
+        )
+        connection.execute("DELETE FROM containers WHERE id = ?", (container_id,))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.delete("/shelves/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_shelf(shelf_id: int) -> Response:
+    with connect() as connection:
+        exists = connection.execute(
+            "SELECT 1 FROM shelves WHERE id = ?", (shelf_id,)
+        ).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Shelf not found")
+        connection.execute(
+            """
+            UPDATE books
+            SET container_id = NULL, position = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE container_id IN (
+                SELECT id FROM containers WHERE shelf_id = ?
+            )
+            """,
+            (shelf_id,),
+        )
+        connection.execute("DELETE FROM shelves WHERE id = ?", (shelf_id,))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowRightLeft,
   BookOpen,
   BookPlus,
   Check,
@@ -24,7 +25,12 @@ import type {
   Stats,
 } from "./types";
 
-const emptyStats: Stats = { total: 0, pending: 0, read: 0 };
+const emptyStats: Stats = {
+  total: 0,
+  pending: 0,
+  currently_reading: 0,
+  read: 0,
+};
 const emptyBook: BookPayload = {
   title: "",
   author: "",
@@ -44,6 +50,7 @@ function App() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showReorganize, setShowReorganize] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -120,6 +127,7 @@ function App() {
         <div className="stats-grid">
           <StatCard icon={<LibraryBig />} label="Total books" value={stats.total} tone="green" />
           <StatCard icon={<BookOpen />} label="Waiting to be read" value={stats.pending} tone="ochre" />
+          <StatCard icon={<BookOpen />} label="Currently reading" value={stats.currently_reading} tone="blue" />
           <StatCard icon={<Check />} label="Books read" value={stats.read} tone="clay" />
         </div>
 
@@ -128,9 +136,14 @@ function App() {
             <p className="eyebrow dark">The catalogue</p>
             <h2>Your books</h2>
           </div>
-          <button className="secondary-button" onClick={() => setEditing(null)}>
-            <Plus size={17} /> Add book
-          </button>
+          <div className="heading-actions">
+            <button className="outline-button" onClick={() => setShowReorganize(true)}>
+              <ArrowRightLeft size={17} /> Reorganize books
+            </button>
+            <button className="secondary-button" onClick={() => setEditing(null)}>
+              <Plus size={17} /> Add book
+            </button>
+          </div>
         </div>
 
         <div className="toolbar">
@@ -144,13 +157,13 @@ function App() {
             />
           </div>
           <div className="filters" aria-label="Filter books">
-            {(["ALL", "PENDING", "READ"] as const).map((item) => (
+            {(["ALL", "PENDING", "CURRENTLY_READING", "READ"] as const).map((item) => (
               <button
                 className={filter === item ? "active" : ""}
                 key={item}
                 onClick={() => setFilter(item)}
               >
-                {item === "ALL" ? "All" : item === "PENDING" ? "Pending" : "Read"}
+                {statusLabel(item)}
               </button>
             ))}
           </div>
@@ -179,12 +192,16 @@ function App() {
                     <p>{book.author}</p>
                   </div>
                   <span className={`status ${book.status.toLowerCase()}`}>
-                    {book.status === "PENDING" ? "Pending" : "Read"}
+                    {statusLabel(book.status)}
                   </span>
                 </div>
                 <div className="location">
                   <MapPin size={16} />
-                  <span>{book.location_label ?? "Location not assigned"}</span>
+                  <span>
+                    {book.status === "CURRENTLY_READING"
+                      ? "Currently reading · outside library"
+                      : book.location_label ?? "Location not assigned"}
+                  </span>
                 </div>
                 <div className="row-actions">
                   {book.goodreads_url && (
@@ -228,8 +245,22 @@ function App() {
           onChanged={refresh}
         />
       )}
+      {showReorganize && (
+        <ReorganizeDialog
+          library={library}
+          onClose={() => setShowReorganize(false)}
+          onChanged={refresh}
+        />
+      )}
     </main>
   );
+}
+
+function statusLabel(status: "ALL" | BookStatus) {
+  if (status === "ALL") return "All";
+  if (status === "PENDING") return "Pending";
+  if (status === "CURRENTLY_READING") return "Currently reading";
+  return "Read";
 }
 
 function StatCard({
@@ -334,23 +365,38 @@ function BookDialog({
             </label>
             <label>Status
               <select value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as BookStatus })}>
+                onChange={(e) => {
+                  const status = e.target.value as BookStatus;
+                  setForm({
+                    ...form,
+                    status,
+                    ...(status === "CURRENTLY_READING"
+                      ? { container_id: null, position: null }
+                      : {}),
+                  });
+                }}>
                 <option value="PENDING">Pending</option>
+                <option value="CURRENTLY_READING">Currently reading</option>
                 <option value="READ">Read</option>
               </select>
             </label>
             <label>Position
               <input type="number" min="1" value={form.position ?? ""}
+                disabled={form.status === "CURRENTLY_READING"}
                 onChange={(e) => setForm({ ...form, position: e.target.value ? Number(e.target.value) : null })} />
             </label>
             <label className="wide">Physical container
               <select value={form.container_id ?? ""}
+                disabled={form.status === "CURRENTLY_READING"}
                 onChange={(e) => setForm({ ...form, container_id: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">Not assigned</option>
                 {containers.map((container) => (
                   <option key={container.id} value={container.id}>{container.label}</option>
                 ))}
               </select>
+              {form.status === "CURRENTLY_READING" && (
+                <small>Currently-reading books stay outside the physical library map.</small>
+              )}
               {containers.length === 0 && <small>Create your library layout first to assign a location.</small>}
             </label>
             <label className="wide">Goodreads link
@@ -461,11 +507,78 @@ function LibraryDialog({
           </section>
         </div>
         {error && <div className="form-error">{error}</div>}
-        <div className="layout-summary">
+        <div className="layout-tree">
           {library.length === 0 ? <p>No bookcases yet.</p> : library.map((bookcase) => (
-            <div key={bookcase.id}><strong>{bookcase.name}</strong>
-              <span>{bookcase.shelves.length} shelves · {bookcase.shelves.reduce((n, s) => n + s.containers.length, 0)} containers</span>
-            </div>
+            <section className="bookcase-block" key={bookcase.id}>
+              <div className="bookcase-heading">
+                <div>
+                  <strong>{bookcase.name}</strong>
+                  <span>
+                    {bookcase.shelves.length} shelves ·{" "}
+                    {bookcase.shelves.reduce((n, shelf) => n + shelf.containers.length, 0)} containers
+                  </span>
+                </div>
+              </div>
+              {bookcase.shelves.length === 0 ? (
+                <p className="muted">No shelves in this bookcase.</p>
+              ) : bookcase.shelves.map((shelf) => (
+                <div className="shelf-block" key={shelf.id}>
+                  <div className="shelf-heading">
+                    <strong>Shelf {shelf.shelf_number}</strong>
+                    <span>{shelf.containers.length} containers</span>
+                    <button
+                      className="danger-icon"
+                      title="Delete shelf"
+                      onClick={() => {
+                        const bookCount = shelf.containers.reduce(
+                          (total, container) => total + container.book_count,
+                          0,
+                        );
+                        if (!window.confirm(
+                          `Delete Shelf ${shelf.shelf_number}? ${
+                            bookCount
+                              ? `${bookCount} books will become unassigned.`
+                              : "It contains no assigned books."
+                          }`,
+                        )) return;
+                        void act(() => api.deleteShelf(shelf.id));
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="container-list">
+                    {shelf.containers.length === 0 ? (
+                      <span className="muted">No containers.</span>
+                    ) : shelf.containers.map((container) => (
+                      <div className="container-chip" key={container.id}>
+                        <span>
+                          {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+                          {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
+                          {container.container_number}
+                        </span>
+                        <small>{container.book_count} books</small>
+                        <button
+                          title="Delete container"
+                          onClick={() => {
+                            if (!window.confirm(
+                              `Delete this container? ${
+                                container.book_count
+                                  ? `${container.book_count} books will become unassigned.`
+                                  : "It contains no assigned books."
+                              }`,
+                            )) return;
+                            void act(() => api.deleteContainer(container.id));
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
           ))}
         </div>
       </div>
@@ -473,5 +586,142 @@ function LibraryDialog({
   );
 }
 
-export default App;
+function ReorganizeDialog({
+  library,
+  onClose,
+  onChanged,
+}: {
+  library: Bookcase[];
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [allBooks, setAllBooks] = useState<Book[]>([]);
+  const [selectedBook, setSelectedBook] = useState("");
+  const [selectedContainer, setSelectedContainer] = useState("");
+  const [position, setPosition] = useState(1);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
+  const containers = useMemo(
+    () =>
+      library.flatMap((bookcase) =>
+        bookcase.shelves.flatMap((shelf) =>
+          shelf.containers.map((container) => ({
+            ...container,
+            label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${
+              container.layer === "BACKGROUND" ? "Background" : "Foreground"
+            } ${container.container_type === "ROW" ? "Row" : "Pile"} ${
+              container.container_number
+            }`,
+          })),
+        ),
+      ),
+    [library],
+  );
+
+  const loadBooks = useCallback(async () => {
+    try {
+      setAllBooks(await api.books("ALL", ""));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load books");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBooks();
+  }, [loadBooks]);
+
+  const movableBooks = allBooks.filter(
+    (book) => book.status !== "CURRENTLY_READING",
+  );
+  const chosenBook = movableBooks.find(
+    (book) => book.id === Number(selectedBook),
+  );
+
+  async function move(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await api.moveBook(
+        Number(selectedBook),
+        Number(selectedContainer),
+        position,
+      );
+      await Promise.all([loadBooks(), onChanged()]);
+      setSelectedBook("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to move book");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog reorganize-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Change of place</p>
+            <h2>Reorganize books</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <p className="dialog-intro">
+          Choose a book and its destination. If another book occupies that
+          position, BOOKPILE swaps their places automatically.
+        </p>
+        <form onSubmit={(event) => void move(event)}>
+          <div className="move-grid">
+            <label>Book
+              <select required value={selectedBook} onChange={(event) => setSelectedBook(event.target.value)}>
+                <option value="">Choose book</option>
+                {movableBooks.map((book) => (
+                  <option key={book.id} value={book.id}>
+                    {book.title} — {book.author}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="current-location">
+              <MapPin size={17} />
+              <span>{chosenBook?.location_label ?? "Current location not assigned"}</span>
+            </div>
+            <label>Destination container
+              <select required value={selectedContainer} onChange={(event) => setSelectedContainer(event.target.value)}>
+                <option value="">Choose container</option>
+                {containers.map((container) => (
+                  <option key={container.id} value={container.id}>
+                    {container.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>Destination position
+              <input
+                required
+                type="number"
+                min="1"
+                value={position}
+                onChange={(event) => setPosition(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          {error && <div className="form-error">{error}</div>}
+          <div className="dialog-actions">
+            <button type="button" className="text-button" onClick={onClose}>Close</button>
+            <button
+              className="primary-button"
+              disabled={saving || !selectedBook || !selectedContainer}
+            >
+              <ArrowRightLeft size={17} />
+              {saving ? "Moving…" : "Move book"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default App;

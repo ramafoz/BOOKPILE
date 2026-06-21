@@ -40,6 +40,15 @@ export const api = {
     }),
   deleteBook: (id: number) =>
     request<void>(`/books/${id}`, { method: "DELETE" }),
+  moveBook: (id: number, containerId: number, position: number) =>
+    request<Book>(`/books/${id}/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        container_id: containerId,
+        position,
+        swap_if_occupied: true,
+      }),
+    }),
   createBookcase: (name: string, description: string) =>
     request("/bookcases", {
       method: "POST",
@@ -68,5 +77,8 @@ export const api = {
         container_number: containerNumber,
       }),
     }),
+  deleteShelf: (id: number) =>
+    request<void>(`/shelves/${id}`, { method: "DELETE" }),
+  deleteContainer: (id: number) =>
+    request<void>(`/containers/${id}`, { method: "DELETE" }),
 };
-

@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 class BookStatus(str, Enum):
     pending = "PENDING"
+    currently_reading = "CURRENTLY_READING"
     read = "READ"
 
 
@@ -33,6 +34,12 @@ class ContainerCreate(BaseModel):
     container_type: ContainerType
     layer: Layer
     container_number: int = Field(gt=0)
+
+
+class BookMove(BaseModel):
+    container_id: int
+    position: int = Field(gt=0)
+    swap_if_occupied: bool = True
 
 
 class BookBase(BaseModel):
@@ -86,5 +93,5 @@ class Book(BookBase):
 class Stats(BaseModel):
     total: int
     pending: int
+    currently_reading: int
     read: int
-
