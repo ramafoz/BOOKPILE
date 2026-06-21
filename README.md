@@ -34,6 +34,21 @@ frontend in separate PowerShell windows, and prints the single LAN URL to use
 from the computer or another device on the same Wi-Fi. Keep both windows open
 while using BOOKPILE.
 
+### Desktop shortcuts
+
+Install the shortcuts once:
+
+```powershell
+.\install-desktop-shortcuts.ps1
+```
+
+After that:
+
+- Double-click **Start BOOKPILE** to start both servers invisibly. A confirmation
+  displays the mobile URL and copies it to the clipboard.
+- Double-click **Stop BOOKPILE** to stop only the BOOKPILE processes.
+- Runtime logs are stored locally in `.bookpile-runtime/`.
+
 ### Backend
 
 ```powershell
