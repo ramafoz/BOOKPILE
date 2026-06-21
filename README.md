@@ -29,9 +29,10 @@ From the project root:
 .\start-bookpile.ps1
 ```
 
-This opens the backend and frontend in separate PowerShell windows and prints
-both the desktop URL and the URL to use from another device on the same Wi-Fi.
-Keep both windows open while using BOOKPILE.
+This builds the optimized frontend when necessary, opens the backend and
+frontend in separate PowerShell windows, and prints the single LAN URL to use
+from the computer or another device on the same Wi-Fi. Keep both windows open
+while using BOOKPILE.
 
 ### Backend
 
@@ -67,9 +68,11 @@ example:
 http://192.168.1.50:5173
 ```
 
-The frontend proxies API requests to FastAPI on the host computer, so no mobile
-configuration is required. Windows may ask once whether Node.js or Python may
-communicate on private networks; allow access for **private networks only**.
+The optimized frontend proxies API requests to FastAPI on the host computer, so
+no mobile configuration is required. Vite development mode is not used for this
+launcher, which substantially reduces the number of files transferred to the
+phone. Windows may ask once whether Node.js may communicate on private
+networks; allow access for **private networks only**.
 
 ## Data
 
