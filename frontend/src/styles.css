@@ -125,7 +125,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .cover-placeholder { display: grid; place-items: center; color: #9a856c; background: #e9e1d5; border: 1px dashed #c6b9a6; }
 .cover-actions { flex: 1; display: flex; align-items: flex-start; flex-direction: column; gap: 8px; }
 .file-button, .remove-cover-button { display: inline-flex; align-items: center; gap: 8px; border-radius: 7px; padding: 10px 13px; font-weight: 700; }
-.file-button { color: #fff; background: #28574d; cursor: pointer; }
+.form-grid .file-button { color: #fff; background: #28574d; cursor: pointer; }
+.form-grid .file-button svg { color: #fff; }
 .file-button input { display: none; }
 .remove-cover-button { border: 1px solid #cba995; color: #994c35; background: transparent; }
 .date-fields legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
