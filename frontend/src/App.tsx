@@ -5,7 +5,10 @@ import {
   BookPlus,
   Camera,
   Check,
+  DatabaseBackup,
+  Download,
   ExternalLink,
+  FileSpreadsheet,
   LibraryBig,
   MapPin,
   Pencil,
@@ -56,6 +59,7 @@ function App() {
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReorganize, setShowReorganize] = useState(false);
+  const [showData, setShowData] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -105,9 +109,14 @@ function App() {
             <span className="brand-mark"><LibraryBig size={22} /></span>
             BOOKPILE
           </a>
-          <button className="ghost-button" onClick={() => setShowLibrary(true)}>
-            <Settings2 size={17} /> Library layout
-          </button>
+          <div className="nav-actions">
+            <button className="ghost-button" onClick={() => setShowData(true)}>
+              <DatabaseBackup size={17} /> Data & backups
+            </button>
+            <button className="ghost-button" onClick={() => setShowLibrary(true)}>
+              <Settings2 size={17} /> Library layout
+            </button>
+          </div>
         </nav>
         <div className="hero-copy">
           <p className="eyebrow">Your personal library, mapped</p>
@@ -266,6 +275,7 @@ function App() {
           onChanged={refresh}
         />
       )}
+      {showData && <DataDialog onClose={() => setShowData(false)} />}
     </main>
   );
 }
@@ -870,6 +880,66 @@ function ReorganizeDialog({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function DataDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog data-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Catalogue safety</p>
+            <h2>Data & backups</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <p className="dialog-intro">
+          Download a complete, verified copy before adding more books. Full
+          backups include the SQLite catalogue and every cover image.
+        </p>
+        <div className="data-options">
+          <article>
+            <div className="data-option-icon"><DatabaseBackup /></div>
+            <div>
+              <h3>Full BOOKPILE backup</h3>
+              <p>
+                A ZIP containing the database, covers, integrity metadata, and
+                SHA-256 checksums. This is the format intended for restoration.
+              </p>
+              <a
+                className="primary-button"
+                href={api.downloadUrl("/exports/full-backup")}
+                download
+              >
+                <Download size={17} /> Download full backup
+              </a>
+            </div>
+          </article>
+          <article>
+            <div className="data-option-icon csv"><FileSpreadsheet /></div>
+            <div>
+              <h3>Books as CSV</h3>
+              <p>
+                A spreadsheet-friendly export with dates, status, Goodreads,
+                physical location, and cover references. It does not include images.
+              </p>
+              <a
+                className="outline-button"
+                href={api.downloadUrl("/exports/books.csv")}
+                download
+              >
+                <Download size={17} /> Export CSV
+              </a>
+            </div>
+          </article>
+        </div>
+        <div className="data-note">
+          Phase A only creates downloads. It never changes or replaces your
+          catalogue.
+        </div>
       </div>
     </div>
   );

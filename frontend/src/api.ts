@@ -24,6 +24,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  downloadUrl: (path: string) => `${API_URL}${path}`,
   coverUrl: (filename: string) => `${API_URL}/covers/${filename}`,
   books: (status: string, search: string) => {
     const params = new URLSearchParams();

@@ -1,6 +1,10 @@
+import csv
+import hashlib
+import json
 import os
 import shutil
 import sqlite3
+import zipfile
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -350,3 +354,102 @@ def test_cover_upload_rejects_non_image() -> None:
             files={"cover": ("not-image.txt", b"not an image", "text/plain")},
         )
         assert response.status_code == 415
+
+
+def test_full_backup_contains_verified_database_and_covers(tmp_path: Path) -> None:
+    image_bytes = BytesIO()
+    Image.new("RGB", (600, 900), "#315b54").save(image_bytes, "PNG")
+
+    with TestClient(app) as client:
+        book = client.post(
+            "/books",
+            json={
+                "title": "Beloved",
+                "author": "Toni Morrison",
+                "acquisition_date": "2026-06-21",
+            },
+        ).json()
+        covered = client.post(
+            f'/books/{book["id"]}/cover',
+            files={"cover": ("beloved.png", image_bytes.getvalue(), "image/png")},
+        ).json()
+
+        response = client.get("/exports/full-backup")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+
+    archive_path = tmp_path / "backup.zip"
+    archive_path.write_bytes(response.content)
+    with zipfile.ZipFile(archive_path) as archive:
+        names = set(archive.namelist())
+        cover_name = f'covers/{covered["cover_filename"]}'
+        assert {"manifest.json", "bookpile.db", cover_name} <= names
+
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["format"] == "BOOKPILE_BACKUP"
+        assert manifest["backup_format_version"] == 1
+        assert manifest["counts"]["books"] == 1
+        assert manifest["counts"]["covers"] == 1
+
+        for filename, metadata in manifest["files"].items():
+            contents = archive.read(filename)
+            assert hashlib.sha256(contents).hexdigest() == metadata["sha256"]
+            assert len(contents) == metadata["size"]
+
+        exported_database = tmp_path / "bookpile.db"
+        exported_database.write_bytes(archive.read("bookpile.db"))
+        with sqlite3.connect(exported_database) as connection:
+            assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            exported = connection.execute(
+                "SELECT title, acquisition_date, cover_filename FROM books"
+            ).fetchone()
+            assert exported == (
+                "Beloved",
+                "2026-06-21",
+                covered["cover_filename"],
+            )
+
+
+def test_csv_export_is_excel_friendly_and_contains_location() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Salón"}).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 2},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        client.post(
+            "/books",
+            json={
+                "title": "Cien años de soledad",
+                "author": "Gabriel García Márquez",
+                "status": "READ",
+                "read_date": "2026-06-20",
+                "container_id": container["id"],
+                "position": 3,
+            },
+        )
+
+        response = client.get("/exports/books.csv")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    rows = list(
+        csv.DictReader(response.content.decode("utf-8-sig").splitlines())
+    )
+    assert len(rows) == 1
+    assert rows[0]["title"] == "Cien años de soledad"
+    assert rows[0]["author"] == "Gabriel García Márquez"
+    assert rows[0]["read_date"] == "2026-06-20"
+    assert rows[0]["bookcase"] == "Salón"
+    assert rows[0]["location"] == (
+        "Salón · Shelf 2 · Foreground Pile 1 · Position 3"
+    )

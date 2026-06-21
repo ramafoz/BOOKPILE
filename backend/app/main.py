@@ -1,6 +1,8 @@
+import os
 import sqlite3
+import tempfile
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -17,10 +19,12 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
 from .database import connect, database_path, init_database
+from .exports import create_full_backup, write_books_csv
 from .schemas import (
     Book,
     BookCreate,
@@ -63,6 +67,16 @@ def covers_directory() -> Path:
 def delete_cover_file(filename: str | None) -> None:
     if filename:
         (covers_directory() / filename).unlink(missing_ok=True)
+
+
+def temporary_download(suffix: str) -> Path:
+    descriptor, filename = tempfile.mkstemp(
+        prefix="bookpile-download-",
+        suffix=suffix,
+    )
+    os.close(descriptor)
+    Path(filename).unlink(missing_ok=True)
+    return Path(filename)
 
 
 def serialize_book(row: sqlite3.Row) -> dict[str, Any]:
@@ -136,6 +150,43 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/exports/full-backup")
+def download_full_backup() -> FileResponse:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = temporary_download(".zip")
+    try:
+        create_full_backup(path)
+    except ValueError as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=f"BOOKPILE-backup-{timestamp}.zip",
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
+@app.get("/exports/books.csv")
+def download_books_csv() -> FileResponse:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = temporary_download(".csv")
+    try:
+        write_books_csv(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        filename=f"BOOKPILE-books-{timestamp}.csv",
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
 
 
 @app.get("/stats", response_model=Stats)

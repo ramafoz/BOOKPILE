@@ -17,6 +17,9 @@ exact physical location.
 - Preserve the original collection as historical books with unknown acquisition
   dates.
 - Add, replace, and remove optimized cover photos from desktop or mobile.
+- Download a verified ZIP backup containing SQLite, covers, manifest, and
+  checksums.
+- Export all books, dates, and physical locations as an Excel-friendly CSV.
 
 ## Stack
 

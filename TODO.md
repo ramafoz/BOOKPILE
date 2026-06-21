@@ -2,14 +2,14 @@
 
 ## Next priority: backup and data portability
 
-- [ ] Create a downloadable backup containing:
+- [x] Create a downloadable backup containing:
   - SQLite catalogue database.
   - All locally stored cover images.
   - Backup metadata and format version.
 - [ ] Add a controlled restore flow.
 - [ ] Validate backup integrity before restoring.
 - [ ] Create an automatic safety backup before every restore.
-- [ ] Export the catalogue to CSV.
+- [x] Export the catalogue to CSV.
 - [ ] Consider Excel export after CSV is stable.
 - [ ] Document manual recovery and backup storage recommendations.
 
@@ -77,4 +77,3 @@
 - [ ] Renumber containers.
 - [ ] Renumber book positions.
 - [ ] Keep an optional history of physical moves.
-
