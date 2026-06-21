@@ -16,6 +16,7 @@ exact physical location.
 - Record optional acquisition, reading-started, and finished-reading dates.
 - Preserve the original collection as historical books with unknown acquisition
   dates.
+- Add, replace, and remove optimized cover photos from desktop or mobile.
 
 ## Stack
 

@@ -1,9 +1,12 @@
 import os
+import shutil
 import sqlite3
 from datetime import date
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
 
 TEST_DATABASE = Path(__file__).parent / "test_bookpile.db"
@@ -15,10 +18,12 @@ from app.database import init_database  # noqa: E402
 
 def setup_function() -> None:
     TEST_DATABASE.unlink(missing_ok=True)
+    shutil.rmtree(TEST_DATABASE.parent / "covers", ignore_errors=True)
 
 
 def teardown_function() -> None:
     TEST_DATABASE.unlink(missing_ok=True)
+    shutil.rmtree(TEST_DATABASE.parent / "covers", ignore_errors=True)
 
 
 def test_catalogue_flow() -> None:
@@ -298,4 +303,50 @@ def test_existing_catalogue_migrates_without_losing_books(
         assert row["reading_started_date"] is None
         assert row["read_date"] is None
         assert row["is_original_collection"] == 1
+        assert row["cover_filename"] is None
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def test_cover_upload_is_optimized_served_and_removed() -> None:
+    image_bytes = BytesIO()
+    Image.new("RGB", (1800, 2400), "#8b4d36").save(image_bytes, "JPEG")
+
+    with TestClient(app) as client:
+        book = client.post(
+            "/books",
+            json={"title": "Kindred", "author": "Octavia E. Butler"},
+        ).json()
+        uploaded = client.post(
+            f'/books/{book["id"]}/cover',
+            files={"cover": ("kindred.jpg", image_bytes.getvalue(), "image/jpeg")},
+        )
+
+        assert uploaded.status_code == 200
+        filename = uploaded.json()["cover_filename"]
+        assert filename.endswith(".webp")
+
+        served = client.get(f"/covers/{filename}")
+        assert served.status_code == 200
+        assert served.headers["content-type"] == "image/webp"
+        with Image.open(BytesIO(served.content)) as optimized:
+            assert optimized.format == "WEBP"
+            assert optimized.width <= 900
+            assert optimized.height <= 1400
+
+        removed = client.delete(f'/books/{book["id"]}/cover')
+        assert removed.status_code == 200
+        assert removed.json()["cover_filename"] is None
+        assert client.get(f"/covers/{filename}").status_code == 404
+
+
+def test_cover_upload_rejects_non_image() -> None:
+    with TestClient(app) as client:
+        book = client.post(
+            "/books",
+            json={"title": "Parable", "author": "Octavia E. Butler"},
+        ).json()
+        response = client.post(
+            f'/books/{book["id"]}/cover',
+            files={"cover": ("not-image.txt", b"not an image", "text/plain")},
+        )
+        assert response.status_code == 415

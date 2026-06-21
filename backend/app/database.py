@@ -68,6 +68,7 @@ def init_database() -> None:
                 read_date TEXT,
                 is_original_collection INTEGER NOT NULL DEFAULT 0
                     CHECK (is_original_collection IN (0, 1)),
+                cover_filename TEXT,
                 container_id INTEGER,
                 position INTEGER CHECK (position IS NULL OR position > 0),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -88,6 +89,7 @@ def init_database() -> None:
         _migrate_container_numbering(connection)
         _migrate_book_statuses(connection)
         _migrate_book_dates(connection)
+        _migrate_book_covers(connection)
 
 
 def _migrate_container_numbering(connection: sqlite3.Connection) -> None:
@@ -178,6 +180,7 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 read_date TEXT,
                 is_original_collection INTEGER NOT NULL DEFAULT 0
                     CHECK (is_original_collection IN (0, 1)),
+                cover_filename TEXT,
                 container_id INTEGER,
                 position INTEGER CHECK (position IS NULL OR position > 0),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -193,12 +196,12 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             INSERT INTO books_new (
                 id, title, author, status, goodreads_url, notes,
                 acquisition_date, reading_started_date, read_date,
-                is_original_collection,
+                is_original_collection, cover_filename,
                 container_id, position, created_at, updated_at
             )
             SELECT
                 id, title, author, status, goodreads_url, notes,
-                NULL, NULL, NULL, 1,
+                NULL, NULL, NULL, 1, NULL,
                 container_id, position, created_at, updated_at
             FROM books;
 
@@ -247,3 +250,12 @@ def _migrate_book_dates(connection: sqlite3.Connection) -> None:
         connection.execute(
             "UPDATE books SET is_original_collection = 1"
         )
+
+
+def _migrate_book_covers(connection: sqlite3.Connection) -> None:
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(books)").fetchall()
+    }
+    if "cover_filename" not in columns:
+        connection.execute("ALTER TABLE books ADD COLUMN cover_filename TEXT")

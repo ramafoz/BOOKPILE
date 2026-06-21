@@ -1,12 +1,26 @@
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import date
+from io import BytesIO
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
-from .database import connect, init_database
+from .database import connect, database_path, init_database
 from .schemas import (
     Book,
     BookCreate,
@@ -33,6 +47,22 @@ LEFT JOIN containers c ON c.id = b.container_id
 LEFT JOIN shelves s ON s.id = c.shelf_id
 LEFT JOIN bookcases bc ON bc.id = s.bookcase_id
 """
+
+MAX_COVER_BYTES = 12 * 1024 * 1024
+MAX_COVER_SIZE = (900, 1400)
+ALLOWED_COVER_FORMATS = {"JPEG", "PNG", "WEBP", "HEIF"}
+register_heif_opener()
+
+
+def covers_directory() -> Path:
+    directory = database_path().parent / "covers"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def delete_cover_file(filename: str | None) -> None:
+    if filename:
+        (covers_directory() / filename).unlink(missing_ok=True)
 
 
 def serialize_book(row: sqlite3.Row) -> dict[str, Any]:
@@ -330,11 +360,96 @@ def move_book(book_id: int, payload: BookMove) -> dict[str, Any]:
 
 @app.delete("/books/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_book(book_id: int) -> Response:
+    existing = fetch_book(book_id)
     with connect() as connection:
         cursor = connection.execute("DELETE FROM books WHERE id = ?", (book_id,))
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Book not found")
+    delete_cover_file(existing["cover_filename"])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/covers/{filename}")
+def cover_image(filename: str) -> FileResponse:
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=404, detail="Cover not found")
+    path = covers_directory() / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Cover not found")
+    return FileResponse(
+        path,
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.post("/books/{book_id}/cover", response_model=Book)
+async def upload_cover(
+    book_id: int,
+    cover: UploadFile = File(...),
+) -> dict[str, Any]:
+    existing = fetch_book(book_id)
+    contents = await cover.read(MAX_COVER_BYTES + 1)
+    if len(contents) > MAX_COVER_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Cover image must be 12 MB or smaller",
+        )
+
+    try:
+        with Image.open(BytesIO(contents)) as source:
+            if source.format not in ALLOWED_COVER_FORMATS:
+                raise HTTPException(
+                    status_code=415,
+                    detail="Use a JPEG, PNG, WebP, HEIC, or HEIF image",
+                )
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail(MAX_COVER_SIZE, Image.Resampling.LANCZOS)
+            if image.mode == "RGBA":
+                background = Image.new("RGB", image.size, "white")
+                background.paste(image, mask=image.getchannel("A"))
+                image = background
+            elif image.mode != "RGB":
+                image = image.convert("RGB")
+
+            filename = f"{uuid4().hex}.webp"
+            destination = covers_directory() / filename
+            image.save(destination, "WEBP", quality=82, method=6)
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=415,
+            detail="The selected file is not a valid supported image",
+        ) from exc
+
+    with connect() as connection:
+        connection.execute(
+            """
+            UPDATE books
+            SET cover_filename = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (filename, book_id),
+        )
+    delete_cover_file(existing["cover_filename"])
+    return fetch_book(book_id)
+
+
+@app.delete("/books/{book_id}/cover", response_model=Book)
+def remove_cover(book_id: int) -> dict[str, Any]:
+    existing = fetch_book(book_id)
+    with connect() as connection:
+        connection.execute(
+            """
+            UPDATE books
+            SET cover_filename = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (book_id,),
+        )
+    delete_cover_file(existing["cover_filename"])
+    return fetch_book(book_id)
 
 
 @app.get("/library")

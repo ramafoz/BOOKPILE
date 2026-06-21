@@ -10,8 +10,9 @@ import type {
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
   const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: isFormData ? undefined : { "Content-Type": "application/json" },
     ...options,
   });
   if (!response.ok) {
@@ -23,6 +24,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  coverUrl: (filename: string) => `${API_URL}/covers/${filename}`,
   books: (status: string, search: string) => {
     const params = new URLSearchParams();
     if (status !== "ALL") params.set("status", status);
@@ -40,6 +42,13 @@ export const api = {
     }),
   deleteBook: (id: number) =>
     request<void>(`/books/${id}`, { method: "DELETE" }),
+  uploadCover: (id: number, cover: File) => {
+    const body = new FormData();
+    body.append("cover", cover);
+    return request<Book>(`/books/${id}/cover`, { method: "POST", body });
+  },
+  deleteCover: (id: number) =>
+    request<Book>(`/books/${id}/cover`, { method: "DELETE" }),
   moveBook: (id: number, containerId: number, position: number) =>
     request<Book>(`/books/${id}/move`, {
       method: "POST",

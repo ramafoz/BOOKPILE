@@ -81,6 +81,7 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .book-list { border-top: 1px solid #dcd3c5; }
 .book-row { display: grid; grid-template-columns: 48px minmax(250px, 1fr) minmax(290px, .9fr) auto; align-items: center; gap: 20px; min-height: 95px; border-bottom: 1px solid #dcd3c5; }
 .book-spine { width: 38px; height: 55px; display: grid; place-items: center; border-radius: 3px; font-family: Georgia, "Times New Roman", serif; font-weight: 700; color: #fff; box-shadow: inset -6px 0 #00000018; }
+.book-cover-thumb { width: 40px; height: 58px; object-fit: cover; border-radius: 3px; box-shadow: 0 3px 9px #173d3530; }
 .book-spine.pending { background: #b37937; }
 .book-spine.currently_reading { background: #527b8e; }
 .book-spine.read { background: #397367; }
@@ -117,6 +118,16 @@ input:disabled, select:disabled { color: #8b918e; background: #e9e3d9; cursor: n
 textarea { resize: vertical; }
 small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .date-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.cover-field { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.cover-field legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.cover-editor { display: flex; align-items: center; gap: 16px; }
+.cover-editor > img, .cover-placeholder { width: 86px; height: 122px; border-radius: 6px; object-fit: cover; box-shadow: 0 5px 16px #173d3526; }
+.cover-placeholder { display: grid; place-items: center; color: #9a856c; background: #e9e1d5; border: 1px dashed #c6b9a6; }
+.cover-actions { flex: 1; display: flex; align-items: flex-start; flex-direction: column; gap: 8px; }
+.file-button, .remove-cover-button { display: inline-flex; align-items: center; gap: 8px; border-radius: 7px; padding: 10px 13px; font-weight: 700; }
+.file-button { color: #fff; background: #28574d; cursor: pointer; }
+.file-button input { display: none; }
+.remove-cover-button { border: 1px solid #cba995; color: #994c35; background: transparent; }
 .date-fields legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
 .checkbox-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; padding-top: 3px; }
 .checkbox-label input { width: auto; margin: 0; accent-color: #28574d; }
@@ -179,6 +190,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
   .date-fields { grid-column: auto; grid-template-columns: 1fr; }
+  .cover-field { grid-column: auto; }
+  .cover-editor { align-items: flex-start; }
   .checkbox-label { grid-column: auto; }
   .dialog { padding: 22px; }
   .book-main { align-items: flex-start; flex-direction: column; gap: 7px; }

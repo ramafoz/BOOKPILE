@@ -91,6 +91,7 @@ class Book(BookBase):
     id: int
     created_at: str
     updated_at: str
+    cover_filename: str | None = None
     location_label: str | None = None
     bookcase_name: str | None = None
     shelf_number: int | None = None

@@ -40,6 +40,7 @@ export interface Book {
   position: number | null;
   created_at: string;
   updated_at: string;
+  cover_filename: string | null;
   location_label: string | null;
 }
 

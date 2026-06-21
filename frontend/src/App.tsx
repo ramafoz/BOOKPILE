@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   BookOpen,
   BookPlus,
+  Camera,
   Check,
   ExternalLink,
   LibraryBig,
@@ -187,9 +188,17 @@ function App() {
           ) : (
             books.map((book) => (
               <article className="book-row" key={book.id}>
-                <div className={`book-spine ${book.status.toLowerCase()}`}>
-                  {book.title.slice(0, 1).toUpperCase()}
-                </div>
+                {book.cover_filename ? (
+                  <img
+                    className="book-cover-thumb"
+                    src={api.coverUrl(book.cover_filename)}
+                    alt={`Cover of ${book.title}`}
+                  />
+                ) : (
+                  <div className={`book-spine ${book.status.toLowerCase()}`}>
+                    {book.title.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
                 <div className="book-main">
                   <div>
                     <h3>{book.title}</h3>
@@ -342,6 +351,11 @@ function BookDialog({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [removeCover, setRemoveCover] = useState(false);
+  const [coverPreview, setCoverPreview] = useState<string | null>(
+    book?.cover_filename ? api.coverUrl(book.cover_filename) : null,
+  );
   const containers = useMemo(
     () =>
       library.flatMap((bookcase) =>
@@ -359,6 +373,13 @@ function BookDialog({
     [library],
   );
 
+  useEffect(() => {
+    if (!coverFile) return;
+    const preview = URL.createObjectURL(coverFile);
+    setCoverPreview(preview);
+    return () => URL.revokeObjectURL(preview);
+  }, [coverFile]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -369,8 +390,14 @@ function BookDialog({
         goodreads_url: form.goodreads_url || null,
         notes: form.notes || null,
       };
-      if (book) await api.updateBook(book.id, payload);
-      else await api.createBook(payload);
+      const savedBook = book
+        ? await api.updateBook(book.id, payload)
+        : await api.createBook(payload);
+      if (coverFile) {
+        await api.uploadCover(savedBook.id, coverFile);
+      } else if (removeCover && savedBook.cover_filename) {
+        await api.deleteCover(savedBook.id);
+      }
       await onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save book");
@@ -389,6 +416,45 @@ function BookDialog({
         </div>
         <form onSubmit={(event) => void submit(event)}>
           <div className="form-grid">
+            <fieldset className="wide cover-field">
+              <legend>Cover image</legend>
+              <div className="cover-editor">
+                {coverPreview && !removeCover ? (
+                  <img src={coverPreview} alt="Selected cover preview" />
+                ) : (
+                  <div className="cover-placeholder"><BookOpen size={28} /></div>
+                )}
+                <div className="cover-actions">
+                  <label className="file-button">
+                    <Camera size={17} />
+                    {coverPreview && !removeCover ? "Replace cover" : "Take or choose photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        setCoverFile(file);
+                        setRemoveCover(false);
+                      }}
+                    />
+                  </label>
+                  {coverPreview && !removeCover && (
+                    <button
+                      type="button"
+                      className="remove-cover-button"
+                      onClick={() => {
+                        setCoverFile(null);
+                        setCoverPreview(null);
+                        setRemoveCover(true);
+                      }}
+                    >
+                      <Trash2 size={16} /> Remove cover
+                    </button>
+                  )}
+                  <small>JPEG, PNG, WebP or iPhone HEIC · maximum 12 MB. Images are optimized automatically.</small>
+                </div>
+              </div>
+            </fieldset>
             <label className="wide">Title
               <input required autoFocus value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })} />
