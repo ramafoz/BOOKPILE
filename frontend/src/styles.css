@@ -87,6 +87,7 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .book-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .book-main h3 { margin: 0 0 5px; font-family: Georgia, "Times New Roman", serif; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .book-main p { margin: 0; color: #6d7773; font-size: 14px; }
+.book-dates { margin-top: 6px; color: #8b6849; font-size: 11px; }
 .status { padding: 4px 9px; border-radius: 20px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
 .status.pending { background: #f3e5cb; color: #8a5b1f; }
 .status.currently_reading { background: #deebf1; color: #345f73; }
@@ -115,6 +116,10 @@ input:focus, select:focus, textarea:focus { border-color: #a85835; box-shadow: 0
 input:disabled, select:disabled { color: #8b918e; background: #e9e3d9; cursor: not-allowed; }
 textarea { resize: vertical; }
 small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
+.date-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.date-fields legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.checkbox-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; padding-top: 3px; }
+.checkbox-label input { width: auto; margin: 0; accent-color: #28574d; }
 .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 24px; }
 .text-button { border: 0; background: transparent; color: #5b6763; padding: 10px; }
 .dialog-intro { color: #6b7672; line-height: 1.55; margin: -10px 0 23px; }
@@ -173,6 +178,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .catalogue-heading h2 { font-size: 32px; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
+  .date-fields { grid-column: auto; grid-template-columns: 1fr; }
+  .checkbox-label { grid-column: auto; }
   .dialog { padding: 22px; }
   .book-main { align-items: flex-start; flex-direction: column; gap: 7px; }
   .move-grid { grid-template-columns: 1fr; }

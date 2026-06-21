@@ -63,6 +63,11 @@ def init_database() -> None:
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
                 notes TEXT,
+                acquisition_date TEXT,
+                reading_started_date TEXT,
+                read_date TEXT,
+                is_original_collection INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_original_collection IN (0, 1)),
                 container_id INTEGER,
                 position INTEGER CHECK (position IS NULL OR position > 0),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -82,6 +87,7 @@ def init_database() -> None:
         )
         _migrate_container_numbering(connection)
         _migrate_book_statuses(connection)
+        _migrate_book_dates(connection)
 
 
 def _migrate_container_numbering(connection: sqlite3.Connection) -> None:
@@ -167,6 +173,11 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
                 notes TEXT,
+                acquisition_date TEXT,
+                reading_started_date TEXT,
+                read_date TEXT,
+                is_original_collection INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_original_collection IN (0, 1)),
                 container_id INTEGER,
                 position INTEGER CHECK (position IS NULL OR position > 0),
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,10 +192,13 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
 
             INSERT INTO books_new (
                 id, title, author, status, goodreads_url, notes,
+                acquisition_date, reading_started_date, read_date,
+                is_original_collection,
                 container_id, position, created_at, updated_at
             )
             SELECT
                 id, title, author, status, goodreads_url, notes,
+                NULL, NULL, NULL, 1,
                 container_id, position, created_at, updated_at
             FROM books;
 
@@ -204,3 +218,32 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
         raise
     finally:
         connection.execute("PRAGMA foreign_keys = ON")
+
+
+def _migrate_book_dates(connection: sqlite3.Connection) -> None:
+    """Add optional lifecycle dates without changing existing book data."""
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(books)").fetchall()
+    }
+    was_existing_catalogue = "acquisition_date" not in columns
+
+    additions = (
+        ("acquisition_date", "TEXT"),
+        ("reading_started_date", "TEXT"),
+        ("read_date", "TEXT"),
+        (
+            "is_original_collection",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (is_original_collection IN (0, 1))",
+        ),
+    )
+    for column, declaration in additions:
+        if column not in columns:
+            connection.execute(
+                f"ALTER TABLE books ADD COLUMN {column} {declaration}"
+            )
+
+    if was_existing_catalogue:
+        connection.execute(
+            "UPDATE books SET is_original_collection = 1"
+        )

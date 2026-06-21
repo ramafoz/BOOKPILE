@@ -1,4 +1,5 @@
 from enum import Enum
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -48,6 +49,10 @@ class BookBase(BaseModel):
     status: BookStatus = BookStatus.pending
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
+    acquisition_date: date | None = None
+    reading_started_date: date | None = None
+    read_date: date | None = None
+    is_original_collection: bool = False
     container_id: int | None = None
     position: int | None = Field(default=None, gt=0)
 
@@ -72,6 +77,10 @@ class BookUpdate(BaseModel):
     status: BookStatus | None = None
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
+    acquisition_date: date | None = None
+    reading_started_date: date | None = None
+    read_date: date | None = None
+    is_original_collection: bool | None = None
     container_id: int | None = None
     position: int | None = Field(default=None, gt=0)
 

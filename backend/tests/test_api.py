@@ -1,4 +1,6 @@
 import os
+import sqlite3
+from datetime import date
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,6 +10,7 @@ TEST_DATABASE = Path(__file__).parent / "test_bookpile.db"
 os.environ["BOOKPILE_DATABASE"] = str(TEST_DATABASE)
 
 from app.main import app  # noqa: E402
+from app.database import init_database  # noqa: E402
 
 
 def setup_function() -> None:
@@ -165,6 +168,7 @@ def test_currently_reading_book_has_no_library_position() -> None:
         assert reading.json()["status"] == "CURRENTLY_READING"
         assert reading.json()["container_id"] is None
         assert reading.json()["position"] is None
+        assert reading.json()["reading_started_date"] == date.today().isoformat()
         assert client.get("/stats").json()["currently_reading"] == 1
 
 
@@ -217,3 +221,81 @@ def test_move_swaps_books_and_deleting_shelf_unassigns_them() -> None:
         books = client.get("/books").json()
         assert all(book["container_id"] is None for book in books)
         assert all(book["position"] is None for book in books)
+
+
+def test_dates_can_be_entered_and_read_date_is_added_on_transition() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "The Dispossessed",
+                "author": "Ursula K. Le Guin",
+                "acquisition_date": "2026-06-01",
+                "is_original_collection": False,
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["acquisition_date"] == "2026-06-01"
+        assert created.json()["reading_started_date"] is None
+        assert created.json()["read_date"] is None
+
+        read = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={"status": "READ"},
+        )
+        assert read.status_code == 200
+        assert read.json()["read_date"] == date.today().isoformat()
+
+        corrected = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={
+                "reading_started_date": "2026-06-10",
+                "read_date": "2026-06-20",
+            },
+        )
+        assert corrected.json()["reading_started_date"] == "2026-06-10"
+        assert corrected.json()["read_date"] == "2026-06-20"
+
+
+def test_existing_catalogue_migrates_without_losing_books(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    legacy_database = tmp_path / "legacy.db"
+    with sqlite3.connect(legacy_database) as connection:
+        connection.execute(
+            """
+            CREATE TABLE books (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                author TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
+                goodreads_url TEXT,
+                notes TEXT,
+                container_id INTEGER,
+                position INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO books (title, author, status)
+            VALUES ('Legacy book', 'Existing author', 'PENDING')
+            """
+        )
+
+    monkeypatch.setenv("BOOKPILE_DATABASE", str(legacy_database))
+    init_database()
+
+    with sqlite3.connect(legacy_database) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute("SELECT * FROM books").fetchone()
+        assert row["title"] == "Legacy book"
+        assert row["acquisition_date"] is None
+        assert row["reading_started_date"] is None
+        assert row["read_date"] is None
+        assert row["is_original_collection"] == 1
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

@@ -1,5 +1,6 @@
 import sqlite3
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Response, status
@@ -156,15 +157,22 @@ def list_books(
 @app.post("/books", response_model=Book, status_code=status.HTTP_201_CREATED)
 def create_book(payload: BookCreate) -> dict[str, Any]:
     container_id, position = location_values(payload)
+    reading_started_date = payload.reading_started_date
+    read_date = payload.read_date
     if payload.status == BookStatus.currently_reading:
         container_id, position = None, None
+        reading_started_date = reading_started_date or date.today()
+    elif payload.status == BookStatus.read:
+        read_date = read_date or date.today()
     try:
         with connect() as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO books (
-                    title, author, status, goodreads_url, notes, container_id, position
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    title, author, status, goodreads_url, notes,
+                    acquisition_date, reading_started_date, read_date,
+                    is_original_collection, container_id, position
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.title,
@@ -172,6 +180,18 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                     payload.status.value,
                     str(payload.goodreads_url) if payload.goodreads_url else None,
                     payload.notes,
+                    (
+                        payload.acquisition_date.isoformat()
+                        if payload.acquisition_date
+                        else None
+                    ),
+                    (
+                        reading_started_date.isoformat()
+                        if reading_started_date
+                        else None
+                    ),
+                    read_date.isoformat() if read_date else None,
+                    int(payload.is_original_collection),
                     container_id,
                     position,
                 ),
@@ -197,6 +217,17 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["status"] = changes["status"].value
     if "goodreads_url" in changes and changes["goodreads_url"] is not None:
         changes["goodreads_url"] = str(changes["goodreads_url"])
+    for date_field in (
+        "acquisition_date",
+        "reading_started_date",
+        "read_date",
+    ):
+        if date_field in changes and changes[date_field] is not None:
+            changes[date_field] = changes[date_field].isoformat()
+    if "is_original_collection" in changes:
+        changes["is_original_collection"] = int(
+            changes["is_original_collection"]
+        )
 
     location_touched = {"container_id", "position"} & payload.model_fields_set
     if location_touched:
@@ -214,6 +245,17 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
     if next_status == BookStatus.currently_reading.value:
         changes["container_id"] = None
         changes["position"] = None
+        if (
+            "reading_started_date" not in payload.model_fields_set
+            and existing["reading_started_date"] is None
+        ):
+            changes["reading_started_date"] = date.today().isoformat()
+    elif (
+        next_status == BookStatus.read.value
+        and "read_date" not in payload.model_fields_set
+        and existing["read_date"] is None
+    ):
+        changes["read_date"] = date.today().isoformat()
 
     assignments = ", ".join(f"{column} = ?" for column in changes)
     values = list(changes.values())

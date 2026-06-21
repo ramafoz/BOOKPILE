@@ -37,6 +37,10 @@ const emptyBook: BookPayload = {
   status: "PENDING",
   goodreads_url: null,
   notes: null,
+  acquisition_date: null,
+  reading_started_date: null,
+  read_date: null,
+  is_original_collection: false,
   container_id: null,
   position: null,
 };
@@ -190,6 +194,7 @@ function App() {
                   <div>
                     <h3>{book.title}</h3>
                     <p>{book.author}</p>
+                    <BookDates book={book} />
                   </div>
                   <span className={`status ${book.status.toLowerCase()}`}>
                     {statusLabel(book.status)}
@@ -263,6 +268,31 @@ function statusLabel(status: "ALL" | BookStatus) {
   return "Read";
 }
 
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function BookDates({ book }: { book: Book }) {
+  const dates = [
+    book.acquisition_date
+      ? `Acquired ${formatDate(book.acquisition_date)}`
+      : book.is_original_collection
+        ? "Original collection"
+        : null,
+    book.reading_started_date
+      ? `Started ${formatDate(book.reading_started_date)}`
+      : null,
+    book.read_date ? `Read ${formatDate(book.read_date)}` : null,
+  ].filter(Boolean);
+
+  return dates.length ? <small className="book-dates">{dates.join(" · ")}</small> : null;
+}
+
 function StatCard({
   icon,
   label,
@@ -301,6 +331,10 @@ function BookDialog({
           status: book.status,
           goodreads_url: book.goodreads_url,
           notes: book.notes,
+          acquisition_date: book.acquisition_date,
+          reading_started_date: book.reading_started_date,
+          read_date: book.read_date,
+          is_original_collection: book.is_original_collection,
           container_id: book.container_id,
           position: book.position,
         }
@@ -367,9 +401,16 @@ function BookDialog({
               <select value={form.status}
                 onChange={(e) => {
                   const status = e.target.value as BookStatus;
+                  const today = new Date().toISOString().slice(0, 10);
                   setForm({
                     ...form,
                     status,
+                    ...(status === "CURRENTLY_READING" && !form.reading_started_date
+                      ? { reading_started_date: today }
+                      : {}),
+                    ...(status === "READ" && !form.read_date
+                      ? { read_date: today }
+                      : {}),
                     ...(status === "CURRENTLY_READING"
                       ? { container_id: null, position: null }
                       : {}),
@@ -399,6 +440,50 @@ function BookDialog({
               )}
               {containers.length === 0 && <small>Create your library layout first to assign a location.</small>}
             </label>
+            <fieldset className="wide date-fields">
+              <legend>Book history</legend>
+              <label>Acquired
+                <input
+                  type="date"
+                  value={form.acquisition_date ?? ""}
+                  onChange={(e) => setForm({
+                    ...form,
+                    acquisition_date: e.target.value || null,
+                  })}
+                />
+              </label>
+              <label>Reading started
+                <input
+                  type="date"
+                  value={form.reading_started_date ?? ""}
+                  onChange={(e) => setForm({
+                    ...form,
+                    reading_started_date: e.target.value || null,
+                  })}
+                />
+              </label>
+              <label>Finished reading
+                <input
+                  type="date"
+                  value={form.read_date ?? ""}
+                  onChange={(e) => setForm({
+                    ...form,
+                    read_date: e.target.value || null,
+                  })}
+                />
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.is_original_collection}
+                  onChange={(e) => setForm({
+                    ...form,
+                    is_original_collection: e.target.checked,
+                  })}
+                />
+                Original collection / acquisition date unknown
+              </label>
+            </fieldset>
             <label className="wide">Goodreads link
               <input type="url" placeholder="https://www.goodreads.com/…"
                 value={form.goodreads_url ?? ""}

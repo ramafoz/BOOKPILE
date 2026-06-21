@@ -13,6 +13,9 @@ exact physical location.
   position.
 - Inspect and safely delete shelves and containers without deleting books.
 - Reorganize books quickly, swapping positions when the destination is occupied.
+- Record optional acquisition, reading-started, and finished-reading dates.
+- Preserve the original collection as historical books with unknown acquisition
+  dates.
 
 ## Stack
 

@@ -32,6 +32,10 @@ export interface Book {
   status: BookStatus;
   goodreads_url: string | null;
   notes: string | null;
+  acquisition_date: string | null;
+  reading_started_date: string | null;
+  read_date: string | null;
+  is_original_collection: boolean;
   container_id: number | null;
   position: number | null;
   created_at: string;
@@ -52,6 +56,10 @@ export interface BookPayload {
   status: BookStatus;
   goodreads_url: string | null;
   notes: string | null;
+  acquisition_date: string | null;
+  reading_started_date: string | null;
+  read_date: string | null;
+  is_original_collection: boolean;
   container_id: number | null;
   position: number | null;
 }
