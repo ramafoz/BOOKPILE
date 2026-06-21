@@ -20,6 +20,8 @@ exact physical location.
 - Download a verified ZIP backup containing SQLite, covers, manifest, and
   checksums.
 - Export all books, dates, and physical locations as an Excel-friendly CSV.
+- Inspect and restore validated BOOKPILE backups with an automatic pre-restore
+  safety backup and rollback protection.
 
 ## Stack
 

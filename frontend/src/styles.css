@@ -169,10 +169,26 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .data-options article { display: flex; gap: 17px; padding: 20px; border: 1px solid #d8cebf; background: #fffdf8; border-radius: 10px; }
 .data-option-icon { flex: 0 0 auto; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 50%; color: #28574d; background: #dfece7; }
 .data-option-icon.csv { color: #8d6425; background: #f3e5ca; }
+.data-option-icon.restore { color: #8e4934; background: #f1dfd8; }
 .data-options h3 { margin: 1px 0 6px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
 .data-options p { margin: 0 0 15px; color: #69736f; line-height: 1.5; font-size: 14px; }
 .data-options a { text-decoration: none; }
 .data-note { margin-top: 17px; padding: 12px 14px; color: #52605c; background: #e9e3d8; border-radius: 7px; font-size: 13px; }
+.restore-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.restore-picker > span { color: #727b78; font-size: 13px; word-break: break-all; }
+.restore-file-button { padding: 9px 12px; }
+.restore-confirmation { margin-top: 18px; padding: 19px; border: 2px solid #c88969; border-radius: 10px; background: #fff8f4; }
+.restore-confirmation h3, .restore-success h3 { margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; }
+.restore-confirmation > p:not(.eyebrow) { color: #68716e; font-size: 13px; }
+.restore-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.restore-counts span { padding: 7px 10px; color: #5e6864; background: #eee7dd; border-radius: 6px; font-size: 12px; }
+.restore-counts strong { color: #273a35; }
+.restore-check { display: flex; align-items: flex-start; gap: 9px; margin: 15px 0; color: #6d3d2f; font-size: 13px; font-weight: 700; line-height: 1.45; }
+.restore-check input { width: auto; margin: 2px 0 0; accent-color: #a85835; }
+.danger-button { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 7px; padding: 12px 16px; color: #fff; background: #a5432d; font-weight: 700; }
+.danger-button:disabled { opacity: .45; cursor: not-allowed; }
+.restore-success { display: flex; gap: 14px; margin-top: 18px; padding: 18px; color: #28574d; background: #dfece7; border: 1px solid #b9d2c8; border-radius: 10px; }
+.restore-success p { color: #52645e; line-height: 1.5; font-size: 13px; }
 
 @media (max-width: 850px) {
   .shelf-art { opacity: .25; right: -80px; }

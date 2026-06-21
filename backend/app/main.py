@@ -25,6 +25,7 @@ from pillow_heif import register_heif_opener
 
 from .database import connect, database_path, init_database
 from .exports import create_full_backup, write_books_csv
+from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
 from .schemas import (
     Book,
     BookCreate,
@@ -187,6 +188,38 @@ def download_books_csv() -> FileResponse:
         filename=f"BOOKPILE-books-{timestamp}.csv",
         background=BackgroundTask(path.unlink, missing_ok=True),
     )
+
+
+@app.post("/restore/inspect")
+async def inspect_restore(
+    backup: UploadFile = File(...),
+) -> dict[str, Any]:
+    path = temporary_download(".zip")
+    size = 0
+    try:
+        with path.open("wb") as destination:
+            while chunk := await backup.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_BACKUP_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="Backup ZIP must be 1 GB or smaller",
+                    )
+                destination.write(chunk)
+        try:
+            return stage_restore(path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        path.unlink(missing_ok=True)
+
+
+@app.post("/restore/{token}")
+def confirm_restore(token: str) -> dict[str, Any]:
+    try:
+        return perform_restore(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/stats", response_model=Stats)

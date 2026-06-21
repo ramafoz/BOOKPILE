@@ -56,6 +56,9 @@ Creating a backup will not require stopping BOOKPILE.
 
 Restore is the high-risk operation and will be deliberately stricter.
 
+**Implemented:** staged inspection, explicit confirmation, automatic
+pre-restore backup, atomic replacement, and rollback protection.
+
 ### Validation before changing anything
 
 The backend will:
@@ -163,4 +166,3 @@ Estimated implementation and testing: 3–5 hours.
 - Synchronization between several active BOOKPILE installations.
 
 These can be considered after local backup and restore are proven reliable.
-

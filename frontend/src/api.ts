@@ -7,6 +7,21 @@ import type {
   Stats,
 } from "./types";
 
+export interface RestoreInspection {
+  token: string;
+  created_at: string;
+  schema_version: number;
+  counts: {
+    bookcases: number;
+    shelves: number;
+    containers: number;
+    books: number;
+    covers: number;
+  };
+  filename: string;
+  validated_at: string;
+}
+
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -91,4 +106,17 @@ export const api = {
     request<void>(`/shelves/${id}`, { method: "DELETE" }),
   deleteContainer: (id: number) =>
     request<void>(`/containers/${id}`, { method: "DELETE" }),
+  inspectRestore: (backup: File) => {
+    const body = new FormData();
+    body.append("backup", backup);
+    return request<RestoreInspection>("/restore/inspect", {
+      method: "POST",
+      body,
+    });
+  },
+  confirmRestore: (token: string) =>
+    request<RestoreInspection & {
+      safety_backup: string;
+      restored_at: string;
+    }>(`/restore/${token}`, { method: "POST" }),
 };

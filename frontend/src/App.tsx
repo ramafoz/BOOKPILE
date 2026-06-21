@@ -16,9 +16,10 @@ import {
   Search,
   Settings2,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
-import { api } from "./api";
+import { api, type RestoreInspection } from "./api";
 import type {
   Book,
   BookPayload,
@@ -886,6 +887,50 @@ function ReorganizeDialog({
 }
 
 function DataDialog({ onClose }: { onClose: () => void }) {
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [inspection, setInspection] = useState<RestoreInspection | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const [restored, setRestored] = useState<{
+    safety_backup: string;
+    counts: RestoreInspection["counts"];
+  } | null>(null);
+
+  async function inspectBackup() {
+    if (!restoreFile) return;
+    setWorking(true);
+    setError("");
+    setInspection(null);
+    setRestored(null);
+    setConfirmed(false);
+    try {
+      setInspection(await api.inspectRestore(restoreFile));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to inspect backup");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function restoreBackup() {
+    if (!inspection || !confirmed) return;
+    setWorking(true);
+    setError("");
+    try {
+      const result = await api.confirmRestore(inspection.token);
+      setRestored({
+        safety_backup: result.safety_backup,
+        counts: result.counts,
+      });
+      setInspection(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to restore backup");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
       <div className="dialog data-dialog" onMouseDown={(event) => event.stopPropagation()}>
@@ -935,10 +980,101 @@ function DataDialog({ onClose }: { onClose: () => void }) {
               </a>
             </div>
           </article>
+          <article className="restore-option">
+            <div className="data-option-icon restore"><Upload /></div>
+            <div>
+              <h3>Restore a full backup</h3>
+              <p>
+                Select a BOOKPILE ZIP. It will be fully validated before you
+                are offered the option to replace the current catalogue.
+              </p>
+              <div className="restore-picker">
+                <label className="file-button restore-file-button">
+                  <Upload size={17} />
+                  Choose backup ZIP
+                  <input
+                    type="file"
+                    accept=".zip,application/zip"
+                    onChange={(event) => {
+                      setRestoreFile(event.target.files?.[0] ?? null);
+                      setInspection(null);
+                      setRestored(null);
+                      setConfirmed(false);
+                      setError("");
+                    }}
+                  />
+                </label>
+                <span>{restoreFile?.name ?? "No backup selected"}</span>
+              </div>
+              <button
+                type="button"
+                className="outline-button"
+                disabled={!restoreFile || working}
+                onClick={() => void inspectBackup()}
+              >
+                {working && !inspection ? "Validating…" : "Inspect backup"}
+              </button>
+            </div>
+          </article>
         </div>
+        {error && <div className="form-error">{error}</div>}
+        {inspection && (
+          <section className="restore-confirmation">
+            <p className="eyebrow dark">Validated backup</p>
+            <h3>{new Date(inspection.created_at).toLocaleString()}</h3>
+            <div className="restore-counts">
+              <span><strong>{inspection.counts.books}</strong> books</span>
+              <span><strong>{inspection.counts.covers}</strong> covers</span>
+              <span><strong>{inspection.counts.bookcases}</strong> bookcases</span>
+              <span><strong>{inspection.counts.shelves}</strong> shelves</span>
+              <span><strong>{inspection.counts.containers}</strong> containers</span>
+            </div>
+            <p>
+              Checksums, SQLite integrity, foreign keys, record counts, and
+              cover files are valid.
+            </p>
+            <label className="restore-check">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              Replace the current catalogue with this validated backup.
+              BOOKPILE will first create an automatic safety backup.
+            </label>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={!confirmed || working}
+              onClick={() => void restoreBackup()}
+            >
+              {working ? "Restoring…" : "Restore this backup"}
+            </button>
+          </section>
+        )}
+        {restored && (
+          <section className="restore-success">
+            <Check size={25} />
+            <div>
+              <h3>Restore completed</h3>
+              <p>
+                Restored {restored.counts.books} books and{" "}
+                {restored.counts.covers} covers. The catalogue that was
+                replaced is preserved as <strong>{restored.safety_backup}</strong>.
+              </p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => window.location.reload()}
+              >
+                Reload BOOKPILE
+              </button>
+            </div>
+          </section>
+        )}
         <div className="data-note">
-          Phase A only creates downloads. It never changes or replaces your
-          catalogue.
+          Restore never changes the catalogue during inspection. Replacement
+          only happens after validation and explicit confirmation.
         </div>
       </div>
     </div>

@@ -23,11 +23,13 @@ from app.database import init_database  # noqa: E402
 def setup_function() -> None:
     TEST_DATABASE.unlink(missing_ok=True)
     shutil.rmtree(TEST_DATABASE.parent / "covers", ignore_errors=True)
+    shutil.rmtree(TEST_DATABASE.parent / ".restore-staging", ignore_errors=True)
 
 
 def teardown_function() -> None:
     TEST_DATABASE.unlink(missing_ok=True)
     shutil.rmtree(TEST_DATABASE.parent / "covers", ignore_errors=True)
+    shutil.rmtree(TEST_DATABASE.parent / ".restore-staging", ignore_errors=True)
 
 
 def test_catalogue_flow() -> None:
@@ -453,3 +455,162 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
     assert rows[0]["location"] == (
         "Salón · Shelf 2 · Foreground Pile 1 · Position 3"
     )
+
+
+def test_restore_recovers_deleted_book_and_cover() -> None:
+    image_bytes = BytesIO()
+    Image.new("RGB", (500, 800), "#4d6f78").save(image_bytes, "JPEG")
+
+    with TestClient(app) as client:
+        first = client.post(
+            "/books",
+            json={"title": "First backup book", "author": "Author One"},
+        ).json()
+        second = client.post(
+            "/books",
+            json={"title": "Second backup book", "author": "Author Two"},
+        ).json()
+        covered = client.post(
+            f'/books/{second["id"]}/cover',
+            files={"cover": ("cover.jpg", image_bytes.getvalue(), "image/jpeg")},
+        ).json()
+        backup = client.get("/exports/full-backup")
+        assert backup.status_code == 200
+
+        assert client.delete(f'/books/{second["id"]}').status_code == 204
+        assert len(client.get("/books").json()) == 1
+
+        inspection = client.post(
+            "/restore/inspect",
+            files={"backup": ("saved.zip", backup.content, "application/zip")},
+        )
+        assert inspection.status_code == 200
+        assert inspection.json()["counts"]["books"] == 2
+        assert inspection.json()["counts"]["covers"] == 1
+
+        restored = client.post(f'/restore/{inspection.json()["token"]}')
+        assert restored.status_code == 200
+        assert restored.json()["safety_backup"].startswith("pre-restore-")
+
+        books = client.get("/books").json()
+        assert {book["title"] for book in books} == {
+            "First backup book",
+            "Second backup book",
+        }
+        restored_cover = next(
+            book["cover_filename"]
+            for book in books
+            if book["title"] == "Second backup book"
+        )
+        assert restored_cover == covered["cover_filename"]
+        assert client.get(f"/covers/{restored_cover}").status_code == 200
+
+    backup_directory = TEST_DATABASE.parent.parent / "backups"
+    for backup_file in backup_directory.glob("pre-restore-*.zip"):
+        backup_file.unlink(missing_ok=True)
+
+
+def test_restore_rejects_checksum_mismatch(tmp_path: Path) -> None:
+    with TestClient(app) as client:
+        client.post(
+            "/books",
+            json={"title": "Protected book", "author": "Safe Author"},
+        )
+        valid_backup = client.get("/exports/full-backup").content
+
+    source = tmp_path / "valid.zip"
+    source.write_bytes(valid_backup)
+    damaged = tmp_path / "damaged.zip"
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(
+        damaged, "w", zipfile.ZIP_DEFLATED
+    ) as replacement:
+        for name in original.namelist():
+            contents = original.read(name)
+            if name == "bookpile.db":
+                tampered = bytearray(contents)
+                tampered[-1] ^= 0x01
+                contents = bytes(tampered)
+            replacement.writestr(name, contents)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/restore/inspect",
+            files={"backup": ("damaged.zip", damaged.read_bytes(), "application/zip")},
+        )
+        assert response.status_code == 422
+        assert "Checksum mismatch" in response.json()["detail"]
+        assert len(client.get("/books").json()) == 1
+
+
+def test_restore_rejects_unsafe_zip_path(tmp_path: Path) -> None:
+    unsafe = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(unsafe, "w") as archive:
+        archive.writestr("../bookpile.db", b"no")
+        archive.writestr("manifest.json", "{}")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/restore/inspect",
+            files={"backup": ("unsafe.zip", unsafe.read_bytes(), "application/zip")},
+        )
+        assert response.status_code == 422
+        assert "Unsafe" in response.json()["detail"]
+
+
+def test_restore_rejects_newer_schema(tmp_path: Path) -> None:
+    with TestClient(app) as client:
+        client.post(
+            "/books",
+            json={"title": "Versioned book", "author": "Version Author"},
+        )
+        valid_backup = client.get("/exports/full-backup").content
+
+    source = tmp_path / "valid.zip"
+    source.write_bytes(valid_backup)
+    newer = tmp_path / "newer.zip"
+    with zipfile.ZipFile(source) as original, zipfile.ZipFile(
+        newer, "w", zipfile.ZIP_DEFLATED
+    ) as replacement:
+        for name in original.namelist():
+            contents = original.read(name)
+            if name == "manifest.json":
+                manifest = json.loads(contents)
+                manifest["schema_version"] = 999
+                contents = json.dumps(manifest).encode()
+            replacement.writestr(name, contents)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/restore/inspect",
+            files={"backup": ("newer.zip", newer.read_bytes(), "application/zip")},
+        )
+        assert response.status_code == 422
+        assert "newer unsupported" in response.json()["detail"]
+
+
+def test_restore_rechecks_staged_checksums() -> None:
+    with TestClient(app) as client:
+        client.post(
+            "/books",
+            json={"title": "Checksum book", "author": "Careful Author"},
+        )
+        backup = client.get("/exports/full-backup").content
+        inspection = client.post(
+            "/restore/inspect",
+            files={"backup": ("backup.zip", backup, "application/zip")},
+        ).json()
+
+        staged_database = (
+            TEST_DATABASE.parent
+            / ".restore-staging"
+            / inspection["token"]
+            / "bookpile.db"
+        )
+        contents = bytearray(staged_database.read_bytes())
+        contents[-1] ^= 0x01
+        staged_database.write_bytes(contents)
+
+        response = client.post(f'/restore/{inspection["token"]}')
+        assert response.status_code == 409
+        assert "checksum changed" in response.json()["detail"]
+        assert len(client.get("/books").json()) == 1

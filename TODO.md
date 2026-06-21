@@ -6,9 +6,9 @@
   - SQLite catalogue database.
   - All locally stored cover images.
   - Backup metadata and format version.
-- [ ] Add a controlled restore flow.
-- [ ] Validate backup integrity before restoring.
-- [ ] Create an automatic safety backup before every restore.
+- [x] Add a controlled restore flow.
+- [x] Validate backup integrity before restoring.
+- [x] Create an automatic safety backup before every restore.
 - [x] Export the catalogue to CSV.
 - [ ] Consider Excel export after CSV is stable.
 - [ ] Document manual recovery and backup storage recommendations.
