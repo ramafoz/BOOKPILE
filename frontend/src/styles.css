@@ -103,6 +103,9 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .status.read { background: #dcebe6; color: #285c51; }
 .location { display: flex; align-items: center; gap: 8px; color: #68726e; font-size: 13px; line-height: 1.4; }
 .location svg { color: #a85835; flex: 0 0 auto; }
+.location-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.location-copy strong { overflow: hidden; color: #40504b; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.location-copy span { color: #78817e; font-size: 12px; }
 .book-side { min-width: 0; display: flex; align-items: flex-end; flex-direction: column; gap: 7px; }
 .location { width: 100%; justify-content: flex-start; }
 .row-actions { display: flex; justify-content: flex-end; }

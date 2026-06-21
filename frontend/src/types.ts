@@ -42,6 +42,11 @@ export interface Book {
   updated_at: string;
   cover_filename: string | null;
   location_label: string | null;
+  bookcase_name: string | null;
+  shelf_number: number | null;
+  container_type: ContainerType | null;
+  layer: Layer | null;
+  container_number: number | null;
 }
 
 export interface Stats {

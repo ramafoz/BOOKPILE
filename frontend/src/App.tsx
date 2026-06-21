@@ -382,11 +382,27 @@ function App() {
                 <div className="book-side">
                   <div className="location">
                     <MapPin size={16} />
-                    <span>
-                      {book.status === "CURRENTLY_READING"
-                        ? "Currently reading · outside library"
-                        : book.location_label ?? "Location not assigned"}
-                    </span>
+                    {book.status === "CURRENTLY_READING" ? (
+                      <div className="location-copy">
+                        <strong>Currently reading</strong>
+                        <span>Outside the physical library</span>
+                      </div>
+                    ) : book.container_id ? (
+                      <div className="location-copy">
+                        <strong>{book.bookcase_name}</strong>
+                        <span>
+                          Shelf {book.shelf_number} ·{" "}
+                          {book.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+                          {book.container_type === "ROW" ? "Row" : "Pile"}{" "}
+                          {book.container_number} · Position {book.position}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="location-copy">
+                        <strong>Location not assigned</strong>
+                        <span>No shelf or container selected</span>
+                      </div>
+                    )}
                   </div>
                   <div className="row-actions">
                     {book.goodreads_url && (
