@@ -183,6 +183,8 @@ function App() {
     setBookcaseFilter(String(bookcaseId));
     setShelfFilter(shelfId ? String(shelfId) : "");
     setContainerFilter(containerId ? String(containerId) : "");
+    setSortBy("physical");
+    setSortOrder("asc");
     setShowAdvanced(true);
     setShowMap(false);
     window.setTimeout(
@@ -1309,8 +1311,7 @@ function MapContainerGraphic({
                 y +
                 labelHeight +
                 padding +
-                bookAreaHeight -
-                book.position * slotHeight
+                (book.position - 1) * slotHeight
               }
               width={availableWidth}
               height={bookHeight}
@@ -1683,7 +1684,7 @@ function LibraryMapDialog({
           <span><i className="pending" /> Pending</span>
           <span><i className="reading" /> Reading…</span>
           <span><i className="read" /> Read</span>
-          <span className="map-legend-note">Rows run left → right · piles stack bottom → top</span>
+          <span className="map-legend-note">Rows run left → right · piles stack top → bottom</span>
           {!editingLayout ? (
             <button
               className="text-button map-edit-button"

@@ -24,6 +24,8 @@
 - [x] Show rows horizontally and piles vertically.
 - [x] Open the catalogue filtered by bookcase, shelf, or container when that
   hierarchy level is clicked.
+- [x] Sort catalogue results by ascending physical position when opened from
+  the visual map.
 - [x] Do not make individual books clickable in the visual index.
 - [x] Allow persistent physical gaps between containers.
 - [ ] Show empty book positions where useful.
@@ -32,6 +34,10 @@
 - [x] Scale furniture to preserve approximate relative physical size.
 - [x] Resize shelves within a bookcase using relative height weights.
 - [x] Reposition and resize containers within a shelf.
+- [ ] Let every container have independently customizable height as well as
+  width, so piles can sit above background rows in unused vertical space.
+- [ ] Allow visual container overlap: foreground containers may cover up to
+  50% of a background row's height to simulate shelf depth.
 - [x] Persist the visual layout independently from catalogue locations.
 - [ ] Add direct drag-and-resize handles as an optional convenience over the
   current precise slider controls.
