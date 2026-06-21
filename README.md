@@ -28,6 +28,8 @@ exact physical location.
   date ranges and physical location.
 - Insert a new book into an occupied container position by shifting the
   contiguous books one place after explicit confirmation.
+- Browse a read-only visual library index with exploded background/foreground
+  layers and click-through catalogue filters.
 
 ## Stack
 

@@ -25,6 +25,49 @@ export interface Bookcase {
   shelves: Shelf[];
 }
 
+export interface MapBook {
+  id: number;
+  title: string;
+  status: BookStatus;
+  container_id: number;
+  position: number;
+}
+
+export interface MapContainer extends Container {
+  books: MapBook[];
+  status_counts: {
+    pending: number;
+    reading: number;
+    read: number;
+  };
+}
+
+export interface MapShelf {
+  id: number;
+  bookcase_id: number;
+  shelf_number: number;
+  book_count: number;
+  containers: MapContainer[];
+}
+
+export interface MapBookcase {
+  id: number;
+  name: string;
+  description: string | null;
+  book_count: number;
+  shelves: MapShelf[];
+}
+
+export interface LibraryMapData {
+  bookcases: MapBookcase[];
+  outside_books: Array<{
+    id: number;
+    title: string;
+    status: BookStatus;
+    position: null;
+  }>;
+}
+
 export interface Book {
   id: number;
   title: string;

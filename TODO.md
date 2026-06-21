@@ -15,9 +15,17 @@
 
 ## Visual library representation
 
-- [ ] Display bookcases, shelves, rows, and piles graphically.
-- [ ] Reorganize books using drag and drop.
-- [ ] Show empty positions and physical gaps.
+- [x] Build a read-only visual index of bookcases, shelves, containers, and
+  status-coloured books.
+- [x] Use an exploded shelf view so overlapping background and foreground
+  containers remain simultaneously visible.
+- [x] Render background containers with lighter styling and foreground
+  containers with stronger borders/shadows.
+- [x] Show rows horizontally and piles vertically.
+- [x] Open the catalogue filtered by bookcase, shelf, or container when that
+  hierarchy level is clicked.
+- [x] Do not make individual books clickable in the visual index.
+- [ ] Show empty positions and physical gaps where useful.
 - [ ] Detect duplicate or conflicting positions visually.
 - [ ] Let the user position bookcases/furniture relative to one another.
 - [ ] Scale furniture to preserve approximate relative physical size.
@@ -25,6 +33,8 @@
 - [ ] Reorder and resize containers within a shelf.
 - [ ] Render containers as grey rectangles that fill with books.
 - [ ] Colour books according to reading status.
+- [ ] Future-only idea: drag books between containers and reorder them visually.
+  This is not part of the current visual-index scope.
 
 ## Batch catalogue entry
 

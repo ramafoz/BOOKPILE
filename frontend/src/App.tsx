@@ -9,6 +9,7 @@ import {
   Download,
   ExternalLink,
   FileSpreadsheet,
+  GalleryVerticalEnd,
   LibraryBig,
   ListPlus,
   MapPin,
@@ -29,6 +30,10 @@ import type {
   BookStatus,
   ContainerType,
   Layer,
+  LibraryMapData,
+  MapBookcase,
+  MapContainer,
+  MapShelf,
   Stats,
 } from "./types";
 
@@ -64,6 +69,7 @@ function App() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReorganize, setShowReorganize] = useState(false);
   const [showData, setShowData] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -165,6 +171,25 @@ function App() {
     }
   }
 
+  function openCatalogueAt(
+    bookcaseId: number,
+    shelfId: number | "" = "",
+    containerId: number | "" = "",
+  ) {
+    setBookcaseFilter(String(bookcaseId));
+    setShelfFilter(shelfId ? String(shelfId) : "");
+    setContainerFilter(containerId ? String(containerId) : "");
+    setShowAdvanced(true);
+    setShowMap(false);
+    window.setTimeout(
+      () => document.querySelector(".catalogue-heading")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+      0,
+    );
+  }
+
   return (
     <main>
       <header className="hero">
@@ -174,6 +199,9 @@ function App() {
             BOOKPILE
           </a>
           <div className="nav-actions">
+            <button className="ghost-button" onClick={() => setShowMap(true)}>
+              <GalleryVerticalEnd size={17} /> Library map
+            </button>
             <button className="ghost-button" onClick={() => setShowData(true)}>
               <DatabaseBackup size={17} /> Data & backups
             </button>
@@ -464,6 +492,12 @@ function App() {
         />
       )}
       {showData && <DataDialog onClose={() => setShowData(false)} />}
+      {showMap && (
+        <LibraryMapDialog
+          onClose={() => setShowMap(false)}
+          onFilter={openCatalogueAt}
+        />
+      )}
     </main>
   );
 }
@@ -1158,6 +1192,405 @@ function ReorganizeDialog({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+const MAP_WIDTH = 960;
+const MAP_INSET = 22;
+
+function mapShelfHeight(shelf: MapShelf) {
+  if (shelf.containers.length === 0) return 62;
+  if (shelf.book_count === 0) return 92;
+  const layers = new Set(shelf.containers.map((container) => container.layer));
+  return layers.size > 1 ? 190 : 126;
+}
+
+function bookColour(status: BookStatus) {
+  if (status === "READ") return "#4f887b";
+  if (status === "CURRENTLY_READING") return "#557f93";
+  return "#d29a46";
+}
+
+function MapContainerGraphic({
+  container,
+  x,
+  y,
+  width,
+  height,
+  onSelect,
+}: {
+  container: MapContainer;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  onSelect: () => void;
+}) {
+  const padding = 9;
+  const labelHeight = 22;
+  const bookAreaHeight = Math.max(18, height - labelHeight - padding * 2);
+  const availableWidth = Math.max(20, width - padding * 2);
+  const books = container.books;
+  const isRow = container.container_type === "ROW";
+  const maxPosition = Math.max(
+    1,
+    ...books.map((book) => book.position),
+  );
+  const activate = (event: React.KeyboardEvent<SVGGElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect();
+    }
+  };
+
+  return (
+    <g
+      className={`map-container ${container.layer.toLowerCase()}`}
+      role="button"
+      tabIndex={0}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+      onKeyDown={activate}
+    >
+      <title>
+        {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+        {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
+        {container.container_number} · {container.book_count} books
+      </title>
+      <rect x={x} y={y} width={width} height={height} rx="7" />
+      <text x={x + padding} y={y + 16} className="map-container-label">
+        {container.layer === "BACKGROUND" ? "BG" : "FG"} ·{" "}
+        {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
+        {container.container_number}
+      </text>
+      {container.book_count === 0 ? (
+        <text
+          x={x + width / 2}
+          y={y + labelHeight + bookAreaHeight / 2 + 5}
+          textAnchor="middle"
+          className="map-empty-label"
+        >
+          empty
+        </text>
+      ) : isRow ? (
+        books.map((book) => {
+          const slotWidth = availableWidth / maxPosition;
+          const bookWidth = Math.max(3, Math.min(12, slotWidth - 2));
+          return (
+            <rect
+              key={book.id}
+              className="map-book"
+              x={x + padding + (book.position - 1) * slotWidth}
+              y={y + labelHeight + padding}
+              width={bookWidth}
+              height={bookAreaHeight}
+              rx="1"
+              fill={bookColour(book.status)}
+            >
+              <title>{book.title}</title>
+            </rect>
+          );
+        })
+      ) : (
+        books.map((book) => {
+          const slotHeight = bookAreaHeight / maxPosition;
+          const bookHeight = Math.max(3, Math.min(10, slotHeight - 1));
+          return (
+            <rect
+              key={book.id}
+              className="map-book"
+              x={x + padding}
+              y={
+                y +
+                labelHeight +
+                padding +
+                bookAreaHeight -
+                book.position * slotHeight
+              }
+              width={availableWidth}
+              height={bookHeight}
+              rx="1"
+              fill={bookColour(book.status)}
+            >
+              <title>{book.title}</title>
+            </rect>
+          );
+        })
+      )}
+    </g>
+  );
+}
+
+function MapShelfGraphic({
+  shelf,
+  y,
+  height,
+  onShelf,
+  onContainer,
+}: {
+  shelf: MapShelf;
+  y: number;
+  height: number;
+  onShelf: () => void;
+  onContainer: (container: MapContainer) => void;
+}) {
+  const layers = (["BACKGROUND", "FOREGROUND"] as const)
+    .map((layer) => ({
+      layer,
+      containers: shelf.containers.filter(
+        (container) => container.layer === layer,
+      ),
+    }))
+    .filter((group) => group.containers.length > 0);
+  const headerHeight = 28;
+  const layerGap = 8;
+  const contentHeight = height - headerHeight - 8;
+  const layerHeight =
+    layers.length > 0
+      ? (contentHeight - layerGap * (layers.length - 1)) / layers.length
+      : contentHeight;
+
+  return (
+    <g
+      className="map-shelf"
+      role="button"
+      tabIndex={0}
+      onClick={onShelf}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onShelf();
+      }}
+    >
+      <title>Shelf {shelf.shelf_number} · {shelf.book_count} books</title>
+      <rect
+        x={MAP_INSET}
+        y={y}
+        width={MAP_WIDTH - MAP_INSET * 2}
+        height={height - 5}
+        rx="5"
+        className="map-shelf-frame"
+      />
+      <text x={MAP_INSET + 10} y={y + 19} className="map-shelf-label">
+        Shelf {shelf.shelf_number}
+      </text>
+      <text
+        x={MAP_WIDTH - MAP_INSET - 10}
+        y={y + 19}
+        textAnchor="end"
+        className="map-shelf-count"
+      >
+        {shelf.book_count} books
+      </text>
+      {layers.length === 0 ? (
+        <text
+          x={MAP_WIDTH / 2}
+          y={y + headerHeight + contentHeight / 2}
+          textAnchor="middle"
+          className="map-empty-shelf"
+        >
+          No containers
+        </text>
+      ) : (
+        layers.map((group, layerIndex) => {
+          const layerY =
+            y + headerHeight + layerIndex * (layerHeight + layerGap);
+          const gap = 8;
+          const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 20;
+          const containerWidth =
+            (usableWidth - gap * (group.containers.length - 1)) /
+            group.containers.length;
+          return (
+            <g key={group.layer}>
+              <text
+                x={MAP_INSET + 7}
+                y={layerY + layerHeight / 2 + 4}
+                className="map-layer-label"
+              >
+                {group.layer === "BACKGROUND" ? "BACK" : "FRONT"}
+              </text>
+              {group.containers.map((container, index) => (
+                <MapContainerGraphic
+                  key={container.id}
+                  container={container}
+                  x={MAP_INSET + 20 + index * (containerWidth + gap)}
+                  y={layerY}
+                  width={containerWidth}
+                  height={layerHeight}
+                  onSelect={() => onContainer(container)}
+                />
+              ))}
+            </g>
+          );
+        })
+      )}
+      <line
+        x1={MAP_INSET}
+        y1={y + height - 5}
+        x2={MAP_WIDTH - MAP_INSET}
+        y2={y + height - 5}
+        className="map-shelf-board"
+      />
+    </g>
+  );
+}
+
+function MapBookcaseGraphic({
+  bookcase,
+  onBookcase,
+  onShelf,
+  onContainer,
+}: {
+  bookcase: MapBookcase;
+  onBookcase: () => void;
+  onShelf: (shelf: MapShelf) => void;
+  onContainer: (shelf: MapShelf, container: MapContainer) => void;
+}) {
+  const titleHeight = 48;
+  const shelfHeights = bookcase.shelves.map(mapShelfHeight);
+  const height =
+    titleHeight +
+    shelfHeights.reduce((total, shelfHeight) => total + shelfHeight, 0) +
+    18;
+  let shelfY = titleHeight;
+
+  return (
+    <article className="map-bookcase-card">
+      <button className="map-bookcase-heading" onClick={onBookcase}>
+        <span>{bookcase.name}</span>
+        <small>
+          {bookcase.shelves.length} shelves · {bookcase.book_count} books
+        </small>
+      </button>
+      <svg
+        viewBox={`0 0 ${MAP_WIDTH} ${height}`}
+        role="img"
+        aria-label={`Visual index for ${bookcase.name}`}
+      >
+        <rect
+          x="5"
+          y="4"
+          width={MAP_WIDTH - 10}
+          height={height - 9}
+          rx="9"
+          className="map-furniture-frame"
+        />
+        {bookcase.shelves.map((shelf, index) => {
+          const currentY = shelfY;
+          const currentHeight = shelfHeights[index];
+          shelfY += currentHeight;
+          return (
+            <MapShelfGraphic
+              key={shelf.id}
+              shelf={shelf}
+              y={currentY}
+              height={currentHeight}
+              onShelf={() => onShelf(shelf)}
+              onContainer={(container) => onContainer(shelf, container)}
+            />
+          );
+        })}
+      </svg>
+    </article>
+  );
+}
+
+function LibraryMapDialog({
+  onClose,
+  onFilter,
+}: {
+  onClose: () => void;
+  onFilter: (
+    bookcaseId: number,
+    shelfId?: number | "",
+    containerId?: number | "",
+  ) => void;
+}) {
+  const [map, setMap] = useState<LibraryMapData>({
+    bookcases: [],
+    outside_books: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void api.libraryMap()
+      .then(setMap)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Unable to load map");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div
+        className="dialog map-dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Read-only visual index</p>
+            <h2>Library map</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <p className="dialog-intro">
+          Background and foreground containers are separated into exploded
+          layers so blocked books remain visible. Click furniture, a shelf, or
+          a container to open the matching catalogue filter.
+        </p>
+        <div className="map-legend">
+          <span><i className="pending" /> Pending</span>
+          <span><i className="reading" /> Reading…</span>
+          <span><i className="read" /> Read</span>
+          <span className="map-legend-note">Rows run left → right · piles stack bottom → top</span>
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        {loading ? (
+          <div className="empty-state">Drawing the library…</div>
+        ) : (
+          <>
+            {map.outside_books.length > 0 && (
+              <section className="map-outside">
+                <div>
+                  <strong>Outside the library map</strong>
+                  <span>
+                    {map.outside_books.length}{" "}
+                    {map.outside_books.length === 1 ? "book" : "books"}
+                  </span>
+                </div>
+                <div className="map-outside-books">
+                  {map.outside_books.map((book) => (
+                    <span key={book.id} title={book.title}>
+                      <i style={{ background: bookColour(book.status) }} />
+                      {book.status === "CURRENTLY_READING"
+                        ? "Reading…"
+                        : book.status === "READ"
+                          ? "Read"
+                          : "Pending"}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+            <div className="map-bookcases">
+              {map.bookcases.map((bookcase) => (
+                <MapBookcaseGraphic
+                  key={bookcase.id}
+                  bookcase={bookcase}
+                  onBookcase={() => onFilter(bookcase.id)}
+                  onShelf={(shelf) => onFilter(bookcase.id, shelf.id)}
+                  onContainer={(shelf, container) =>
+                    onFilter(bookcase.id, shelf.id, container.id)
+                  }
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

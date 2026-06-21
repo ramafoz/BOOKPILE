@@ -899,3 +899,88 @@ def test_shift_at_end_extends_container_positions() -> None:
         assert positions["New Seven"] == 7
         assert positions["Book 7"] == 8
         assert positions["Book 8"] == 9
+
+
+def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases", json={"name": "Visual Bookcase"}
+        ).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        background = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        foreground = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        client.post(
+            "/books",
+            json={
+                "title": "Background pending",
+                "author": "Author",
+                "status": "PENDING",
+                "container_id": background["id"],
+                "position": 2,
+            },
+        )
+        client.post(
+            "/books",
+            json={
+                "title": "Foreground read",
+                "author": "Author",
+                "status": "READ",
+                "container_id": foreground["id"],
+                "position": 1,
+            },
+        )
+        reading = client.post(
+            "/books",
+            json={
+                "title": "Reading away from shelf",
+                "author": "Author",
+                "status": "CURRENTLY_READING",
+            },
+        ).json()
+
+        response = client.get("/library-map")
+        assert response.status_code == 200
+        payload = response.json()
+        mapped = payload["bookcases"][0]
+        assert mapped["name"] == "Visual Bookcase"
+        assert mapped["book_count"] == 2
+        mapped_shelf = mapped["shelves"][0]
+        assert mapped_shelf["book_count"] == 2
+        assert [container["layer"] for container in mapped_shelf["containers"]] == [
+            "BACKGROUND",
+            "FOREGROUND",
+        ]
+        assert mapped_shelf["containers"][0]["books"][0]["position"] == 2
+        assert mapped_shelf["containers"][0]["status_counts"] == {
+            "pending": 1,
+            "reading": 0,
+            "read": 0,
+        }
+        assert mapped_shelf["containers"][1]["status_counts"]["read"] == 1
+        assert payload["outside_books"] == [
+            {
+                "id": reading["id"],
+                "title": "Reading away from shelf",
+                "status": "CURRENTLY_READING",
+                "position": None,
+            }
+        ]

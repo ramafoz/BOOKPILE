@@ -705,6 +705,107 @@ def library() -> list[dict[str, Any]]:
     return bookcases
 
 
+@app.get("/library-map")
+def library_map() -> dict[str, Any]:
+    with connect() as connection:
+        bookcases = [
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM bookcases ORDER BY name COLLATE NOCASE"
+            )
+        ]
+        shelves = [
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM shelves ORDER BY bookcase_id, shelf_number"
+            )
+        ]
+        containers = [
+            dict(row)
+            for row in connection.execute(
+                """
+                SELECT *
+                FROM containers
+                ORDER BY
+                    shelf_id,
+                    CASE layer WHEN 'BACKGROUND' THEN 0 ELSE 1 END,
+                    CASE container_type WHEN 'ROW' THEN 0 ELSE 1 END,
+                    container_number
+                """
+            )
+        ]
+        books = [
+            dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, title, status, container_id, position
+                FROM books
+                WHERE container_id IS NOT NULL
+                ORDER BY container_id, position
+                """
+            )
+        ]
+        outside_books = [
+            dict(row)
+            for row in connection.execute(
+                """
+                SELECT id, title, status, position
+                FROM books
+                WHERE container_id IS NULL
+                ORDER BY
+                    CASE status
+                        WHEN 'CURRENTLY_READING' THEN 0
+                        WHEN 'PENDING' THEN 1
+                        ELSE 2
+                    END,
+                    title COLLATE NOCASE
+                """
+            )
+        ]
+
+    books_by_container: dict[int, list[dict[str, Any]]] = {}
+    for book in books:
+        books_by_container.setdefault(book["container_id"], []).append(book)
+
+    containers_by_shelf: dict[int, list[dict[str, Any]]] = {}
+    for container in containers:
+        container["books"] = books_by_container.get(container["id"], [])
+        container["book_count"] = len(container["books"])
+        container["status_counts"] = {
+            "pending": sum(
+                book["status"] == BookStatus.pending.value
+                for book in container["books"]
+            ),
+            "reading": sum(
+                book["status"] == BookStatus.currently_reading.value
+                for book in container["books"]
+            ),
+            "read": sum(
+                book["status"] == BookStatus.read.value
+                for book in container["books"]
+            ),
+        }
+        containers_by_shelf.setdefault(container["shelf_id"], []).append(container)
+
+    shelves_by_bookcase: dict[int, list[dict[str, Any]]] = {}
+    for shelf in shelves:
+        shelf["containers"] = containers_by_shelf.get(shelf["id"], [])
+        shelf["book_count"] = sum(
+            container["book_count"] for container in shelf["containers"]
+        )
+        shelves_by_bookcase.setdefault(shelf["bookcase_id"], []).append(shelf)
+
+    for bookcase in bookcases:
+        bookcase["shelves"] = shelves_by_bookcase.get(bookcase["id"], [])
+        bookcase["book_count"] = sum(
+            shelf["book_count"] for shelf in bookcase["shelves"]
+        )
+    return {
+        "bookcases": bookcases,
+        "outside_books": outside_books,
+    }
+
+
 @app.post("/bookcases", status_code=status.HTTP_201_CREATED)
 def create_bookcase(payload: BookcaseCreate) -> dict[str, Any]:
     try:

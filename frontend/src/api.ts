@@ -5,6 +5,7 @@ import type {
   ContainerType,
   Layer,
   Stats,
+  LibraryMapData,
 } from "./types";
 
 export interface RestoreInspection {
@@ -94,6 +95,7 @@ export const api = {
   },
   stats: () => request<Stats>("/stats"),
   library: () => request<Bookcase[]>("/library"),
+  libraryMap: () => request<LibraryMapData>("/library-map"),
   createBook: (book: BookPayload, shiftExisting = false) =>
     request<Book>("/books", {
       method: "POST",
