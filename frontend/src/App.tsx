@@ -15,6 +15,8 @@ import {
   MapPin,
   Pencil,
   Plus,
+  RotateCcw,
+  Save,
   Search,
   Settings2,
   SlidersHorizontal,
@@ -35,6 +37,8 @@ import type {
   MapContainer,
   MapShelf,
   Stats,
+  VisualLayout,
+  VisualRect,
 } from "./types";
 
 const emptyStats: Stats = {
@@ -1200,13 +1204,6 @@ function ReorganizeDialog({
 const MAP_WIDTH = 960;
 const MAP_INSET = 22;
 
-function mapShelfHeight(shelf: MapShelf) {
-  if (shelf.containers.length === 0) return 62;
-  if (shelf.book_count === 0) return 92;
-  const layers = new Set(shelf.containers.map((container) => container.layer));
-  return layers.size > 1 ? 190 : 126;
-}
-
 function bookColour(status: BookStatus) {
   if (status === "READ") return "#4f887b";
   if (status === "CURRENTLY_READING") return "#557f93";
@@ -1220,6 +1217,7 @@ function MapContainerGraphic({
   width,
   height,
   onSelect,
+  obscured,
 }: {
   container: MapContainer;
   x: number;
@@ -1227,6 +1225,7 @@ function MapContainerGraphic({
   width: number;
   height: number;
   onSelect: () => void;
+  obscured: boolean;
 }) {
   const padding = 9;
   const labelHeight = 22;
@@ -1247,7 +1246,9 @@ function MapContainerGraphic({
 
   return (
     <g
-      className={`map-container ${container.layer.toLowerCase()}`}
+      className={`map-container ${obscured ? "obscured" : ""} ${
+        container.layer === "FOREGROUND" ? "foreground" : ""
+      }`}
       role="button"
       tabIndex={0}
       onClick={(event) => {
@@ -1331,12 +1332,14 @@ function MapShelfGraphic({
   height,
   onShelf,
   onContainer,
+  containerLayout,
 }: {
   shelf: MapShelf;
   y: number;
   height: number;
   onShelf: () => void;
   onContainer: (container: MapContainer) => void;
+  containerLayout: Map<number, { x: number; width: number }>;
 }) {
   const layers = (["BACKGROUND", "FOREGROUND"] as const)
     .map((layer) => ({
@@ -1353,6 +1356,9 @@ function MapShelfGraphic({
     layers.length > 0
       ? (contentHeight - layerGap * (layers.length - 1)) / layers.length
       : contentHeight;
+  const hasForeground = shelf.containers.some(
+    (container) => container.layer === "FOREGROUND",
+  );
 
   return (
     <g
@@ -1397,11 +1403,7 @@ function MapShelfGraphic({
         layers.map((group, layerIndex) => {
           const layerY =
             y + headerHeight + layerIndex * (layerHeight + layerGap);
-          const gap = 8;
           const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 20;
-          const containerWidth =
-            (usableWidth - gap * (group.containers.length - 1)) /
-            group.containers.length;
           return (
             <g key={group.layer}>
               <text
@@ -1409,19 +1411,31 @@ function MapShelfGraphic({
                 y={layerY + layerHeight / 2 + 4}
                 className="map-layer-label"
               >
-                {group.layer === "BACKGROUND" ? "BACK" : "FRONT"}
+                {layers.length === 1
+                  ? "BOOKS"
+                  : group.layer === "BACKGROUND" ? "BACK" : "FRONT"}
               </text>
-              {group.containers.map((container, index) => (
-                <MapContainerGraphic
-                  key={container.id}
-                  container={container}
-                  x={MAP_INSET + 20 + index * (containerWidth + gap)}
-                  y={layerY}
-                  width={containerWidth}
-                  height={layerHeight}
-                  onSelect={() => onContainer(container)}
-                />
-              ))}
+              {group.containers.map((container, index) => {
+                const fallbackWidth = 100 / group.containers.length;
+                const placement = containerLayout.get(container.id) ?? {
+                  x: index * fallbackWidth,
+                  width: fallbackWidth,
+                };
+                return (
+                  <MapContainerGraphic
+                    key={container.id}
+                    container={container}
+                    x={MAP_INSET + 20 + usableWidth * placement.x / 100}
+                    y={layerY}
+                    width={usableWidth * placement.width / 100}
+                    height={layerHeight}
+                    obscured={
+                      hasForeground && container.layer === "BACKGROUND"
+                    }
+                    onSelect={() => onContainer(container)}
+                  />
+                );
+              })}
             </g>
           );
         })
@@ -1442,22 +1456,42 @@ function MapBookcaseGraphic({
   onBookcase,
   onShelf,
   onContainer,
+  rect,
+  shelfLayout,
+  containerLayout,
 }: {
   bookcase: MapBookcase;
   onBookcase: () => void;
   onShelf: (shelf: MapShelf) => void;
   onContainer: (shelf: MapShelf, container: MapContainer) => void;
+  rect: VisualRect;
+  shelfLayout: Map<number, number>;
+  containerLayout: Map<number, { x: number; width: number }>;
 }) {
   const titleHeight = 48;
-  const shelfHeights = bookcase.shelves.map(mapShelfHeight);
-  const height =
-    titleHeight +
-    shelfHeights.reduce((total, shelfHeight) => total + shelfHeight, 0) +
-    18;
+  const height = 620;
+  const availableHeight = height - titleHeight - 18;
+  const totalWeight = bookcase.shelves.reduce(
+    (total, shelf) => total + (shelfLayout.get(shelf.id) ?? 1),
+    0,
+  );
+  const shelfHeights = bookcase.shelves.map(
+    (shelf) =>
+      availableHeight * (shelfLayout.get(shelf.id) ?? 1) /
+      Math.max(totalWeight, 1),
+  );
   let shelfY = titleHeight;
 
   return (
-    <article className="map-bookcase-card">
+    <article
+      className="map-bookcase-card"
+      style={{
+        left: `${rect.x}%`,
+        top: `${rect.y}%`,
+        width: `${rect.width}%`,
+        height: `${rect.height}%`,
+      }}
+    >
       <button className="map-bookcase-heading" onClick={onBookcase}>
         <span>{bookcase.name}</span>
         <small>
@@ -1466,6 +1500,7 @@ function MapBookcaseGraphic({
       </button>
       <svg
         viewBox={`0 0 ${MAP_WIDTH} ${height}`}
+        preserveAspectRatio="none"
         role="img"
         aria-label={`Visual index for ${bookcase.name}`}
       >
@@ -1484,18 +1519,56 @@ function MapBookcaseGraphic({
           return (
             <MapShelfGraphic
               key={shelf.id}
-              shelf={shelf}
+                  shelf={shelf}
               y={currentY}
               height={currentHeight}
               onShelf={() => onShelf(shelf)}
-              onContainer={(container) => onContainer(shelf, container)}
-            />
+                  onContainer={(container) => onContainer(shelf, container)}
+                  containerLayout={containerLayout}
+                />
           );
         })}
       </svg>
     </article>
   );
 }
+
+function RangeField({
+  label,
+  value,
+  min = 0,
+  max = 100,
+  step = 1,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="map-range">
+      <span>{label}<strong>{Math.round(value * 10) / 10}</strong></span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  );
+}
+
+const emptyVisualLayout: VisualLayout = {
+  bookcases: [],
+  shelves: [],
+  containers: [],
+  outside: { x: 54, y: 70, width: 28, height: 18 },
+};
 
 function LibraryMapDialog({
   onClose,
@@ -1511,18 +1584,82 @@ function LibraryMapDialog({
   const [map, setMap] = useState<LibraryMapData>({
     bookcases: [],
     outside_books: [],
+    layout: emptyVisualLayout,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingLayout, setEditingLayout] = useState(false);
+  const [draft, setDraft] = useState<VisualLayout>(emptyVisualLayout);
+  const [selectedBookcase, setSelectedBookcase] = useState("");
+  const [selectedShelf, setSelectedShelf] = useState("");
+  const [selectedContainer, setSelectedContainer] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void api.libraryMap()
-      .then(setMap)
+      .then((result) => {
+        setMap(result);
+        setDraft(structuredClone(result.layout));
+        setSelectedBookcase(String(result.bookcases[0]?.id ?? ""));
+        setSelectedShelf(String(result.bookcases[0]?.shelves[0]?.id ?? ""));
+        setSelectedContainer(
+          String(result.bookcases[0]?.shelves[0]?.containers[0]?.id ?? ""),
+        );
+      })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load map");
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const activeLayout = editingLayout ? draft : map.layout;
+  const bookcaseRects = new Map(
+    activeLayout.bookcases.map((item) => [item.id, item]),
+  );
+  const shelfWeights = new Map(
+    activeLayout.shelves.map((item) => [item.id, item.height_weight]),
+  );
+  const containerRects = new Map(
+    activeLayout.containers.map((item) => [
+      item.id,
+      { x: item.x, width: item.width },
+    ]),
+  );
+  const selectedBookcaseItem = draft.bookcases.find(
+    (item) => item.id === Number(selectedBookcase),
+  );
+  const selectedShelfItem = draft.shelves.find(
+    (item) => item.id === Number(selectedShelf),
+  );
+  const selectedContainerItem = draft.containers.find(
+    (item) => item.id === Number(selectedContainer),
+  );
+
+  function updateBookcaseRect(field: keyof VisualRect, value: number) {
+    setDraft((current) => ({
+      ...current,
+      bookcases: current.bookcases.map((item) =>
+        item.id === Number(selectedBookcase)
+          ? { ...item, [field]: value }
+          : item,
+      ),
+    }));
+  }
+
+  async function saveLayout() {
+    setSaving(true);
+    setError("");
+    try {
+      const saved = await api.updateVisualLayout(draft);
+      setMap((current) => ({ ...current, layout: saved }));
+      setDraft(structuredClone(saved));
+      setEditingLayout(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save layout");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
@@ -1538,49 +1675,233 @@ function LibraryMapDialog({
           <button className="icon-button" onClick={onClose}><X /></button>
         </div>
         <p className="dialog-intro">
-          Background and foreground containers are separated into exploded
-          layers so blocked books remain visible. Click furniture, a shelf, or
-          a container to open the matching catalogue filter.
+          The room layout remembers the relative size and position of each
+          piece. Shelves with overlapping layers are exploded so blocked books
+          remain visible. Click a hierarchy level to filter the catalogue.
         </p>
         <div className="map-legend">
           <span><i className="pending" /> Pending</span>
           <span><i className="reading" /> Reading…</span>
           <span><i className="read" /> Read</span>
           <span className="map-legend-note">Rows run left → right · piles stack bottom → top</span>
+          {!editingLayout ? (
+            <button
+              className="text-button map-edit-button"
+              onClick={() => {
+                setDraft(structuredClone(map.layout));
+                setEditingLayout(true);
+              }}
+            >
+              <Pencil size={15} /> Edit layout
+            </button>
+          ) : (
+            <div className="map-edit-actions">
+              <button
+                className="text-button"
+                onClick={() => {
+                  setDraft(structuredClone(map.layout));
+                  setEditingLayout(false);
+                }}
+              >
+                <RotateCcw size={15} /> Cancel
+              </button>
+              <button
+                className="primary-button"
+                disabled={saving}
+                onClick={() => void saveLayout()}
+              >
+                <Save size={15} /> {saving ? "Saving…" : "Save layout"}
+              </button>
+            </div>
+          )}
         </div>
         {error && <div className="form-error">{error}</div>}
         {loading ? (
           <div className="empty-state">Drawing the library…</div>
         ) : (
           <>
-            {map.outside_books.length > 0 && (
-              <section className="map-outside">
-                <div>
-                  <strong>Outside the library map</strong>
-                  <span>
-                    {map.outside_books.length}{" "}
-                    {map.outside_books.length === 1 ? "book" : "books"}
-                  </span>
+            {editingLayout && (
+              <aside className="map-layout-editor">
+                <div className="map-editor-section">
+                  <label>
+                    Furniture
+                    <select
+                      value={selectedBookcase}
+                      onChange={(event) => setSelectedBookcase(event.target.value)}
+                    >
+                      {map.bookcases.map((bookcase) => (
+                        <option key={bookcase.id} value={bookcase.id}>
+                          {bookcase.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedBookcaseItem && (
+                    <div className="map-range-grid">
+                      {(["x", "y", "width", "height"] as const).map((field) => (
+                        <RangeField
+                          key={field}
+                          label={field === "x" ? "Horizontal" : field === "y"
+                            ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
+                          value={selectedBookcaseItem[field]}
+                          min={field === "width" || field === "height" ? 5 : 0}
+                          max={field === "x" || field === "width"
+                            ? 100 - (field === "x" ? selectedBookcaseItem.width : selectedBookcaseItem.x)
+                            : 100 - (field === "y" ? selectedBookcaseItem.height : selectedBookcaseItem.y)}
+                          onChange={(value) => updateBookcaseRect(field, value)}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="map-outside-books">
-                  {map.outside_books.map((book) => (
-                    <span key={book.id} title={book.title}>
-                      <i style={{ background: bookColour(book.status) }} />
-                      {book.status === "CURRENTLY_READING"
-                        ? "Reading…"
-                        : book.status === "READ"
-                          ? "Read"
-                          : "Pending"}
-                    </span>
-                  ))}
+                <div className="map-editor-section">
+                  <strong className="map-editor-title">Reading / outside area</strong>
+                  <div className="map-range-grid">
+                    {(["x", "y", "width", "height"] as const).map((field) => (
+                      <RangeField
+                        key={field}
+                        label={field === "x" ? "Horizontal" : field === "y"
+                          ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
+                        value={draft.outside[field]}
+                        min={field === "width" || field === "height" ? 5 : 0}
+                        max={field === "x" || field === "width"
+                          ? 100 - (field === "x" ? draft.outside.width : draft.outside.x)
+                          : 100 - (field === "y" ? draft.outside.height : draft.outside.y)}
+                        onChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            outside: { ...current.outside, [field]: value },
+                          }))}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </section>
+                <div className="map-editor-section">
+                  <label>
+                    Shelf height
+                    <select
+                      value={selectedShelf}
+                      onChange={(event) => setSelectedShelf(event.target.value)}
+                    >
+                      {map.bookcases.flatMap((bookcase) =>
+                        bookcase.shelves.map((shelf) => (
+                          <option key={shelf.id} value={shelf.id}>
+                            {bookcase.name} · Shelf {shelf.shelf_number}
+                          </option>
+                        )),
+                      )}
+                    </select>
+                  </label>
+                  {selectedShelfItem && (
+                    <RangeField
+                      label="Relative height"
+                      value={selectedShelfItem.height_weight}
+                      min={0.25}
+                      max={8}
+                      step={0.25}
+                      onChange={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          shelves: current.shelves.map((item) =>
+                            item.id === selectedShelfItem.id
+                              ? { ...item, height_weight: value }
+                              : item,
+                          ),
+                        }))}
+                    />
+                  )}
+                </div>
+                <div className="map-editor-section">
+                  <label>
+                    Container spacing
+                    <select
+                      value={selectedContainer}
+                      onChange={(event) => setSelectedContainer(event.target.value)}
+                    >
+                      {map.bookcases.flatMap((bookcase) =>
+                        bookcase.shelves.flatMap((shelf) =>
+                          shelf.containers.map((container) => (
+                            <option key={container.id} value={container.id}>
+                              {bookcase.name} · S{shelf.shelf_number} ·{" "}
+                              {container.layer === "BACKGROUND" ? "BG" : "FG"}{" "}
+                              {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
+                              {container.container_number}
+                            </option>
+                          )),
+                        ),
+                      )}
+                    </select>
+                  </label>
+                  {selectedContainerItem && (
+                    <div className="map-range-grid">
+                      <RangeField
+                        label="Start"
+                        value={selectedContainerItem.x}
+                        max={100 - selectedContainerItem.width}
+                        onChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            containers: current.containers.map((item) =>
+                              item.id === selectedContainerItem.id
+                                ? { ...item, x: value }
+                                : item,
+                            ),
+                          }))}
+                      />
+                      <RangeField
+                        label="Width"
+                        value={selectedContainerItem.width}
+                        min={4}
+                        max={100 - selectedContainerItem.x}
+                        onChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            containers: current.containers.map((item) =>
+                              item.id === selectedContainerItem.id
+                                ? { ...item, width: value }
+                                : item,
+                            ),
+                          }))}
+                      />
+                    </div>
+                  )}
+                </div>
+              </aside>
             )}
-            <div className="map-bookcases">
+            <div className={`map-room ${editingLayout ? "editing" : ""}`}>
+              {map.outside_books.length > 0 && (
+                <section
+                  className="map-outside"
+                  style={{
+                    left: `${activeLayout.outside.x}%`,
+                    top: `${activeLayout.outside.y}%`,
+                    width: `${activeLayout.outside.width}%`,
+                    height: `${activeLayout.outside.height}%`,
+                  }}
+                >
+                  <div>
+                    <strong>Reading / outside library</strong>
+                    <span>{map.outside_books.length} books</span>
+                  </div>
+                  <div className="map-outside-books">
+                    {map.outside_books.map((book) => (
+                      <span key={book.id} title={book.title}>
+                        <i style={{ background: bookColour(book.status) }} />
+                        {book.status === "CURRENTLY_READING" ? "Reading…" : "Out"}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
               {map.bookcases.map((bookcase) => (
                 <MapBookcaseGraphic
                   key={bookcase.id}
                   bookcase={bookcase}
+                  rect={bookcaseRects.get(bookcase.id) ?? {
+                    x: 2, y: 8, width: 28, height: 72,
+                  }}
+                  shelfLayout={shelfWeights}
+                  containerLayout={containerRects}
                   onBookcase={() => onFilter(bookcase.id)}
                   onShelf={(shelf) => onFilter(bookcase.id, shelf.id)}
                   onContainer={(shelf, container) =>

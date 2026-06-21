@@ -105,3 +105,32 @@ class Stats(BaseModel):
     pending: int
     currently_reading: int
     read: int
+
+
+class VisualRect(BaseModel):
+    x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=100)
+    width: float = Field(gt=0, le=100)
+    height: float = Field(gt=0, le=100)
+
+
+class VisualBookcaseLayout(VisualRect):
+    id: int
+
+
+class VisualShelfLayout(BaseModel):
+    id: int
+    height_weight: float = Field(ge=0.25, le=8)
+
+
+class VisualContainerLayout(BaseModel):
+    id: int
+    x: float = Field(ge=0, le=100)
+    width: float = Field(gt=0, le=100)
+
+
+class VisualLayoutUpdate(BaseModel):
+    bookcases: list[VisualBookcaseLayout]
+    shelves: list[VisualShelfLayout]
+    containers: list[VisualContainerLayout]
+    outside: VisualRect

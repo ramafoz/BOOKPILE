@@ -19,18 +19,22 @@
   status-coloured books.
 - [x] Use an exploded shelf view so overlapping background and foreground
   containers remain simultaneously visible.
-- [x] Render background containers with lighter styling and foreground
-  containers with stronger borders/shadows.
+- [x] Render background containers with lighter styling only when a foreground
+  layer actually obscures them.
 - [x] Show rows horizontally and piles vertically.
 - [x] Open the catalogue filtered by bookcase, shelf, or container when that
   hierarchy level is clicked.
 - [x] Do not make individual books clickable in the visual index.
-- [ ] Show empty positions and physical gaps where useful.
+- [x] Allow persistent physical gaps between containers.
+- [ ] Show empty book positions where useful.
 - [ ] Detect duplicate or conflicting positions visually.
-- [ ] Let the user position bookcases/furniture relative to one another.
-- [ ] Scale furniture to preserve approximate relative physical size.
-- [ ] Reorder and resize shelves within a bookcase.
-- [ ] Reorder and resize containers within a shelf.
+- [x] Let the user position bookcases/furniture relative to one another.
+- [x] Scale furniture to preserve approximate relative physical size.
+- [x] Resize shelves within a bookcase using relative height weights.
+- [x] Reposition and resize containers within a shelf.
+- [x] Persist the visual layout independently from catalogue locations.
+- [ ] Add direct drag-and-resize handles as an optional convenience over the
+  current precise slider controls.
 - [ ] Render containers as grey rectangles that fill with books.
 - [ ] Colour books according to reading status.
 - [ ] Future-only idea: drag books between containers and reorder them visually.

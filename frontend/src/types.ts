@@ -66,6 +66,21 @@ export interface LibraryMapData {
     status: BookStatus;
     position: null;
   }>;
+  layout: VisualLayout;
+}
+
+export interface VisualRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface VisualLayout {
+  bookcases: Array<VisualRect & { id: number }>;
+  shelves: Array<{ id: number; height_weight: number }>;
+  containers: Array<{ id: number; x: number; width: number }>;
+  outside: VisualRect;
 }
 
 export interface Book {

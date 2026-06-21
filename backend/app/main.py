@@ -36,6 +36,7 @@ from .schemas import (
     ContainerCreate,
     ShelfCreate,
     Stats,
+    VisualLayoutUpdate,
 )
 
 
@@ -705,6 +706,121 @@ def library() -> list[dict[str, Any]]:
     return bookcases
 
 
+def default_bookcase_rect(name: str, index: int, total: int) -> dict[str, float]:
+    normalized = name.casefold()
+    if "office" in normalized:
+        return {"x": 2, "y": 12, "width": 24, "height": 78}
+    if "left side" in normalized:
+        return {"x": 31, "y": 8, "width": 18, "height": 84}
+    if "wall unit" in normalized and "top" in normalized:
+        return {"x": 49, "y": 5, "width": 49, "height": 40}
+    width = min(28.0, 92.0 / max(total, 1))
+    return {
+        "x": 3 + index * (width + 2),
+        "y": 8,
+        "width": width,
+        "height": 72,
+    }
+
+
+def ensure_visual_layout(
+    connection: sqlite3.Connection,
+    bookcases: list[dict[str, Any]],
+    shelves: list[dict[str, Any]],
+    containers: list[dict[str, Any]],
+) -> None:
+    total = len(bookcases)
+    for index, bookcase in enumerate(bookcases):
+        rect = default_bookcase_rect(bookcase["name"], index, total)
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO visual_layout_items
+                (item_type, item_id, x, y, width, height)
+            VALUES ('BOOKCASE', ?, ?, ?, ?, ?)
+            """,
+            (
+                bookcase["id"],
+                rect["x"],
+                rect["y"],
+                rect["width"],
+                rect["height"],
+            ),
+        )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO visual_layout_items
+            (item_type, item_id, x, y, width, height)
+        VALUES ('OUTSIDE', 0, 54, 70, 28, 18)
+        """
+    )
+    for shelf in shelves:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO visual_shelf_layout (shelf_id, height_weight)
+            VALUES (?, 1)
+            """,
+            (shelf["id"],),
+        )
+    containers_by_shelf_layer: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    for container in containers:
+        containers_by_shelf_layer.setdefault(
+            (container["shelf_id"], container["layer"]), []
+        ).append(container)
+    for group in containers_by_shelf_layer.values():
+        gap = 3.0
+        width = max(8.0, (100.0 - gap * (len(group) - 1)) / len(group))
+        for index, container in enumerate(group):
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO visual_container_layout
+                    (container_id, x, width)
+                VALUES (?, ?, ?)
+                """,
+                (container["id"], index * (width + gap), width),
+            )
+
+
+def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
+    items = connection.execute(
+        """
+        SELECT item_type, item_id, x, y, width, height
+        FROM visual_layout_items
+        ORDER BY item_type, item_id
+        """
+    ).fetchall()
+    bookcases = []
+    outside = {"x": 54, "y": 70, "width": 28, "height": 18}
+    for row in items:
+        rect = {
+            key: row[key]
+            for key in ("x", "y", "width", "height")
+        }
+        if row["item_type"] == "OUTSIDE":
+            outside = rect
+        else:
+            bookcases.append({"id": row["item_id"], **rect})
+    return {
+        "bookcases": bookcases,
+        "shelves": [
+            {"id": row["shelf_id"], "height_weight": row["height_weight"]}
+            for row in connection.execute(
+                "SELECT * FROM visual_shelf_layout ORDER BY shelf_id"
+            )
+        ],
+        "containers": [
+            {
+                "id": row["container_id"],
+                "x": row["x"],
+                "width": row["width"],
+            }
+            for row in connection.execute(
+                "SELECT * FROM visual_container_layout ORDER BY container_id"
+            )
+        ],
+        "outside": outside,
+    }
+
+
 @app.get("/library-map")
 def library_map() -> dict[str, Any]:
     with connect() as connection:
@@ -762,6 +878,8 @@ def library_map() -> dict[str, Any]:
                 """
             )
         ]
+        ensure_visual_layout(connection, bookcases, shelves, containers)
+        layout = fetch_visual_layout(connection)
 
     books_by_container: dict[int, list[dict[str, Any]]] = {}
     for book in books:
@@ -803,7 +921,86 @@ def library_map() -> dict[str, Any]:
     return {
         "bookcases": bookcases,
         "outside_books": outside_books,
+        "layout": layout,
     }
+
+
+@app.put("/visual-layout")
+def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
+    for rect in [*payload.bookcases, payload.outside]:
+        if rect.x + rect.width > 100 or rect.y + rect.height > 100:
+            raise HTTPException(
+                status_code=422,
+                detail="Layout items must remain inside the canvas",
+            )
+    for container in payload.containers:
+        if container.x + container.width > 100:
+            raise HTTPException(
+                status_code=422,
+                detail="Containers must remain inside their shelf layer",
+            )
+
+    with connect() as connection:
+        valid_bookcases = {
+            row["id"] for row in connection.execute("SELECT id FROM bookcases")
+        }
+        valid_shelves = {
+            row["id"] for row in connection.execute("SELECT id FROM shelves")
+        }
+        valid_containers = {
+            row["id"] for row in connection.execute("SELECT id FROM containers")
+        }
+        if {item.id for item in payload.bookcases} != valid_bookcases:
+            raise HTTPException(status_code=422, detail="Bookcase layout is incomplete")
+        if {item.id for item in payload.shelves} != valid_shelves:
+            raise HTTPException(status_code=422, detail="Shelf layout is incomplete")
+        if {item.id for item in payload.containers} != valid_containers:
+            raise HTTPException(status_code=422, detail="Container layout is incomplete")
+
+        connection.execute(
+            "DELETE FROM visual_layout_items WHERE item_type = 'BOOKCASE'"
+        )
+        connection.executemany(
+            """
+            INSERT INTO visual_layout_items
+                (item_type, item_id, x, y, width, height)
+            VALUES ('BOOKCASE', ?, ?, ?, ?, ?)
+            """,
+            [
+                (item.id, item.x, item.y, item.width, item.height)
+                for item in payload.bookcases
+            ],
+        )
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO visual_layout_items
+                (item_type, item_id, x, y, width, height)
+            VALUES ('OUTSIDE', 0, ?, ?, ?, ?)
+            """,
+            (
+                payload.outside.x,
+                payload.outside.y,
+                payload.outside.width,
+                payload.outside.height,
+            ),
+        )
+        connection.execute("DELETE FROM visual_shelf_layout")
+        connection.executemany(
+            """
+            INSERT INTO visual_shelf_layout (shelf_id, height_weight)
+            VALUES (?, ?)
+            """,
+            [(item.id, item.height_weight) for item in payload.shelves],
+        )
+        connection.execute("DELETE FROM visual_container_layout")
+        connection.executemany(
+            """
+            INSERT INTO visual_container_layout (container_id, x, width)
+            VALUES (?, ?, ?)
+            """,
+            [(item.id, item.x, item.width) for item in payload.containers],
+        )
+        return fetch_visual_layout(connection)
 
 
 @app.post("/bookcases", status_code=status.HTTP_201_CREATED)

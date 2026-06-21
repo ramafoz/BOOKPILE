@@ -984,3 +984,30 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "position": None,
             }
         ]
+        assert len(payload["layout"]["bookcases"]) == 1
+        assert payload["layout"]["bookcases"][0]["id"] == mapped["id"]
+        assert payload["layout"]["shelves"] == [
+            {"id": mapped_shelf["id"], "height_weight": 1.0}
+        ]
+        assert len(payload["layout"]["containers"]) == 2
+
+        layout = payload["layout"]
+        layout["bookcases"][0].update(
+            {"x": 11, "y": 9, "width": 35, "height": 70}
+        )
+        layout["shelves"][0]["height_weight"] = 2.5
+        layout["containers"][0].update({"x": 8, "width": 40})
+        saved = client.put("/visual-layout", json=layout)
+        assert saved.status_code == 200
+        assert saved.json()["bookcases"][0]["x"] == 11
+        assert saved.json()["shelves"][0]["height_weight"] == 2.5
+        assert saved.json()["containers"][0]["x"] == 8
+
+        persisted = client.get("/library-map").json()["layout"]
+        assert persisted == saved.json()
+
+        invalid = persisted.copy()
+        invalid["bookcases"] = [
+            {**invalid["bookcases"][0], "x": 90, "width": 35}
+        ]
+        assert client.put("/visual-layout", json=invalid).status_code == 422

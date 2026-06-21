@@ -6,6 +6,7 @@ import type {
   Layer,
   Stats,
   LibraryMapData,
+  VisualLayout,
 } from "./types";
 
 export interface RestoreInspection {
@@ -96,6 +97,11 @@ export const api = {
   stats: () => request<Stats>("/stats"),
   library: () => request<Bookcase[]>("/library"),
   libraryMap: () => request<LibraryMapData>("/library-map"),
+  updateVisualLayout: (layout: VisualLayout) =>
+    request<VisualLayout>("/visual-layout", {
+      method: "PUT",
+      body: JSON.stringify(layout),
+    }),
   createBook: (book: BookPayload, shiftExisting = false) =>
     request<Book>("/books", {
       method: "POST",

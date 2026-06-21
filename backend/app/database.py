@@ -84,6 +84,31 @@ def init_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_books_status ON books(status);
             CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
             CREATE INDEX IF NOT EXISTS idx_books_author ON books(author);
+
+            CREATE TABLE IF NOT EXISTS visual_layout_items (
+                item_type TEXT NOT NULL
+                    CHECK (item_type IN ('BOOKCASE', 'OUTSIDE')),
+                item_id INTEGER NOT NULL DEFAULT 0,
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                width REAL NOT NULL,
+                height REAL NOT NULL,
+                PRIMARY KEY (item_type, item_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS visual_shelf_layout (
+                shelf_id INTEGER PRIMARY KEY,
+                height_weight REAL NOT NULL DEFAULT 1
+                    CHECK (height_weight > 0),
+                FOREIGN KEY (shelf_id) REFERENCES shelves(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS visual_container_layout (
+                container_id INTEGER PRIMARY KEY,
+                x REAL NOT NULL,
+                width REAL NOT NULL,
+                FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE
+            );
             """
         )
         _migrate_container_numbering(connection)

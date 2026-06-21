@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from PIL import Image, UnidentifiedImageError
 
-from .database import database_path
+from .database import database_path, init_database
 from .exports import (
     BACKUP_FORMAT_VERSION,
     SCHEMA_VERSION,
@@ -276,6 +276,10 @@ def perform_restore(token: str) -> dict:
                     os.replace(live_covers, old_covers)
                 os.replace(incoming_covers, live_covers)
 
+                # Older valid backups may predate additive feature tables.
+                # Bring the restored database up to the current schema before
+                # handing it back to the running application.
+                init_database()
                 final_summary = database_summary(live_database)
                 final_counts = {
                     **final_summary["counts"],
