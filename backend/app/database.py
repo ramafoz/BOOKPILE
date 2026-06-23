@@ -107,6 +107,8 @@ def init_database() -> None:
                 container_id INTEGER PRIMARY KEY,
                 x REAL NOT NULL,
                 width REAL NOT NULL,
+                y REAL NOT NULL DEFAULT 0,
+                height REAL NOT NULL DEFAULT 100,
                 FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE
             );
             """
@@ -115,6 +117,73 @@ def init_database() -> None:
         _migrate_book_statuses(connection)
         _migrate_book_dates(connection)
         _migrate_book_covers(connection)
+        _migrate_visual_container_layout(connection)
+
+
+def _migrate_visual_container_layout(connection: sqlite3.Connection) -> None:
+    """Allow each visual container to keep its own vertical placement and height."""
+    columns = {
+        row["name"]
+        for row in connection.execute("PRAGMA table_info(visual_container_layout)")
+    }
+    added_vertical_layout = False
+    if "y" not in columns:
+        connection.execute(
+            "ALTER TABLE visual_container_layout ADD COLUMN y REAL NOT NULL DEFAULT 0"
+        )
+        added_vertical_layout = True
+    if "height" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE visual_container_layout
+            ADD COLUMN height REAL NOT NULL DEFAULT 100
+            """
+        )
+        added_vertical_layout = True
+    if added_vertical_layout:
+        _set_default_visual_container_heights(connection)
+
+
+def _set_default_visual_container_heights(connection: sqlite3.Connection) -> None:
+    """Give old overlapping shelf layers a readable default split."""
+    connection.execute(
+        """
+        UPDATE visual_container_layout
+        SET y = 0, height = 68
+        WHERE y = 0
+          AND height = 100
+          AND container_id IN (
+              SELECT background.id
+              FROM containers AS background
+              WHERE background.layer = 'BACKGROUND'
+                AND EXISTS (
+                    SELECT 1
+                    FROM containers AS foreground
+                    WHERE foreground.shelf_id = background.shelf_id
+                      AND foreground.layer = 'FOREGROUND'
+                )
+          )
+        """
+    )
+    connection.execute(
+        """
+        UPDATE visual_container_layout
+        SET y = 50, height = 50
+        WHERE y = 0
+          AND height = 100
+          AND container_id IN (
+              SELECT foreground.id
+              FROM containers AS foreground
+              WHERE foreground.layer = 'FOREGROUND'
+                AND EXISTS (
+                    SELECT 1
+                    FROM containers AS background
+                    WHERE background.shelf_id = foreground.shelf_id
+                      AND background.layer = 'BACKGROUND'
+                )
+          )
+        """
+    )
 
 
 def _migrate_container_numbering(connection: sqlite3.Connection) -> None:

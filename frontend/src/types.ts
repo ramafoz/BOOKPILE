@@ -79,7 +79,7 @@ export interface VisualRect {
 export interface VisualLayout {
   bookcases: Array<VisualRect & { id: number }>;
   shelves: Array<{ id: number; height_weight: number }>;
-  containers: Array<{ id: number; x: number; width: number }>;
+  containers: Array<VisualRect & { id: number }>;
   outside: VisualRect;
 }
 

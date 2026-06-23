@@ -770,13 +770,27 @@ def ensure_visual_layout(
         gap = 3.0
         width = max(8.0, (100.0 - gap * (len(group) - 1)) / len(group))
         for index, container in enumerate(group):
+            has_opposite_layer = any(
+                candidate["shelf_id"] == container["shelf_id"]
+                and candidate["layer"] != container["layer"]
+                for candidate in containers
+            )
+            if not has_opposite_layer:
+                y = 0.0
+                height = 100.0
+            elif container["layer"] == "BACKGROUND":
+                y = 0.0
+                height = 68.0
+            else:
+                y = 50.0
+                height = 50.0
             connection.execute(
                 """
                 INSERT OR IGNORE INTO visual_container_layout
-                    (container_id, x, width)
-                VALUES (?, ?, ?)
+                    (container_id, x, y, width, height)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (container["id"], index * (width + gap), width),
+                (container["id"], index * (width + gap), y, width, height),
             )
 
 
@@ -811,7 +825,9 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
             {
                 "id": row["container_id"],
                 "x": row["x"],
+                "y": row["y"],
                 "width": row["width"],
+                "height": row["height"],
             }
             for row in connection.execute(
                 "SELECT * FROM visual_container_layout ORDER BY container_id"
@@ -934,7 +950,7 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
                 detail="Layout items must remain inside the canvas",
             )
     for container in payload.containers:
-        if container.x + container.width > 100:
+        if container.x + container.width > 100 or container.y + container.height > 100:
             raise HTTPException(
                 status_code=422,
                 detail="Containers must remain inside their shelf layer",
@@ -995,10 +1011,13 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
         connection.execute("DELETE FROM visual_container_layout")
         connection.executemany(
             """
-            INSERT INTO visual_container_layout (container_id, x, width)
-            VALUES (?, ?, ?)
+            INSERT INTO visual_container_layout (container_id, x, y, width, height)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            [(item.id, item.x, item.width) for item in payload.containers],
+            [
+                (item.id, item.x, item.y, item.width, item.height)
+                for item in payload.containers
+            ],
         )
         return fetch_visual_layout(connection)
 

@@ -126,7 +126,9 @@ class VisualShelfLayout(BaseModel):
 class VisualContainerLayout(BaseModel):
     id: int
     x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=100)
     width: float = Field(gt=0, le=100)
+    height: float = Field(gt=0, le=100)
 
 
 class VisualLayoutUpdate(BaseModel):

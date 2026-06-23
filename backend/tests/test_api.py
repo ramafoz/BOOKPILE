@@ -996,12 +996,14 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             {"x": 11, "y": 9, "width": 35, "height": 70}
         )
         layout["shelves"][0]["height_weight"] = 2.5
-        layout["containers"][0].update({"x": 8, "width": 40})
+        layout["containers"][0].update({"x": 8, "y": 12, "width": 40, "height": 70})
         saved = client.put("/visual-layout", json=layout)
         assert saved.status_code == 200
         assert saved.json()["bookcases"][0]["x"] == 11
         assert saved.json()["shelves"][0]["height_weight"] == 2.5
         assert saved.json()["containers"][0]["x"] == 8
+        assert saved.json()["containers"][0]["y"] == 12
+        assert saved.json()["containers"][0]["height"] == 70
 
         persisted = client.get("/library-map").json()["layout"]
         assert persisted == saved.json()
