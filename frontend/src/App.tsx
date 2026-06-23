@@ -196,6 +196,24 @@ function App() {
     );
   }
 
+  function openReadingCatalogue() {
+    setFilter("CURRENTLY_READING");
+    setBookcaseFilter("");
+    setShelfFilter("");
+    setContainerFilter("");
+    setSortBy("title");
+    setSortOrder("asc");
+    setShowAdvanced(true);
+    setShowMap(false);
+    window.setTimeout(
+      () => document.querySelector(".catalogue-heading")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+      0,
+    );
+  }
+
   return (
     <main>
       <header className="hero">
@@ -498,10 +516,11 @@ function App() {
         />
       )}
       {showData && <DataDialog onClose={() => setShowData(false)} />}
-      {showMap && (
+        {showMap && (
         <LibraryMapDialog
           onClose={() => setShowMap(false)}
           onFilter={openCatalogueAt}
+          onReadingFilter={openReadingCatalogue}
         />
       )}
     </main>
@@ -1505,6 +1524,7 @@ const emptyVisualLayout: VisualLayout = {
 function LibraryMapDialog({
   onClose,
   onFilter,
+  onReadingFilter,
 }: {
   onClose: () => void;
   onFilter: (
@@ -1512,6 +1532,7 @@ function LibraryMapDialog({
     shelfId?: number | "",
     containerId?: number | "",
   ) => void;
+  onReadingFilter: () => void;
 }) {
   const [map, setMap] = useState<LibraryMapData>({
     bookcases: [],
@@ -1833,6 +1854,16 @@ function LibraryMapDialog({
               {map.outside_books.length > 0 && (
                 <section
                   className="map-outside"
+                  role="button"
+                  tabIndex={0}
+                  title="Show currently reading books"
+                  onClick={onReadingFilter}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onReadingFilter();
+                    }
+                  }}
                   style={{
                     left: `${activeLayout.outside.x}%`,
                     top: `${activeLayout.outside.y}%`,

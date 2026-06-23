@@ -226,7 +226,9 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-range input { width: 100%; accent-color: #28574d; }
 .map-room { position: relative; width: 100%; aspect-ratio: 5 / 3; min-height: 520px; overflow: hidden; border: 1px solid #cfc4b4; border-radius: 12px; background: linear-gradient(#eee8dd 0 76%, #d8cec0 76%); box-shadow: inset 0 0 50px #4d403314; }
 .map-room.editing { background-image: linear-gradient(#28574d12 1px, transparent 1px), linear-gradient(90deg, #28574d12 1px, transparent 1px), linear-gradient(#eee8dd 0 76%, #d8cec0 76%); background-size: 5% 5%, 5% 5%, 100% 100%; }
-.map-outside { position: absolute; z-index: 3; display: flex; overflow: hidden; align-items: center; justify-content: center; padding: 7px; border: 1px solid #9db8c1; border-radius: 9px; background: #e7f0f3; box-shadow: 0 5px 16px #31495120; }
+.map-outside { position: absolute; z-index: 3; display: flex; overflow: hidden; align-items: center; justify-content: center; padding: 7px; border: 1px solid #9db8c1; border-radius: 9px; background: #e7f0f3; box-shadow: 0 5px 16px #31495120; cursor: pointer; }
+.map-outside:focus { outline: 2px solid #a85835; outline-offset: 2px; }
+.map-outside:hover { border-color: #a85835; box-shadow: 0 6px 18px #31495130; }
 .map-outside-books { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .map-outside-books span { display: inline-flex; align-items: center; padding: 2px; background: #f7fbfc; border-radius: 3px; }
 .map-outside-books i { width: 10px; height: 22px; border: 1px solid #26332f80; border-radius: 1px; }
