@@ -114,6 +114,27 @@ networks; allow access for **private networks only**.
 SQLite data is stored in `backend/data/bookpile.db` and is intentionally
 excluded from Git. Back up that file to preserve your catalogue.
 
+## Catalogue maintenance checks
+
+The project includes read-only utilities that never modify the database.
+Double-click either `.cmd` launcher:
+
+- `check-bookpile-dates.cmd` audits lifecycle chronology, unexplained missing
+  reading dates, original-collection conflicts, and suspicious future dates.
+- `check-bookpile-goodreads.cmd` checks Goodreads URLs and compares public book
+  metadata with BOOKPILE title and author.
+
+Reports are written as Excel-friendly CSV files under `maintenance/reports/`.
+Goodreads review links normally require an authenticated browser session, so
+the Goodreads launcher opens them one at a time in the default signed-in
+browser. Answer yes, no, skip, or quit; decisions made so far are retained in
+the generated report. For a network-only report without opening the browser,
+run:
+
+```powershell
+backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py
+```
+
 ## Roadmap
 
 1. Random and oldest-pending reading suggestions.

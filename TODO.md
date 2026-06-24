@@ -114,6 +114,8 @@
 
 ## Advanced search and data quality
 
+- [x] Add read-only external maintenance checks for lifecycle dates and
+  Goodreads links.
 - [ ] Search and filter by physical location.
 - [ ] Filter by lifecycle dates.
 - [ ] Filter by genres and tags.
