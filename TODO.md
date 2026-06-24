@@ -53,6 +53,7 @@
 - [x] Add a dedicated batch-add workflow.
 - [x] Keep the selected container between consecutive books.
 - [x] Advance the physical position automatically after each saved book.
+- [x] Let a batch advance through positions in ascending or descending order.
 - [x] Keep useful repeated catalogue values while clearing title/author-specific
   fields.
 - [x] Allow leaving batch mode without affecting normal single-book entry.

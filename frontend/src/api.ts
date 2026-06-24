@@ -102,10 +102,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(layout),
     }),
-  createBook: (book: BookPayload, shiftExisting = false) =>
+  createBook: (
+    book: BookPayload,
+    shiftExisting = false,
+    shiftDirection: "UP" | "DOWN" = "UP",
+  ) =>
     request<Book>("/books", {
       method: "POST",
-      body: JSON.stringify({ ...book, shift_existing: shiftExisting }),
+      body: JSON.stringify({
+        ...book,
+        shift_existing: shiftExisting,
+        shift_direction: shiftDirection,
+      }),
     }),
   updateBook: (id: number, book: BookPayload) =>
     request<Book>(`/books/${id}`, {

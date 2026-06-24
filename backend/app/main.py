@@ -360,12 +360,15 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
         with connect() as connection:
             if container_id is not None and position is not None:
                 connection.execute("BEGIN IMMEDIATE")
+                shifting_down = payload.shift_direction.value == "DOWN"
+                comparison = "<=" if shifting_down else ">="
+                ordering = "DESC" if shifting_down else "ASC"
                 occupied_rows = connection.execute(
-                    """
+                    f"""
                     SELECT id, title, author, position
                     FROM books
-                    WHERE container_id = ? AND position >= ?
-                    ORDER BY position ASC
+                    WHERE container_id = ? AND position {comparison} ?
+                    ORDER BY position {ordering}
                     """,
                     (container_id, position),
                 ).fetchall()
@@ -376,7 +379,11 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                         if row["position"] != expected_position:
                             break
                         contiguous.append(row)
-                        expected_position += 1
+                        expected_position += -1 if shifting_down else 1
+
+                    shift_possible = not (
+                        shifting_down and contiguous[-1]["position"] == 1
+                    )
 
                     if not payload.shift_existing:
                         occupant = contiguous[0]
@@ -397,6 +404,23 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                                 "position": position,
                                 "shift_count": len(contiguous),
                                 "last_position": contiguous[-1]["position"],
+                                "shift_direction": payload.shift_direction.value,
+                                "shift_possible": shift_possible,
+                            },
+                        )
+
+                    if not shift_possible:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "code": "POSITION_SHIFT_BLOCKED",
+                                "message": (
+                                    "Cannot make room downward because the "
+                                    "occupied sequence reaches position 1"
+                                ),
+                                "container_id": container_id,
+                                "position": position,
+                                "shift_direction": payload.shift_direction.value,
                             },
                         )
 
@@ -407,7 +431,10 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                             SET position = ?, updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                             """,
-                            (row["position"] + 1, row["id"]),
+                            (
+                                row["position"] + (-1 if shifting_down else 1),
+                                row["id"],
+                            ),
                         )
 
             cursor = connection.execute(

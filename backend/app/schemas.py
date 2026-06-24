@@ -20,6 +20,11 @@ class Layer(str, Enum):
     foreground = "FOREGROUND"
 
 
+class ShiftDirection(str, Enum):
+    up = "UP"
+    down = "DOWN"
+
+
 class BookcaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
@@ -69,6 +74,7 @@ class BookBase(BaseModel):
 
 class BookCreate(BookBase):
     shift_existing: bool = False
+    shift_direction: ShiftDirection = ShiftDirection.up
 
 
 class BookUpdate(BaseModel):

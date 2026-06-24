@@ -645,6 +645,7 @@ function BookDialog({
     book?.cover_filename ? api.coverUrl(book.cover_filename) : null,
   );
   const [batchMessage, setBatchMessage] = useState("");
+  const [batchDirection, setBatchDirection] = useState<"UP" | "DOWN">("UP");
   const titleInput = useRef<HTMLInputElement>(null);
   const containers = useMemo(
     () =>
@@ -685,7 +686,7 @@ function BookDialog({
         savedBook = await api.updateBook(book.id, payload);
       } else {
         try {
-          savedBook = await api.createBook(payload);
+          savedBook = await api.createBook(payload, false, batchDirection);
         } catch (err) {
           if (err instanceof ApiError && err.code === "POSITION_OCCUPIED") {
             const detail = err.detail ?? {};
@@ -700,21 +701,32 @@ function BookDialog({
               typeof detail.last_position === "number"
                 ? detail.last_position
                 : position;
+            const shiftingDown = detail.shift_direction === "DOWN";
+            const shiftPossible = detail.shift_possible !== false;
+            if (!shiftPossible) {
+              setError(
+                "That occupied sequence reaches position 1, so it cannot be shifted downward. Choose another position or switch to ascending.",
+              );
+              return;
+            }
+            const rangeStart = Math.min(Number(position), Number(lastPosition));
+            const rangeEnd = Math.max(Number(position), Number(lastPosition));
+            const destinationStart = rangeStart + (shiftingDown ? -1 : 1);
+            const destinationEnd = rangeEnd + (shiftingDown ? -1 : 1);
             const approved = window.confirm(
               `Position ${position} is occupied by “${
                 occupant?.title ?? "another book"
               }”${occupant?.author ? ` — ${occupant.author}` : ""}.\n\n` +
               `Make room by moving ${shiftCount} ${
                 shiftCount === 1 ? "book" : "books"
-              } one position (${position}–${lastPosition} → ${
-                Number(lastPosition) + 1
-              })?`,
+              } one position ${shiftingDown ? "down" : "up"} ` +
+              `(${rangeStart}–${rangeEnd} → ${destinationStart}–${destinationEnd})?`,
             );
             if (!approved) {
               setError("The book was not added. Choose another position.");
               return;
             }
-            savedBook = await api.createBook(payload, true);
+            savedBook = await api.createBook(payload, true, batchDirection);
           } else {
             throw err;
           }
@@ -727,6 +739,10 @@ function BookDialog({
       }
       await onSaved();
       if (batchMode && !book) {
+        const nextPosition =
+          savedBook.position === null
+            ? null
+            : savedBook.position + (batchDirection === "DOWN" ? -1 : 1);
         setForm((current) => ({
           ...current,
           title: "",
@@ -735,7 +751,7 @@ function BookDialog({
           notes: null,
           reading_started_date: null,
           read_date: null,
-          position: current.position === null ? null : current.position + 1,
+          position: nextPosition && nextPosition > 0 ? nextPosition : null,
         }));
         setCoverFile(null);
         setCoverPreview(null);
@@ -744,7 +760,9 @@ function BookDialog({
           `Added “${savedBook.title}”. Container retained${
             savedBook.position === null
               ? "."
-              : `; next position is ${savedBook.position + 1}.`
+              : nextPosition && nextPosition > 0
+                ? `; next position is ${nextPosition}.`
+                : "; position 1 reached—enter another position or switch direction."
           }`,
         );
         window.setTimeout(() => titleInput.current?.focus(), 0);
@@ -767,8 +785,22 @@ function BookDialog({
         <form onSubmit={(event) => void submit(event)}>
           {batchMode && (
             <div className="batch-banner">
-              Container, position sequence, status, acquisition date, and
-              original-collection setting stay ready for the next book.
+              <span>
+                Container, position sequence, status, acquisition date, and
+                original-collection setting stay ready for the next book.
+              </span>
+              <label>
+                Position direction
+                <select
+                  value={batchDirection}
+                  onChange={(event) =>
+                    setBatchDirection(event.target.value as "UP" | "DOWN")
+                  }
+                >
+                  <option value="UP">Ascending · 6 → 7 → 8</option>
+                  <option value="DOWN">Descending · 6 → 5 → 4</option>
+                </select>
+              </label>
             </div>
           )}
           <div className="form-grid">

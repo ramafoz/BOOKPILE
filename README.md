@@ -23,7 +23,7 @@ exact physical location.
 - Inspect and restore validated BOOKPILE backups with an automatic pre-restore
   safety backup and rollback protection.
 - Add books rapidly in batches while retaining the physical container and
-  advancing positions.
+  advancing positions upward or downward.
 - Sort by title, author, physical position, or lifecycle dates and filter by
   date ranges and physical location.
 - Insert a new book into an occupied container position by shifting the

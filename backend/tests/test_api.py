@@ -901,6 +901,135 @@ def test_shift_at_end_extends_container_positions() -> None:
         assert positions["Book 8"] == 9
 
 
+def test_occupied_position_can_shift_books_downward() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases", json={"name": "Downward Shift"}
+        ).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        for position in (2, 4, 5, 6, 8):
+            client.post(
+                "/books",
+                json={
+                    "title": f"Book {position}",
+                    "author": "Author",
+                    "container_id": container["id"],
+                    "position": position,
+                },
+            )
+
+        conflict = client.post(
+            "/books",
+            json={
+                "title": "New Six",
+                "author": "Author",
+                "container_id": container["id"],
+                "position": 6,
+                "shift_direction": "DOWN",
+            },
+        )
+        assert conflict.status_code == 409
+        detail = conflict.json()["detail"]
+        assert detail["shift_direction"] == "DOWN"
+        assert detail["shift_count"] == 3
+        assert detail["last_position"] == 4
+        assert detail["shift_possible"] is True
+
+        inserted = client.post(
+            "/books",
+            json={
+                "title": "New Six",
+                "author": "Author",
+                "container_id": container["id"],
+                "position": 6,
+                "shift_existing": True,
+                "shift_direction": "DOWN",
+            },
+        )
+        assert inserted.status_code == 201
+        books = client.get(
+            "/books",
+            params={"container_id": container["id"], "sort_by": "physical"},
+        ).json()
+        assert [(book["title"], book["position"]) for book in books] == [
+            ("Book 2", 2),
+            ("Book 4", 3),
+            ("Book 5", 4),
+            ("Book 6", 5),
+            ("New Six", 6),
+            ("Book 8", 8),
+        ]
+
+
+def test_downward_shift_is_blocked_at_position_one() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases", json={"name": "Downward Boundary"}
+        ).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        for position in (1, 2, 3):
+            client.post(
+                "/books",
+                json={
+                    "title": f"Book {position}",
+                    "author": "Author",
+                    "container_id": container["id"],
+                    "position": position,
+                },
+            )
+
+        conflict = client.post(
+            "/books",
+            json={
+                "title": "New Three",
+                "author": "Author",
+                "container_id": container["id"],
+                "position": 3,
+                "shift_direction": "DOWN",
+            },
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"]["shift_possible"] is False
+
+        blocked = client.post(
+            "/books",
+            json={
+                "title": "New Three",
+                "author": "Author",
+                "container_id": container["id"],
+                "position": 3,
+                "shift_existing": True,
+                "shift_direction": "DOWN",
+            },
+        )
+        assert blocked.status_code == 409
+        assert blocked.json()["detail"]["code"] == "POSITION_SHIFT_BLOCKED"
+
+
 def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None:
     with TestClient(app) as client:
         bookcase = client.post(

@@ -123,6 +123,10 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .empty-state p { margin: 0; }
 .error-banner, .form-error { color: #8b321f; background: #fae4dd; border: 1px solid #efc5ba; padding: 11px 14px; border-radius: 7px; margin: 12px 0; }
 .batch-banner { margin-bottom: 17px; padding: 11px 13px; color: #315a50; background: #dfece7; border: 1px solid #bed5cc; border-radius: 7px; font-size: 13px; line-height: 1.45; }
+.batch-banner { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.batch-banner > span { flex: 1; }
+.batch-banner label { flex: 0 0 230px; color: #315a50; font-size: 12px; font-weight: 700; }
+.batch-banner select { margin-top: 4px; padding: 8px 10px; }
 .batch-success { color: #28574d; background: #dfece7; border: 1px solid #b9d2c8; padding: 11px 14px; border-radius: 7px; margin: 12px 0; }
 
 .dialog-backdrop { position: fixed; z-index: 20; inset: 0; background: #0c241fba; backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; }
@@ -285,6 +289,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .filters button { flex: 1; }
   .advanced-toggle { justify-content: center; }
   .advanced-filters { grid-template-columns: 1fr 1fr; }
+  .batch-banner { align-items: stretch; flex-direction: column; }
+  .batch-banner label { flex-basis: auto; }
   .advanced-filters .wide-filter { grid-column: span 2; }
   .catalogue-heading { align-items: center; }
   .catalogue-heading { align-items: flex-start; gap: 15px; flex-direction: column; }
