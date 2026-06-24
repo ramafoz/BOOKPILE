@@ -81,6 +81,7 @@
 ## Additional cataloguing
 
 - [x] Mark a read book's reading date as explicitly unknown.
+- [x] Keep acquisition and reading dates chronologically consistent.
 - [ ] ISBN.
 - [ ] Publisher.
 - [ ] Publication year.

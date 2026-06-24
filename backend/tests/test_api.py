@@ -311,6 +311,121 @@ def test_read_book_can_have_an_explicitly_unknown_reading_date() -> None:
         assert pending.json()["is_read_date_unknown"] is False
 
 
+def test_original_collection_clears_acquisition_date() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "Inherited shelf book",
+                "author": "Old Author",
+                "acquisition_date": "2010-03-04",
+            },
+        ).json()
+        assert created["acquisition_date"] == "2010-03-04"
+
+        original = client.patch(
+            f'/books/{created["id"]}',
+            json={"is_original_collection": True},
+        )
+        assert original.status_code == 200
+        assert original.json()["is_original_collection"] is True
+        assert original.json()["acquisition_date"] is None
+
+        newly_dated = client.patch(
+            f'/books/{created["id"]}',
+            json={"acquisition_date": "2012-07-08"},
+        )
+        assert newly_dated.status_code == 200
+        assert newly_dated.json()["acquisition_date"] == "2012-07-08"
+        assert newly_dated.json()["is_original_collection"] is False
+
+        created_original = client.post(
+            "/books",
+            json={
+                "title": "Another inherited book",
+                "author": "Old Author",
+                "acquisition_date": "1999-01-01",
+                "is_original_collection": True,
+            },
+        )
+        assert created_original.status_code == 201
+        assert created_original.json()["acquisition_date"] is None
+
+
+def test_book_dates_must_follow_chronological_order() -> None:
+    with TestClient(app) as client:
+        invalid_started = client.post(
+            "/books",
+            json={
+                "title": "Time traveller one",
+                "author": "Chronology",
+                "acquisition_date": "2020-05-10",
+                "reading_started_date": "2020-05-09",
+            },
+        )
+        assert invalid_started.status_code == 422
+        assert "earlier than acquisition" in invalid_started.json()["detail"]
+
+        invalid_finished = client.post(
+            "/books",
+            json={
+                "title": "Time traveller two",
+                "author": "Chronology",
+                "status": "READ",
+                "reading_started_date": "2020-05-10",
+                "read_date": "2020-05-09",
+            },
+        )
+        assert invalid_finished.status_code == 422
+        assert "earlier than reading started" in invalid_finished.json()["detail"]
+
+        book = client.post(
+            "/books",
+            json={
+                "title": "Ordered history",
+                "author": "Chronology",
+                "status": "READ",
+                "acquisition_date": "2020-05-01",
+                "reading_started_date": "2020-05-05",
+                "read_date": "2020-05-10",
+            },
+        ).json()
+        invalid_update = client.patch(
+            f'/books/{book["id"]}',
+            json={"acquisition_date": "2020-05-06"},
+        )
+        assert invalid_update.status_code == 422
+        assert "earlier than acquisition" in invalid_update.json()["detail"]
+
+
+def test_automatic_read_dates_respect_existing_history() -> None:
+    with TestClient(app) as client:
+        future_acquisition = "2099-01-02"
+        created = client.post(
+            "/books",
+            json={
+                "title": "Future acquisition",
+                "author": "Chronology",
+                "status": "READ",
+                "acquisition_date": future_acquisition,
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["read_date"] == future_acquisition
+
+        started = client.post(
+            "/books",
+            json={
+                "title": "Future reading",
+                "author": "Chronology",
+                "status": "CURRENTLY_READING",
+                "acquisition_date": future_acquisition,
+            },
+        )
+        assert started.status_code == 201
+        assert started.json()["reading_started_date"] == future_acquisition
+
+
 def test_existing_catalogue_migrates_without_losing_books(
     tmp_path: Path,
     monkeypatch,

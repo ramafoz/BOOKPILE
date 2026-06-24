@@ -120,6 +120,46 @@ def location_values(payload: BookCreate | BookUpdate) -> tuple[int | None, int |
     return container_id, position
 
 
+def validate_book_dates(
+    acquisition_date: date | None,
+    reading_started_date: date | None,
+    read_date: date | None,
+) -> None:
+    if (
+        acquisition_date is not None
+        and reading_started_date is not None
+        and reading_started_date < acquisition_date
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Reading started date cannot be earlier than acquisition date",
+        )
+    if (
+        reading_started_date is not None
+        and read_date is not None
+        and read_date < reading_started_date
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Finished reading date cannot be earlier than reading started date",
+        )
+    if (
+        acquisition_date is not None
+        and read_date is not None
+        and read_date < acquisition_date
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Finished reading date cannot be earlier than acquisition date",
+        )
+
+
+def parsed_date(value: str | date | None) -> date | None:
+    if value is None or isinstance(value, date):
+        return value
+    return date.fromisoformat(value)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
@@ -349,20 +389,34 @@ def list_books(
 @app.post("/books", response_model=Book, status_code=status.HTTP_201_CREATED)
 def create_book(payload: BookCreate) -> dict[str, Any]:
     container_id, position = location_values(payload)
+    acquisition_date = (
+        None if payload.is_original_collection else payload.acquisition_date
+    )
     reading_started_date = payload.reading_started_date
     read_date = payload.read_date
     is_read_date_unknown = payload.is_read_date_unknown
     if payload.status == BookStatus.currently_reading:
         container_id, position = None, None
-        reading_started_date = reading_started_date or date.today()
+        reading_started_date = reading_started_date or max(
+            value for value in (date.today(), acquisition_date) if value is not None
+        )
         is_read_date_unknown = False
     elif payload.status == BookStatus.read:
         if is_read_date_unknown:
             read_date = None
         else:
-            read_date = read_date or date.today()
+            read_date = read_date or max(
+                value
+                for value in (
+                    date.today(),
+                    acquisition_date,
+                    reading_started_date,
+                )
+                if value is not None
+            )
     else:
         is_read_date_unknown = False
+    validate_book_dates(acquisition_date, reading_started_date, read_date)
     try:
         with connect() as connection:
             if container_id is not None and position is not None:
@@ -460,8 +514,8 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                     str(payload.goodreads_url) if payload.goodreads_url else None,
                     payload.notes,
                     (
-                        payload.acquisition_date.isoformat()
-                        if payload.acquisition_date
+                        acquisition_date.isoformat()
+                        if acquisition_date
                         else None
                     ),
                     (
@@ -512,6 +566,10 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["is_read_date_unknown"] = int(
             changes["is_read_date_unknown"]
         )
+    if changes.get("is_original_collection"):
+        changes["acquisition_date"] = None
+    elif changes.get("acquisition_date") is not None:
+        changes["is_original_collection"] = 0
 
     location_touched = {"container_id", "position"} & payload.model_fields_set
     if location_touched:
@@ -540,18 +598,61 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
             "reading_started_date" not in payload.model_fields_set
             and existing["reading_started_date"] is None
         ):
-            changes["reading_started_date"] = date.today().isoformat()
+            next_acquisition = parsed_date(
+                changes.get("acquisition_date", existing["acquisition_date"])
+            )
+            changes["reading_started_date"] = max(
+                value
+                for value in (date.today(), next_acquisition)
+                if value is not None
+            ).isoformat()
     elif next_status == BookStatus.read.value:
         if next_read_date_unknown:
             changes["read_date"] = None
             changes["is_read_date_unknown"] = 1
-        elif changes.get("read_date", existing["read_date"]) is None:
-            changes["read_date"] = date.today().isoformat()
+        elif (
+            changes.get("read_date", existing["read_date"]) is None
+            and (
+                (
+                    "status" in payload.model_fields_set
+                    and existing["status"] != BookStatus.read.value
+                )
+                or (
+                    "is_read_date_unknown" in payload.model_fields_set
+                    and existing["is_read_date_unknown"]
+                )
+            )
+        ):
+            next_acquisition = parsed_date(
+                changes.get("acquisition_date", existing["acquisition_date"])
+            )
+            next_started = parsed_date(
+                changes.get(
+                    "reading_started_date",
+                    existing["reading_started_date"],
+                )
+            )
+            changes["read_date"] = max(
+                value
+                for value in (date.today(), next_acquisition, next_started)
+                if value is not None
+            ).isoformat()
     else:
         changes["is_read_date_unknown"] = 0
 
     if changes.get("read_date") is not None:
         changes["is_read_date_unknown"] = 0
+
+    validate_book_dates(
+        parsed_date(changes.get("acquisition_date", existing["acquisition_date"])),
+        parsed_date(
+            changes.get(
+                "reading_started_date",
+                existing["reading_started_date"],
+            )
+        ),
+        parsed_date(changes.get("read_date", existing["read_date"])),
+    )
 
     assignments = ", ".join(f"{column} = ?" for column in changes)
     values = list(changes.values())

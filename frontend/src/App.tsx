@@ -573,6 +573,14 @@ function formatDate(value: string) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+function latestDate(...values: Array<string | null>) {
+  return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? "";
+}
+
+function earliestDate(...values: Array<string | null>) {
+  return values.filter((value): value is string => Boolean(value)).sort().at(0);
+}
+
 function BookDates({ book }: { book: Book }) {
   const dates = [
     book.acquisition_date
@@ -863,15 +871,24 @@ function BookDialog({
                 onChange={(e) => {
                   const status = e.target.value as BookStatus;
                   const today = new Date().toISOString().slice(0, 10);
+                  const suggestedStarted = latestDate(
+                    today,
+                    form.acquisition_date,
+                  );
+                  const suggestedFinished = latestDate(
+                    today,
+                    form.acquisition_date,
+                    form.reading_started_date,
+                  );
                   setForm({
                     ...form,
                     status,
                     ...(status === "CURRENTLY_READING" && !form.reading_started_date
-                      ? { reading_started_date: today }
+                      ? { reading_started_date: suggestedStarted }
                       : {}),
                     ...(status === "READ" && !form.read_date
                       && !form.is_read_date_unknown
-                      ? { read_date: today }
+                      ? { read_date: suggestedFinished }
                       : {}),
                     ...(status === "CURRENTLY_READING"
                       ? {
@@ -915,9 +932,14 @@ function BookDialog({
                   <input
                     type="date"
                     value={form.acquisition_date ?? ""}
+                    max={earliestDate(
+                      form.reading_started_date,
+                      form.read_date,
+                    )}
                     onChange={(e) => setForm({
                       ...form,
                       acquisition_date: e.target.value || null,
+                      is_original_collection: false,
                     })}
                   />
                   <button
@@ -937,6 +959,8 @@ function BookDialog({
                   <input
                     type="date"
                     value={form.reading_started_date ?? ""}
+                    min={form.acquisition_date ?? undefined}
+                    max={form.read_date ?? undefined}
                     onChange={(e) => setForm({
                       ...form,
                       reading_started_date: e.target.value || null,
@@ -959,6 +983,10 @@ function BookDialog({
                   <input
                     type="date"
                     value={form.read_date ?? ""}
+                    min={latestDate(
+                      form.acquisition_date,
+                      form.reading_started_date,
+                    ) || undefined}
                     disabled={form.is_read_date_unknown}
                     onChange={(e) => setForm({
                       ...form,
@@ -989,7 +1017,11 @@ function BookDialog({
                       is_read_date_unknown: e.target.checked,
                       read_date: e.target.checked
                         ? null
-                        : new Date().toISOString().slice(0, 10),
+                        : latestDate(
+                            new Date().toISOString().slice(0, 10),
+                            form.acquisition_date,
+                            form.reading_started_date,
+                          ),
                     })}
                   />
                   Reading date unknown
@@ -1002,6 +1034,7 @@ function BookDialog({
                   onChange={(e) => setForm({
                     ...form,
                     is_original_collection: e.target.checked,
+                    ...(e.target.checked ? { acquisition_date: null } : {}),
                   })}
                 />
                 Original collection / acquisition date unknown

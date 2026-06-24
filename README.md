@@ -15,6 +15,8 @@ exact physical location.
 - Reorganize books quickly, swapping positions when the destination is occupied.
 - Record optional acquisition, reading-started, and finished-reading dates,
   including read books whose exact reading date is unknown.
+- Keep lifecycle dates chronologically consistent and clear acquisition dates
+  automatically for original-collection books.
 - Preserve the original collection as historical books with unknown acquisition
   dates.
 - Add, replace, and remove optimized cover photos from desktop or mobile.
