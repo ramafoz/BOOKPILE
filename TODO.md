@@ -34,15 +34,17 @@
 - [x] Scale furniture to preserve approximate relative physical size.
 - [x] Resize shelves within a bookcase using relative height weights.
 - [x] Reposition and resize containers within a shelf.
-- [ ] Let every container have independently customizable height as well as
+- [x] Let every container have independently customizable height as well as
   width, so piles can sit above background rows in unused vertical space.
-- [ ] Allow visual container overlap: foreground containers may cover up to
+- [x] Allow visual container overlap: foreground containers may cover up to
   50% of a background row's height to simulate shelf depth.
 - [x] Persist the visual layout independently from catalogue locations.
 - [ ] Add direct drag-and-resize handles as an optional convenience over the
   current precise slider controls.
-- [ ] Render containers as grey rectangles that fill with books.
-- [ ] Colour books according to reading status.
+- [x] Render containers as grey rectangles that fill with books.
+- [x] Colour books according to reading status.
+- [x] Open the visual map from a catalogue location and highlight the selected
+  book while fading all other books.
 - [ ] Future-only idea: drag books between containers and reorder them visually.
   This is not part of the current visual-index scope.
 
@@ -88,9 +90,9 @@
 
 ## Faster book capture
 
-- [ ] Scan ISBN or barcode from a phone.
+- [ ] Scan ISBN or barcode from a phone (see `SCANNING_PLAN.md`).
 - [ ] Look up title and author automatically.
-- [ ] Retrieve cover and publication metadata automatically.
+- [ ] Integrate scanning into Batch Add while preserving container and position.
 - [ ] Add OCR as a later fallback for books without usable barcodes.
 
 ## Reading suggestions

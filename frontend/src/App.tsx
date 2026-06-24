@@ -74,6 +74,7 @@ function App() {
   const [showReorganize, setShowReorganize] = useState(false);
   const [showData, setShowData] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [focusedMapBook, setFocusedMapBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -187,6 +188,7 @@ function App() {
     setSortOrder("asc");
     setShowAdvanced(true);
     setShowMap(false);
+    setFocusedMapBook(null);
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
         behavior: "smooth",
@@ -205,6 +207,7 @@ function App() {
     setSortOrder("asc");
     setShowAdvanced(true);
     setShowMap(false);
+    setFocusedMapBook(null);
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
         behavior: "smooth",
@@ -212,6 +215,12 @@ function App() {
       }),
       0,
     );
+  }
+
+  function openBookOnMap(book: Book) {
+    if (!book.container_id && book.status !== "CURRENTLY_READING") return;
+    setFocusedMapBook(book);
+    setShowMap(true);
   }
 
   return (
@@ -223,7 +232,13 @@ function App() {
             BOOKPILE
           </a>
           <div className="nav-actions">
-            <button className="ghost-button" onClick={() => setShowMap(true)}>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setFocusedMapBook(null);
+                setShowMap(true);
+              }}
+            >
               <GalleryVerticalEnd size={17} /> Library map
             </button>
             <button className="ghost-button" onClick={() => setShowData(true)}>
@@ -432,7 +447,17 @@ function App() {
                   </div>
                 </div>
                 <div className="book-side">
-                  <div className="location">
+                  <button
+                    className="location location-link"
+                    type="button"
+                    disabled={!book.container_id && book.status !== "CURRENTLY_READING"}
+                    aria-label={
+                      book.container_id || book.status === "CURRENTLY_READING"
+                        ? `Find ${book.title} on the library map`
+                        : "This book has no location to show on the library map"
+                    }
+                    onClick={() => openBookOnMap(book)}
+                  >
                     <MapPin size={16} />
                     {book.status === "CURRENTLY_READING" ? (
                       <div className="location-copy">
@@ -455,7 +480,7 @@ function App() {
                         <span>No shelf or container selected</span>
                       </div>
                     )}
-                  </div>
+                  </button>
                   <div className="row-actions">
                     {book.goodreads_url && (
                       <a
@@ -516,9 +541,13 @@ function App() {
         />
       )}
       {showData && <DataDialog onClose={() => setShowData(false)} />}
-        {showMap && (
+      {showMap && (
         <LibraryMapDialog
-          onClose={() => setShowMap(false)}
+          focusedBook={focusedMapBook}
+          onClose={() => {
+            setShowMap(false);
+            setFocusedMapBook(null);
+          }}
           onFilter={openCatalogueAt}
           onReadingFilter={openReadingCatalogue}
         />
@@ -1239,6 +1268,7 @@ function MapContainerGraphic({
   height,
   onSelect,
   obscured,
+  focusedBookId,
 }: {
   container: MapContainer;
   x: number;
@@ -1247,6 +1277,7 @@ function MapContainerGraphic({
   height: number;
   onSelect: () => void;
   obscured: boolean;
+  focusedBookId: number | null;
 }) {
   const padding = 3;
   const bookAreaHeight = Math.max(6, height - padding * 2);
@@ -1290,12 +1321,18 @@ function MapContainerGraphic({
           return (
             <rect
               key={book.id}
-              className="map-book"
+              className={`map-book ${
+                focusedBookId === null
+                  ? ""
+                  : book.id === focusedBookId
+                    ? "focused"
+                    : "muted"
+              }`}
               x={x + padding + (book.position - 1) * slotWidth}
               y={y + padding}
               width={bookWidth}
               height={bookAreaHeight}
-              fill={bookColour(book.status)}
+              fill={focusedBookId === book.id ? "#287fbd" : bookColour(book.status)}
             >
               <title>{book.title}</title>
             </rect>
@@ -1308,12 +1345,18 @@ function MapContainerGraphic({
           return (
             <rect
               key={book.id}
-              className="map-book"
+              className={`map-book ${
+                focusedBookId === null
+                  ? ""
+                  : book.id === focusedBookId
+                    ? "focused"
+                    : "muted"
+              }`}
               x={x + padding}
               y={y + padding + (book.position - 1) * slotHeight}
               width={availableWidth}
               height={bookHeight}
-              fill={bookColour(book.status)}
+              fill={focusedBookId === book.id ? "#287fbd" : bookColour(book.status)}
             >
               <title>{book.title}</title>
             </rect>
@@ -1331,6 +1374,7 @@ function MapShelfGraphic({
   onShelf,
   onContainer,
   containerLayout,
+  focusedBookId,
 }: {
   shelf: MapShelf;
   y: number;
@@ -1338,6 +1382,7 @@ function MapShelfGraphic({
   onShelf: () => void;
   onContainer: (container: MapContainer) => void;
   containerLayout: Map<number, VisualRect>;
+  focusedBookId: number | null;
 }) {
   const contentY = y + 7;
   const contentHeight = Math.max(8, height - 17);
@@ -1388,6 +1433,7 @@ function MapShelfGraphic({
             width={usableWidth * placement.width / 100}
             height={contentHeight * placement.height / 100}
             obscured={hasForeground && container.layer === "BACKGROUND"}
+            focusedBookId={focusedBookId}
             onSelect={() => onContainer(container)}
           />
         );
@@ -1411,6 +1457,7 @@ function MapBookcaseGraphic({
   rect,
   shelfLayout,
   containerLayout,
+  focusedBookId,
 }: {
   bookcase: MapBookcase;
   onBookcase: () => void;
@@ -1419,6 +1466,7 @@ function MapBookcaseGraphic({
   rect: VisualRect;
   shelfLayout: Map<number, number>;
   containerLayout: Map<number, VisualRect>;
+  focusedBookId: number | null;
 }) {
   const height = 620;
   const availableHeight = height - 22;
@@ -1476,6 +1524,7 @@ function MapBookcaseGraphic({
               onShelf={() => onShelf(shelf)}
               onContainer={(container) => onContainer(shelf, container)}
               containerLayout={containerLayout}
+              focusedBookId={focusedBookId}
             />
           );
         })}
@@ -1525,6 +1574,7 @@ function LibraryMapDialog({
   onClose,
   onFilter,
   onReadingFilter,
+  focusedBook,
 }: {
   onClose: () => void;
   onFilter: (
@@ -1533,6 +1583,7 @@ function LibraryMapDialog({
     containerId?: number | "",
   ) => void;
   onReadingFilter: () => void;
+  focusedBook: Book | null;
 }) {
   const [map, setMap] = useState<LibraryMapData>({
     bookcases: [],
@@ -1628,9 +1679,19 @@ function LibraryMapDialog({
           <button className="icon-button" onClick={onClose}><X /></button>
         </div>
         <p className="dialog-intro">
-          The room layout remembers the relative size and position of each
-          piece. Shelves with overlapping layers are exploded so blocked books
-          remain visible. Click a hierarchy level to filter the catalogue.
+          {focusedBook ? (
+            <>
+              Finding <strong>{focusedBook.title}</strong>: the selected book is
+              blue and every other book is faded.
+            </>
+          ) : (
+            <>
+              The room layout remembers the relative size and position of each
+              piece. Shelves with overlapping layers are exploded so blocked
+              books remain visible. Click a hierarchy level to filter the
+              catalogue.
+            </>
+          )}
         </p>
         <div className="map-legend">
           <span><i className="pending" /> Pending</span>
@@ -1873,8 +1934,25 @@ function LibraryMapDialog({
                 >
                   <div className="map-outside-books">
                     {map.outside_books.map((book) => (
-                      <span key={book.id} title={book.title}>
-                        <i style={{ background: bookColour(book.status) }} />
+                      <span
+                        key={book.id}
+                        className={
+                          focusedBook
+                            ? book.id === focusedBook.id
+                              ? "focused"
+                              : "muted"
+                            : ""
+                        }
+                        title={book.title}
+                      >
+                        <i
+                          style={{
+                            background:
+                              focusedBook?.id === book.id
+                                ? "#287fbd"
+                                : bookColour(book.status),
+                          }}
+                        />
                       </span>
                     ))}
                   </div>
@@ -1889,6 +1967,7 @@ function LibraryMapDialog({
                   }}
                   shelfLayout={shelfWeights}
                   containerLayout={containerRects}
+                  focusedBookId={focusedBook?.id ?? null}
                   onBookcase={() => onFilter(bookcase.id)}
                   onShelf={(shelf) => onFilter(bookcase.id, shelf.id)}
                   onContainer={(shelf, container) =>

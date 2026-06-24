@@ -108,6 +108,12 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .location-copy span { color: #78817e; font-size: 12px; }
 .book-side { min-width: 0; display: flex; align-items: flex-end; flex-direction: column; gap: 7px; }
 .location { width: 100%; justify-content: flex-start; }
+.location-link { padding: 4px 6px; margin: -4px -6px; border: 0; border-radius: 6px; color: inherit; text-align: left; font: inherit; background: transparent; cursor: pointer; }
+.location-link:hover, .location-link:focus-visible { background: #e9e1d5; outline: none; }
+.location-link:hover .location-copy strong, .location-link:focus-visible .location-copy strong { color: #a85835; text-decoration: underline; }
+.location-link:disabled { opacity: 1; cursor: default; }
+.location-link:disabled:hover { background: transparent; }
+.location-link:disabled:hover .location-copy strong { color: #40504b; text-decoration: none; }
 .row-actions { display: flex; justify-content: flex-end; }
 .row-actions a, .row-actions button, .icon-button { width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: transparent; color: #67716e; border-radius: 50%; }
 .row-actions a:hover, .row-actions button:hover, .icon-button:hover { background: #e7dfd3; color: #173d35; }
@@ -232,6 +238,9 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-outside-books { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .map-outside-books span { display: inline-flex; align-items: center; padding: 2px; background: #f7fbfc; border-radius: 3px; }
 .map-outside-books i { width: 10px; height: 22px; border: 1px solid #26332f80; border-radius: 1px; }
+.map-outside-books span.muted { opacity: .18; filter: grayscale(1); }
+.map-outside-books span.focused { opacity: 1; filter: none; }
+.map-outside-books span.focused i { border-color: #0e527f; box-shadow: 0 0 0 2px #287fbd55; }
 .map-bookcase-card { position: absolute; z-index: 2; overflow: hidden; border: 1px solid #aa9a84; border-radius: 7px; background: #e7ded0; box-shadow: 0 8px 24px #173d3524; }
 .map-bookcase-card:focus { outline: 2px solid #a85835; outline-offset: 2px; }
 .map-bookcase-card svg { width: 100%; height: 100%; display: block; }
@@ -248,6 +257,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-container.foreground > rect:first-of-type { fill: #d1cdc5; stroke: #7f786d; stroke-width: 1.5; filter: drop-shadow(0 3px 2px #63584925); }
 .map-container:hover > rect:first-of-type, .map-container:focus > rect:first-of-type { stroke: #a85835; stroke-width: 3; }
 .map-book { pointer-events: none; stroke: #26332f99; stroke-width: .35; shape-rendering: crispEdges; }
+.map-book.muted { opacity: .16; fill: #9da5a2; stroke: #6e7573aa; }
+.map-book.focused { opacity: 1; stroke: #0e527f; stroke-width: 1.4; filter: drop-shadow(0 0 3px #287fbd99); }
 
 @media (max-width: 850px) {
   .shelf-art { opacity: .25; right: -80px; }
