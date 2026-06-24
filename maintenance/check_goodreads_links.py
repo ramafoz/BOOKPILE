@@ -46,6 +46,29 @@ def similarity(expected: str, actual: str) -> float:
     return SequenceMatcher(None, left, right).ratio()
 
 
+def canonical_url(url: str) -> str:
+    parsed = urllib.parse.urlsplit(url.strip())
+    hostname = (parsed.hostname or "").lower()
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path.rstrip("/") or "/"
+    return urllib.parse.urlunsplit(
+        ("https", f"{hostname}{port}", path, "", "")
+    )
+
+
+def duplicate_groups(books: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for book in books:
+        grouped.setdefault(canonical_url(book["goodreads_url"]), []).append(book)
+    return {
+        url: members
+        for url, members in grouped.items()
+        if len(members) > 1
+    }
+
+
 def extract_metadata(body: str) -> tuple[str, str]:
     title_match = TITLE_PATTERN.search(body) or HTML_TITLE_PATTERN.search(body)
     title = html.unescape(title_match.group(1)).strip() if title_match else ""
@@ -72,6 +95,8 @@ def check_link(book: dict, timeout: float) -> dict:
         "expected_title": book["title"],
         "expected_author": book["author"],
         "url": url,
+        "canonical_url": canonical_url(url),
+        "duplicate_books": "",
         "http_status": "",
         "final_url": "",
         "page_title": "",
@@ -159,6 +184,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=12)
     parser.add_argument("--limit", type=int, default=0, help="Check only N links.")
     parser.add_argument(
+        "--duplicates-only",
+        action="store_true",
+        help="Check URL uniqueness without making network requests.",
+    )
+    parser.add_argument(
         "--interactive",
         action="store_true",
         help="Open unverifiable links one at a time for signed-in review.",
@@ -175,13 +205,53 @@ def main() -> int:
             ORDER BY title COLLATE NOCASE, author COLLATE NOCASE
             """
         ).fetchall()
-    books = [dict(row) for row in rows[: args.limit or None]]
+    all_books = [dict(row) for row in rows]
+    duplicates = duplicate_groups(all_books)
+    duplicate_book_count = sum(len(members) for members in duplicates.values())
+    print(
+        f"Unique-link check: {len(duplicates)} duplicate groups, "
+        f"{duplicate_book_count} affected books."
+    )
+    for members in duplicates.values():
+        titles = ", ".join(
+            f'#{book["id"]} {book["title"]}'
+            for book in members
+        )
+        print(f"  DUPLICATE: {titles}")
+
+    books = all_books[: args.limit or None]
     print(f"Checking {len(books)} Goodreads links. This can take a few minutes.")
 
     results = []
     stopped_early = False
     for index, book in enumerate(books, start=1):
-        result = check_link(book, args.timeout)
+        canonical = canonical_url(book["goodreads_url"])
+        duplicate_members = duplicates.get(canonical, [])
+        if duplicate_members:
+            result = {
+                "status": "DUPLICATE_URL",
+                "book_id": book["id"],
+                "expected_title": book["title"],
+                "expected_author": book["author"],
+                "url": book["goodreads_url"],
+                "canonical_url": canonical,
+                "duplicate_books": " | ".join(
+                    f'#{member["id"]} {member["title"]}'
+                    for member in duplicate_members
+                    if member["id"] != book["id"]
+                ),
+                "http_status": "",
+                "final_url": "",
+                "page_title": "",
+                "page_author": "",
+                "title_similarity": "",
+                "author_similarity": "",
+                "message": "The same Goodreads URL is assigned to multiple books.",
+            }
+        elif args.duplicates_only:
+            continue
+        else:
+            result = check_link(book, args.timeout)
         results.append(result)
         print(f'[{index}/{len(books)}] {result["status"]}: {book["title"]}')
         if args.interactive and result["status"] in {
@@ -217,7 +287,10 @@ def main() -> int:
                 break
 
     if not results:
-        print("No Goodreads links found.")
+        if not books:
+            print("No Goodreads links found.")
+        elif args.duplicates_only:
+            print("All Goodreads links are unique.")
         return 0
 
     path = report_path("goodreads-audit")
@@ -236,6 +309,7 @@ def main() -> int:
             "HTTP_ERROR",
             "POSSIBLE_MISMATCH",
             "MANUAL_MISMATCH",
+            "DUPLICATE_URL",
         }
         for result in results
     ) else 0

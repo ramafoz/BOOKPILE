@@ -122,7 +122,8 @@ Double-click either `.cmd` launcher:
 - `check-bookpile-dates.cmd` audits lifecycle chronology, unexplained missing
   reading dates, original-collection conflicts, and suspicious future dates.
 - `check-bookpile-goodreads.cmd` checks Goodreads URLs and compares public book
-  metadata with BOOKPILE title and author.
+  metadata with BOOKPILE title and author. It always checks that every URL is
+  unique before accessing Goodreads.
 
 Reports are written as Excel-friendly CSV files under `maintenance/reports/`.
 Goodreads review links normally require an authenticated browser session, so
@@ -133,6 +134,12 @@ run:
 
 ```powershell
 backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py
+```
+
+For an immediate offline duplicate check without contacting Goodreads:
+
+```powershell
+backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py --duplicates-only
 ```
 
 ## Roadmap
