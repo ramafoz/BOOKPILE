@@ -351,11 +351,18 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
     container_id, position = location_values(payload)
     reading_started_date = payload.reading_started_date
     read_date = payload.read_date
+    is_read_date_unknown = payload.is_read_date_unknown
     if payload.status == BookStatus.currently_reading:
         container_id, position = None, None
         reading_started_date = reading_started_date or date.today()
+        is_read_date_unknown = False
     elif payload.status == BookStatus.read:
-        read_date = read_date or date.today()
+        if is_read_date_unknown:
+            read_date = None
+        else:
+            read_date = read_date or date.today()
+    else:
+        is_read_date_unknown = False
     try:
         with connect() as connection:
             if container_id is not None and position is not None:
@@ -442,8 +449,9 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                 INSERT INTO books (
                     title, author, status, goodreads_url, notes,
                     acquisition_date, reading_started_date, read_date,
-                    is_original_collection, container_id, position
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    is_read_date_unknown, is_original_collection,
+                    container_id, position
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.title,
@@ -462,6 +470,7 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                         else None
                     ),
                     read_date.isoformat() if read_date else None,
+                    int(is_read_date_unknown),
                     int(payload.is_original_collection),
                     container_id,
                     position,
@@ -499,6 +508,10 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["is_original_collection"] = int(
             changes["is_original_collection"]
         )
+    if "is_read_date_unknown" in changes:
+        changes["is_read_date_unknown"] = int(
+            changes["is_read_date_unknown"]
+        )
 
     location_touched = {"container_id", "position"} & payload.model_fields_set
     if location_touched:
@@ -513,20 +526,32 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["position"] = position
 
     next_status = changes.get("status", existing["status"])
+    next_read_date_unknown = bool(
+        changes.get(
+            "is_read_date_unknown",
+            existing["is_read_date_unknown"],
+        )
+    )
     if next_status == BookStatus.currently_reading.value:
         changes["container_id"] = None
         changes["position"] = None
+        changes["is_read_date_unknown"] = 0
         if (
             "reading_started_date" not in payload.model_fields_set
             and existing["reading_started_date"] is None
         ):
             changes["reading_started_date"] = date.today().isoformat()
-    elif (
-        next_status == BookStatus.read.value
-        and "read_date" not in payload.model_fields_set
-        and existing["read_date"] is None
-    ):
-        changes["read_date"] = date.today().isoformat()
+    elif next_status == BookStatus.read.value:
+        if next_read_date_unknown:
+            changes["read_date"] = None
+            changes["is_read_date_unknown"] = 1
+        elif changes.get("read_date", existing["read_date"]) is None:
+            changes["read_date"] = date.today().isoformat()
+    else:
+        changes["is_read_date_unknown"] = 0
+
+    if changes.get("read_date") is not None:
+        changes["is_read_date_unknown"] = 0
 
     assignments = ", ".join(f"{column} = ?" for column in changes)
     values = list(changes.values())

@@ -93,6 +93,7 @@ export interface Book {
   acquisition_date: string | null;
   reading_started_date: string | null;
   read_date: string | null;
+  is_read_date_unknown: boolean;
   is_original_collection: boolean;
   container_id: number | null;
   position: number | null;
@@ -123,6 +124,7 @@ export interface BookPayload {
   acquisition_date: string | null;
   reading_started_date: string | null;
   read_date: string | null;
+  is_read_date_unknown: boolean;
   is_original_collection: boolean;
   container_id: number | null;
   position: number | null;

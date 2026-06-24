@@ -80,6 +80,7 @@
 
 ## Additional cataloguing
 
+- [x] Mark a read book's reading date as explicitly unknown.
 - [ ] ISBN.
 - [ ] Publisher.
 - [ ] Publication year.

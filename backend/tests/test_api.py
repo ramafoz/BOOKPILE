@@ -268,6 +268,49 @@ def test_dates_can_be_entered_and_read_date_is_added_on_transition() -> None:
         assert corrected.json()["read_date"] == "2026-06-20"
 
 
+def test_read_book_can_have_an_explicitly_unknown_reading_date() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "An old favourite",
+                "author": "Remembered Author",
+                "status": "READ",
+                "is_read_date_unknown": True,
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["status"] == "READ"
+        assert created.json()["read_date"] is None
+        assert created.json()["is_read_date_unknown"] is True
+
+        dated = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={
+                "read_date": "2001-05-12",
+                "is_read_date_unknown": False,
+            },
+        )
+        assert dated.status_code == 200
+        assert dated.json()["read_date"] == "2001-05-12"
+        assert dated.json()["is_read_date_unknown"] is False
+
+        unknown_again = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={"is_read_date_unknown": True},
+        )
+        assert unknown_again.status_code == 200
+        assert unknown_again.json()["read_date"] is None
+        assert unknown_again.json()["is_read_date_unknown"] is True
+
+        pending = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={"status": "PENDING"},
+        )
+        assert pending.status_code == 200
+        assert pending.json()["is_read_date_unknown"] is False
+
+
 def test_existing_catalogue_migrates_without_losing_books(
     tmp_path: Path,
     monkeypatch,
@@ -308,6 +351,7 @@ def test_existing_catalogue_migrates_without_losing_books(
         assert row["acquisition_date"] is None
         assert row["reading_started_date"] is None
         assert row["read_date"] is None
+        assert row["is_read_date_unknown"] == 0
         assert row["is_original_collection"] == 1
         assert row["cover_filename"] is None
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -451,6 +495,7 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
     assert rows[0]["title"] == "Cien años de soledad"
     assert rows[0]["author"] == "Gabriel García Márquez"
     assert rows[0]["read_date"] == "2026-06-20"
+    assert rows[0]["is_read_date_unknown"] == "false"
     assert rows[0]["bookcase"] == "Salón"
     assert rows[0]["location"] == (
         "Salón · Shelf 2 · Foreground Pile 1 · Position 3"

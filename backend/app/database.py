@@ -66,6 +66,8 @@ def init_database() -> None:
                 acquisition_date TEXT,
                 reading_started_date TEXT,
                 read_date TEXT,
+                is_read_date_unknown INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_read_date_unknown IN (0, 1)),
                 is_original_collection INTEGER NOT NULL DEFAULT 0
                     CHECK (is_original_collection IN (0, 1)),
                 cover_filename TEXT,
@@ -272,6 +274,8 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 acquisition_date TEXT,
                 reading_started_date TEXT,
                 read_date TEXT,
+                is_read_date_unknown INTEGER NOT NULL DEFAULT 0
+                    CHECK (is_read_date_unknown IN (0, 1)),
                 is_original_collection INTEGER NOT NULL DEFAULT 0
                     CHECK (is_original_collection IN (0, 1)),
                 cover_filename TEXT,
@@ -290,12 +294,12 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             INSERT INTO books_new (
                 id, title, author, status, goodreads_url, notes,
                 acquisition_date, reading_started_date, read_date,
-                is_original_collection, cover_filename,
+                is_read_date_unknown, is_original_collection, cover_filename,
                 container_id, position, created_at, updated_at
             )
             SELECT
                 id, title, author, status, goodreads_url, notes,
-                NULL, NULL, NULL, 1, NULL,
+                NULL, NULL, NULL, 0, 1, NULL,
                 container_id, position, created_at, updated_at
             FROM books;
 
@@ -329,6 +333,10 @@ def _migrate_book_dates(connection: sqlite3.Connection) -> None:
         ("acquisition_date", "TEXT"),
         ("reading_started_date", "TEXT"),
         ("read_date", "TEXT"),
+        (
+            "is_read_date_unknown",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (is_read_date_unknown IN (0, 1))",
+        ),
         (
             "is_original_collection",
             "INTEGER NOT NULL DEFAULT 0 CHECK (is_original_collection IN (0, 1))",

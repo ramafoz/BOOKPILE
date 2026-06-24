@@ -57,6 +57,7 @@ class BookBase(BaseModel):
     acquisition_date: date | None = None
     reading_started_date: date | None = None
     read_date: date | None = None
+    is_read_date_unknown: bool = False
     is_original_collection: bool = False
     container_id: int | None = None
     position: int | None = Field(default=None, gt=0)
@@ -86,6 +87,7 @@ class BookUpdate(BaseModel):
     acquisition_date: date | None = None
     reading_started_date: date | None = None
     read_date: date | None = None
+    is_read_date_unknown: bool | None = None
     is_original_collection: bool | None = None
     container_id: int | None = None
     position: int | None = Field(default=None, gt=0)

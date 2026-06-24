@@ -111,6 +111,7 @@ One row per book will include:
 - Acquisition date.
 - Reading-started date.
 - Read date.
+- Reading-date-unknown flag.
 - Original-collection flag.
 - Bookcase.
 - Shelf number.

@@ -133,6 +133,7 @@ CSV_COLUMNS = (
     "acquisition_date",
     "reading_started_date",
     "read_date",
+    "is_read_date_unknown",
     "is_original_collection",
     "bookcase",
     "shelf_number",
@@ -159,6 +160,7 @@ def write_books_csv(destination: Path) -> int:
         b.acquisition_date,
         b.reading_started_date,
         b.read_date,
+        b.is_read_date_unknown,
         b.is_original_collection,
         bc.name AS bookcase,
         s.shelf_number,
@@ -199,6 +201,9 @@ def write_books_csv(destination: Path) -> int:
             record = dict(row)
             record["is_original_collection"] = (
                 "true" if record["is_original_collection"] else "false"
+            )
+            record["is_read_date_unknown"] = (
+                "true" if record["is_read_date_unknown"] else "false"
             )
             writer.writerow(record)
     return len(rows)

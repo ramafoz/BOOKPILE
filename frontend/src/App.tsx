@@ -56,6 +56,7 @@ const emptyBook: BookPayload = {
   acquisition_date: null,
   reading_started_date: null,
   read_date: null,
+  is_read_date_unknown: false,
   is_original_collection: false,
   container_id: null,
   position: null,
@@ -582,7 +583,11 @@ function BookDates({ book }: { book: Book }) {
     book.reading_started_date
       ? `Started ${formatDate(book.reading_started_date)}`
       : null,
-    book.read_date ? `Read ${formatDate(book.read_date)}` : null,
+    book.read_date
+      ? `Read ${formatDate(book.read_date)}`
+      : book.status === "READ" && book.is_read_date_unknown
+        ? "Read · date unknown"
+        : null,
   ].filter(Boolean);
 
   return dates.length ? <small className="book-dates">{dates.join(" · ")}</small> : null;
@@ -631,6 +636,7 @@ function BookDialog({
           acquisition_date: book.acquisition_date,
           reading_started_date: book.reading_started_date,
           read_date: book.read_date,
+          is_read_date_unknown: book.is_read_date_unknown,
           is_original_collection: book.is_original_collection,
           container_id: book.container_id,
           position: book.position,
@@ -751,6 +757,7 @@ function BookDialog({
           notes: null,
           reading_started_date: null,
           read_date: null,
+          is_read_date_unknown: false,
           position: nextPosition && nextPosition > 0 ? nextPosition : null,
         }));
         setCoverFile(null);
@@ -863,10 +870,17 @@ function BookDialog({
                       ? { reading_started_date: today }
                       : {}),
                     ...(status === "READ" && !form.read_date
+                      && !form.is_read_date_unknown
                       ? { read_date: today }
                       : {}),
                     ...(status === "CURRENTLY_READING"
-                      ? { container_id: null, position: null }
+                      ? {
+                          container_id: null,
+                          position: null,
+                          is_read_date_unknown: false,
+                        }
+                      : status !== "READ"
+                        ? { is_read_date_unknown: false }
                       : {}),
                   });
                 }}>
@@ -920,12 +934,30 @@ function BookDialog({
                 <input
                   type="date"
                   value={form.read_date ?? ""}
+                  disabled={form.is_read_date_unknown}
                   onChange={(e) => setForm({
                     ...form,
                     read_date: e.target.value || null,
+                    is_read_date_unknown: false,
                   })}
                 />
               </label>
+              {form.status === "READ" && (
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={form.is_read_date_unknown}
+                    onChange={(e) => setForm({
+                      ...form,
+                      is_read_date_unknown: e.target.checked,
+                      read_date: e.target.checked
+                        ? null
+                        : new Date().toISOString().slice(0, 10),
+                    })}
+                  />
+                  Reading date unknown
+                </label>
+              )}
               <label className="checkbox-label">
                 <input
                   type="checkbox"
