@@ -143,6 +143,11 @@ input:disabled, select:disabled { color: #8b918e; background: #e9e3d9; cursor: n
 textarea { resize: vertical; }
 small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .date-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.date-input-row { display: flex; align-items: stretch; gap: 6px; }
+.date-input-row input { min-width: 0; }
+.date-input-row button { flex: 0 0 auto; margin-top: 7px; padding: 0 9px; border: 1px solid #d7cdbd; border-radius: 7px; color: #6c5143; background: #f5ede2; font-size: 12px; font-weight: 700; }
+.date-input-row button:hover:not(:disabled), .date-input-row button:focus-visible { border-color: #a85835; color: #8b402b; background: #fff8f1; outline: none; }
+.date-input-row button:disabled { opacity: .38; cursor: default; }
 .cover-field { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
 .cover-field legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
 .cover-editor { display: flex; align-items: center; gap: 16px; }

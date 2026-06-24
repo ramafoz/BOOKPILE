@@ -911,36 +911,73 @@ function BookDialog({
             <fieldset className="wide date-fields">
               <legend>Book history</legend>
               <label>Acquired
-                <input
-                  type="date"
-                  value={form.acquisition_date ?? ""}
-                  onChange={(e) => setForm({
-                    ...form,
-                    acquisition_date: e.target.value || null,
-                  })}
-                />
+                <span className="date-input-row">
+                  <input
+                    type="date"
+                    value={form.acquisition_date ?? ""}
+                    onChange={(e) => setForm({
+                      ...form,
+                      acquisition_date: e.target.value || null,
+                    })}
+                  />
+                  <button
+                    type="button"
+                    disabled={!form.acquisition_date}
+                    onClick={() => setForm({
+                      ...form,
+                      acquisition_date: null,
+                    })}
+                  >
+                    Clear
+                  </button>
+                </span>
               </label>
               <label>Reading started
-                <input
-                  type="date"
-                  value={form.reading_started_date ?? ""}
-                  onChange={(e) => setForm({
-                    ...form,
-                    reading_started_date: e.target.value || null,
-                  })}
-                />
+                <span className="date-input-row">
+                  <input
+                    type="date"
+                    value={form.reading_started_date ?? ""}
+                    onChange={(e) => setForm({
+                      ...form,
+                      reading_started_date: e.target.value || null,
+                    })}
+                  />
+                  <button
+                    type="button"
+                    disabled={!form.reading_started_date}
+                    onClick={() => setForm({
+                      ...form,
+                      reading_started_date: null,
+                    })}
+                  >
+                    Clear
+                  </button>
+                </span>
               </label>
               <label>Finished reading
-                <input
-                  type="date"
-                  value={form.read_date ?? ""}
-                  disabled={form.is_read_date_unknown}
-                  onChange={(e) => setForm({
-                    ...form,
-                    read_date: e.target.value || null,
-                    is_read_date_unknown: false,
-                  })}
-                />
+                <span className="date-input-row">
+                  <input
+                    type="date"
+                    value={form.read_date ?? ""}
+                    disabled={form.is_read_date_unknown}
+                    onChange={(e) => setForm({
+                      ...form,
+                      read_date: e.target.value || null,
+                      is_read_date_unknown: false,
+                    })}
+                  />
+                  <button
+                    type="button"
+                    disabled={!form.read_date}
+                    onClick={() => setForm({
+                      ...form,
+                      read_date: null,
+                      is_read_date_unknown: form.status === "READ",
+                    })}
+                  >
+                    Clear
+                  </button>
+                </span>
               </label>
               {form.status === "READ" && (
                 <label className="checkbox-label">
