@@ -183,6 +183,158 @@ def test_currently_reading_book_has_no_library_position() -> None:
         assert client.get("/stats").json()["currently_reading"] == 1
 
 
+def test_assigning_reading_book_to_occupied_position_shifts_container() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Office"})
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase.json()["id"], "shelf_number": 1},
+        )
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "container_type": "PILE",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        )
+        reading = client.post(
+            "/books",
+            json={
+                "title": "Reading now",
+                "author": "Author",
+                "status": "CURRENTLY_READING",
+            },
+        ).json()
+        existing = []
+        for position in (1, 2, 3):
+            existing.append(
+                client.post(
+                    "/books",
+                    json={
+                        "title": f"Existing {position}",
+                        "author": "Author",
+                        "container_id": container.json()["id"],
+                        "position": position,
+                    },
+                ).json()
+            )
+
+        assigned = client.patch(
+            f'/books/{reading["id"]}',
+            json={
+                "status": "READ",
+                "container_id": container.json()["id"],
+                "position": 1,
+                "is_read_date_unknown": True,
+            },
+        )
+
+        assert assigned.status_code == 200
+        books = {
+            book["title"]: book
+            for book in client.get(
+                "/books",
+                params={"container_id": container.json()["id"], "sort_by": "physical"},
+            ).json()
+        }
+        assert books["Reading now"]["position"] == 1
+        assert books["Existing 1"]["position"] == 2
+        assert books["Existing 2"]["position"] == 3
+        assert books["Existing 3"]["position"] == 4
+
+
+def test_setting_book_to_reading_closes_position_gap() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Office"})
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase.json()["id"], "shelf_number": 1},
+        )
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        )
+        books = []
+        for position in (1, 2, 3):
+            books.append(
+                client.post(
+                    "/books",
+                    json={
+                        "title": f"Book {position}",
+                        "author": "Author",
+                        "container_id": container.json()["id"],
+                        "position": position,
+                    },
+                ).json()
+            )
+
+        reading = client.patch(
+            f'/books/{books[1]["id"]}',
+            json={"status": "CURRENTLY_READING"},
+        )
+
+        assert reading.status_code == 200
+        assert reading.json()["container_id"] is None
+        positions = {
+            book["title"]: book["position"]
+            for book in client.get(
+                "/books",
+                params={"container_id": container.json()["id"], "sort_by": "physical"},
+            ).json()
+        }
+        assert positions == {"Book 1": 1, "Book 3": 2}
+
+
+def test_deleting_book_closes_position_gap() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Office"})
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase.json()["id"], "shelf_number": 1},
+        )
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf.json()["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        )
+        books = []
+        for position in (1, 2, 3):
+            books.append(
+                client.post(
+                    "/books",
+                    json={
+                        "title": f"Book {position}",
+                        "author": "Author",
+                        "container_id": container.json()["id"],
+                        "position": position,
+                    },
+                ).json()
+            )
+
+        deleted = client.delete(f'/books/{books[0]["id"]}')
+
+        assert deleted.status_code == 204
+        positions = {
+            book["title"]: book["position"]
+            for book in client.get(
+                "/books",
+                params={"container_id": container.json()["id"], "sort_by": "physical"},
+            ).json()
+        }
+        assert positions == {"Book 2": 1, "Book 3": 2}
+
+
 def test_move_swaps_books_and_deleting_shelf_unassigns_them() -> None:
     with TestClient(app) as client:
         bookcase = client.post("/bookcases", json={"name": "Hall"})

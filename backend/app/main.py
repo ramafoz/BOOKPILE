@@ -120,6 +120,67 @@ def location_values(payload: BookCreate | BookUpdate) -> tuple[int | None, int |
     return container_id, position
 
 
+def ensure_container_exists(connection: sqlite3.Connection, container_id: int) -> None:
+    container_exists = connection.execute(
+        "SELECT 1 FROM containers WHERE id = ?", (container_id,)
+    ).fetchone()
+    if container_exists is None:
+        raise HTTPException(status_code=404, detail="Container not found")
+
+
+def make_room_for_position(
+    connection: sqlite3.Connection,
+    container_id: int,
+    position: int,
+) -> None:
+    rows = connection.execute(
+        """
+        SELECT id, position
+        FROM books
+        WHERE container_id = ? AND position >= ?
+        ORDER BY position DESC
+        """,
+        (container_id, position),
+    ).fetchall()
+    for row in rows:
+        connection.execute(
+            """
+            UPDATE books
+            SET position = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (row["position"] + 1, row["id"]),
+        )
+
+
+def close_position_gap(
+    connection: sqlite3.Connection,
+    container_id: int | None,
+    position: int | None,
+) -> None:
+    if container_id is None or position is None:
+        return
+
+    rows = connection.execute(
+        """
+        SELECT id, position
+        FROM books
+        WHERE container_id = ? AND position > ?
+        ORDER BY position ASC
+        """,
+        (container_id, position),
+    ).fetchall()
+    for row in rows:
+        connection.execute(
+            """
+            UPDATE books
+            SET position = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (row["position"] - 1, row["id"]),
+        )
+
+
 def validate_book_dates(
     acquisition_date: date | None,
     reading_started_date: date | None,
@@ -658,10 +719,44 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
     values = list(changes.values())
     try:
         with connect() as connection:
-            connection.execute(
-                f"UPDATE books SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (*values, book_id),
+            next_container_id = changes.get("container_id", existing["container_id"])
+            next_position = changes.get("position", existing["position"])
+            location_changed = (
+                next_container_id != existing["container_id"]
+                or next_position != existing["position"]
             )
+            if location_changed:
+                connection.execute("BEGIN IMMEDIATE")
+                if next_container_id is not None and next_position is not None:
+                    ensure_container_exists(connection, next_container_id)
+                connection.execute(
+                    """
+                    UPDATE books
+                    SET container_id = NULL, position = NULL, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (book_id,),
+                )
+                close_position_gap(
+                    connection,
+                    existing["container_id"],
+                    existing["position"],
+                )
+                if next_container_id is not None and next_position is not None:
+                    make_room_for_position(
+                        connection,
+                        next_container_id,
+                        next_position,
+                    )
+                connection.execute(
+                    f"UPDATE books SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (*values, book_id),
+                )
+            else:
+                connection.execute(
+                    f"UPDATE books SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (*values, book_id),
+                )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return fetch_book(book_id)
@@ -678,40 +773,22 @@ def move_book(book_id: int, payload: BookMove) -> dict[str, Any]:
 
     try:
         with connect() as connection:
-            container_exists = connection.execute(
-                "SELECT 1 FROM containers WHERE id = ?", (payload.container_id,)
-            ).fetchone()
-            if container_exists is None:
-                raise HTTPException(status_code=404, detail="Container not found")
-
-            occupant = connection.execute(
-                """
-                SELECT id
-                FROM books
-                WHERE container_id = ? AND position = ? AND id != ?
-                """,
-                (payload.container_id, payload.position, book_id),
-            ).fetchone()
-            if occupant and not payload.swap_if_occupied:
-                raise HTTPException(status_code=409, detail="Position is already occupied")
-
+            connection.execute("BEGIN IMMEDIATE")
+            ensure_container_exists(connection, payload.container_id)
             connection.execute(
                 "UPDATE books SET container_id = NULL, position = NULL WHERE id = ?",
                 (book_id,),
             )
-            if occupant:
-                connection.execute(
-                    """
-                    UPDATE books
-                    SET container_id = ?, position = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (
-                        moving["container_id"],
-                        moving["position"],
-                        occupant["id"],
-                    ),
-                )
+            close_position_gap(
+                connection,
+                moving["container_id"],
+                moving["position"],
+            )
+            make_room_for_position(
+                connection,
+                payload.container_id,
+                payload.position,
+            )
             connection.execute(
                 """
                 UPDATE books
@@ -729,7 +806,13 @@ def move_book(book_id: int, payload: BookMove) -> dict[str, Any]:
 def delete_book(book_id: int) -> Response:
     existing = fetch_book(book_id)
     with connect() as connection:
+        connection.execute("BEGIN IMMEDIATE")
         cursor = connection.execute("DELETE FROM books WHERE id = ?", (book_id,))
+        close_position_gap(
+            connection,
+            existing["container_id"],
+            existing["position"],
+        )
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Book not found")
     delete_cover_file(existing["cover_filename"])
