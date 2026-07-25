@@ -43,8 +43,16 @@
   current precise slider controls.
 - [x] Render containers as grey rectangles that fill with books.
 - [x] Colour books according to reading status.
+- [ ] Add alternate visual-map colouring modes beyond status:
+  - Colour by acquisition recency.
+  - Colour by reading-date recency.
+  - Use lighter/darker tones to make older versus more recent books visible at
+    a glance.
 - [x] Open the visual map from a catalogue location and highlight the selected
   book while fading all other books.
+- [ ] Keep a book's physical position stored when its status changes to
+  `Reading...`; visually show it in the reading area, but do not clear the
+  saved container/position unless the user explicitly edits the location.
 - [ ] Future-only idea: drag books between containers and reorder them visually.
   This is not part of the current visual-index scope.
 
@@ -82,6 +90,13 @@
 
 - [x] Mark a read book's reading date as explicitly unknown.
 - [x] Keep acquisition and reading dates chronologically consistent.
+- [ ] Support multiple authors as structured data:
+  - Allow two-author books to show both names in the main catalogue.
+  - For larger groups, show `Varios`/`Multiple authors` in the main view as a
+    clickable label.
+  - Open an integrated frontend pop-up with the full author list.
+  - Include every individual author in search results, even when their name is
+    hidden behind the shortened main-view label.
 - [ ] ISBN.
 - [ ] Publisher.
 - [ ] Publication year.
@@ -118,6 +133,11 @@
   Goodreads links.
 - [ ] Search and filter by physical location.
 - [ ] Filter by lifecycle dates.
+- [ ] Add explicit filters for unknown/missing dates, especially:
+  - Read books with unknown finished-reading date.
+  - Books with unknown acquisition date.
+  - Date-range filters should optionally include unknown-date books instead of
+    always hiding them.
 - [ ] Filter by genres and tags.
 - [ ] Find books without a physical location.
 - [ ] Find books without a cover.
