@@ -89,6 +89,12 @@ function App() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [exactBookFilter, setExactBookFilter] = useState<number | null>(null);
+  const [quickView, setQuickView] = useState("");
+  const [catalogueCheck, setCatalogueCheck] = useState("");
+  const [showCatalogueChecks, setShowCatalogueChecks] = useState(false);
+  const [includeUnknownSelectedDates, setIncludeUnknownSelectedDates] =
+    useState(false);
+  const [includeUnknownSortDates, setIncludeUnknownSortDates] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -107,6 +113,10 @@ function App() {
           dateField,
           dateFrom,
           dateTo,
+          quickView,
+          catalogueCheck,
+          includeUnknownSelectedDates,
+          includeUnknownSortDates,
         }),
         api.stats(),
         api.library(),
@@ -131,6 +141,10 @@ function App() {
     dateFrom,
     dateTo,
     exactBookFilter,
+    quickView,
+    catalogueCheck,
+    includeUnknownSelectedDates,
+    includeUnknownSortDates,
   ]);
 
   const filterShelves = useMemo(
@@ -187,6 +201,9 @@ function App() {
     containerId: number | "" = "",
   ) {
     setExactBookFilter(null);
+    setQuickView("");
+    setCatalogueCheck("");
+    setShowCatalogueChecks(false);
     setBookcaseFilter(String(bookcaseId));
     setShelfFilter(shelfId ? String(shelfId) : "");
     setContainerFilter(containerId ? String(containerId) : "");
@@ -206,6 +223,9 @@ function App() {
 
   function openReadingCatalogue() {
     setExactBookFilter(null);
+    setQuickView("");
+    setCatalogueCheck("");
+    setShowCatalogueChecks(false);
     setFilter("CURRENTLY_READING");
     setBookcaseFilter("");
     setShelfFilter("");
@@ -234,6 +254,11 @@ function App() {
     setContainerFilter("");
     setDateFrom("");
     setDateTo("");
+    setQuickView("");
+    setCatalogueCheck("");
+    setShowCatalogueChecks(false);
+    setIncludeUnknownSelectedDates(false);
+    setIncludeUnknownSortDates(false);
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(false);
@@ -311,6 +336,13 @@ function App() {
           <div>
             <p className="eyebrow dark">The catalogue</p>
             <h2>Your books</h2>
+            <p className="catalogue-count">
+              {loading
+                ? "Counting books…"
+                : books.length === stats.total
+                  ? `${books.length} books shown`
+                  : `${books.length} of ${stats.total} books shown`}
+            </p>
           </div>
           <div className="heading-actions">
             <button className="outline-button" onClick={() => setBatchAdding(true)}>
@@ -362,7 +394,32 @@ function App() {
         {showAdvanced && (
           <div className="advanced-filters">
             <label>Sort by
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <select
+                value={sortBy}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSortBy(value);
+                  if (
+                    (
+                      value === "acquisition_date"
+                      && quickView === "original_collection"
+                    )
+                    || (
+                      value === "reading_started_date"
+                      && catalogueCheck === "missing_started"
+                    )
+                    || (
+                      value === "read_date"
+                      && (
+                        quickView === "missing_finished"
+                        || catalogueCheck === "missing_end"
+                      )
+                    )
+                  ) {
+                    setIncludeUnknownSortDates(true);
+                  }
+                }}
+              >
                 <option value="title">Title</option>
                 <option value="author">Author</option>
                 <option value="physical">Physical position</option>
@@ -376,6 +433,35 @@ function App() {
               <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "asc" | "desc")}>
                 <option value="asc">Ascending</option>
                 <option value="desc">Descending</option>
+              </select>
+            </label>
+            <label>Quick view
+              <select
+                value={quickView}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setExactBookFilter(null);
+                  setQuickView(value);
+                  setCatalogueCheck("");
+                  setShowCatalogueChecks(false);
+                  setFilter(value === "missing_finished" ? "READ" : "ALL");
+                  if (
+                    (
+                      value === "original_collection"
+                      && sortBy === "acquisition_date"
+                    )
+                    || (
+                      value === "missing_finished"
+                      && sortBy === "read_date"
+                    )
+                  ) {
+                    setIncludeUnknownSortDates(true);
+                  }
+                }}
+              >
+                <option value="">All catalogue data</option>
+                <option value="missing_finished">Read · finished date unknown</option>
+                <option value="original_collection">Original Collection</option>
               </select>
             </label>
             <label>Bookcase
@@ -409,7 +495,7 @@ function App() {
                 ))}
               </select>
             </label>
-            <label className="wide-filter">Container
+            <label>Container
               <select value={containerFilter} onChange={(event) => setContainerFilter(event.target.value)}>
                 <option value="">All containers</option>
                 {filterContainers.map((container) => (
@@ -417,19 +503,81 @@ function App() {
                 ))}
               </select>
             </label>
-            <label>Date type
-              <select value={dateField} onChange={(event) => setDateField(event.target.value)}>
-                <option value="acquisition_date">Acquisition</option>
-                <option value="reading_started_date">Reading started</option>
-                <option value="read_date">Finished reading</option>
-              </select>
-            </label>
+            <div className="date-type-filter">
+              <label>Date type
+                <select value={dateField} onChange={(event) => setDateField(event.target.value)}>
+                  <option value="acquisition_date">Acquisition</option>
+                  <option value="reading_started_date">Reading started</option>
+                  <option value="read_date">Finished reading</option>
+                </select>
+              </label>
+              <label className="advanced-check">
+                <input
+                  type="checkbox"
+                  checked={includeUnknownSortDates}
+                  onChange={(event) => setIncludeUnknownSortDates(event.target.checked)}
+                />
+                Include books whose sorted date is unknown
+              </label>
+              <label className="advanced-check">
+                <input
+                  type="checkbox"
+                  checked={includeUnknownSelectedDates}
+                  onChange={(event) => setIncludeUnknownSelectedDates(event.target.checked)}
+                />
+                Include books whose selected date is unknown
+              </label>
+            </div>
             <label>From
               <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
             </label>
             <label>To
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
+            <div className="catalogue-check-control">
+              <button
+                type="button"
+                className={`catalogue-check-toggle ${showCatalogueChecks ? "active" : ""}`}
+                onClick={() => {
+                  const next = !showCatalogueChecks;
+                  setShowCatalogueChecks(next);
+                  if (!next) setCatalogueCheck("");
+                }}
+              >
+                Catalogue check
+              </button>
+              {showCatalogueChecks && (
+                <select
+                  aria-label="Catalogue check"
+                  value={catalogueCheck}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setExactBookFilter(null);
+                    setCatalogueCheck(value);
+                    setQuickView("");
+                    setFilter("ALL");
+                    if (
+                      (
+                        value === "missing_started"
+                        && sortBy === "reading_started_date"
+                      )
+                      || (
+                        value === "missing_end"
+                        && sortBy === "read_date"
+                      )
+                    ) {
+                      setIncludeUnknownSortDates(true);
+                    }
+                  }}
+                >
+                  <option value="">Choose a catalogue check…</option>
+                  <option value="missing_started">Reading Started Date Unknown</option>
+                  <option value="missing_end">Reading End Date Unknown</option>
+                  <option value="no_location">Without a physical location</option>
+                  <option value="no_cover">Without a cover</option>
+                </select>
+              )}
+            </div>
             <button
               className="clear-filters"
               onClick={() => {
@@ -441,6 +589,12 @@ function App() {
                 setDateField("acquisition_date");
                 setDateFrom("");
                 setDateTo("");
+                setQuickView("");
+                setCatalogueCheck("");
+                setShowCatalogueChecks(false);
+                setIncludeUnknownSelectedDates(false);
+                setIncludeUnknownSortDates(false);
+                setFilter("ALL");
               }}
             >
               Clear advanced filters
@@ -1324,6 +1478,10 @@ function ReorganizeDialog({
         dateField: "acquisition_date",
         dateFrom: "",
         dateTo: "",
+        quickView: "",
+        catalogueCheck: "",
+        includeUnknownSelectedDates: false,
+        includeUnknownSortDates: false,
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load books");

@@ -36,6 +36,10 @@ export interface BookQuery {
   dateField: string;
   dateFrom: string;
   dateTo: string;
+  includeUnknownSelectedDates: boolean;
+  includeUnknownSortDates: boolean;
+  quickView: string;
+  catalogueCheck: string;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
@@ -94,6 +98,14 @@ export const api = {
       if (query.dateFrom) params.set("date_from", query.dateFrom);
       if (query.dateTo) params.set("date_to", query.dateTo);
     }
+    if (query.includeUnknownSelectedDates) {
+      params.set("include_unknown_dates", "true");
+    }
+    if (query.includeUnknownSortDates) {
+      params.set("include_unknown_sort_dates", "true");
+    }
+    if (query.quickView) params.set("quick_view", query.quickView);
+    if (query.catalogueCheck) params.set("catalogue_check", query.catalogueCheck);
     return request<Book[]>(`/books?${params}`);
   },
   stats: () => request<Stats>("/stats"),

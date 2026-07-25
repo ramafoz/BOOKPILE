@@ -85,6 +85,16 @@ This roadmap separates future work by its effect on the current data model.
   container selectors.
 - [x] Filter by optional from/to ranges for acquisition, reading-started, or
   finished-reading dates.
+- [x] Independently include books with an unknown selected date in date-range
+  results or an unknown sorted date in date-sorted results.
+- [x] Add normal quick views for Read books with an unknown finished-reading
+  date and books belonging to the Original Collection.
+- [x] Add separate catalogue-cleanup checks for Read books whose known
+  reading interval is missing one endpoint, and for books with no physical
+  location or no cover.
+- [x] Show how many books match the active catalogue filters.
+- [x] Treat unknown dates as earlier than all known dates when sorting any
+  lifecycle date, while allowing unknown-date books to be excluded.
 - [x] Mark a read book's finished-reading date as explicitly unknown.
 - [x] Keep acquisition and reading dates chronologically consistent.
 - [x] Add read-only external maintenance checks for lifecycle dates and
@@ -114,17 +124,6 @@ fields.
 - [ ] Integrate scanning into Batch Add while preserving its current container,
   position, and direction.
 - [ ] Add OCR later as a fallback for books without a usable barcode.
-
-### Search, filters, and data-quality views
-
-- [ ] Add explicit unknown/missing-date filters:
-  - Read books with an unknown finished-reading date.
-  - Books with an unknown acquisition date.
-  - An option for date-range filters to include unknown-date books.
-- [ ] Add quick views for:
-  - Books without a physical location.
-  - Books without a cover.
-  - Books with missing dates.
 
 ### Suggestions and statistics using existing data
 

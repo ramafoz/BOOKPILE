@@ -72,6 +72,7 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .stat-card span { display: block; color: #75807c; margin-top: 6px; font-size: 14px; }
 .catalogue-heading { display: flex; justify-content: space-between; align-items: end; margin: 30px 0 23px; }
 .catalogue-heading h2, .dialog h2 { margin: 0; font-size: 38px; }
+.catalogue-count { margin: 6px 0 0; color: #75807c; font-size: 13px; }
 .heading-actions { display: flex; gap: 10px; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .search-box { flex: 1; max-width: 530px; background: #fffdf8; border: 1px solid #ddd4c5; border-radius: 8px; padding: 0 14px; display: flex; align-items: center; color: #7b837f; }
@@ -81,11 +82,18 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .filters button.active { background: #fffdf8; color: #173d35; box-shadow: 0 2px 6px #173d3514; font-weight: 700; }
 .advanced-toggle { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #b9ad9d; border-radius: 7px; padding: 10px 13px; color: #52605c; background: transparent; }
 .advanced-toggle.active { color: #fff; background: #28574d; border-color: #28574d; }
-.advanced-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: -4px 0 22px; padding: 16px; border: 1px solid #d8cebf; border-radius: 10px; background: #eee7dc; }
+.advanced-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: -4px 0 22px; padding: 16px; border: 1px solid #d8cebf; border-radius: 10px; background: #eee7dc; }
 .advanced-filters label { color: #4e5b57; font-size: 12px; font-weight: 700; }
 .advanced-filters input, .advanced-filters select { margin-top: 5px; }
-.advanced-filters .wide-filter { grid-column: span 2; }
-.clear-filters { align-self: end; border: 0; color: #7e4936; background: transparent; padding: 11px 4px; text-decoration: underline; }
+.advanced-filters .advanced-check { align-self: end; display: flex; align-items: center; gap: 8px; padding: 10px 0; }
+.advanced-filters .advanced-check input { width: auto; margin: 0; accent-color: #28574d; }
+.date-type-filter > label:first-child { display: block; }
+.date-type-filter .advanced-check { padding: 7px 0 0; font-size: 11px; line-height: 1.3; }
+.catalogue-check-control { grid-column: span 2; align-self: end; display: grid; grid-template-columns: minmax(150px, .55fr) minmax(220px, 1fr); gap: 10px; }
+.catalogue-check-toggle { align-self: end; border: 1px solid #b9ad9d; border-radius: 7px; padding: 11px 13px; color: #52605c; background: #fffdf8; text-align: left; font-weight: 700; }
+.catalogue-check-toggle.active { color: #fff; border-color: #28574d; background: #28574d; }
+.catalogue-check-control select { margin: 0; }
+.clear-filters { grid-column: 3; align-self: end; justify-self: end; border: 0; color: #7e4936; background: transparent; padding: 11px 4px; text-decoration: underline; }
 .book-list { border-top: 1px solid #dcd3c5; }
 .book-row { display: grid; grid-template-columns: 92px 48px minmax(260px, 1fr) minmax(300px, .9fr); align-items: center; gap: 16px; min-height: 105px; padding: 9px 0; border-bottom: 1px solid #dcd3c5; }
 .book-spine { width: 38px; height: 55px; display: grid; place-items: center; border-radius: 3px; font-family: Georgia, "Times New Roman", serif; font-weight: 700; color: #fff; box-shadow: inset -6px 0 #00000018; }
@@ -311,6 +319,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .filters button { flex: 1; }
   .advanced-toggle { justify-content: center; }
   .advanced-filters { grid-template-columns: 1fr 1fr; }
+  .catalogue-check-control { grid-column: span 2; }
+  .clear-filters { grid-column: 2; }
   .batch-banner { align-items: stretch; flex-direction: column; }
   .batch-banner label { flex-basis: auto; }
   .advanced-filters .wide-filter { grid-column: span 2; }
@@ -338,5 +348,6 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 
 @media (max-width: 420px) {
   .advanced-filters { grid-template-columns: 1fr; }
-  .advanced-filters .wide-filter { grid-column: auto; }
+  .catalogue-check-control { grid-column: auto; grid-template-columns: 1fr; }
+  .clear-filters { grid-column: auto; justify-self: start; }
 }

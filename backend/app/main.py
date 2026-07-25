@@ -370,6 +370,20 @@ def list_books(
     ] = "acquisition_date",
     date_from: date | None = None,
     date_to: date | None = None,
+    include_unknown_dates: bool = False,
+    include_unknown_sort_dates: bool = False,
+    quick_view: Literal[
+        "missing_finished",
+        "original_collection",
+    ]
+    | None = None,
+    catalogue_check: Literal[
+        "missing_started",
+        "missing_end",
+        "no_location",
+        "no_cover",
+    ]
+    | None = None,
 ) -> list[dict[str, Any]]:
     where: list[str] = []
     params: list[Any] = []
@@ -397,12 +411,53 @@ def list_books(
     if container_id is not None:
         where.append("c.id = ?")
         params.append(container_id)
+    if quick_view == "missing_finished":
+        where.append("(b.status = 'READ' AND b.read_date IS NULL)")
+    elif quick_view == "original_collection":
+        where.append("b.is_original_collection = 1")
+    if catalogue_check == "missing_started":
+        where.append(
+            """
+            (
+                b.status = 'READ'
+                AND b.reading_started_date IS NULL
+                AND b.read_date IS NOT NULL
+            )
+            """
+        )
+    elif catalogue_check == "missing_end":
+        where.append(
+            """
+            (
+                b.status = 'READ'
+                AND b.reading_started_date IS NOT NULL
+                AND b.read_date IS NULL
+            )
+            """
+        )
+    elif catalogue_check == "no_location":
+        where.append("b.container_id IS NULL")
+    elif catalogue_check == "no_cover":
+        where.append("(b.cover_filename IS NULL OR b.cover_filename = '')")
+    date_conditions: list[str] = []
     if date_from is not None:
-        where.append(f"b.{date_field} >= ?")
+        date_conditions.append(f"b.{date_field} >= ?")
         params.append(date_from.isoformat())
     if date_to is not None:
-        where.append(f"b.{date_field} <= ?")
+        date_conditions.append(f"b.{date_field} <= ?")
         params.append(date_to.isoformat())
+    if date_conditions:
+        date_clause = " AND ".join(date_conditions)
+        if include_unknown_dates:
+            where.append(f"(({date_clause}) OR b.{date_field} IS NULL)")
+        else:
+            where.append(f"({date_clause})")
+    if (
+        sort_by
+        in {"acquisition_date", "reading_started_date", "read_date"}
+        and not include_unknown_sort_dates
+    ):
+        where.append(f"b.{sort_by} IS NOT NULL")
 
     query = BOOK_SELECT
     if where:
@@ -426,8 +481,10 @@ def list_books(
         "reading_started_date",
         "read_date",
     }:
+        unknown_direction = "ASC" if sort_order == "asc" else "DESC"
         query += (
-            f" ORDER BY CASE WHEN b.{sort_by} IS NULL THEN 1 ELSE 0 END ASC,"
+            f" ORDER BY CASE WHEN b.{sort_by} IS NULL THEN 0 ELSE 1 END"
+            f" {unknown_direction},"
             f" b.{sort_by} {direction}, b.title COLLATE NOCASE ASC"
         )
     elif sort_by == "author":

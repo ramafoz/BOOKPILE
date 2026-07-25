@@ -1056,6 +1056,18 @@ def test_books_can_be_sorted_and_filtered_by_location_and_dates() -> None:
         assert [book["title"] for book in read_desc] == [
             "Zulu",
             "Alpha",
+        ]
+        read_desc_with_unknown = client.get(
+            "/books",
+            params={
+                "sort_by": "read_date",
+                "sort_order": "desc",
+                "include_unknown_sort_dates": True,
+            },
+        ).json()
+        assert [book["title"] for book in read_desc_with_unknown] == [
+            "Zulu",
+            "Alpha",
             "Middle",
         ]
 
@@ -1064,6 +1076,188 @@ def test_books_can_be_sorted_and_filtered_by_location_and_dates() -> None:
             params={"date_from": "2026-01-01", "date_to": "2025-01-01"},
         )
         assert invalid_dates.status_code == 422
+
+
+def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
+    image_bytes = BytesIO()
+    Image.new("RGB", (120, 180), "#54756d").save(image_bytes, "JPEG")
+
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases", json={"name": "Data Quality"}
+        ).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+
+        pending_complete = client.post(
+            "/books",
+            json={
+                "title": "Pending complete",
+                "author": "Author",
+                "acquisition_date": "2025-03-10",
+                "container_id": container["id"],
+                "position": 1,
+            },
+        ).json()
+        pending_unknown_acquisition = client.post(
+            "/books",
+            json={
+                "title": "Pending unknown acquisition",
+                "author": "Author",
+                "is_original_collection": True,
+            },
+        ).json()
+        client.post(
+            "/books",
+            json={
+                "title": "Read complete",
+                "author": "Author",
+                "status": "READ",
+                "acquisition_date": "2024-01-10",
+                "reading_started_date": "2024-02-01",
+                "read_date": "2024-02-05",
+                "container_id": container["id"],
+                "position": 2,
+            },
+        )
+        read_unknown_finish = client.post(
+            "/books",
+            json={
+                "title": "Read unknown finish",
+                "author": "Author",
+                "status": "READ",
+                "acquisition_date": "2023-01-10",
+                "reading_started_date": "2023-02-01",
+                "is_read_date_unknown": True,
+                "container_id": container["id"],
+                "position": 3,
+            },
+        ).json()
+        client.post(
+            "/books",
+            json={
+                "title": "Read missing start",
+                "author": "Author",
+                "status": "READ",
+                "acquisition_date": "2022-01-10",
+                "read_date": "2022-02-05",
+                "container_id": container["id"],
+                "position": 4,
+            },
+        )
+        covered = client.post(
+            f'/books/{pending_complete["id"]}/cover',
+            files={
+                "cover": (
+                    "pending.jpg",
+                    image_bytes.getvalue(),
+                    "image/jpeg",
+                )
+            },
+        )
+        assert covered.status_code == 200
+
+        def titles_for(**params: object) -> set[str]:
+            return {
+                book["title"]
+                for book in client.get("/books", params=params).json()
+            }
+
+        assert titles_for(quick_view="missing_finished") == {
+            read_unknown_finish["title"]
+        }
+        assert titles_for(quick_view="original_collection") == {
+            pending_unknown_acquisition["title"]
+        }
+        assert titles_for(catalogue_check="missing_started") == {
+            "Read missing start",
+        }
+        assert titles_for(catalogue_check="missing_end") == {
+            "Read unknown finish",
+        }
+        assert titles_for(catalogue_check="no_location") == {
+            pending_unknown_acquisition["title"]
+        }
+        assert titles_for(catalogue_check="no_cover") == {
+            "Pending unknown acquisition",
+            "Read complete",
+            "Read unknown finish",
+            "Read missing start",
+        }
+        date_range = {
+            "date_field": "acquisition_date",
+            "date_from": "2025-01-01",
+            "date_to": "2025-12-31",
+        }
+        assert titles_for(**date_range) == {"Pending complete"}
+        assert titles_for(
+            **date_range,
+            include_unknown_dates=True,
+        ) == {
+            "Pending complete",
+            "Pending unknown acquisition",
+        }
+        assert titles_for(
+            **date_range,
+            include_unknown_sort_dates=True,
+        ) == {"Pending complete"}
+        acquisition_order_without_unknown = [
+            book["title"]
+            for book in client.get(
+                "/books",
+                params={
+                    "sort_by": "acquisition_date",
+                    "sort_order": "asc",
+                },
+            ).json()
+        ]
+        assert acquisition_order_without_unknown == [
+            "Read missing start",
+            "Read unknown finish",
+            "Read complete",
+            "Pending complete",
+        ]
+        acquisition_order_with_unknown = [
+            book["title"]
+            for book in client.get(
+                "/books",
+                params={
+                    "sort_by": "acquisition_date",
+                    "sort_order": "asc",
+                    "include_unknown_sort_dates": True,
+                },
+            ).json()
+        ]
+        assert acquisition_order_with_unknown == [
+            "Pending unknown acquisition",
+            "Read missing start",
+            "Read unknown finish",
+            "Read complete",
+            "Pending complete",
+        ]
+        reading_start_order = [
+            book["title"]
+            for book in client.get(
+                "/books",
+                params={
+                    "sort_by": "reading_started_date",
+                    "sort_order": "asc",
+                },
+            ).json()
+        ]
+        assert "Read missing start" not in reading_start_order
+        assert "Pending unknown acquisition" not in reading_start_order
 
 
 def test_occupied_position_can_shift_contiguous_books_to_make_room() -> None:
