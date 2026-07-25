@@ -463,7 +463,15 @@ function App() {
                     {book.status === "CURRENTLY_READING" ? (
                       <div className="location-copy">
                         <strong>Currently reading</strong>
-                        <span>Outside the physical library</span>
+                        <span>
+                          {book.container_id
+                            ? `Saved at ${book.bookcase_name} · Shelf ${book.shelf_number} · ${
+                              book.layer === "BACKGROUND" ? "Background" : "Foreground"
+                            } ${book.container_type === "ROW" ? "Row" : "Pile"} ${
+                              book.container_number
+                            } · Position ${book.position}`
+                            : "No return location assigned"}
+                        </span>
                       </div>
                     ) : book.container_id ? (
                       <div className="location-copy">
@@ -892,8 +900,6 @@ function BookDialog({
                       : {}),
                     ...(status === "CURRENTLY_READING"
                       ? {
-                          container_id: null,
-                          position: null,
                           is_read_date_unknown: false,
                         }
                       : status !== "READ"
@@ -908,12 +914,10 @@ function BookDialog({
             </label>
             <label>Position
               <input type="number" min="1" value={form.position ?? ""}
-                disabled={form.status === "CURRENTLY_READING"}
                 onChange={(e) => setForm({ ...form, position: e.target.value ? Number(e.target.value) : null })} />
             </label>
             <label className="wide">Physical container
               <select value={form.container_id ?? ""}
-                disabled={form.status === "CURRENTLY_READING"}
                 onChange={(e) => setForm({ ...form, container_id: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">Not assigned</option>
                 {containers.map((container) => (
@@ -921,7 +925,7 @@ function BookDialog({
                 ))}
               </select>
               {form.status === "CURRENTLY_READING" && (
-                <small>Currently-reading books stay outside the physical library map.</small>
+                <small>The saved return location is retained while the book appears in the map's reading area.</small>
               )}
               {containers.length === 0 && <small>Create your library layout first to assign a location.</small>}
             </label>
@@ -1292,9 +1296,7 @@ function ReorganizeDialog({
     void loadBooks();
   }, [loadBooks]);
 
-  const movableBooks = allBooks.filter(
-    (book) => book.status !== "CURRENTLY_READING",
-  );
+  const movableBooks = allBooks;
   const chosenBook = movableBooks.find(
     (book) => book.id === Number(selectedBook),
   );

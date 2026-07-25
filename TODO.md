@@ -41,6 +41,9 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Colour books according to reading status.
 - [x] Open the visual map from a catalogue location, highlight the selected
   book, and fade all other books.
+- [x] Preserve a book's saved container and position while its status is
+  `Reading...`, showing it only in the separate reading area on the visual map
+  unless the user explicitly edits its physical location.
 
 ### Catalogue entry, dates, sorting, and filtering
 
@@ -73,15 +76,6 @@ fields.
 
 - [ ] Document manual recovery procedures and recommendations for storing
   backups safely.
-
-### Reading status and physical location
-
-- [ ] Preserve a book's saved container and position when its status changes
-  to `Reading...`.
-  - Show the book in the separate reading area on the visual map.
-  - Do not clear its physical location unless the user explicitly edits it.
-  - Ensure returning the book to the shelf does not disturb other positions
-    unnecessarily.
 
 ### Visual-map improvements using existing data
 

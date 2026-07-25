@@ -143,7 +143,7 @@ def test_row_and_pile_can_share_number_in_same_layer() -> None:
         assert duplicate_pile.status_code == 409
 
 
-def test_currently_reading_book_has_no_library_position() -> None:
+def test_currently_reading_book_preserves_library_position() -> None:
     with TestClient(app) as client:
         bookcase = client.post("/bookcases", json={"name": "Office"})
         shelf = client.post(
@@ -177,8 +177,8 @@ def test_currently_reading_book_has_no_library_position() -> None:
 
         assert reading.status_code == 200
         assert reading.json()["status"] == "CURRENTLY_READING"
-        assert reading.json()["container_id"] is None
-        assert reading.json()["position"] is None
+        assert reading.json()["container_id"] == container.json()["id"]
+        assert reading.json()["position"] == 1
         assert reading.json()["reading_started_date"] == date.today().isoformat()
         assert client.get("/stats").json()["currently_reading"] == 1
 
@@ -245,7 +245,7 @@ def test_assigning_reading_book_to_occupied_position_shifts_container() -> None:
         assert books["Existing 3"]["position"] == 4
 
 
-def test_setting_book_to_reading_closes_position_gap() -> None:
+def test_setting_book_to_reading_preserves_container_sequence() -> None:
     with TestClient(app) as client:
         bookcase = client.post("/bookcases", json={"name": "Office"})
         shelf = client.post(
@@ -281,7 +281,8 @@ def test_setting_book_to_reading_closes_position_gap() -> None:
         )
 
         assert reading.status_code == 200
-        assert reading.json()["container_id"] is None
+        assert reading.json()["container_id"] == container.json()["id"]
+        assert reading.json()["position"] == 2
         positions = {
             book["title"]: book["position"]
             for book in client.get(
@@ -289,7 +290,7 @@ def test_setting_book_to_reading_closes_position_gap() -> None:
                 params={"container_id": container.json()["id"], "sort_by": "physical"},
             ).json()
         }
-        assert positions == {"Book 1": 1, "Book 3": 2}
+        assert positions == {"Book 1": 1, "Book 2": 2, "Book 3": 3}
 
 
 def test_deleting_book_closes_position_gap() -> None:
@@ -1395,8 +1396,12 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "title": "Reading away from shelf",
                 "author": "Author",
                 "status": "CURRENTLY_READING",
+                "container_id": background["id"],
+                "position": 3,
             },
         ).json()
+        assert reading["container_id"] == background["id"]
+        assert reading["position"] == 3
 
         response = client.get("/library-map")
         assert response.status_code == 200

@@ -457,7 +457,6 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
     read_date = payload.read_date
     is_read_date_unknown = payload.is_read_date_unknown
     if payload.status == BookStatus.currently_reading:
-        container_id, position = None, None
         reading_started_date = reading_started_date or max(
             value for value in (date.today(), acquisition_date) if value is not None
         )
@@ -652,8 +651,6 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         )
     )
     if next_status == BookStatus.currently_reading.value:
-        changes["container_id"] = None
-        changes["position"] = None
         changes["is_read_date_unknown"] = 0
         if (
             "reading_started_date" not in payload.model_fields_set
@@ -765,12 +762,6 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
 @app.post("/books/{book_id}/move", response_model=Book)
 def move_book(book_id: int, payload: BookMove) -> dict[str, Any]:
     moving = fetch_book(book_id)
-    if moving["status"] == BookStatus.currently_reading.value:
-        raise HTTPException(
-            status_code=409,
-            detail="A currently-reading book must remain outside the library map",
-        )
-
     try:
         with connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -1109,6 +1100,7 @@ def library_map() -> dict[str, Any]:
                 SELECT id, title, status, container_id, position
                 FROM books
                 WHERE container_id IS NOT NULL
+                  AND status != 'CURRENTLY_READING'
                 ORDER BY container_id, position
                 """
             )
@@ -1117,16 +1109,10 @@ def library_map() -> dict[str, Any]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT id, title, status, position
+                SELECT id, title, status, NULL AS position
                 FROM books
-                WHERE container_id IS NULL
-                ORDER BY
-                    CASE status
-                        WHEN 'CURRENTLY_READING' THEN 0
-                        WHEN 'PENDING' THEN 1
-                        ELSE 2
-                    END,
-                    title COLLATE NOCASE
+                WHERE status = 'CURRENTLY_READING'
+                ORDER BY title COLLATE NOCASE
                 """
             )
         ]
