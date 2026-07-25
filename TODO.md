@@ -1,153 +1,262 @@
 # BOOKPILE Roadmap
 
-## Next priority: backup and data portability
+This roadmap separates future work by its effect on the current data model.
+
+- `[x]` Implemented.
+- `[ ]` Planned or under consideration.
+- `[N]` Explicitly not planned.
+
+## Implemented foundation
+
+### Backup and data portability
 
 - [x] Create a downloadable backup containing:
-  - SQLite catalogue database.
+  - The SQLite catalogue database.
   - All locally stored cover images.
-  - Backup metadata and format version.
+  - Backup metadata and a format version.
 - [x] Add a controlled restore flow.
 - [x] Validate backup integrity before restoring.
 - [x] Create an automatic safety backup before every restore.
 - [x] Export the catalogue to CSV.
-- [ ] Consider Excel export after CSV is stable.
-- [ ] Document manual recovery and backup storage recommendations.
 
-## Visual library representation
+### Visual library
 
 - [x] Build a read-only visual index of bookcases, shelves, containers, and
   status-coloured books.
-- [x] Use an exploded shelf view so overlapping background and foreground
-  containers remain simultaneously visible.
-- [x] Render background containers with lighter styling only when a foreground
-  layer actually obscures them.
+- [x] Keep overlapping background and foreground containers simultaneously
+  visible.
+- [x] Use lighter background styling only when a foreground layer obscures it.
 - [x] Show rows horizontally and piles vertically.
-- [x] Open the catalogue filtered by bookcase, shelf, or container when that
-  hierarchy level is clicked.
-- [x] Sort catalogue results by ascending physical position when opened from
-  the visual map.
-- [x] Do not make individual books clickable in the visual index.
+- [x] Open the catalogue, filtered and sorted by physical position, when a
+  bookcase, shelf, or container is clicked.
+- [x] Keep individual books non-clickable in the general visual index.
 - [x] Allow persistent physical gaps between containers.
-- [ ] Show empty book positions where useful.
-- [ ] Detect duplicate or conflicting positions visually.
-- [x] Let the user position bookcases/furniture relative to one another.
-- [x] Scale furniture to preserve approximate relative physical size.
-- [x] Resize shelves within a bookcase using relative height weights.
-- [x] Reposition and resize containers within a shelf.
-- [x] Let every container have independently customizable height as well as
-  width, so piles can sit above background rows in unused vertical space.
-- [x] Allow visual container overlap: foreground containers may cover up to
-  50% of a background row's height to simulate shelf depth.
+- [x] Position and scale furniture relative to other furniture.
+- [x] Resize shelves within furniture using relative height weights.
+- [x] Reposition containers and customize their width and height.
+- [x] Allow foreground containers to overlap up to 50% of a background row's
+  height.
 - [x] Persist the visual layout independently from catalogue locations.
-- [ ] Add direct drag-and-resize handles as an optional convenience over the
-  current precise slider controls.
-- [x] Render containers as grey rectangles that fill with books.
+- [x] Render containers as grey rectangles filled with books.
 - [x] Colour books according to reading status.
-- [ ] Add alternate visual-map colouring modes beyond status:
-  - Colour by acquisition recency.
-  - Colour by reading-date recency.
-  - Use lighter/darker tones to make older versus more recent books visible at
-    a glance.
-- [x] Open the visual map from a catalogue location and highlight the selected
-  book while fading all other books.
-- [ ] Keep a book's physical position stored when its status changes to
-  `Reading...`; visually show it in the reading area, but do not clear the
-  saved container/position unless the user explicitly edits the location.
-- [ ] Future-only idea: drag books between containers and reorder them visually.
-  This is not part of the current visual-index scope.
+- [x] Open the visual map from a catalogue location, highlight the selected
+  book, and fade all other books.
 
-## Batch catalogue entry
+### Catalogue entry, dates, sorting, and filtering
 
-- [x] Add a dedicated batch-add workflow.
-- [x] Keep the selected container between consecutive books.
-- [x] Advance the physical position automatically after each saved book.
-- [x] Let a batch advance through positions in ascending or descending order.
-- [x] Keep useful repeated catalogue values while clearing title/author-specific
-  fields.
-- [x] Allow leaving batch mode without affecting normal single-book entry.
-
-## Catalogue sorting and filtering
-
-- [x] Sort by physical position.
-- [x] Sort alphabetically by title.
-- [x] Sort alphabetically by author.
-- [x] Sort by acquisition date.
-- [x] Sort by reading-started date.
-- [x] Sort by finished-reading date.
-- [x] Support ascending and descending order.
-- [x] Filter by date ranges.
-- [x] Filter by bookcase, shelf, or container.
-
-## Loans
-
-- [ ] Mark a book as loaned.
-- [ ] Record who has it.
-- [ ] Record the loan date.
-- [ ] Display outstanding loans.
-- [ ] Optionally record return dates and loan history.
-
-## Additional cataloguing
-
-- [x] Mark a read book's reading date as explicitly unknown.
+- [x] Add a dedicated Batch Add workflow.
+- [x] Preserve the selected container and useful repeated values between
+  consecutive Batch Add entries.
+- [x] Advance physical positions automatically in ascending or descending
+  order.
+- [x] Clear title- and author-specific values between Batch Add entries.
+- [x] Allow leaving Batch Add without affecting normal single-book entry.
+- [x] Sort by physical position, title, author, acquisition date,
+  reading-started date, or finished-reading date.
+- [x] Support ascending and descending sorting.
+- [x] Filter by date ranges and by bookcase, shelf, or container.
+- [x] Mark a read book's finished-reading date as explicitly unknown.
 - [x] Keep acquisition and reading dates chronologically consistent.
-- [ ] Support multiple authors as structured data:
-  - Allow two-author books to show both names in the main catalogue.
-  - For larger groups, show `Varios`/`Multiple authors` in the main view as a
-    clickable label.
-  - Open an integrated frontend pop-up with the full author list.
-  - Include every individual author in search results, even when their name is
-    hidden behind the shortened main-view label.
-- [ ] ISBN.
-- [ ] Publisher.
-- [ ] Publication year.
-- [ ] Language.
-- [ ] Edition.
-- [ ] Genres.
-- [ ] Free-form tags.
-- [ ] Personal rating.
+- [x] Add read-only external maintenance checks for lifecycle dates and
+  Goodreads links.
 
-## Faster book capture
+## A. Features possible with the current database
 
-- [ ] Scan ISBN or barcode from a phone (see `SCANNING_PLAN.md`).
-- [ ] Look up title and author automatically.
-- [ ] Integrate scanning into Batch Add while preserving container and position.
-- [ ] Add OCR as a later fallback for books without usable barcodes.
+These features can use the fields and relationships already stored. They may
+require backend or frontend work, but do not require adding catalogue data
+fields.
 
-## Reading suggestions
+### Data safety and documentation
+
+- [ ] Document manual recovery procedures and recommendations for storing
+  backups safely.
+
+### Reading status and physical location
+
+- [ ] Preserve a book's saved container and position when its status changes
+  to `Reading...`.
+  - Show the book in the separate reading area on the visual map.
+  - Do not clear its physical location unless the user explicitly edits it.
+  - Ensure returning the book to the shelf does not disturb other positions
+    unnecessarily.
+
+### Visual-map improvements using existing data
+
+- [ ] Add direct drag-and-resize handles as an optional alternative to the
+  current precise slider controls.
+- [ ] Add visual-map colouring modes derived from existing fields:
+  - Reading status.
+  - Acquisition-date recency.
+  - Finished-reading-date recency.
+  - Time spent pending, when acquisition and reading-started dates are known.
+  - Reading duration, when reading-started and finished-reading dates are
+    known.
+  - Use a clear legend and consistent light-to-dark scales.
+- [ ] Keep visual book dragging and visual reordering as a possible future
+  improvement; it is outside the current read-only visual-map scope.
+
+### Faster book capture
+
+- [ ] Scan an ISBN/barcode from a phone as described in `SCANNING_PLAN.md`.
+- [ ] Use the scanned code to look up title and author without storing new
+  metadata.
+- [ ] Integrate scanning into Batch Add while preserving its current container,
+  position, and direction.
+- [ ] Add OCR later as a fallback for books without a usable barcode.
+
+### Search, filters, and data-quality views
+
+- [ ] Verify whether the existing physical-location search covers all desired
+  search cases; extend it only where gaps remain.
+- [ ] Verify whether existing lifecycle-date filters cover all desired cases;
+  extend them only where gaps remain.
+- [ ] Add explicit unknown/missing-date filters:
+  - Read books with an unknown finished-reading date.
+  - Books with an unknown acquisition date.
+  - An option for date-range filters to include unknown-date books.
+- [ ] Add quick views for:
+  - Books without a physical location.
+  - Books without a cover.
+  - Books with missing dates.
+
+### Suggestions and statistics using existing data
 
 - [ ] Suggest a random pending book.
 - [ ] Suggest the oldest pending book.
-- [ ] Filter suggestions by genre, size, or time in the pending list.
+- [ ] Filter suggestions by time spent pending.
+- [ ] Show books read by month and year.
+- [ ] Show average time spent pending.
+- [ ] Show average reading duration.
+- [ ] Compare books acquired with books read.
+- [ ] Compare the original collection with later acquisitions.
 
-## Statistics
-
-- [ ] Books read by month and year.
-- [ ] Average time spent pending.
-- [ ] Average reading duration.
-- [ ] Books acquired versus books read.
-- [ ] Original collection versus later acquisitions.
-
-## Advanced search and data quality
-
-- [x] Add read-only external maintenance checks for lifecycle dates and
-  Goodreads links.
-- [ ] Search and filter by physical location.
-- [ ] Filter by lifecycle dates.
-- [ ] Add explicit filters for unknown/missing dates, especially:
-  - Read books with unknown finished-reading date.
-  - Books with unknown acquisition date.
-  - Date-range filters should optionally include unknown-date books instead of
-    always hiding them.
-- [ ] Filter by genres and tags.
-- [ ] Find books without a physical location.
-- [ ] Find books without a cover.
-- [ ] Find books with missing dates.
-- [ ] Find incomplete metadata.
-
-## Physical map maintenance
+### Physical-library maintenance
 
 - [ ] Edit bookcase names and descriptions.
 - [ ] Renumber shelves.
 - [ ] Renumber containers.
-- [ ] Renumber book positions.
-- [ ] Keep an optional history of physical moves.
+- [ ] Renumber book positions while preserving a continuous sequence and
+  resolving collisions safely.
+
+## B. Features requiring a safe database expansion
+
+These features need new book fields, related records, or historical data.
+Before implementing any of them, introduce a repeatable migration process that
+protects the completed catalogue.
+
+### Safe schema-expansion prerequisite
+
+- [ ] Add versioned database migrations.
+- [ ] Create an automatic full ZIP backup before every migration.
+- [ ] Prefer additive, nullable fields and new related tables so all existing
+  books remain valid without placeholder data.
+- [ ] Test migrations against a copy of the populated database and verify:
+  - Book, hierarchy, layout, date, link, and cover counts.
+  - Existing catalogue values before and after migration.
+  - Backup export and restore compatibility.
+- [ ] Record the database schema version in backups.
+- [ ] Document recovery steps for a failed migration.
+
+### Structured authors
+
+- [ ] Replace the single free-text author value with structured author records
+  while preserving the original text during migration.
+- [ ] Support any number of authors per book and preserve their display order.
+- [ ] Show both names directly for two-author books.
+- [ ] For larger groups, show a clickable `Varios`/`Multiple authors` label.
+- [ ] Open an integrated pop-up containing the complete author list.
+- [ ] Include a book in search results when any contributing author matches.
+
+### Additional book metadata
+
+- [ ] Add optional number of pages.
+- [ ] Add optional ISBN.
+- [ ] Add optional publisher.
+- [ ] Add optional publication year.
+- [ ] Add optional language.
+- [ ] Add optional edition.
+- [ ] Add structured genres.
+- [ ] Add a fiction/non-fiction classification.
+- [ ] Add free-form tags.
+- [ ] Add an optional personal rating.
+
+### Features enabled by additional metadata
+
+- [ ] Add visual-map colouring modes for:
+  - Language.
+  - Fiction/non-fiction.
+  - Publication year.
+  - Personal rating.
+  - Other catalogue fields where a visual comparison is useful.
+- [ ] Give every colouring mode a clear legend.
+- [ ] Filter searches and reading suggestions by genre, page count, language,
+  fiction/non-fiction, tags, or rating.
+- [ ] Show pages read by month and year.
+- [ ] Find books with incomplete optional metadata.
+
+### Loans and history
+
+- [ ] Add an `On loan` state independent of the book's reading status, so
+  lending a book does not replace `Pending`, `Reading...`, or `Read`.
+- [ ] Record the borrower and loan date.
+- [ ] Record an optional expected return date and the eventual actual return
+  date.
+- [ ] Display outstanding loans and overdue expected return dates.
+- [ ] Add a separate visual-map area for books currently on loan.
+  - Preserve each loaned book's saved physical location.
+  - Return it to its normal map position when the active loan ends.
+- [ ] Retain completed loans as optional history.
+- [ ] Optionally retain a history of physical moves.
+
+## C. Product-scale expansion: users and publication
+
+This is a separate scale of project. It changes BOOKPILE from a trusted
+single-user local application into a multi-user product exposed to the
+internet. It requires product, privacy, security, hosting, and operational
+decisions in addition to application code.
+
+### Multi-user foundation
+
+- [ ] Define the intended product model: self-hosted instance, hosted service,
+  installable app, or a combination.
+- [ ] Introduce user accounts with secure registration, sign-in, sign-out,
+  password recovery, and session management.
+- [ ] Assign every library, book, cover, hierarchy record, and visual layout to
+  an owner.
+- [ ] Migrate the current library safely to the first owner account.
+- [ ] Enforce strict data separation between users.
+- [ ] Give each user an independent catalogue, physical hierarchy, visual map,
+  backup, restore, and export flow.
+
+### Privacy and social features
+
+- [ ] Define library visibility levels such as private, friends-only, or
+  public.
+- [ ] Define separate visibility controls for catalogue information and the
+  physical map, since the map may reveal details about a user's home.
+- [ ] Add friendship requests, acceptance, removal, and blocking.
+- [ ] Create a privacy-safe public/friends catalogue view that can omit physical
+  location and map information.
+
+### Publishable web/app infrastructure
+
+- [ ] Replace local-only assumptions with production configuration for the
+  database, cover storage, API URLs, and secrets.
+- [ ] Choose production hosting, a managed database, durable image storage,
+  domain, and HTTPS.
+- [ ] Add authorization checks to every user-owned backend operation.
+- [ ] Add upload validation, rate limiting, security headers, audit logging,
+  monitoring, and error reporting.
+- [ ] Define storage limits, backup retention, account deletion, and data
+  export policies.
+- [ ] Add automated deployment, migration, test, and rollback procedures.
+- [ ] Test responsive behaviour, accessibility, browser support, and mobile
+  installation requirements.
+- [ ] Prepare terms of use, privacy information, and any required consent or
+  data-protection processes before accepting external users.
+
+## Explicitly not planned
+
+- [N] Excel export; CSV and full ZIP backups are sufficient.
+- [N] Empty-position markers on the visual map.
+- [N] Visual duplicate/conflicting-position warnings.
