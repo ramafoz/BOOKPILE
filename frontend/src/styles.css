@@ -222,6 +222,11 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: -7px 0 18px; padding: 11px 13px; color: #596662; background: #eee7dc; border-radius: 8px; font-size: 12px; }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-legend i { width: 11px; height: 11px; border-radius: 2px; }
+.map-colour-picker { display: inline-flex; align-items: center; gap: 7px; color: #475650; font-weight: 700; }
+.map-colour-picker select { padding: 6px 28px 6px 8px; border: 1px solid #c8bcaa; border-radius: 6px; background: #fffaf1; color: #354740; font: inherit; }
+.map-status-legend, .map-scale-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.map-scale-legend { min-width: 290px; color: #68746f; }
+.map-scale-legend .map-colour-gradient { width: 130px; height: 12px; border: 1px solid #71807966; background: linear-gradient(90deg, #d7e8ec, #8b4035); }
 .map-legend i.pending { background: #d29a46; }
 .map-legend i.reading { background: #557f93; }
 .map-legend i.read { background: #4f887b; }
@@ -230,6 +235,8 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-edit-actions { display: flex; align-items: center; gap: 8px; margin-left: 4px; }
 .map-edit-actions button { padding: 7px 10px; }
 .map-layout-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #d4c8b7; border-radius: 10px; background: #f4eee4; }
+.map-direct-help { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border-radius: 7px; color: #51625c; background: #dfeae5; font-size: 12px; line-height: 1.45; }
+.map-direct-help strong { color: #8a452f; }
 .map-editor-section { min-width: 0; padding: 12px; border-radius: 8px; background: #fffaf1; }
 .map-editor-section > label { display: grid; gap: 6px; color: #475650; font-size: 12px; font-weight: 700; }
 .map-editor-title { display: block; margin-bottom: 9px; color: #475650; font-size: 12px; }
@@ -241,11 +248,15 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-range input { width: 100%; accent-color: #28574d; }
 .map-room { position: relative; width: 100%; aspect-ratio: 5 / 3; min-height: 520px; overflow: hidden; border: 1px solid #cfc4b4; border-radius: 12px; background: linear-gradient(#eee8dd 0 76%, #d8cec0 76%); box-shadow: inset 0 0 50px #4d403314; }
 .map-room.editing { background-image: linear-gradient(#28574d12 1px, transparent 1px), linear-gradient(90deg, #28574d12 1px, transparent 1px), linear-gradient(#eee8dd 0 76%, #d8cec0 76%); background-size: 5% 5%, 5% 5%, 100% 100%; }
+.map-direct-handle { position: absolute; z-index: 8; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid #f8f3e9; border-radius: 50%; color: #fff; background: #28574d; box-shadow: 0 2px 8px #173d3540; font-size: 16px; font-weight: 800; line-height: 1; touch-action: none; }
+.map-direct-handle:hover, .map-direct-handle:focus { background: #a85835; outline: 2px solid #fff; }
+.map-direct-handle.move { top: 5px; left: 50%; cursor: move; transform: translateX(-50%); }
+.map-direct-handle.resize { right: 5px; bottom: 5px; cursor: nwse-resize; }
 .map-outside { position: absolute; z-index: 3; display: flex; overflow: hidden; align-items: center; justify-content: center; padding: 7px; border: 1px solid #9db8c1; border-radius: 9px; background: #e7f0f3; box-shadow: 0 5px 16px #31495120; cursor: pointer; }
 .map-outside:focus { outline: 2px solid #a85835; outline-offset: 2px; }
 .map-outside:hover { border-color: #a85835; box-shadow: 0 6px 18px #31495130; }
 .map-outside-books { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
-.map-outside-books span { display: inline-flex; align-items: center; padding: 2px; background: #f7fbfc; border-radius: 3px; }
+.map-outside-books span { display: inline-flex; align-items: center; padding: 2px; background: #f7fbfc; border-radius: 3px; cursor: pointer; }
 .map-outside-books i { width: 10px; height: 22px; border: 1px solid #26332f80; border-radius: 1px; }
 .map-outside-books span.muted { opacity: .18; filter: grayscale(1); }
 .map-outside-books span.focused { opacity: 1; filter: none; }
@@ -259,13 +270,19 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-shelf-frame { fill: #f4eee4; stroke: #b8a992; stroke-width: 1.5; }
 .map-shelf:hover > .map-shelf-frame, .map-shelf:focus > .map-shelf-frame { fill: #fffaf1; stroke: #a85835; stroke-width: 2.5; }
 .map-shelf-board { stroke: #80684e; stroke-width: 7; }
+.map-shelf-resize-handle { stroke: #a8583500; stroke-width: 18; cursor: ns-resize; pointer-events: stroke; touch-action: none; }
+.map-shelf-resize-handle:hover { stroke: #a85835aa; }
 .map-container { cursor: pointer; }
+.map-container.editing { cursor: move; touch-action: none; }
 .map-container:focus { outline: none; }
 .map-container > rect:first-of-type { fill: #d8d4cc; stroke: #a9a297; stroke-width: 1; }
 .map-container.obscured > rect:first-of-type { fill: #e4e1db; stroke: #bbb5ab; stroke-dasharray: 4 3; }
 .map-container.foreground > rect:first-of-type { fill: #d1cdc5; stroke: #7f786d; stroke-width: 1.5; filter: drop-shadow(0 3px 2px #63584925); }
 .map-container:hover > rect:first-of-type, .map-container:focus > rect:first-of-type { stroke: #a85835; stroke-width: 3; }
-.map-book { pointer-events: none; stroke: #26332f99; stroke-width: .35; shape-rendering: crispEdges; }
+.map-svg-resize-handle { fill: #28574d; stroke: #fffaf1; stroke-width: 2; cursor: nwse-resize; pointer-events: all; touch-action: none; }
+.map-svg-resize-handle:hover { fill: #a85835; }
+.map-book { pointer-events: all; cursor: pointer; stroke: #26332f99; stroke-width: .35; shape-rendering: crispEdges; }
+.map-container.editing .map-book { pointer-events: none; cursor: move; }
 .map-book.muted { opacity: .16; fill: #9da5a2; stroke: #6e7573aa; }
 .map-book.focused { opacity: 1; stroke: #0e527f; stroke-width: 1.4; filter: drop-shadow(0 0 3px #287fbd99); }
 

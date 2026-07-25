@@ -347,6 +347,7 @@ def stats() -> dict[str, int]:
 
 @app.get("/books", response_model=list[Book])
 def list_books(
+    book_id: int | None = None,
     book_status: BookStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, max_length=200),
     sort_by: Literal[
@@ -377,6 +378,9 @@ def list_books(
             status_code=422,
             detail="Date from must be earlier than or equal to date to",
         )
+    if book_id is not None:
+        where.append("b.id = ?")
+        params.append(book_id)
     if book_status:
         where.append("b.status = ?")
         params.append(book_status.value)
@@ -1097,7 +1101,9 @@ def library_map() -> dict[str, Any]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT id, title, status, container_id, position
+                SELECT
+                    id, title, status, container_id, position,
+                    acquisition_date, reading_started_date, read_date
                 FROM books
                 WHERE container_id IS NOT NULL
                   AND status != 'CURRENTLY_READING'
@@ -1109,7 +1115,9 @@ def library_map() -> dict[str, Any]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT id, title, status, NULL AS position
+                SELECT
+                    id, title, status, container_id, NULL AS position,
+                    acquisition_date, reading_started_date, read_date
                 FROM books
                 WHERE status = 'CURRENTLY_READING'
                 ORDER BY title COLLATE NOCASE
@@ -1194,6 +1202,41 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail="Shelf layout is incomplete")
         if {item.id for item in payload.containers} != valid_containers:
             raise HTTPException(status_code=422, detail="Container layout is incomplete")
+
+        container_context = {
+            row["id"]: (row["shelf_id"], row["layer"])
+            for row in connection.execute(
+                "SELECT id, shelf_id, layer FROM containers"
+            )
+        }
+        grouped_containers: dict[
+            tuple[int, str], list[VisualContainerLayout]
+        ] = {}
+        for item in payload.containers:
+            grouped_containers.setdefault(container_context[item.id], []).append(item)
+        for group in grouped_containers.values():
+            for index, first in enumerate(group):
+                for second in group[index + 1 :]:
+                    overlap_width = min(
+                        first.x + first.width,
+                        second.x + second.width,
+                    ) - max(first.x, second.x)
+                    overlap_height = min(
+                        first.y + first.height,
+                        second.y + second.height,
+                    ) - max(first.y, second.y)
+                    if overlap_width > 0.0001 and overlap_height > 0.0001:
+                        raise HTTPException(
+                            status_code=422,
+                            detail={
+                                "code": "CONTAINER_LAYOUT_OVERLAP",
+                                "message": (
+                                    "Containers in the same shelf layer cannot "
+                                    "overlap"
+                                ),
+                                "container_ids": [first.id, second.id],
+                            },
+                        )
 
         connection.execute(
             "DELETE FROM visual_layout_items WHERE item_type = 'BOOKCASE'"

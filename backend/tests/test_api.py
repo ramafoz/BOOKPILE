@@ -985,8 +985,17 @@ def test_books_can_be_sorted_and_filtered_by_location_and_dates() -> None:
                 "position": 1,
             },
         ]
+        created_books = []
         for book in books:
-            assert client.post("/books", json=book).status_code == 201
+            created = client.post("/books", json=book)
+            assert created.status_code == 201
+            created_books.append(created.json())
+
+        exact_book = client.get(
+            "/books",
+            params={"book_id": created_books[1]["id"]},
+        ).json()
+        assert [book["title"] for book in exact_book] == ["Alpha"]
 
         title_desc = client.get(
             "/books",
@@ -1376,6 +1385,7 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "title": "Background pending",
                 "author": "Author",
                 "status": "PENDING",
+                "acquisition_date": "2024-01-10",
                 "container_id": background["id"],
                 "position": 2,
             },
@@ -1386,6 +1396,9 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "title": "Foreground read",
                 "author": "Author",
                 "status": "READ",
+                "acquisition_date": "2023-03-01",
+                "reading_started_date": "2023-03-10",
+                "read_date": "2023-03-20",
                 "container_id": foreground["id"],
                 "position": 1,
             },
@@ -1396,6 +1409,8 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "title": "Reading away from shelf",
                 "author": "Author",
                 "status": "CURRENTLY_READING",
+                "acquisition_date": "2025-05-01",
+                "reading_started_date": "2025-05-04",
                 "container_id": background["id"],
                 "position": 3,
             },
@@ -1416,6 +1431,10 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             "FOREGROUND",
         ]
         assert mapped_shelf["containers"][0]["books"][0]["position"] == 2
+        assert (
+            mapped_shelf["containers"][0]["books"][0]["acquisition_date"]
+            == "2024-01-10"
+        )
         assert mapped_shelf["containers"][0]["status_counts"] == {
             "pending": 1,
             "reading": 0,
@@ -1427,7 +1446,11 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "id": reading["id"],
                 "title": "Reading away from shelf",
                 "status": "CURRENTLY_READING",
+                "container_id": background["id"],
                 "position": None,
+                "acquisition_date": "2025-05-01",
+                "reading_started_date": "2025-05-04",
+                "read_date": None,
             }
         ]
         assert len(payload["layout"]["bookcases"]) == 1
@@ -1459,3 +1482,67 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             {**invalid["bookcases"][0], "x": 90, "width": 35}
         ]
         assert client.put("/visual-layout", json=invalid).status_code == 422
+
+
+def test_visual_layout_prevents_overlap_within_the_same_shelf_layer() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases", json={"name": "Collision Bookcase"}
+        ).json()
+        shelf = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        background_row = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        background_pile = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "PILE",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        foreground = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "FOREGROUND",
+                "container_number": 1,
+            },
+        ).json()
+
+        layout = client.get("/library-map").json()["layout"]
+        by_id = {item["id"]: item for item in layout["containers"]}
+        by_id[background_row["id"]].update(
+            {"x": 0, "y": 0, "width": 50, "height": 100}
+        )
+        by_id[background_pile["id"]].update(
+            {"x": 40, "y": 0, "width": 50, "height": 100}
+        )
+        by_id[foreground["id"]].update(
+            {"x": 0, "y": 0, "width": 100, "height": 100}
+        )
+
+        blocked = client.put("/visual-layout", json=layout)
+        assert blocked.status_code == 422
+        assert blocked.json()["detail"]["code"] == "CONTAINER_LAYOUT_OVERLAP"
+        assert set(blocked.json()["detail"]["container_ids"]) == {
+            background_row["id"],
+            background_pile["id"],
+        }
+
+        by_id[background_pile["id"]].update(
+            {"x": 50, "y": 0, "width": 50, "height": 100}
+        )
+        allowed = client.put("/visual-layout", json=layout)
+        assert allowed.status_code == 200

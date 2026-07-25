@@ -41,9 +41,33 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Colour books according to reading status.
 - [x] Open the visual map from a catalogue location, highlight the selected
   book, and fade all other books.
+- [x] Open the main catalogue with an exact-book filter when an individual book
+  is clicked on the visual map.
 - [x] Preserve a book's saved container and position while its status is
   `Reading...`, showing it only in the separate reading area on the visual map
   unless the user explicitly edits its physical location.
+- [x] Add direct layout handles alongside the precise sliders:
+  - Move and resize furniture and the Reading area.
+  - Move and resize containers.
+  - Resize adjacent shelves by dragging their divider.
+- [x] Add visual-map colouring modes derived from existing data:
+  - Reading status.
+  - Acquisition-date recency.
+  - Finished-reading-date recency.
+  - Time spent pending.
+  - Reading duration.
+  - Use a 1st–99th percentile-clipped light-blue-to-deep-red scale so outliers
+    do not flatten the useful visual range.
+  - Identify unique oldest/newest or shortest/longest books in each legend.
+  - Count same-day date intervals as one day.
+  - Distinguish Pending, Reading, and Read-with-missing-data states where a
+    duration or finished-reading date is not applicable or unavailable.
+  - Use a background-like neutral missing-data colour and a mode-specific
+    legend.
+- [x] Prevent containers in the same shelf and layer from gaining visual
+  overlap through either direct manipulation or precise sliders.
+  - Continue allowing overlap between background and foreground layers.
+  - Validate the same rule in the backend before saving a layout.
 
 ### Catalogue entry, dates, sorting, and filtering
 
@@ -77,18 +101,8 @@ fields.
 - [ ] Document manual recovery procedures and recommendations for storing
   backups safely.
 
-### Visual-map improvements using existing data
+### Visual-map future ideas
 
-- [ ] Add direct drag-and-resize handles as an optional alternative to the
-  current precise slider controls.
-- [ ] Add visual-map colouring modes derived from existing fields:
-  - Reading status.
-  - Acquisition-date recency.
-  - Finished-reading-date recency.
-  - Time spent pending, when acquisition and reading-started dates are known.
-  - Reading duration, when reading-started and finished-reading dates are
-    known.
-  - Use a clear legend and consistent light-to-dark scales.
 - [ ] Keep visual book dragging and visual reordering as a possible future
   improvement; it is outside the current read-only visual-map scope.
 

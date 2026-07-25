@@ -29,8 +29,11 @@ export interface MapBook {
   id: number;
   title: string;
   status: BookStatus;
-  container_id: number;
-  position: number;
+  container_id: number | null;
+  position: number | null;
+  acquisition_date: string | null;
+  reading_started_date: string | null;
+  read_date: string | null;
 }
 
 export interface MapContainer extends Container {
@@ -60,12 +63,7 @@ export interface MapBookcase {
 
 export interface LibraryMapData {
   bookcases: MapBookcase[];
-  outside_books: Array<{
-    id: number;
-    title: string;
-    status: BookStatus;
-    position: null;
-  }>;
+  outside_books: MapBook[];
   layout: VisualLayout;
 }
 

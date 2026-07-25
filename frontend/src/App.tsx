@@ -33,6 +33,7 @@ import type {
   ContainerType,
   Layer,
   LibraryMapData,
+  MapBook,
   MapBookcase,
   MapContainer,
   MapShelf,
@@ -87,6 +88,7 @@ function App() {
   const [dateField, setDateField] = useState("acquisition_date");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [exactBookFilter, setExactBookFilter] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -94,6 +96,7 @@ function App() {
     try {
       const [nextBooks, nextStats, nextLibrary] = await Promise.all([
         api.books({
+          bookId: exactBookFilter === null ? "" : String(exactBookFilter),
           status: filter,
           search: debouncedSearch,
           sortBy,
@@ -127,6 +130,7 @@ function App() {
     dateField,
     dateFrom,
     dateTo,
+    exactBookFilter,
   ]);
 
   const filterShelves = useMemo(
@@ -182,6 +186,7 @@ function App() {
     shelfId: number | "" = "",
     containerId: number | "" = "",
   ) {
+    setExactBookFilter(null);
     setBookcaseFilter(String(bookcaseId));
     setShelfFilter(shelfId ? String(shelfId) : "");
     setContainerFilter(containerId ? String(containerId) : "");
@@ -200,6 +205,7 @@ function App() {
   }
 
   function openReadingCatalogue() {
+    setExactBookFilter(null);
     setFilter("CURRENTLY_READING");
     setBookcaseFilter("");
     setShelfFilter("");
@@ -207,6 +213,30 @@ function App() {
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(true);
+    setShowMap(false);
+    setFocusedMapBook(null);
+    window.setTimeout(
+      () => document.querySelector(".catalogue-heading")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      }),
+      0,
+    );
+  }
+
+  function openExactBookCatalogue(book: MapBook) {
+    setExactBookFilter(book.id);
+    setFilter("ALL");
+    setSearch(book.title);
+    setDebouncedSearch(book.title);
+    setBookcaseFilter("");
+    setShelfFilter("");
+    setContainerFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setSortBy("title");
+    setSortOrder("asc");
+    setShowAdvanced(false);
     setShowMap(false);
     setFocusedMapBook(null);
     window.setTimeout(
@@ -302,7 +332,10 @@ function App() {
               aria-label="Search books"
               placeholder="Search by title or author…"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setExactBookFilter(null);
+                setSearch(event.target.value);
+              }}
             />
           </div>
           <div className="filters" aria-label="Filter books">
@@ -310,7 +343,10 @@ function App() {
               <button
                 className={filter === item ? "active" : ""}
                 key={item}
-                onClick={() => setFilter(item)}
+                onClick={() => {
+                  setExactBookFilter(null);
+                  setFilter(item);
+                }}
               >
                 {statusLabel(item)}
               </button>
@@ -559,6 +595,7 @@ function App() {
           }}
           onFilter={openCatalogueAt}
           onReadingFilter={openReadingCatalogue}
+          onBookFilter={openExactBookCatalogue}
         />
       )}
     </main>
@@ -1276,6 +1313,7 @@ function ReorganizeDialog({
   const loadBooks = useCallback(async () => {
     try {
       setAllBooks(await api.books({
+        bookId: "",
         status: "ALL",
         search: "",
         sortBy: "title",
@@ -1389,11 +1427,229 @@ function ReorganizeDialog({
 
 const MAP_WIDTH = 960;
 const MAP_INSET = 22;
+const MAP_HEIGHT = 620;
 
-function bookColour(status: BookStatus) {
+type MapColourMode =
+  | "status"
+  | "acquisition"
+  | "finished"
+  | "pending_duration"
+  | "reading_duration";
+
+interface MapColourScale {
+  mode: MapColourMode;
+  label: string;
+  colour: (book: MapBook) => string;
+  detail: (book: MapBook) => string | null;
+  lowLabel?: string;
+  highLabel?: string;
+  legendItems: Array<{ label: string; colour: string }>;
+}
+
+const MAP_COLOUR_OPTIONS: Array<{ value: MapColourMode; label: string }> = [
+  { value: "status", label: "Reading status" },
+  { value: "acquisition", label: "Acquisition recency" },
+  { value: "finished", label: "Reading recency" },
+  { value: "pending_duration", label: "Time spent pending" },
+  { value: "reading_duration", label: "Reading duration" },
+];
+
+const MISSING_MAP_COLOUR = "#e5dfd5";
+const PENDING_MAP_COLOUR = "#d7ae6c";
+const READING_MAP_COLOUR = "#7699a7";
+const LIGHT_MAP_COLOUR = "#d7e8ec";
+const DARK_MAP_COLOUR = "#8b4035";
+
+function statusBookColour(status: BookStatus) {
   if (status === "READ") return "#4f887b";
   if (status === "CURRENTLY_READING") return "#557f93";
   return "#d29a46";
+}
+
+function dateAsDay(value: string | null) {
+  if (!value) return null;
+  return Math.floor(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
+}
+
+function durationInDays(start: string | null, end: string | null) {
+  const startDay = dateAsDay(start);
+  const endDay = dateAsDay(end);
+  if (startDay === null || endDay === null) return null;
+  return Math.max(0, endDay - startDay) + 1;
+}
+
+function metricForBook(book: MapBook, mode: MapColourMode) {
+  if (mode === "acquisition") return dateAsDay(book.acquisition_date);
+  if (mode === "finished") return dateAsDay(book.read_date);
+  if (mode === "pending_duration") {
+    return durationInDays(book.acquisition_date, book.reading_started_date);
+  }
+  if (mode === "reading_duration") {
+    return durationInDays(book.reading_started_date, book.read_date);
+  }
+  return null;
+}
+
+function interpolateHex(start: string, end: string, amount: number) {
+  const channel = (value: string, offset: number) =>
+    Number.parseInt(value.slice(offset, offset + 2), 16);
+  const mix = (offset: number) =>
+    Math.round(
+      channel(start, offset) +
+      (channel(end, offset) - channel(start, offset)) * amount,
+    ).toString(16).padStart(2, "0");
+  return `#${mix(1)}${mix(3)}${mix(5)}`;
+}
+
+function dayAsDate(day: number) {
+  return new Date(day * 86_400_000).toISOString().slice(0, 10);
+}
+
+function specialMapCategory(book: MapBook, mode: MapColourMode) {
+  if (mode === "acquisition" && !book.acquisition_date) {
+    return { label: "No acquisition date", colour: MISSING_MAP_COLOUR };
+  }
+  if (mode === "finished") {
+    if (book.status === "PENDING") {
+      return { label: "Pending", colour: PENDING_MAP_COLOUR };
+    }
+    if (book.status === "CURRENTLY_READING") {
+      return { label: "Reading…", colour: READING_MAP_COLOUR };
+    }
+    if (!book.read_date) {
+      return { label: "Read · date unknown", colour: MISSING_MAP_COLOUR };
+    }
+  }
+  if (mode === "pending_duration") {
+    if (book.status === "PENDING") {
+      return { label: "Still pending", colour: PENDING_MAP_COLOUR };
+    }
+    if (metricForBook(book, mode) === null) {
+      return book.status === "CURRENTLY_READING"
+        ? { label: "Reading · no dates", colour: READING_MAP_COLOUR }
+        : { label: "Read · no dates", colour: MISSING_MAP_COLOUR };
+    }
+  }
+  if (mode === "reading_duration") {
+    if (book.status === "PENDING") {
+      return { label: "Pending", colour: PENDING_MAP_COLOUR };
+    }
+    if (book.status === "CURRENTLY_READING") {
+      return { label: "Still reading", colour: READING_MAP_COLOUR };
+    }
+    if (metricForBook(book, mode) === null) {
+      return { label: "Read · no dates", colour: MISSING_MAP_COLOUR };
+    }
+  }
+  return null;
+}
+
+function percentile(sortedValues: number[], fraction: number) {
+  if (sortedValues.length === 0) return 0;
+  const index = (sortedValues.length - 1) * fraction;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sortedValues[lower];
+  const amount = index - lower;
+  return sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * amount;
+}
+
+function buildMapColourScale(
+  mode: MapColourMode,
+  books: MapBook[],
+): MapColourScale {
+  const option = MAP_COLOUR_OPTIONS.find((item) => item.value === mode);
+  if (mode === "status") {
+    return {
+      mode,
+      label: option?.label ?? "Reading status",
+      colour: (book) => statusBookColour(book.status),
+      detail: () => null,
+      legendItems: [],
+    };
+  }
+
+  const scoredBooks = books
+    .filter((book) => specialMapCategory(book, mode) === null)
+    .map((book) => ({ book, value: metricForBook(book, mode) }))
+    .filter(
+      (item): item is { book: MapBook; value: number } => item.value !== null,
+    );
+  const values = scoredBooks
+    .map((item) => item.value)
+    .sort((first, second) => first - second);
+  const usePercentiles = values.length >= 3;
+  const minimum = values.length > 0
+    ? percentile(values, usePercentiles ? 0.01 : 0)
+    : 0;
+  const maximum = values.length > 0
+    ? percentile(values, usePercentiles ? 0.99 : 1)
+    : 0;
+  const actualMinimum = values[0] ?? 0;
+  const actualMaximum = values.at(-1) ?? 0;
+  const isDuration = mode === "pending_duration" || mode === "reading_duration";
+  const describe = (value: number) =>
+    isDuration
+      ? `${value} day${value === 1 ? "" : "s"}`
+      : formatDate(dayAsDate(value));
+  const endpointLabel = (isMinimum: boolean) => {
+    if (scoredBooks.length === 0) return "No dated books";
+    const value = isMinimum ? actualMinimum : actualMaximum;
+    const winners = scoredBooks.filter((item) => item.value === value);
+    const qualifier = isDuration
+      ? isMinimum ? "Shortest" : "Longest"
+      : isMinimum ? "Oldest" : "Newest";
+    if (winners.length !== 1) {
+      return `${qualifier}: tie (${winners.length}) · ${describe(value)}`;
+    }
+    return `${qualifier}: “${winners[0].book.title}” · ${describe(value)}`;
+  };
+  const legendItems = Array.from(
+    new Map(
+      books
+        .map((book) => specialMapCategory(book, mode))
+        .filter((item): item is { label: string; colour: string } => item !== null)
+        .map((item) => [item.label, item]),
+    ).values(),
+  );
+
+  return {
+    mode,
+    label: option?.label ?? mode,
+    colour: (book) => {
+      const category = specialMapCategory(book, mode);
+      if (category) return category.colour;
+      const value = metricForBook(book, mode);
+      if (value === null) return MISSING_MAP_COLOUR;
+      const amount = maximum === minimum
+        ? 0.65
+        : Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum)));
+      return interpolateHex(LIGHT_MAP_COLOUR, DARK_MAP_COLOUR, amount);
+    },
+    detail: (book) => {
+      const category = specialMapCategory(book, mode);
+      if (category) return category.label;
+      const value = metricForBook(book, mode);
+      return value === null ? "No data" : describe(value);
+    },
+    lowLabel: endpointLabel(true),
+    highLabel: endpointLabel(false),
+    legendItems,
+  };
+}
+
+function overlapArea(first: VisualRect, second: VisualRect) {
+  const width = Math.max(
+    0,
+    Math.min(first.x + first.width, second.x + second.width) -
+    Math.max(first.x, second.x),
+  );
+  const height = Math.max(
+    0,
+    Math.min(first.y + first.height, second.y + second.height) -
+    Math.max(first.y, second.y),
+  );
+  return width * height;
 }
 
 function MapContainerGraphic({
@@ -1405,6 +1661,11 @@ function MapContainerGraphic({
   onSelect,
   obscured,
   focusedBookId,
+  colourScale,
+  editing,
+  onEdit,
+  onRectPointerDown,
+  onBookSelect,
 }: {
   container: MapContainer;
   x: number;
@@ -1414,6 +1675,14 @@ function MapContainerGraphic({
   onSelect: () => void;
   obscured: boolean;
   focusedBookId: number | null;
+  colourScale: MapColourScale;
+  editing: boolean;
+  onEdit: () => void;
+  onRectPointerDown: (
+    event: React.PointerEvent<SVGGElement | SVGRectElement>,
+    mode: "move" | "resize",
+  ) => void;
+  onBookSelect: (book: MapBook) => void;
 }) {
   const padding = 3;
   const bookAreaHeight = Math.max(6, height - padding * 2);
@@ -1422,25 +1691,30 @@ function MapContainerGraphic({
   const isRow = container.container_type === "ROW";
   const maxPosition = Math.max(
     1,
-    ...books.map((book) => book.position),
+    ...books.map((book) => book.position ?? 1),
   );
   const activate = (event: React.KeyboardEvent<SVGGElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onSelect();
+      if (editing) onEdit();
+      else onSelect();
     }
   };
 
   return (
     <g
-      className={`map-container ${obscured ? "obscured" : ""} ${
+      className={`map-container ${editing ? "editing" : ""} ${obscured ? "obscured" : ""} ${
         container.layer === "FOREGROUND" ? "foreground" : ""
       }`}
       role="button"
       tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
-        onSelect();
+        if (editing) onEdit();
+        else onSelect();
+      }}
+      onPointerDown={(event) => {
+        if (editing) onRectPointerDown(event, "move");
       }}
       onKeyDown={activate}
     >
@@ -1464,13 +1738,34 @@ function MapContainerGraphic({
                     ? "focused"
                     : "muted"
               }`}
-              x={x + padding + (book.position - 1) * slotWidth}
+              x={x + padding + ((book.position ?? 1) - 1) * slotWidth}
               y={y + padding}
               width={bookWidth}
               height={bookAreaHeight}
-              fill={focusedBookId === book.id ? "#287fbd" : bookColour(book.status)}
+              fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              role={editing ? undefined : "button"}
+              tabIndex={editing ? -1 : 0}
+              aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
+              onClick={(event) => {
+                if (editing) return;
+                event.stopPropagation();
+                onBookSelect(book);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  !editing &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onBookSelect(book);
+                }
+              }}
             >
-              <title>{book.title}</title>
+              <title>
+                {book.title}
+                {colourScale.detail(book) ? ` · ${colourScale.detail(book)}` : ""}
+              </title>
             </rect>
           );
         })
@@ -1489,16 +1784,48 @@ function MapContainerGraphic({
                     : "muted"
               }`}
               x={x + padding}
-              y={y + padding + (book.position - 1) * slotHeight}
+              y={y + padding + ((book.position ?? 1) - 1) * slotHeight}
               width={availableWidth}
               height={bookHeight}
-              fill={focusedBookId === book.id ? "#287fbd" : bookColour(book.status)}
+              fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              role={editing ? undefined : "button"}
+              tabIndex={editing ? -1 : 0}
+              aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
+              onClick={(event) => {
+                if (editing) return;
+                event.stopPropagation();
+                onBookSelect(book);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  !editing &&
+                  (event.key === "Enter" || event.key === " ")
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onBookSelect(book);
+                }
+              }}
             >
-              <title>{book.title}</title>
+              <title>
+                {book.title}
+                {colourScale.detail(book) ? ` · ${colourScale.detail(book)}` : ""}
+              </title>
             </rect>
           );
         })
       ) : null}
+      {editing && (
+        <rect
+          className="map-svg-resize-handle"
+          x={x + Math.max(0, width - 14)}
+          y={y + Math.max(0, height - 14)}
+          width={14}
+          height={14}
+          rx={2}
+          onPointerDown={(event) => onRectPointerDown(event, "resize")}
+        />
+      )}
     </g>
   );
 }
@@ -1511,6 +1838,12 @@ function MapShelfGraphic({
   onContainer,
   containerLayout,
   focusedBookId,
+  colourScale,
+  editing,
+  onEditShelf,
+  onEditContainer,
+  onContainerLayoutChange,
+  onBookSelect,
 }: {
   shelf: MapShelf;
   y: number;
@@ -1519,6 +1852,12 @@ function MapShelfGraphic({
   onContainer: (container: MapContainer) => void;
   containerLayout: Map<number, VisualRect>;
   focusedBookId: number | null;
+  colourScale: MapColourScale;
+  editing: boolean;
+  onEditShelf: () => void;
+  onEditContainer: (container: MapContainer) => void;
+  onContainerLayoutChange: (containerId: number, rect: VisualRect) => void;
+  onBookSelect: (book: MapBook) => void;
 }) {
   const contentY = y + 7;
   const contentHeight = Math.max(8, height - 17);
@@ -1533,12 +1872,14 @@ function MapShelfGraphic({
       tabIndex={0}
       onClick={(event) => {
         event.stopPropagation();
-        onShelf();
+        if (editing) onEditShelf();
+        else onShelf();
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.stopPropagation();
-          onShelf();
+          if (editing) onEditShelf();
+          else onShelf();
         }
       }}
     >
@@ -1570,6 +1911,47 @@ function MapShelfGraphic({
             height={contentHeight * placement.height / 100}
             obscured={hasForeground && container.layer === "BACKGROUND"}
             focusedBookId={focusedBookId}
+            colourScale={colourScale}
+            editing={editing}
+            onEdit={() => onEditContainer(container)}
+            onBookSelect={onBookSelect}
+            onRectPointerDown={(event, mode) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onEditContainer(container);
+              const svg = event.currentTarget.ownerSVGElement;
+              if (!svg) return;
+              const bounds = svg.getBoundingClientRect();
+              const startX = event.clientX;
+              const startY = event.clientY;
+              const start = placement;
+              const move = (moveEvent: PointerEvent) => {
+                const deltaX =
+                  (moveEvent.clientX - startX) * MAP_WIDTH /
+                  Math.max(bounds.width, 1) / usableWidth * 100;
+                const deltaY =
+                  (moveEvent.clientY - startY) * MAP_HEIGHT /
+                  Math.max(bounds.height, 1) / contentHeight * 100;
+                const next = mode === "move"
+                  ? {
+                      ...start,
+                      x: Math.max(0, Math.min(100 - start.width, start.x + deltaX)),
+                      y: Math.max(0, Math.min(100 - start.height, start.y + deltaY)),
+                    }
+                  : {
+                      ...start,
+                      width: Math.max(4, Math.min(100 - start.x, start.width + deltaX)),
+                      height: Math.max(4, Math.min(100 - start.y, start.height + deltaY)),
+                    };
+                onContainerLayoutChange(container.id, next);
+              };
+              const stop = () => {
+                window.removeEventListener("pointermove", move);
+                window.removeEventListener("pointerup", stop);
+              };
+              window.addEventListener("pointermove", move);
+              window.addEventListener("pointerup", stop, { once: true });
+            }}
             onSelect={() => onContainer(container)}
           />
         );
@@ -1594,6 +1976,15 @@ function MapBookcaseGraphic({
   shelfLayout,
   containerLayout,
   focusedBookId,
+  colourScale,
+  editing,
+  onEditBookcase,
+  onEditShelf,
+  onEditContainer,
+  onContainerLayoutChange,
+  onShelfWeightsChange,
+  onRectPointerDown,
+  onBookSelect,
 }: {
   bookcase: MapBookcase;
   onBookcase: () => void;
@@ -1603,8 +1994,25 @@ function MapBookcaseGraphic({
   shelfLayout: Map<number, number>;
   containerLayout: Map<number, VisualRect>;
   focusedBookId: number | null;
+  colourScale: MapColourScale;
+  editing: boolean;
+  onEditBookcase: () => void;
+  onEditShelf: (shelf: MapShelf) => void;
+  onEditContainer: (container: MapContainer) => void;
+  onContainerLayoutChange: (containerId: number, rect: VisualRect) => void;
+  onShelfWeightsChange: (
+    firstShelfId: number,
+    firstWeight: number,
+    secondShelfId: number,
+    secondWeight: number,
+  ) => void;
+  onRectPointerDown: (
+    event: React.PointerEvent<HTMLElement>,
+    mode: "move" | "resize",
+  ) => void;
+  onBookSelect: (book: MapBook) => void;
 }) {
-  const height = 620;
+  const height = MAP_HEIGHT;
   const availableHeight = height - 22;
   const totalWeight = bookcase.shelves.reduce(
     (total, shelf) => total + (shelfLayout.get(shelf.id) ?? 1),
@@ -1622,9 +2030,12 @@ function MapBookcaseGraphic({
       className="map-bookcase-card"
       role="button"
       tabIndex={0}
-      onClick={onBookcase}
+      onClick={editing ? onEditBookcase : onBookcase}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onBookcase();
+        if (event.key === "Enter" || event.key === " ") {
+          if (editing) onEditBookcase();
+          else onBookcase();
+        }
       }}
       style={{
         left: `${rect.x}%`,
@@ -1651,20 +2062,93 @@ function MapBookcaseGraphic({
           const currentY = shelfY;
           const currentHeight = shelfHeights[index];
           shelfY += currentHeight;
+          const nextShelf = bookcase.shelves[index + 1];
           return (
-            <MapShelfGraphic
-              key={shelf.id}
-              shelf={shelf}
-              y={currentY}
-              height={currentHeight}
-              onShelf={() => onShelf(shelf)}
-              onContainer={(container) => onContainer(shelf, container)}
-              containerLayout={containerLayout}
-              focusedBookId={focusedBookId}
-            />
+            <g key={shelf.id}>
+              <MapShelfGraphic
+                shelf={shelf}
+                y={currentY}
+                height={currentHeight}
+                onShelf={() => onShelf(shelf)}
+                onContainer={(container) => onContainer(shelf, container)}
+                containerLayout={containerLayout}
+                focusedBookId={focusedBookId}
+                colourScale={colourScale}
+                editing={editing}
+                onEditShelf={() => onEditShelf(shelf)}
+                onEditContainer={onEditContainer}
+                onContainerLayoutChange={onContainerLayoutChange}
+                onBookSelect={onBookSelect}
+              />
+              {editing && nextShelf && (
+                <line
+                  className="map-shelf-resize-handle"
+                  x1={MAP_INSET}
+                  x2={MAP_WIDTH - MAP_INSET}
+                  y1={shelfY - 5}
+                  y2={shelfY - 5}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onEditShelf(shelf);
+                    const svg = event.currentTarget.ownerSVGElement;
+                    if (!svg) return;
+                    const bounds = svg.getBoundingClientRect();
+                    const startY = event.clientY;
+                    const firstStart = shelfLayout.get(shelf.id) ?? 1;
+                    const secondStart = shelfLayout.get(nextShelf.id) ?? 1;
+                    const move = (moveEvent: PointerEvent) => {
+                      const logicalDelta =
+                        (moveEvent.clientY - startY) * MAP_HEIGHT /
+                        Math.max(bounds.height, 1);
+                      const weightDelta =
+                        logicalDelta / availableHeight * Math.max(totalWeight, 1);
+                      const boundedDelta = Math.max(
+                        0.25 - firstStart,
+                        Math.min(secondStart - 0.25, weightDelta),
+                      );
+                      onShelfWeightsChange(
+                        shelf.id,
+                        firstStart + boundedDelta,
+                        nextShelf.id,
+                        secondStart - boundedDelta,
+                      );
+                    };
+                    const stop = () => {
+                      window.removeEventListener("pointermove", move);
+                      window.removeEventListener("pointerup", stop);
+                    };
+                    window.addEventListener("pointermove", move);
+                    window.addEventListener("pointerup", stop, { once: true });
+                  }}
+                />
+              )}
+            </g>
           );
         })}
       </svg>
+      {editing && (
+        <>
+          <button
+            type="button"
+            className="map-direct-handle move"
+            title="Drag furniture"
+            aria-label="Drag furniture"
+            onPointerDown={(event) => onRectPointerDown(event, "move")}
+          >
+            ↕
+          </button>
+          <button
+            type="button"
+            className="map-direct-handle resize"
+            title="Resize furniture"
+            aria-label="Resize furniture"
+            onPointerDown={(event) => onRectPointerDown(event, "resize")}
+          >
+            ↘
+          </button>
+        </>
+      )}
     </article>
   );
 }
@@ -1710,6 +2194,7 @@ function LibraryMapDialog({
   onClose,
   onFilter,
   onReadingFilter,
+  onBookFilter,
   focusedBook,
 }: {
   onClose: () => void;
@@ -1719,6 +2204,7 @@ function LibraryMapDialog({
     containerId?: number | "",
   ) => void;
   onReadingFilter: () => void;
+  onBookFilter: (book: MapBook) => void;
   focusedBook: Book | null;
 }) {
   const [map, setMap] = useState<LibraryMapData>({
@@ -1734,6 +2220,8 @@ function LibraryMapDialog({
   const [selectedShelf, setSelectedShelf] = useState("");
   const [selectedContainer, setSelectedContainer] = useState("");
   const [saving, setSaving] = useState(false);
+  const [colourMode, setColourMode] = useState<MapColourMode>("status");
+  const roomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void api.libraryMap()
@@ -1774,6 +2262,58 @@ function LibraryMapDialog({
   const selectedContainerItem = draft.containers.find(
     (item) => item.id === Number(selectedContainer),
   );
+  const containerContexts = useMemo(
+    () =>
+      new Map(
+        map.bookcases.flatMap((bookcase) =>
+          bookcase.shelves.flatMap((shelf) =>
+            shelf.containers.map((container) => [
+              container.id,
+              { shelfId: shelf.id, layer: container.layer },
+            ] as const),
+          ),
+        ),
+      ),
+    [map],
+  );
+  const draftContainerCollisions = useMemo(() => {
+    const collisions: Array<[number, number]> = [];
+    for (let firstIndex = 0; firstIndex < draft.containers.length; firstIndex += 1) {
+      const first = draft.containers[firstIndex];
+      const firstContext = containerContexts.get(first.id);
+      for (
+        let secondIndex = firstIndex + 1;
+        secondIndex < draft.containers.length;
+        secondIndex += 1
+      ) {
+        const second = draft.containers[secondIndex];
+        const secondContext = containerContexts.get(second.id);
+        if (
+          firstContext?.shelfId === secondContext?.shelfId &&
+          firstContext?.layer === secondContext?.layer &&
+          overlapArea(first, second) > 0.0001
+        ) {
+          collisions.push([first.id, second.id]);
+        }
+      }
+    }
+    return collisions;
+  }, [containerContexts, draft.containers]);
+  const allMapBooks = useMemo(
+    () => [
+      ...map.bookcases.flatMap((bookcase) =>
+        bookcase.shelves.flatMap((shelf) =>
+          shelf.containers.flatMap((container) => container.books),
+        ),
+      ),
+      ...map.outside_books,
+    ],
+    [map],
+  );
+  const colourScale = useMemo(
+    () => buildMapColourScale(colourMode, allMapBooks),
+    [allMapBooks, colourMode],
+  );
 
   function updateBookcaseRect(field: keyof VisualRect, value: number) {
     setDraft((current) => ({
@@ -1784,6 +2324,101 @@ function LibraryMapDialog({
           : item,
       ),
     }));
+  }
+
+  function updateContainerRect(containerId: number, rect: VisualRect) {
+    setDraft((current) => {
+      const original = current.containers.find((item) => item.id === containerId);
+      const context = containerContexts.get(containerId);
+      if (!original || !context) return current;
+      const candidate = {
+        x: Math.max(0, Math.min(100 - rect.width, rect.x)),
+        y: Math.max(0, Math.min(100 - rect.height, rect.y)),
+        width: Math.max(4, Math.min(100 - rect.x, rect.width)),
+        height: Math.max(4, Math.min(100 - rect.y, rect.height)),
+      };
+      const peers = current.containers.filter((item) => {
+        if (item.id === containerId) return false;
+        const peerContext = containerContexts.get(item.id);
+        return (
+          peerContext?.shelfId === context.shelfId &&
+          peerContext.layer === context.layer
+        );
+      });
+      const previousOverlap = peers.reduce(
+        (total, peer) => total + overlapArea(original, peer),
+        0,
+      );
+      const nextOverlap = peers.reduce(
+        (total, peer) => total + overlapArea(candidate, peer),
+        0,
+      );
+      if (nextOverlap > previousOverlap + 0.0001) return current;
+      return {
+        ...current,
+        containers: current.containers.map((item) =>
+          item.id === containerId ? { ...item, ...candidate } : item,
+        ),
+      };
+    });
+  }
+
+  function updateShelfWeights(
+    firstShelfId: number,
+    firstWeight: number,
+    secondShelfId: number,
+    secondWeight: number,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      shelves: current.shelves.map((item) => {
+        if (item.id === firstShelfId) {
+          return { ...item, height_weight: firstWeight };
+        }
+        if (item.id === secondShelfId) {
+          return { ...item, height_weight: secondWeight };
+        }
+        return item;
+      }),
+    }));
+  }
+
+  function beginRoomRectInteraction(
+    event: React.PointerEvent<HTMLElement>,
+    start: VisualRect,
+    mode: "move" | "resize",
+    update: (rect: VisualRect) => void,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const room = roomRef.current;
+    if (!room) return;
+    const bounds = room.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const move = (moveEvent: PointerEvent) => {
+      const deltaX = (moveEvent.clientX - startX) / Math.max(bounds.width, 1) * 100;
+      const deltaY = (moveEvent.clientY - startY) / Math.max(bounds.height, 1) * 100;
+      update(
+        mode === "move"
+          ? {
+              ...start,
+              x: Math.max(0, Math.min(100 - start.width, start.x + deltaX)),
+              y: Math.max(0, Math.min(100 - start.height, start.y + deltaY)),
+            }
+          : {
+              ...start,
+              width: Math.max(5, Math.min(100 - start.x, start.width + deltaX)),
+              height: Math.max(5, Math.min(100 - start.y, start.height + deltaY)),
+            },
+      );
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
   }
 
   async function saveLayout() {
@@ -1825,14 +2460,43 @@ function LibraryMapDialog({
               The room layout remembers the relative size and position of each
               piece. Shelves with overlapping layers are exploded so blocked
               books remain visible. Click a hierarchy level to filter the
-              catalogue.
+              catalogue. In layout-editing mode, use the on-map handles or the
+              precise sliders.
             </>
           )}
         </p>
         <div className="map-legend">
-          <span><i className="pending" /> Pending</span>
-          <span><i className="reading" /> Reading…</span>
-          <span><i className="read" /> Read</span>
+          <label className="map-colour-picker">
+            Colour by
+            <select
+              value={colourMode}
+              onChange={(event) => setColourMode(event.target.value as MapColourMode)}
+            >
+              {MAP_COLOUR_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {colourMode === "status" ? (
+            <div className="map-status-legend">
+              <span><i className="pending" /> Pending</span>
+              <span><i className="reading" /> Reading…</span>
+              <span><i className="read" /> Read</span>
+            </div>
+          ) : (
+            <div className="map-scale-legend" aria-label={`${colourScale.label} scale`}>
+              <span>{colourScale.lowLabel}</span>
+              <i className="map-colour-gradient" />
+              <span>{colourScale.highLabel}</span>
+              {colourScale.legendItems.map((item) => (
+                <span key={item.label}>
+                  <i style={{ background: item.colour }} /> {item.label}
+                </span>
+              ))}
+            </div>
+          )}
           <span className="map-legend-note">Rows run left → right · piles stack top → bottom</span>
           {!editingLayout ? (
             <button
@@ -1857,7 +2521,7 @@ function LibraryMapDialog({
               </button>
               <button
                 className="primary-button"
-                disabled={saving}
+                disabled={saving || draftContainerCollisions.length > 0}
                 onClick={() => void saveLayout()}
               >
                 <Save size={15} /> {saving ? "Saving…" : "Save layout"}
@@ -1872,6 +2536,18 @@ function LibraryMapDialog({
           <>
             {editingLayout && (
               <aside className="map-layout-editor">
+                <p className="map-direct-help">
+                  Direct controls: drag ↕ to move furniture or the Reading area,
+                  drag ↘ to resize them, drag a container to move it, and drag
+                  shelf dividers or container corners to resize.
+                  {draftContainerCollisions.length > 0 && (
+                    <strong>
+                      {" "}Separate {draftContainerCollisions.length} existing
+                      same-layer container overlap
+                      {draftContainerCollisions.length === 1 ? "" : "s"} before saving.
+                    </strong>
+                  )}
+                </p>
                 <div className="map-editor-section">
                   <label>
                     Furniture
@@ -1989,14 +2665,10 @@ function LibraryMapDialog({
                         value={selectedContainerItem.x}
                         max={100 - selectedContainerItem.width}
                         onChange={(value) =>
-                          setDraft((current) => ({
-                            ...current,
-                            containers: current.containers.map((item) =>
-                              item.id === selectedContainerItem.id
-                                ? { ...item, x: value }
-                                : item,
-                            ),
-                          }))}
+                          updateContainerRect(selectedContainerItem.id, {
+                            ...selectedContainerItem,
+                            x: value,
+                          })}
                       />
                       <RangeField
                         label="Width"
@@ -2004,28 +2676,20 @@ function LibraryMapDialog({
                         min={4}
                         max={100 - selectedContainerItem.x}
                         onChange={(value) =>
-                          setDraft((current) => ({
-                            ...current,
-                            containers: current.containers.map((item) =>
-                              item.id === selectedContainerItem.id
-                                ? { ...item, width: value }
-                                : item,
-                            ),
-                          }))}
+                          updateContainerRect(selectedContainerItem.id, {
+                            ...selectedContainerItem,
+                            width: value,
+                          })}
                       />
                       <RangeField
                         label="Vertical"
                         value={selectedContainerItem.y}
                         max={100 - selectedContainerItem.height}
                         onChange={(value) =>
-                          setDraft((current) => ({
-                            ...current,
-                            containers: current.containers.map((item) =>
-                              item.id === selectedContainerItem.id
-                                ? { ...item, y: value }
-                                : item,
-                            ),
-                          }))}
+                          updateContainerRect(selectedContainerItem.id, {
+                            ...selectedContainerItem,
+                            y: value,
+                          })}
                       />
                       <RangeField
                         label="Height"
@@ -2033,32 +2697,31 @@ function LibraryMapDialog({
                         min={4}
                         max={100 - selectedContainerItem.y}
                         onChange={(value) =>
-                          setDraft((current) => ({
-                            ...current,
-                            containers: current.containers.map((item) =>
-                              item.id === selectedContainerItem.id
-                                ? { ...item, height: value }
-                                : item,
-                            ),
-                          }))}
+                          updateContainerRect(selectedContainerItem.id, {
+                            ...selectedContainerItem,
+                            height: value,
+                          })}
                       />
                     </div>
                   )}
                 </div>
               </aside>
             )}
-            <div className={`map-room ${editingLayout ? "editing" : ""}`}>
-              {map.outside_books.length > 0 && (
+            <div
+              ref={roomRef}
+              className={`map-room ${editingLayout ? "editing" : ""}`}
+            >
+              {(editingLayout || map.outside_books.length > 0) && (
                 <section
                   className="map-outside"
                   role="button"
                   tabIndex={0}
                   title="Show currently reading books"
-                  onClick={onReadingFilter}
+                  onClick={editingLayout ? undefined : onReadingFilter}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onReadingFilter();
+                      if (!editingLayout) onReadingFilter();
                     }
                   }}
                   style={{
@@ -2072,6 +2735,8 @@ function LibraryMapDialog({
                     {map.outside_books.map((book) => (
                       <span
                         key={book.id}
+                        role={editingLayout ? undefined : "button"}
+                        tabIndex={editingLayout ? -1 : 0}
                         className={
                           focusedBook
                             ? book.id === focusedBook.id
@@ -2079,19 +2744,74 @@ function LibraryMapDialog({
                               : "muted"
                             : ""
                         }
-                        title={book.title}
+                        title={`${book.title}${
+                          colourScale.detail(book)
+                            ? ` · ${colourScale.detail(book)}`
+                            : ""
+                        }`}
+                        onClick={(event) => {
+                          if (editingLayout) return;
+                          event.stopPropagation();
+                          onBookFilter(book);
+                        }}
+                        onKeyDown={(event) => {
+                          if (
+                            !editingLayout &&
+                            (event.key === "Enter" || event.key === " ")
+                          ) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onBookFilter(book);
+                          }
+                        }}
                       >
                         <i
                           style={{
                             background:
                               focusedBook?.id === book.id
                                 ? "#287fbd"
-                                : bookColour(book.status),
+                                : colourScale.colour(book),
                           }}
                         />
                       </span>
                     ))}
                   </div>
+                  {editingLayout && (
+                    <>
+                      <button
+                        type="button"
+                        className="map-direct-handle move"
+                        title="Drag reading area"
+                        aria-label="Drag reading area"
+                        onPointerDown={(event) =>
+                          beginRoomRectInteraction(
+                            event,
+                            activeLayout.outside,
+                            "move",
+                            (rect) =>
+                              setDraft((current) => ({ ...current, outside: rect })),
+                          )}
+                      >
+                        ↕
+                      </button>
+                      <button
+                        type="button"
+                        className="map-direct-handle resize"
+                        title="Resize reading area"
+                        aria-label="Resize reading area"
+                        onPointerDown={(event) =>
+                          beginRoomRectInteraction(
+                            event,
+                            activeLayout.outside,
+                            "resize",
+                            (rect) =>
+                              setDraft((current) => ({ ...current, outside: rect })),
+                          )}
+                      >
+                        ↘
+                      </button>
+                    </>
+                  )}
                 </section>
               )}
               {map.bookcases.map((bookcase) => (
@@ -2104,6 +2824,34 @@ function LibraryMapDialog({
                   shelfLayout={shelfWeights}
                   containerLayout={containerRects}
                   focusedBookId={focusedBook?.id ?? null}
+                  colourScale={colourScale}
+                  editing={editingLayout}
+                  onEditBookcase={() => setSelectedBookcase(String(bookcase.id))}
+                  onEditShelf={(shelf) => setSelectedShelf(String(shelf.id))}
+                  onEditContainer={(container) =>
+                    setSelectedContainer(String(container.id))}
+                  onContainerLayoutChange={updateContainerRect}
+                  onShelfWeightsChange={updateShelfWeights}
+                  onBookSelect={onBookFilter}
+                  onRectPointerDown={(event, mode) => {
+                    setSelectedBookcase(String(bookcase.id));
+                    const rect = bookcaseRects.get(bookcase.id);
+                    if (!rect) return;
+                    beginRoomRectInteraction(
+                      event,
+                      rect,
+                      mode,
+                      (nextRect) =>
+                        setDraft((current) => ({
+                          ...current,
+                          bookcases: current.bookcases.map((item) =>
+                            item.id === bookcase.id
+                              ? { ...item, ...nextRect }
+                              : item,
+                          ),
+                        })),
+                    );
+                  }}
                   onBookcase={() => onFilter(bookcase.id)}
                   onShelf={(shelf) => onFilter(bookcase.id, shelf.id)}
                   onContainer={(shelf, container) =>

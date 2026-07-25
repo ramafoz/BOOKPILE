@@ -25,6 +25,7 @@ export interface RestoreInspection {
 }
 
 export interface BookQuery {
+  bookId: string;
   status: string;
   search: string;
   sortBy: string;
@@ -80,6 +81,7 @@ export const api = {
   coverUrl: (filename: string) => `${API_URL}/covers/${filename}`,
   books: (query: BookQuery) => {
     const params = new URLSearchParams();
+    if (query.bookId) params.set("book_id", query.bookId);
     if (query.status !== "ALL") params.set("status", query.status);
     if (query.search.trim()) params.set("search", query.search.trim());
     params.set("sort_by", query.sortBy);
