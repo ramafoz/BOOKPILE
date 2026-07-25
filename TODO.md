@@ -54,7 +54,10 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Sort by physical position, title, author, acquisition date,
   reading-started date, or finished-reading date.
 - [x] Support ascending and descending sorting.
-- [x] Filter by date ranges and by bookcase, shelf, or container.
+- [x] Filter by physical location using cascading bookcase, shelf, and
+  container selectors.
+- [x] Filter by optional from/to ranges for acquisition, reading-started, or
+  finished-reading dates.
 - [x] Mark a read book's finished-reading date as explicitly unknown.
 - [x] Keep acquisition and reading dates chronologically consistent.
 - [x] Add read-only external maintenance checks for lifecycle dates and
@@ -106,10 +109,6 @@ fields.
 
 ### Search, filters, and data-quality views
 
-- [ ] Verify whether the existing physical-location search covers all desired
-  search cases; extend it only where gaps remain.
-- [ ] Verify whether existing lifecycle-date filters cover all desired cases;
-  extend them only where gaps remain.
 - [ ] Add explicit unknown/missing-date filters:
   - Read books with an unknown finished-reading date.
   - Books with an unknown acquisition date.
