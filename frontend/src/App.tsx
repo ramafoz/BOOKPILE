@@ -1,10 +1,13 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRightLeft,
+  BarChart3,
   BookOpen,
   BookPlus,
   Camera,
   Check,
+  ChevronDown,
+  Clock3,
   DatabaseBackup,
   Download,
   ExternalLink,
@@ -19,7 +22,9 @@ import {
   Save,
   Search,
   Settings2,
+  Shuffle,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   Upload,
   X,
@@ -30,6 +35,7 @@ import type {
   BookPayload,
   Bookcase,
   BookStatus,
+  CatalogueStatistics,
   ContainerType,
   Layer,
   LibraryMapData,
@@ -37,10 +43,14 @@ import type {
   MapBookcase,
   MapContainer,
   MapShelf,
+  ReadingSuggestion,
   Stats,
   VisualLayout,
   VisualRect,
 } from "./types";
+
+type SuggestionMode = "random" | "oldest" | "waiting";
+type AppMenu = "settings" | "add" | "suggestions";
 
 const emptyStats: Stats = {
   total: 0,
@@ -76,6 +86,10 @@ function App() {
   const [showReorganize, setShowReorganize] = useState(false);
   const [showData, setShowData] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<AppMenu | null>(null);
+  const [suggestionMode, setSuggestionMode] = useState<SuggestionMode | null>(null);
+  const [statusActionBook, setStatusActionBook] = useState<Book | null>(null);
   const [focusedMapBook, setFocusedMapBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -182,6 +196,24 @@ function App() {
   }, [search]);
 
   useEffect(() => {
+    if (!activeMenu) return;
+    function closeMenu(event: MouseEvent) {
+      if (!(event.target as Element).closest("[data-app-menu]")) {
+        setActiveMenu(null);
+      }
+    }
+    function closeMenuWithKeyboard(event: KeyboardEvent) {
+      if (event.key === "Escape") setActiveMenu(null);
+    }
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeMenuWithKeyboard);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("keydown", closeMenuWithKeyboard);
+    };
+  }, [activeMenu]);
+
+  useEffect(() => {
     void refresh();
   }, [refresh]);
 
@@ -281,7 +313,11 @@ function App() {
 
   return (
     <main>
-      <header className="hero">
+      <header className={`hero ${
+        activeMenu === "add" || activeMenu === "suggestions"
+          ? "hero-menu-open"
+          : ""
+      }`}>
         <nav>
           <a className="brand" href="#">
             <span className="brand-mark"><LibraryBig size={22} /></span>
@@ -297,12 +333,37 @@ function App() {
             >
               <GalleryVerticalEnd size={17} /> Library map
             </button>
-            <button className="ghost-button" onClick={() => setShowData(true)}>
-              <DatabaseBackup size={17} /> Data & backups
+            <button className="ghost-button" onClick={() => setShowStatistics(true)}>
+              <BarChart3 size={17} /> Statistics
             </button>
-            <button className="ghost-button" onClick={() => setShowLibrary(true)}>
-              <Settings2 size={17} /> Library layout
-            </button>
+            <div className="app-menu" data-app-menu>
+              <button
+                className="ghost-button menu-trigger"
+                aria-haspopup="menu"
+                aria-expanded={activeMenu === "settings"}
+                onClick={() => setActiveMenu(
+                  activeMenu === "settings" ? null : "settings",
+                )}
+              >
+                <Settings2 size={17} /> Settings <ChevronDown size={15} />
+              </button>
+              {activeMenu === "settings" && (
+                <div className="menu-popover nav-menu" role="menu">
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setShowLibrary(true);
+                  }}>
+                    <Settings2 size={16} /> Customize library layout
+                  </button>
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setShowData(true);
+                  }}>
+                    <DatabaseBackup size={16} /> Data & backups
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </nav>
         <div className="hero-copy">
@@ -312,9 +373,62 @@ function App() {
             Keep track of what you own, what you have read, and exactly where
             to find it.
           </p>
-          <button className="primary-button" onClick={() => setEditing(null)}>
-            <BookPlus size={18} /> Add a book
-          </button>
+          <div className="hero-actions">
+            <div className="app-menu" data-app-menu>
+              <button
+                className="primary-button menu-trigger"
+                aria-haspopup="menu"
+                aria-expanded={activeMenu === "add"}
+                onClick={() => setActiveMenu(activeMenu === "add" ? null : "add")}
+              >
+                <BookPlus size={18} /> Add <ChevronDown size={16} />
+              </button>
+              {activeMenu === "add" && (
+                <div className="menu-popover hero-menu" role="menu">
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setEditing(null);
+                  }}><Plus size={16} /> Add single book</button>
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setBatchAdding(true);
+                  }}><ListPlus size={16} /> Add Batch</button>
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setShowReorganize(true);
+                  }}><ArrowRightLeft size={16} /> Reorganize</button>
+                </div>
+              )}
+            </div>
+            <div className="app-menu" data-app-menu>
+              <button
+                className="hero-secondary-button menu-trigger"
+                aria-haspopup="menu"
+                aria-expanded={activeMenu === "suggestions"}
+                onClick={() => setActiveMenu(
+                  activeMenu === "suggestions" ? null : "suggestions",
+                )}
+              >
+                <Sparkles size={18} /> New read <ChevronDown size={16} />
+              </button>
+              {activeMenu === "suggestions" && (
+                <div className="menu-popover hero-menu" role="menu">
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setSuggestionMode("random");
+                  }}><Shuffle size={16} /> Random pending book</button>
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setSuggestionMode("oldest");
+                  }}><Clock3 size={16} /> Oldest pending book</button>
+                  <button role="menuitem" onClick={() => {
+                    setActiveMenu(null);
+                    setSuggestionMode("waiting");
+                  }}><BarChart3 size={16} /> By time spent pending</button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <div className="shelf-art" aria-hidden="true">
           <span className="book b1" /><span className="book b2" />
@@ -343,17 +457,6 @@ function App() {
                   ? `${books.length} books shown`
                   : `${books.length} of ${stats.total} books shown`}
             </p>
-          </div>
-          <div className="heading-actions">
-            <button className="outline-button" onClick={() => setBatchAdding(true)}>
-              <ListPlus size={17} /> Batch add
-            </button>
-            <button className="outline-button" onClick={() => setShowReorganize(true)}>
-              <ArrowRightLeft size={17} /> Reorganize books
-            </button>
-            <button className="secondary-button" onClick={() => setEditing(null)}>
-              <Plus size={17} /> Add book
-            </button>
           </div>
         </div>
 
@@ -616,9 +719,21 @@ function App() {
           ) : (
             books.map((book) => (
               <article className="book-row" key={book.id}>
-                <span className={`status ${book.status.toLowerCase()}`}>
-                  {statusLabel(book.status)}
-                </span>
+                {book.status === "READ" ? (
+                  <span className="status read">{statusLabel(book.status)}</span>
+                ) : (
+                  <button
+                    className={`status status-action ${book.status.toLowerCase()}`}
+                    title={
+                      book.status === "PENDING"
+                        ? "Start reading this book"
+                        : "Mark this book as finished"
+                    }
+                    onClick={() => setStatusActionBook(book)}
+                  >
+                    {statusLabel(book.status)}
+                  </button>
+                )}
                 {book.cover_filename ? (
                   <img
                     className="book-cover-thumb"
@@ -740,6 +855,33 @@ function App() {
         />
       )}
       {showData && <DataDialog onClose={() => setShowData(false)} />}
+      {showStatistics && (
+        <StatisticsDialog onClose={() => setShowStatistics(false)} />
+      )}
+      {suggestionMode && (
+        <SuggestionsDialog
+          initialMode={suggestionMode}
+          onClose={() => setSuggestionMode(null)}
+          onOpenBook={(book) => {
+            setSuggestionMode(null);
+            openExactBookCatalogue(book);
+          }}
+          onStartReading={(book) => {
+            setSuggestionMode(null);
+            setStatusActionBook(book);
+          }}
+        />
+      )}
+      {statusActionBook && (
+        <StatusActionDialog
+          book={statusActionBook}
+          onClose={() => setStatusActionBook(null)}
+          onConfirmed={async () => {
+            setStatusActionBook(null);
+            await refresh();
+          }}
+        />
+      )}
       {showMap && (
         <LibraryMapDialog
           focusedBook={focusedMapBook}
@@ -816,6 +958,398 @@ function StatCard({
       <div className="stat-icon">{icon}</div>
       <div><strong>{value}</strong><span>{label}</span></div>
     </article>
+  );
+}
+
+const monthNames = Array.from({ length: 12 }, (_, index) =>
+  new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" })
+    .format(new Date(Date.UTC(2024, index, 1))),
+);
+
+function StatisticsDialog({ onClose }: { onClose: () => void }) {
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [statistics, setStatistics] = useState<CatalogueStatistics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    void api.statistics(selectedYear).then((result) => {
+      if (active) setStatistics(result);
+    }).catch((err) => {
+      if (active) setError(err instanceof Error ? err.message : "Unable to load statistics");
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [selectedYear]);
+
+  const rows = selectedYear === null
+    ? statistics?.yearly.map((item) => ({
+        label: String(item.year),
+        acquired: item.acquired,
+        read: item.read,
+      })) ?? []
+    : statistics?.monthly.map((item) => ({
+        label: monthNames[item.month - 1],
+        acquired: item.acquired,
+        read: item.read,
+      })) ?? [];
+  const maximum = Math.max(
+    1,
+    ...rows.flatMap((item) => [item.acquired, item.read]),
+  );
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog statistics-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header statistics-header">
+          <div>
+            <p className="eyebrow dark">Read-only catalogue insights</p>
+            <h2>Statistics</h2>
+          </div>
+          <div className="statistics-header-actions">
+            <label>
+              Period
+              <select
+                value={selectedYear ?? ""}
+                onChange={(event) => setSelectedYear(
+                  event.target.value ? Number(event.target.value) : null,
+                )}
+              >
+                <option value="">All time</option>
+                {[...(statistics?.available_years ?? [])].reverse().map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
+            <button className="icon-button" onClick={onClose}><X /></button>
+          </div>
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        {loading || !statistics ? (
+          <div className="empty-state">Calculating your library…</div>
+        ) : (
+          <>
+            <div className="duration-stat-grid">
+              <DurationCard
+                title="Time spent pending"
+                statistic={statistics.pending_duration}
+                note="Acquisition through reading start"
+              />
+              <DurationCard
+                title="Reading duration"
+                statistic={statistics.reading_duration}
+                note="Reading start through finish"
+              />
+            </div>
+
+            <section className="statistics-section">
+              <div className="statistics-section-heading">
+                <div>
+                  <h3>{selectedYear === null ? "Acquired and read by year" : `Acquired and read in ${selectedYear}`}</h3>
+                  <p>Only records with a known date are counted.</p>
+                </div>
+                <div className="chart-legend">
+                  <span className="acquired-key" /> Acquired
+                  <span className="read-key" /> Read
+                </div>
+              </div>
+              {rows.length === 0 ? (
+                <p className="muted">No known dates are available for this period.</p>
+              ) : (
+                <div className="comparison-chart">
+                  {rows.map((item) => (
+                    <div className="comparison-chart-row" key={item.label}>
+                      <strong>{item.label}</strong>
+                      <div className="comparison-bars">
+                        <span
+                          className="acquired-bar"
+                          style={{ width: `${item.acquired / maximum * 100}%` }}
+                        >{item.acquired || ""}</span>
+                        <span
+                          className="read-bar"
+                          style={{ width: `${item.read / maximum * 100}%` }}
+                        >{item.read || ""}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="statistics-section">
+              <div className="statistics-section-heading">
+                <div>
+                  <h3>Collection comparison</h3>
+                  <p>Current reading-status breakdown.</p>
+                </div>
+              </div>
+              <div className="collection-comparison">
+                <CollectionCard
+                  title="Original Collection"
+                  statistic={statistics.original_collection}
+                />
+                <CollectionCard
+                  title="Later acquisitions"
+                  statistic={statistics.later_acquisitions}
+                />
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DurationCard({
+  title,
+  statistic,
+  note,
+}: {
+  title: string;
+  statistic: CatalogueStatistics["pending_duration"];
+  note: string;
+}) {
+  return (
+    <article className="duration-stat-card">
+      <p>{title}</p>
+      <strong>
+        {statistic.average_days === null ? "—" : `${statistic.average_days} days`}
+      </strong>
+      <span>
+        Median {statistic.median_days === null ? "—" : `${statistic.median_days} days`}
+      </span>
+      <small>{note}</small>
+      <small>{statistic.sample_size} books used · {statistic.excluded} excluded for missing dates</small>
+    </article>
+  );
+}
+
+function CollectionCard({
+  title,
+  statistic,
+}: {
+  title: string;
+  statistic: CatalogueStatistics["original_collection"];
+}) {
+  return (
+    <article className="collection-card">
+      <h4>{title}</h4>
+      <strong>{statistic.total}</strong>
+      <div>
+        <span>{statistic.pending} Pending</span>
+        <span>{statistic.reading} Reading</span>
+        <span>{statistic.read} Read</span>
+      </div>
+    </article>
+  );
+}
+
+function SuggestionsDialog({
+  initialMode,
+  onClose,
+  onOpenBook,
+  onStartReading,
+}: {
+  initialMode: SuggestionMode;
+  onClose: () => void;
+  onOpenBook: (book: Book) => void;
+  onStartReading: (book: Book) => void;
+}) {
+  const [mode, setMode] = useState<SuggestionMode>(initialMode);
+  const [minimumDays, setMinimumDays] = useState(365);
+  const [appliedMinimumDays, setAppliedMinimumDays] = useState(365);
+  const [suggestion, setSuggestion] = useState<ReadingSuggestion | null>(null);
+  const [seenIds, setSeenIds] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  async function loadSuggestion(exclusions: number[]) {
+    setLoading(true);
+    setError("");
+    try {
+      setSuggestion(await api.readingSuggestion(
+        mode,
+        appliedMinimumDays,
+        exclusions,
+      ));
+    } catch (err) {
+      setSuggestion(null);
+      setError(
+        exclusions.length
+          ? "You have seen every matching book in this round."
+          : err instanceof Error ? err.message : "No matching book was found",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    setSeenIds([]);
+    void loadSuggestion([]);
+    // reloadKey deliberately starts a fresh suggestion round.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, appliedMinimumDays, reloadKey]);
+
+  function chooseMode(nextMode: SuggestionMode) {
+    setMode(nextMode);
+    setSuggestion(null);
+    setError("");
+  }
+
+  function anotherSuggestion() {
+    if (!suggestion) return;
+    const nextSeen = [...seenIds, suggestion.book.id];
+    setSeenIds(nextSeen);
+    void loadSuggestion(nextSeen);
+  }
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog suggestion-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div><p className="eyebrow dark">Choose your next book</p><h2>New read</h2></div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <div className="suggestion-modes" aria-label="Suggestion method">
+          <button className={mode === "random" ? "active" : ""} onClick={() => chooseMode("random")}>
+            <Shuffle size={16} /> Random
+          </button>
+          <button className={mode === "oldest" ? "active" : ""} onClick={() => chooseMode("oldest")}>
+            <Clock3 size={16} /> Oldest
+          </button>
+          <button className={mode === "waiting" ? "active" : ""} onClick={() => chooseMode("waiting")}>
+            <BarChart3 size={16} /> Waiting time
+          </button>
+        </div>
+        {mode === "waiting" && (
+          <div className="waiting-threshold">
+            <label>
+              Minimum days pending
+              <input
+                type="number"
+                min="0"
+                max="36500"
+                value={minimumDays}
+                onChange={(event) => setMinimumDays(Number(event.target.value))}
+              />
+            </label>
+            <button onClick={() => setAppliedMinimumDays(Math.max(0, minimumDays))}>
+              Apply
+            </button>
+          </div>
+        )}
+        {loading ? (
+          <div className="empty-state">Looking through your unread books…</div>
+        ) : suggestion ? (
+          <article className="suggestion-card">
+            {suggestion.book.cover_filename ? (
+              <img src={api.coverUrl(suggestion.book.cover_filename)} alt={`Cover of ${suggestion.book.title}`} />
+            ) : (
+              <div className="suggestion-cover-placeholder"><BookOpen size={34} /></div>
+            )}
+            <div className="suggestion-copy">
+              <span className="status pending">Pending</span>
+              <h3>{suggestion.book.title}</h3>
+              <p>{suggestion.book.author}</p>
+              <BookDates book={suggestion.book} />
+              <div className="suggestion-details">
+                <span>
+                  <Clock3 size={15} /> {suggestion.waiting_days === null
+                    ? "Acquisition date unknown"
+                    : `${suggestion.waiting_days} days pending`}
+                </span>
+                <span>
+                  <MapPin size={15} /> {suggestion.book.location_label ?? "Location not assigned"}
+                </span>
+              </div>
+            </div>
+          </article>
+        ) : (
+          <div className="empty-state">
+            <BookOpen size={30} />
+            <p>{error}</p>
+            {seenIds.length > 0 && (
+              <button className="outline-button" onClick={() => setReloadKey((value) => value + 1)}>
+                Start another round
+              </button>
+            )}
+          </div>
+        )}
+        {suggestion && !loading && (
+          <div className="suggestion-actions">
+            <button className="outline-button" onClick={anotherSuggestion}>
+              <Shuffle size={16} /> Another suggestion
+            </button>
+            <button className="outline-button" onClick={() => onOpenBook(suggestion.book)}>
+              Open catalogue record
+            </button>
+            <button className="secondary-button" onClick={() => onStartReading(suggestion.book)}>
+              <BookOpen size={16} /> Start reading
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatusActionDialog({
+  book,
+  onClose,
+  onConfirmed,
+}: {
+  book: Book;
+  onClose: () => void;
+  onConfirmed: () => Promise<void>;
+}) {
+  const finishing = book.status === "CURRENTLY_READING";
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function confirm() {
+    setSaving(true);
+    setError("");
+    try {
+      await api.updateBookStatus(book.id, finishing ? "READ" : "CURRENTLY_READING");
+      await onConfirmed();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update this book");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop status-confirmation-backdrop" onMouseDown={onClose}>
+      <div className="dialog status-confirmation" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Reading status</p>
+            <h2>{finishing ? "Did you finish?" : "Start reading?"}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <h3>{book.title}</h3>
+        <p>{finishing
+          ? "BOOKPILE will mark it as Read and use today as the finished-reading date."
+          : "BOOKPILE will mark it as Reading and use today as the reading-started date. Its saved library position will be preserved."}
+        </p>
+        {error && <div className="form-error">{error}</div>}
+        <div className="dialog-actions">
+          <button className="text-button" onClick={onClose}>Cancel</button>
+          <button className="secondary-button" disabled={saving} onClick={() => void confirm()}>
+            {saving ? "Saving…" : finishing ? "Yes, mark as Read" : "Yes, start reading"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

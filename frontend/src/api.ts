@@ -1,10 +1,13 @@
 import type {
   Book,
   BookPayload,
+  BookStatus,
   Bookcase,
   ContainerType,
   Layer,
   Stats,
+  CatalogueStatistics,
+  ReadingSuggestion,
   LibraryMapData,
   VisualLayout,
 } from "./types";
@@ -109,6 +112,22 @@ export const api = {
     return request<Book[]>(`/books?${params}`);
   },
   stats: () => request<Stats>("/stats"),
+  statistics: (year: number | null) =>
+    request<CatalogueStatistics>(
+      `/statistics${year === null ? "" : `?year=${year}`}`,
+    ),
+  readingSuggestion: (
+    mode: "random" | "oldest" | "waiting",
+    minimumDays: number,
+    excludeIds: number[],
+  ) => {
+    const params = new URLSearchParams({
+      mode,
+      minimum_days: String(minimumDays),
+    });
+    excludeIds.forEach((id) => params.append("exclude_id", String(id)));
+    return request<ReadingSuggestion>(`/suggestions?${params}`);
+  },
   library: () => request<Bookcase[]>("/library"),
   libraryMap: () => request<LibraryMapData>("/library-map"),
   updateVisualLayout: (layout: VisualLayout) =>
@@ -133,6 +152,11 @@ export const api = {
     request<Book>(`/books/${id}`, {
       method: "PATCH",
       body: JSON.stringify(book),
+    }),
+  updateBookStatus: (id: number, status: BookStatus) =>
+    request<Book>(`/books/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
     }),
   deleteBook: (id: number) =>
     request<void>(`/books/${id}`, { method: "DELETE" }),

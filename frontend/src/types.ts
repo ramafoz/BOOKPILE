@@ -113,6 +113,36 @@ export interface Stats {
   read: number;
 }
 
+export interface DurationStatistic {
+  average_days: number | null;
+  median_days: number | null;
+  sample_size: number;
+  excluded: number;
+}
+
+export interface CollectionStatistic {
+  total: number;
+  pending: number;
+  reading: number;
+  read: number;
+}
+
+export interface CatalogueStatistics {
+  selected_year: number | null;
+  available_years: number[];
+  yearly: Array<{ year: number; acquired: number; read: number }>;
+  monthly: Array<{ month: number; acquired: number; read: number }>;
+  pending_duration: DurationStatistic;
+  reading_duration: DurationStatistic;
+  original_collection: CollectionStatistic;
+  later_acquisitions: CollectionStatistic;
+}
+
+export interface ReadingSuggestion {
+  book: Book;
+  waiting_days: number | null;
+}
+
 export interface BookPayload {
   title: string;
   author: string;

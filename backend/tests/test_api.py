@@ -93,6 +93,139 @@ def test_catalogue_flow() -> None:
         assert client.get("/stats").json()["total"] == 0
 
 
+def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
+    with TestClient(app) as client:
+        books = [
+            {
+                "title": "Original read",
+                "author": "Author",
+                "status": "READ",
+                "is_original_collection": True,
+                "reading_started_date": "2024-01-05",
+                "read_date": "2024-01-05",
+            },
+            {
+                "title": "Later read",
+                "author": "Author",
+                "status": "READ",
+                "acquisition_date": "2023-12-01",
+                "reading_started_date": "2024-01-10",
+                "read_date": "2024-01-14",
+            },
+            {
+                "title": "Reading now",
+                "author": "Author",
+                "status": "CURRENTLY_READING",
+                "acquisition_date": "2024-02-01",
+                "reading_started_date": "2024-02-03",
+            },
+            {
+                "title": "Pending",
+                "author": "Author",
+                "acquisition_date": "2024-03-01",
+            },
+        ]
+        for book in books:
+            assert client.post("/books", json=book).status_code == 201
+
+        response = client.get("/statistics", params={"year": 2024})
+
+        assert response.status_code == 200
+        result = response.json()
+        assert result["available_years"] == [2023, 2024]
+        assert result["monthly"][0] == {
+            "month": 1,
+            "acquired": 0,
+            "read": 2,
+        }
+        assert result["monthly"][1] == {
+            "month": 2,
+            "acquired": 1,
+            "read": 0,
+        }
+        assert result["pending_duration"] == {
+            "average_days": 22.0,
+            "median_days": 22.0,
+            "sample_size": 2,
+            "excluded": 1,
+        }
+        assert result["reading_duration"] == {
+            "average_days": 3.0,
+            "median_days": 3.0,
+            "sample_size": 2,
+            "excluded": 0,
+        }
+        assert result["original_collection"] == {
+            "total": 1,
+            "pending": 0,
+            "reading": 0,
+            "read": 1,
+        }
+        assert result["later_acquisitions"] == {
+            "total": 3,
+            "pending": 1,
+            "reading": 1,
+            "read": 1,
+        }
+        empty_period = client.get(
+            "/statistics", params={"year": 2022}
+        ).json()
+        assert all(
+            item["acquired"] == 0 and item["read"] == 0
+            for item in empty_period["monthly"]
+        )
+
+
+def test_reading_suggestions_support_modes_thresholds_and_exclusions() -> None:
+    with TestClient(app) as client:
+        for title, acquired in (
+            ("Oldest pending", "2000-01-01"),
+            ("Newer pending", "2025-01-01"),
+            ("Unknown acquisition", None),
+        ):
+            response = client.post(
+                "/books",
+                json={
+                    "title": title,
+                    "author": "Author",
+                    "acquisition_date": acquired,
+                    "is_original_collection": acquired is None,
+                },
+            )
+            assert response.status_code == 201
+
+        oldest = client.get("/suggestions", params={"mode": "oldest"})
+        assert oldest.status_code == 200
+        assert oldest.json()["book"]["title"] == "Oldest pending"
+        assert oldest.json()["waiting_days"] > 365
+
+        next_oldest = client.get(
+            "/suggestions",
+            params=[
+                ("mode", "oldest"),
+                ("exclude_id", oldest.json()["book"]["id"]),
+            ],
+        )
+        assert next_oldest.json()["book"]["title"] == "Newer pending"
+
+        long_wait = client.get(
+            "/suggestions",
+            params={"mode": "waiting", "minimum_days": 5000},
+        )
+        assert long_wait.status_code == 200
+        assert long_wait.json()["book"]["title"] == "Oldest pending"
+
+        random_suggestion = client.get(
+            "/suggestions", params={"mode": "random"}
+        )
+        assert random_suggestion.status_code == 200
+        assert random_suggestion.json()["book"]["title"] in {
+            "Oldest pending",
+            "Newer pending",
+            "Unknown acquisition",
+        }
+
+
 def test_rejects_incomplete_location() -> None:
     with TestClient(app) as client:
         response = client.post(

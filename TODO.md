@@ -110,6 +110,76 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Renumber book positions while preserving a continuous sequence and
   resolving collisions safely.
 
+### Navigation and primary actions
+
+- [x] Reorder the top navigation as `Library map`, `Statistics`, and
+  `Settings`.
+- [x] Open a Settings menu containing:
+  - `Customize library layout`, opening the existing Library Layout dialog.
+  - `Data & backups`, opening the existing backup/export/restore dialog.
+- [x] Replace the current standalone and catalogue-level add controls with a
+  consistent hero action row below the introductory text.
+  - Add an `Add` menu with `Add single book`, `Add Batch`, and `Reorganize`.
+  - Add a `New read` menu containing the suggestion entry points.
+  - Remove the duplicate Batch Add, Reorganize, and Add Book buttons from the
+    catalogue heading.
+  - Keep both menus usable on mobile and reserve enough desktop hero height so
+    they never overlap the summary counters.
+  - Support closing menus by selecting an item, clicking outside, or pressing
+    Escape, and expose appropriate accessible menu state.
+
+### Reading suggestions using existing data
+
+- [x] Open an integrated suggestion dialog from the hero's `New read` menu.
+- [x] Suggest a random Pending book.
+- [x] Suggest the oldest Pending book whose acquisition date is known.
+- [x] Suggest among Pending books using a minimum time-pending threshold.
+  - Calculate time pending from acquisition date through today.
+  - Clearly separate books with unknown acquisition dates instead of assigning
+    them an invented waiting time.
+- [x] Show the suggested book's cover, title, author, location, acquisition
+  information, and current waiting time where known.
+- [x] Allow another suggestion without closing the dialog and avoid repeating
+  a book until the current candidate set has been exhausted.
+- [x] Allow opening the exact catalogue record from a suggestion.
+- [x] Offer `Start reading` only after explicit confirmation, using the
+  existing status/date update rules and preserving the saved physical
+  location.
+- [x] Add read-only suggestion API tests; no schema changes are required.
+
+### Statistics using existing data
+
+- [x] Add a top-level Statistics tab/view that does not alter catalogue data.
+- [x] Add a read-only statistics API so calculations and missing-data rules
+  are consistent across desktop and mobile.
+- [x] Show the total number of books read by month and year using known
+  finished-reading dates.
+- [x] Show average and median time spent pending for books with both
+  acquisition and reading-started dates.
+- [x] Show average and median reading duration for books with both
+  reading-started and finished-reading dates, counting same-day reading as one
+  day.
+- [x] Compare books acquired with books read by month and year.
+- [x] Compare the Original Collection with later acquisitions using totals and
+  Pending/Reading/Read status breakdowns.
+- [x] Display the sample size beside every date-derived statistic and disclose
+  how many books were excluded because a required date is unknown.
+- [x] Provide year and all-time controls without adding or modifying database
+  fields.
+- [x] Add backend calculation tests covering unknown dates, same-day reading,
+  empty periods, and Original Collection records.
+
+### Status action prompts using existing data
+
+- [x] Make a Pending status label clickable and open a `Start reading?`
+  confirmation dialog.
+- [x] Make a Reading status label clickable and open a `Did you finish?`
+  confirmation dialog.
+- [x] Reuse the existing lifecycle-date validation and automatic date behavior
+  when either action is confirmed.
+- [x] Keep Read status labels non-interactive until reading-session history and
+  safe re-reading support have been added.
+
 ## A. Features possible with the current database
 
 These features can use the fields and relationships already stored. They may
@@ -134,76 +204,6 @@ fields.
 - [ ] Integrate scanning into Batch Add while preserving its current container,
   position, and direction.
 - [ ] Add OCR later as a fallback for books without a usable barcode.
-
-### Navigation and primary actions
-
-- [ ] Reorder the top navigation as `Library map`, `Statistics`, and
-  `Settings`.
-- [ ] Open a Settings menu containing:
-  - `Customize library layout`, opening the existing Library Layout dialog.
-  - `Data & backups`, opening the existing backup/export/restore dialog.
-- [ ] Replace the current standalone and catalogue-level add controls with a
-  consistent hero action row below the introductory text.
-  - Add an `Add` menu with `Add single book`, `Add Batch`, and `Reorganize`.
-  - Add a `New read` menu containing the suggestion entry points.
-  - Remove the duplicate Batch Add, Reorganize, and Add Book buttons from the
-    catalogue heading.
-  - Keep both menus usable on mobile and reserve enough desktop hero height so
-    they never overlap the summary counters.
-  - Support closing menus by selecting an item, clicking outside, or pressing
-    Escape, and expose appropriate accessible menu state.
-
-### Reading suggestions using existing data
-
-- [ ] Open an integrated suggestion dialog from the hero's `New read` menu.
-- [ ] Suggest a random Pending book.
-- [ ] Suggest the oldest Pending book whose acquisition date is known.
-- [ ] Suggest among Pending books using a minimum time-pending threshold.
-  - Calculate time pending from acquisition date through today.
-  - Clearly separate books with unknown acquisition dates instead of assigning
-    them an invented waiting time.
-- [ ] Show the suggested book's cover, title, author, location, acquisition
-  information, and current waiting time where known.
-- [ ] Allow another suggestion without closing the dialog and avoid repeating
-  a book until the current candidate set has been exhausted.
-- [ ] Allow opening the exact catalogue record from a suggestion.
-- [ ] Offer `Start reading` only after explicit confirmation, using the
-  existing status/date update rules and preserving the saved physical
-  location.
-- [ ] Add read-only suggestion API tests; no schema changes are required.
-
-### Statistics using existing data
-
-- [ ] Add a top-level Statistics tab/view that does not alter catalogue data.
-- [ ] Add a read-only statistics API so calculations and missing-data rules
-  are consistent across desktop and mobile.
-- [ ] Show the total number of books read by month and year using known
-  finished-reading dates.
-- [ ] Show average and median time spent pending for books with both
-  acquisition and reading-started dates.
-- [ ] Show average and median reading duration for books with both
-  reading-started and finished-reading dates, counting same-day reading as one
-  day.
-- [ ] Compare books acquired with books read by month and year.
-- [ ] Compare the Original Collection with later acquisitions using totals and
-  Pending/Reading/Read status breakdowns.
-- [ ] Display the sample size beside every date-derived statistic and disclose
-  how many books were excluded because a required date is unknown.
-- [ ] Provide year and all-time controls without adding or modifying database
-  fields.
-- [ ] Add backend calculation tests covering unknown dates, same-day reading,
-  empty periods, and Original Collection records.
-
-### Status action prompts using existing data
-
-- [ ] Make a Pending status label clickable and open a `Start reading?`
-  confirmation dialog.
-- [ ] Make a Reading status label clickable and open a `Did you finish?`
-  confirmation dialog.
-- [ ] Reuse the existing lifecycle-date validation and automatic date behavior
-  when either action is confirmed.
-- [ ] Keep Read status labels non-interactive until reading-session history and
-  safe re-reading support have been added.
 
 ## B. Features requiring a safe database expansion
 

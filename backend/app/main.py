@@ -1,8 +1,9 @@
 import os
 import sqlite3
+import statistics as statistics_module
 import tempfile
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Literal
@@ -1361,6 +1362,156 @@ def create_bookcase(payload: BookcaseCreate) -> dict[str, Any]:
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="Bookcase name already exists") from exc
     return dict(row)
+
+
+def interval_summary(
+    rows: list[sqlite3.Row],
+    start_field: str,
+    end_field: str,
+) -> dict[str, int | float | None]:
+    durations: list[int] = []
+    for row in rows:
+        start = parsed_date(row[start_field])
+        end = parsed_date(row[end_field])
+        if start is not None and end is not None:
+            durations.append((end - start).days + 1)
+    return {
+        "average_days": (
+            round(statistics_module.mean(durations), 1) if durations else None
+        ),
+        "median_days": (
+            round(float(statistics_module.median(durations)), 1)
+            if durations
+            else None
+        ),
+        "sample_size": len(durations),
+        "excluded": len(rows) - len(durations),
+    }
+
+
+@app.get("/statistics")
+def catalogue_statistics(
+    year: int | None = Query(default=None, ge=1000, le=9999),
+) -> dict[str, Any]:
+    with connect() as connection:
+        rows = list(
+            connection.execute(
+                """
+                SELECT status, acquisition_date, reading_started_date,
+                       read_date, is_original_collection
+                FROM books
+                """
+            ).fetchall()
+        )
+
+    acquired_by_year: dict[int, int] = {}
+    read_by_year: dict[int, int] = {}
+    acquired_by_month = [0] * 12
+    read_by_month = [0] * 12
+    for row in rows:
+        acquired = parsed_date(row["acquisition_date"])
+        finished = parsed_date(row["read_date"])
+        if acquired is not None:
+            acquired_by_year[acquired.year] = acquired_by_year.get(acquired.year, 0) + 1
+            if year == acquired.year:
+                acquired_by_month[acquired.month - 1] += 1
+        if finished is not None:
+            read_by_year[finished.year] = read_by_year.get(finished.year, 0) + 1
+            if year == finished.year:
+                read_by_month[finished.month - 1] += 1
+
+    years = sorted({*acquired_by_year, *read_by_year})
+    yearly = [
+        {
+            "year": item,
+            "acquired": acquired_by_year.get(item, 0),
+            "read": read_by_year.get(item, 0),
+        }
+        for item in years
+    ]
+    monthly = [
+        {
+            "month": month,
+            "acquired": acquired_by_month[month - 1],
+            "read": read_by_month[month - 1],
+        }
+        for month in range(1, 13)
+    ]
+
+    started_rows = [
+        row
+        for row in rows
+        if row["status"] in {
+            BookStatus.currently_reading.value,
+            BookStatus.read.value,
+        }
+    ]
+    read_rows = [row for row in rows if row["status"] == BookStatus.read.value]
+
+    def group_summary(original: bool) -> dict[str, int]:
+        group = [row for row in rows if bool(row["is_original_collection"]) is original]
+        return {
+            "total": len(group),
+            "pending": sum(row["status"] == BookStatus.pending.value for row in group),
+            "reading": sum(
+                row["status"] == BookStatus.currently_reading.value for row in group
+            ),
+            "read": sum(row["status"] == BookStatus.read.value for row in group),
+        }
+
+    return {
+        "selected_year": year,
+        "available_years": years,
+        "yearly": yearly,
+        "monthly": monthly,
+        "pending_duration": interval_summary(
+            started_rows, "acquisition_date", "reading_started_date"
+        ),
+        "reading_duration": interval_summary(
+            read_rows, "reading_started_date", "read_date"
+        ),
+        "original_collection": group_summary(True),
+        "later_acquisitions": group_summary(False),
+    }
+
+
+@app.get("/suggestions")
+def reading_suggestion(
+    mode: Literal["random", "oldest", "waiting"] = "random",
+    minimum_days: int = Query(default=365, ge=0, le=36500),
+    exclude_id: list[int] = Query(default=[]),
+) -> dict[str, Any]:
+    where = ["b.status = 'PENDING'"]
+    params: list[Any] = []
+    if mode in {"oldest", "waiting"}:
+        where.append("b.acquisition_date IS NOT NULL")
+    if mode == "waiting":
+        cutoff = date.today() - timedelta(days=minimum_days)
+        where.append("b.acquisition_date <= ?")
+        params.append(cutoff.isoformat())
+    if exclude_id:
+        placeholders = ", ".join("?" for _ in exclude_id)
+        where.append(f"b.id NOT IN ({placeholders})")
+        params.extend(exclude_id)
+
+    order = "b.acquisition_date ASC, b.title COLLATE NOCASE ASC"
+    if mode in {"random", "waiting"}:
+        order = "RANDOM()"
+    query = BOOK_SELECT + " WHERE " + " AND ".join(where)
+    query += f" ORDER BY {order} LIMIT 1"
+    with connect() as connection:
+        row = connection.execute(query, params).fetchone()
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No unread books match this suggestion",
+        )
+    book = serialize_book(row)
+    acquired = parsed_date(book["acquisition_date"])
+    return {
+        "book": book,
+        "waiting_days": max(0, (date.today() - acquired).days) if acquired else None,
+    }
 
 
 @app.patch("/bookcases/{bookcase_id}")
