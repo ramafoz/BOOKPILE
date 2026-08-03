@@ -100,6 +100,16 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Add read-only external maintenance checks for lifecycle dates and
   Goodreads links.
 
+### Physical-library maintenance
+
+- [x] Keep bookcase, shelf, and container maintenance inside Library Layout.
+- [x] Edit bookcase names and descriptions.
+- [x] Renumber shelves, swapping occupied numbers safely.
+- [x] Renumber containers, swapping occupied numbers safely within the same
+  shelf, layer, and container type.
+- [x] Renumber book positions while preserving a continuous sequence and
+  resolving collisions safely.
+
 ## A. Features possible with the current database
 
 These features can use the fields and relationships already stored. They may
@@ -135,14 +145,6 @@ fields.
 - [ ] Show average reading duration.
 - [ ] Compare books acquired with books read.
 - [ ] Compare the original collection with later acquisitions.
-
-### Physical-library maintenance
-
-- [ ] Edit bookcase names and descriptions.
-- [ ] Renumber shelves.
-- [ ] Renumber containers.
-- [ ] Renumber book positions while preserving a continuous sequence and
-  resolving collisions safely.
 
 ## B. Features requiring a safe database expansion
 

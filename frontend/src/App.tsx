@@ -1277,6 +1277,7 @@ function LibraryDialog({
   onChanged: () => Promise<void>;
 }) {
   const [bookcaseName, setBookcaseName] = useState("");
+  const [bookcaseDescription, setBookcaseDescription] = useState("");
   const [selectedBookcase, setSelectedBookcase] = useState("");
   const [shelfNumber, setShelfNumber] = useState(1);
   const shelves = library.flatMap((bookcase) =>
@@ -1287,14 +1288,46 @@ function LibraryDialog({
   const [layer, setLayer] = useState<Layer>("BACKGROUND");
   const [containerNumber, setContainerNumber] = useState(1);
   const [error, setError] = useState("");
+  const [editingBookcaseId, setEditingBookcaseId] = useState<number | null>(null);
+  const [bookcaseNameDraft, setBookcaseNameDraft] = useState("");
+  const [bookcaseDescriptionDraft, setBookcaseDescriptionDraft] = useState("");
+  const [editingShelfId, setEditingShelfId] = useState<number | null>(null);
+  const [shelfNumberDraft, setShelfNumberDraft] = useState(1);
+  const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
+  const [containerNumberDraft, setContainerNumberDraft] = useState(1);
 
-  async function act(action: () => Promise<unknown>) {
+  async function act(action: () => Promise<unknown>): Promise<boolean> {
     setError("");
     try {
       await action();
       await onChanged();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update layout");
+      return false;
+    }
+  }
+
+  async function saveBookcase(bookcaseId: number) {
+    if (!bookcaseNameDraft.trim()) return;
+    if (await act(() => api.updateBookcase(
+      bookcaseId,
+      bookcaseNameDraft,
+      bookcaseDescriptionDraft,
+    ))) {
+      setEditingBookcaseId(null);
+    }
+  }
+
+  async function saveShelf(shelfId: number) {
+    if (await act(() => api.updateShelf(shelfId, shelfNumberDraft))) {
+      setEditingShelfId(null);
+    }
+  }
+
+  async function saveContainer(containerId: number) {
+    if (await act(() => api.updateContainer(containerId, containerNumberDraft))) {
+      setEditingContainerId(null);
     }
   }
 
@@ -1311,9 +1344,16 @@ function LibraryDialog({
             <span className="step">1</span><h3>Add a bookcase</h3>
             <input placeholder="e.g. Office bookcase" value={bookcaseName}
               onChange={(e) => setBookcaseName(e.target.value)} />
+            <textarea
+              rows={2}
+              placeholder="Optional description"
+              value={bookcaseDescription}
+              onChange={(e) => setBookcaseDescription(e.target.value)}
+            />
             <button disabled={!bookcaseName.trim()} onClick={() => void act(async () => {
-              await api.createBookcase(bookcaseName, "");
+              await api.createBookcase(bookcaseName, bookcaseDescription);
               setBookcaseName("");
+              setBookcaseDescription("");
             })}><Plus size={16} /> Add bookcase</button>
           </section>
           <section>
@@ -1356,21 +1396,98 @@ function LibraryDialog({
           {library.length === 0 ? <p>No bookcases yet.</p> : library.map((bookcase) => (
             <section className="bookcase-block" key={bookcase.id}>
               <div className="bookcase-heading">
-                <div>
-                  <strong>{bookcase.name}</strong>
-                  <span>
-                    {bookcase.shelves.length} shelves ·{" "}
-                    {bookcase.shelves.reduce((n, shelf) => n + shelf.containers.length, 0)} containers
-                  </span>
-                </div>
+                {editingBookcaseId === bookcase.id ? (
+                  <div className="hierarchy-edit bookcase-edit">
+                    <input
+                      aria-label="Bookcase name"
+                      value={bookcaseNameDraft}
+                      onChange={(event) => setBookcaseNameDraft(event.target.value)}
+                    />
+                    <textarea
+                      aria-label="Bookcase description"
+                      rows={2}
+                      placeholder="Optional description"
+                      value={bookcaseDescriptionDraft}
+                      onChange={(event) => setBookcaseDescriptionDraft(event.target.value)}
+                    />
+                    <div className="hierarchy-edit-actions">
+                      <button
+                        title="Save bookcase"
+                        disabled={!bookcaseNameDraft.trim()}
+                        onClick={() => void saveBookcase(bookcase.id)}
+                      ><Save size={15} /></button>
+                      <button
+                        title="Cancel editing"
+                        onClick={() => setEditingBookcaseId(null)}
+                      ><X size={15} /></button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <strong>{bookcase.name}</strong>
+                      <span>
+                        {bookcase.shelves.length} shelves ·{" "}
+                        {bookcase.shelves.reduce((n, shelf) => n + shelf.containers.length, 0)} containers
+                      </span>
+                      {bookcase.description && (
+                        <small className="bookcase-description">{bookcase.description}</small>
+                      )}
+                    </div>
+                    <button
+                      className="edit-hierarchy-button"
+                      title="Edit bookcase"
+                      onClick={() => {
+                        setEditingBookcaseId(bookcase.id);
+                        setBookcaseNameDraft(bookcase.name);
+                        setBookcaseDescriptionDraft(bookcase.description ?? "");
+                      }}
+                    ><Pencil size={15} /></button>
+                  </>
+                )}
               </div>
               {bookcase.shelves.length === 0 ? (
                 <p className="muted">No shelves in this bookcase.</p>
               ) : bookcase.shelves.map((shelf) => (
                 <div className="shelf-block" key={shelf.id}>
                   <div className="shelf-heading">
-                    <strong>Shelf {shelf.shelf_number}</strong>
+                    {editingShelfId === shelf.id ? (
+                      <div className="hierarchy-edit compact-edit">
+                        <label>
+                          Shelf number
+                          <input
+                            type="number"
+                            min="1"
+                            value={shelfNumberDraft}
+                            onChange={(event) => setShelfNumberDraft(Number(event.target.value))}
+                          />
+                        </label>
+                        <div className="hierarchy-edit-actions">
+                          <button
+                            title="Save shelf number"
+                            disabled={shelfNumberDraft < 1}
+                            onClick={() => void saveShelf(shelf.id)}
+                          ><Save size={15} /></button>
+                          <button
+                            title="Cancel editing"
+                            onClick={() => setEditingShelfId(null)}
+                          ><X size={15} /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <strong>Shelf {shelf.shelf_number}</strong>
+                    )}
                     <span>{shelf.containers.length} containers</span>
+                    {editingShelfId !== shelf.id && (
+                      <button
+                        className="edit-hierarchy-button"
+                        title="Renumber shelf"
+                        onClick={() => {
+                          setEditingShelfId(shelf.id);
+                          setShelfNumberDraft(shelf.shelf_number);
+                        }}
+                      ><Pencil size={15} /></button>
+                    )}
                     <button
                       className="danger-icon"
                       title="Delete shelf"
@@ -1397,12 +1514,49 @@ function LibraryDialog({
                       <span className="muted">No containers.</span>
                     ) : shelf.containers.map((container) => (
                       <div className="container-chip" key={container.id}>
-                        <span>
-                          {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
-                          {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
-                          {container.container_number}
-                        </span>
+                        {editingContainerId === container.id ? (
+                          <div className="hierarchy-edit compact-edit container-edit">
+                            <span>
+                              {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+                              {container.container_type === "ROW" ? "Row" : "Pile"}
+                            </span>
+                            <input
+                              aria-label="Container number"
+                              type="number"
+                              min="1"
+                              value={containerNumberDraft}
+                              onChange={(event) => setContainerNumberDraft(Number(event.target.value))}
+                            />
+                            <div className="hierarchy-edit-actions">
+                              <button
+                                title="Save container number"
+                                disabled={containerNumberDraft < 1}
+                                onClick={() => void saveContainer(container.id)}
+                              ><Save size={14} /></button>
+                              <button
+                                title="Cancel editing"
+                                onClick={() => setEditingContainerId(null)}
+                              ><X size={14} /></button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span>
+                            {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+                            {container.container_type === "ROW" ? "Row" : "Pile"}{" "}
+                            {container.container_number}
+                          </span>
+                        )}
                         <small>{container.book_count} books</small>
+                        {editingContainerId !== container.id && (
+                          <button
+                            className="edit-hierarchy-button"
+                            title="Renumber container"
+                            onClick={() => {
+                              setEditingContainerId(container.id);
+                              setContainerNumberDraft(container.container_number);
+                            }}
+                          ><Pencil size={14} /></button>
+                        )}
                         <button
                           title="Delete container"
                           onClick={() => {

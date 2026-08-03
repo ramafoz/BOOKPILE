@@ -33,8 +33,11 @@ from .schemas import (
     BookStatus,
     BookUpdate,
     BookcaseCreate,
+    BookcaseUpdate,
     ContainerCreate,
+    ContainerUpdate,
     ShelfCreate,
+    ShelfUpdate,
     Stats,
     VisualLayoutUpdate,
 )
@@ -1360,6 +1363,31 @@ def create_bookcase(payload: BookcaseCreate) -> dict[str, Any]:
     return dict(row)
 
 
+@app.patch("/bookcases/{bookcase_id}")
+def update_bookcase(
+    bookcase_id: int, payload: BookcaseUpdate
+) -> dict[str, Any]:
+    try:
+        with connect() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM bookcases WHERE id = ?", (bookcase_id,)
+            ).fetchone()
+            if exists is None:
+                raise HTTPException(status_code=404, detail="Bookcase not found")
+            connection.execute(
+                "UPDATE bookcases SET name = ?, description = ? WHERE id = ?",
+                (payload.name, payload.description, bookcase_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM bookcases WHERE id = ?", (bookcase_id,)
+            ).fetchone()
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(
+            status_code=409, detail="Bookcase name already exists"
+        ) from exc
+    return dict(row)
+
+
 @app.post("/shelves", status_code=status.HTTP_201_CREATED)
 def create_shelf(payload: ShelfCreate) -> dict[str, Any]:
     try:
@@ -1375,6 +1403,53 @@ def create_shelf(payload: ShelfCreate) -> dict[str, Any]:
         raise HTTPException(
             status_code=409, detail="Shelf already exists or bookcase is invalid"
         ) from exc
+    return dict(row)
+
+
+@app.patch("/shelves/{shelf_id}")
+def update_shelf(shelf_id: int, payload: ShelfUpdate) -> dict[str, Any]:
+    with connect() as connection:
+        shelf = connection.execute(
+            "SELECT * FROM shelves WHERE id = ?", (shelf_id,)
+        ).fetchone()
+        if shelf is None:
+            raise HTTPException(status_code=404, detail="Shelf not found")
+        if shelf["shelf_number"] != payload.shelf_number:
+            collision = connection.execute(
+                """
+                SELECT id FROM shelves
+                WHERE bookcase_id = ? AND shelf_number = ?
+                """,
+                (shelf["bookcase_id"], payload.shelf_number),
+            ).fetchone()
+            if collision is None:
+                connection.execute(
+                    "UPDATE shelves SET shelf_number = ? WHERE id = ?",
+                    (payload.shelf_number, shelf_id),
+                )
+            else:
+                temporary_number = connection.execute(
+                    """
+                    SELECT COALESCE(MAX(shelf_number), 0) + 1
+                    FROM shelves WHERE bookcase_id = ?
+                    """,
+                    (shelf["bookcase_id"],),
+                ).fetchone()[0]
+                connection.execute(
+                    "UPDATE shelves SET shelf_number = ? WHERE id = ?",
+                    (temporary_number, shelf_id),
+                )
+                connection.execute(
+                    "UPDATE shelves SET shelf_number = ? WHERE id = ?",
+                    (shelf["shelf_number"], collision["id"]),
+                )
+                connection.execute(
+                    "UPDATE shelves SET shelf_number = ? WHERE id = ?",
+                    (payload.shelf_number, shelf_id),
+                )
+        row = connection.execute(
+            "SELECT * FROM shelves WHERE id = ?", (shelf_id,)
+        ).fetchone()
     return dict(row)
 
 
@@ -1406,6 +1481,62 @@ def create_container(payload: ContainerCreate) -> dict[str, Any]:
                 "or the shelf is invalid"
             ),
         ) from exc
+    return dict(row)
+
+
+@app.patch("/containers/{container_id}")
+def update_container(
+    container_id: int, payload: ContainerUpdate
+) -> dict[str, Any]:
+    with connect() as connection:
+        container = connection.execute(
+            "SELECT * FROM containers WHERE id = ?", (container_id,)
+        ).fetchone()
+        if container is None:
+            raise HTTPException(status_code=404, detail="Container not found")
+        if container["container_number"] != payload.container_number:
+            context = (
+                container["shelf_id"],
+                container["container_type"],
+                container["layer"],
+            )
+            collision = connection.execute(
+                """
+                SELECT id FROM containers
+                WHERE shelf_id = ? AND container_type = ? AND layer = ?
+                  AND container_number = ?
+                """,
+                (*context, payload.container_number),
+            ).fetchone()
+            if collision is None:
+                connection.execute(
+                    "UPDATE containers SET container_number = ? WHERE id = ?",
+                    (payload.container_number, container_id),
+                )
+            else:
+                temporary_number = connection.execute(
+                    """
+                    SELECT COALESCE(MAX(container_number), 0) + 1
+                    FROM containers
+                    WHERE shelf_id = ? AND container_type = ? AND layer = ?
+                    """,
+                    context,
+                ).fetchone()[0]
+                connection.execute(
+                    "UPDATE containers SET container_number = ? WHERE id = ?",
+                    (temporary_number, container_id),
+                )
+                connection.execute(
+                    "UPDATE containers SET container_number = ? WHERE id = ?",
+                    (container["container_number"], collision["id"]),
+                )
+                connection.execute(
+                    "UPDATE containers SET container_number = ? WHERE id = ?",
+                    (payload.container_number, container_id),
+                )
+        row = connection.execute(
+            "SELECT * FROM containers WHERE id = ?", (container_id,)
+        ).fetchone()
     return dict(row)
 
 

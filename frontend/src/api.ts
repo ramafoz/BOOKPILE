@@ -157,6 +157,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, description: description || null }),
     }),
+  updateBookcase: (id: number, name: string, description: string) =>
+    request(`/bookcases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name, description: description || null }),
+    }),
   createShelf: (bookcaseId: number, shelfNumber: number) =>
     request("/shelves", {
       method: "POST",
@@ -164,6 +169,11 @@ export const api = {
         bookcase_id: bookcaseId,
         shelf_number: shelfNumber,
       }),
+    }),
+  updateShelf: (id: number, shelfNumber: number) =>
+    request(`/shelves/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ shelf_number: shelfNumber }),
     }),
   createContainer: (
     shelfId: number,
@@ -179,6 +189,11 @@ export const api = {
         layer,
         container_number: containerNumber,
       }),
+    }),
+  updateContainer: (id: number, containerNumber: number) =>
+    request(`/containers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ container_number: containerNumber }),
     }),
   deleteShelf: (id: number) =>
     request<void>(`/shelves/${id}`, { method: "DELETE" }),

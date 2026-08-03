@@ -30,8 +30,30 @@ class BookcaseCreate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
 
 
+class BookcaseUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Bookcase name cannot be blank")
+        return stripped
+
+    @field_validator("description")
+    @classmethod
+    def blank_description_to_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else None
+
+
 class ShelfCreate(BaseModel):
     bookcase_id: int
+    shelf_number: int = Field(gt=0)
+
+
+class ShelfUpdate(BaseModel):
     shelf_number: int = Field(gt=0)
 
 
@@ -39,6 +61,10 @@ class ContainerCreate(BaseModel):
     shelf_id: int
     container_type: ContainerType
     layer: Layer
+    container_number: int = Field(gt=0)
+
+
+class ContainerUpdate(BaseModel):
     container_number: int = Field(gt=0)
 
 

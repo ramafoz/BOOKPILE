@@ -143,6 +143,87 @@ def test_row_and_pile_can_share_number_in_same_layer() -> None:
         assert duplicate_pile.status_code == 409
 
 
+def test_library_hierarchy_can_be_edited_without_losing_assignments() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post(
+            "/bookcases",
+            json={"name": "Office", "description": "Old description"},
+        ).json()
+        shelf_one = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+        ).json()
+        shelf_two = client.post(
+            "/shelves",
+            json={"bookcase_id": bookcase["id"], "shelf_number": 2},
+        ).json()
+        container_one = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf_one["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        container_two = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf_one["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 2,
+            },
+        ).json()
+        book = client.post(
+            "/books",
+            json={
+                "title": "The Dispossessed",
+                "author": "Ursula K. Le Guin",
+                "container_id": container_one["id"],
+                "position": 1,
+            },
+        ).json()
+
+        renamed = client.patch(
+            f'/bookcases/{bookcase["id"]}',
+            json={"name": "Study", "description": "West wall"},
+        )
+        swapped_shelves = client.patch(
+            f'/shelves/{shelf_one["id"]}', json={"shelf_number": 2}
+        )
+        swapped_containers = client.patch(
+            f'/containers/{container_one["id"]}',
+            json={"container_number": 2},
+        )
+
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "Study"
+        assert renamed.json()["description"] == "West wall"
+        assert swapped_shelves.status_code == 200
+        assert swapped_containers.status_code == 200
+
+        library = client.get("/library").json()[0]
+        shelves = {item["id"]: item for item in library["shelves"]}
+        assert shelves[shelf_one["id"]]["shelf_number"] == 2
+        assert shelves[shelf_two["id"]]["shelf_number"] == 1
+        containers = {
+            item["id"]: item
+            for item in shelves[shelf_one["id"]]["containers"]
+        }
+        assert containers[container_one["id"]]["container_number"] == 2
+        assert containers[container_two["id"]]["container_number"] == 1
+
+        assigned = client.get(
+            "/books", params={"book_id": book["id"]}
+        ).json()[0]
+        assert assigned["container_id"] == container_one["id"]
+        assert assigned["position"] == 1
+        assert assigned["location_label"] == (
+            "Study · Shelf 2 · Background Row 2 · Position 1"
+        )
+
+
 def test_currently_reading_book_preserves_library_position() -> None:
     with TestClient(app) as client:
         bookcase = client.post("/bookcases", json={"name": "Office"})
