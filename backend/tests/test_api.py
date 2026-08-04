@@ -5,6 +5,7 @@ import os
 import shutil
 import sqlite3
 import zipfile
+from unittest.mock import patch
 from datetime import date
 from io import BytesIO
 from pathlib import Path
@@ -91,6 +92,115 @@ def test_catalogue_flow() -> None:
         deleted = client.delete(f'/books/{created.json()["id"]}')
         assert deleted.status_code == 204
         assert client.get("/stats").json()["total"] == 0
+
+
+def test_isbn_lookup_endpoint_is_read_only_and_normalized() -> None:
+    candidate = {
+        "source": "OPEN_LIBRARY",
+        "source_record_id": "OL1M",
+        "identifiers": {"isbn_10": "0306406152", "isbn_13": "9780306406157"},
+        "title": "Example Book",
+        "subtitle": None,
+        "authors": ["Example Author"],
+        "publisher": None,
+        "published_date": None,
+        "page_count": None,
+        "subjects": [],
+        "language": None,
+        "edition": None,
+        "genres": [],
+        "category": None,
+        "format": None,
+        "confidence_or_match_notes": None,
+    }
+    with patch("app.main.lookup_isbn", return_value=[candidate]) as lookup:
+        with TestClient(app) as client:
+            before = client.get("/stats").json()
+            response = client.get(
+                "/bibliography/isbn", params={"isbn": "978-0-306-40615-7"}
+            )
+            after = client.get("/stats").json()
+
+    assert response.status_code == 200
+    assert response.json()["isbn"] == "9780306406157"
+    assert response.json()["candidates"][0]["title"] == "Example Book"
+    lookup.assert_called_once_with("9780306406157")
+    assert before == after
+
+
+def test_isbn_lookup_endpoint_rejects_an_invalid_checksum() -> None:
+    with TestClient(app) as client:
+        response = client.get(
+            "/bibliography/isbn", params={"isbn": "978-0-306-40615-8"}
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "ISBN-13 checksum is invalid"
+
+
+def test_isbn_lookup_endpoint_reports_provider_outage() -> None:
+    from app.bibliography import BibliographicProvidersUnavailable
+
+    with patch(
+        "app.main.lookup_isbn",
+        side_effect=BibliographicProvidersUnavailable("both failed"),
+    ):
+        with TestClient(app) as client:
+            response = client.get(
+                "/bibliography/isbn", params={"isbn": "9780306406157"}
+            )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Bibliographic lookup services are temporarily unavailable"
+    )
+
+
+def test_isbn_lookup_endpoint_returns_existing_catalogue_matches() -> None:
+    candidate = {
+        "source": "OPEN_LIBRARY",
+        "source_record_id": "OL2M",
+        "identifiers": {"isbn_10": None, "isbn_13": "9780306406157"},
+        "title": "Cien anos de soledad",
+        "subtitle": None,
+        "authors": ["Gabriel García Márquez"],
+        "publisher": None,
+        "published_date": None,
+        "page_count": None,
+        "subjects": [],
+        "language": None,
+        "edition": None,
+        "genres": [],
+        "category": None,
+        "format": None,
+        "confidence_or_match_notes": None,
+    }
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "Cien años de soledad",
+                "author": "Gabriel Garcia Marquez",
+            },
+        ).json()
+        with patch("app.main.lookup_isbn", return_value=[candidate]):
+            response = client.get(
+                "/bibliography/isbn", params={"isbn": "9780306406157"}
+            )
+
+    matches = response.json()["candidates"][0]["catalogue_matches"]
+    assert matches == [
+        {
+            "book_id": created["id"],
+            "title": "Cien años de soledad",
+            "author": "Gabriel Garcia Marquez",
+            "status": "PENDING",
+            "cover_filename": None,
+            "location_label": None,
+            "match_class": "strong",
+            "reason": "Same normalized title and matching author text",
+        }
+    ]
 
 
 def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:

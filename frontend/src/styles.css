@@ -171,7 +171,33 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .date-input-row button:hover:not(:disabled), .date-input-row button:focus-visible { border-color: #a85835; color: #8b402b; background: #fff8f1; outline: none; }
 .date-input-row button:disabled { opacity: .38; cursor: default; }
 .cover-field { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
-.cover-field legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.cover-field legend, .isbn-field legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.isbn-field { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.isbn-lookup-row { display: flex; align-items: flex-end; gap: 10px; }
+.isbn-lookup-row label { flex: 1; }
+.isbn-lookup-row button { flex: 0 0 auto; justify-content: center; margin-bottom: 0; }
+.isbn-lookup-row button:disabled { opacity: .55; cursor: wait; }
+.barcode-photo-button { flex: 0 0 auto; justify-content: center; color: #28574d; cursor: pointer; }
+.barcode-photo-button input { display: none; }
+.barcode-photo-button.busy { opacity: .55; cursor: wait; pointer-events: none; }
+.barcode-photo-button.busy svg { animation: isbn-spin .85s linear infinite; }
+.isbn-message { margin-top: 12px; padding: 10px 12px; border-radius: 7px; color: #4e5e59; background: #e8e3da; font-size: 13px; font-weight: 500; }
+.isbn-message.error { color: #8b321f; background: #fae4dd; border: 1px solid #efc5ba; }
+.isbn-progress { display: flex; align-items: center; gap: 9px; margin-top: 12px; padding: 10px 12px; border-radius: 7px; color: #315a50; background: #dfece7; font-size: 13px; font-weight: 600; }
+.isbn-progress svg { flex: 0 0 auto; animation: isbn-spin .85s linear infinite; }
+@keyframes isbn-spin { to { transform: rotate(360deg); } }
+.isbn-candidate { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-top: 12px; padding: 13px; border: 1px solid #d9cebd; border-radius: 8px; background: #fffdf8; }
+.isbn-candidate-copy { min-width: 0; }
+.isbn-candidate-copy > span { display: block; margin-bottom: 4px; color: #a85835; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.isbn-candidate-copy > strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 18px; }
+.isbn-candidate-copy > p { margin: 3px 0 0; color: #5f6d68; font-size: 13px; }
+.isbn-matches { grid-column: 1 / -1; padding: 11px; border-radius: 7px; color: #68432f; background: #f6e8d4; font-size: 12px; }
+.isbn-matches > strong { display: block; margin-bottom: 7px; color: #8b4b2c; }
+.isbn-match { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 7px; border-top: 1px solid #e6cdaa; }
+.isbn-match + .isbn-match { margin-top: 7px; }
+.isbn-match > span { min-width: 0; }
+.isbn-match small { margin-top: 2px; color: #7c6c60; }
+.isbn-match .text-button { flex: 0 0 auto; padding: 6px; color: #8b4b2c; text-decoration: underline; }
 .cover-editor { display: flex; align-items: center; gap: 16px; }
 .cover-editor > img, .cover-placeholder { width: 86px; height: 122px; border-radius: 6px; object-fit: cover; box-shadow: 0 5px 16px #173d3526; }
 .cover-placeholder { display: grid; place-items: center; color: #9a856c; background: #e9e1d5; border: 1px dashed #c6b9a6; }
@@ -435,6 +461,12 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .form-grid .wide { grid-column: auto; }
   .date-fields { grid-column: auto; grid-template-columns: 1fr; }
   .cover-field { grid-column: auto; }
+  .isbn-field { grid-column: auto; }
+  .isbn-lookup-row { align-items: stretch; flex-direction: column; }
+  .isbn-candidate { grid-template-columns: 1fr; }
+  .isbn-candidate > button { justify-content: center; }
+  .isbn-matches { grid-column: auto; }
+  .isbn-match { align-items: flex-start; flex-direction: column; }
   .cover-editor { align-items: flex-start; }
   .checkbox-label { grid-column: auto; }
   .dialog { padding: 22px; }

@@ -15,11 +15,13 @@ import {
   GalleryVerticalEnd,
   LibraryBig,
   ListPlus,
+  LoaderCircle,
   MapPin,
   Pencil,
   Plus,
   RotateCcw,
   Save,
+  ScanBarcode,
   Search,
   Settings2,
   Shuffle,
@@ -30,12 +32,14 @@ import {
   X,
 } from "lucide-react";
 import { ApiError, api, type RestoreInspection } from "./api";
+import { decodeIsbnBarcodePhoto } from "./barcode";
 import type {
   Book,
   BookPayload,
   Bookcase,
   BookStatus,
   CatalogueStatistics,
+  BibliographicCandidate,
   ContainerType,
   Layer,
   LibraryMapData,
@@ -44,6 +48,7 @@ import type {
   MapContainer,
   MapShelf,
   ReadingSuggestion,
+  ISBNLookupResult,
   Stats,
   VisualLayout,
   VisualRect,
@@ -276,7 +281,7 @@ function App() {
     );
   }
 
-  function openExactBookCatalogue(book: MapBook) {
+  function openExactBookCatalogue(book: { id: number; title: string }) {
     setExactBookFilter(book.id);
     setFilter("ALL");
     setSearch(book.title);
@@ -829,6 +834,10 @@ function App() {
             setEditing(undefined);
             await refresh();
           }}
+          onOpenExisting={(bookId, title) => {
+            setEditing(undefined);
+            openExactBookCatalogue({ id: bookId, title });
+          }}
         />
       )}
       {batchAdding && (
@@ -838,6 +847,10 @@ function App() {
           batchMode
           onClose={() => setBatchAdding(false)}
           onSaved={refresh}
+          onOpenExisting={(bookId, title) => {
+            setBatchAdding(false);
+            openExactBookCatalogue({ id: bookId, title });
+          }}
         />
       )}
       {showLibrary && (
@@ -1359,12 +1372,14 @@ function BookDialog({
   batchMode = false,
   onClose,
   onSaved,
+  onOpenExisting,
 }: {
   book: Book | null;
   library: Bookcase[];
   batchMode?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onOpenExisting: (bookId: number, title: string) => void;
 }) {
   const [form, setForm] = useState<BookPayload>(
     book
@@ -1393,6 +1408,13 @@ function BookDialog({
   );
   const [batchMessage, setBatchMessage] = useState("");
   const [batchDirection, setBatchDirection] = useState<"UP" | "DOWN">("UP");
+  const [isbnInput, setIsbnInput] = useState("");
+  const [isbnLookup, setIsbnLookup] = useState<ISBNLookupResult | null>(null);
+  const [isbnLoading, setIsbnLoading] = useState(false);
+  const [isbnError, setIsbnError] = useState("");
+  const [isbnWaitStage, setIsbnWaitStage] = useState(0);
+  const [barcodeDecoding, setBarcodeDecoding] = useState(false);
+  const barcodePhotoInput = useRef<HTMLInputElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const containers = useMemo(
     () =>
@@ -1417,6 +1439,72 @@ function BookDialog({
     setCoverPreview(preview);
     return () => URL.revokeObjectURL(preview);
   }, [coverFile]);
+
+  useEffect(() => {
+    if (!isbnLoading) {
+      setIsbnWaitStage(0);
+      return;
+    }
+    const reassurance = window.setTimeout(() => setIsbnWaitStage(1), 3500);
+    const fallback = window.setTimeout(() => setIsbnWaitStage(2), 9000);
+    return () => {
+      window.clearTimeout(reassurance);
+      window.clearTimeout(fallback);
+    };
+  }, [isbnLoading]);
+
+  async function lookUpIsbn(value = isbnInput) {
+    if (!value.trim()) {
+      setIsbnError("Enter an ISBN-10 or ISBN-13 first.");
+      return;
+    }
+    setIsbnLoading(true);
+    setIsbnError("");
+    setIsbnLookup(null);
+    try {
+      setIsbnLookup(await api.lookupIsbn(value));
+    } catch (err) {
+      setIsbnError(err instanceof Error ? err.message : "Unable to look up ISBN");
+    } finally {
+      setIsbnLoading(false);
+    }
+  }
+
+  async function decodeBarcodePhoto(file: File | null) {
+    if (!file) return;
+    setBarcodeDecoding(true);
+    setIsbnError("");
+    setIsbnLookup(null);
+    try {
+      const decodedIsbn = await decodeIsbnBarcodePhoto(file);
+      setIsbnInput(decodedIsbn);
+      await lookUpIsbn(decodedIsbn);
+    } catch (err) {
+      setIsbnError(
+        err instanceof Error ? err.message : "Unable to read the barcode photo",
+      );
+    } finally {
+      setBarcodeDecoding(false);
+      if (barcodePhotoInput.current) barcodePhotoInput.current.value = "";
+    }
+  }
+
+  function applyIsbnCandidate(candidate: BibliographicCandidate) {
+    const replacingTypedText = Boolean(form.title.trim() || form.author.trim());
+    if (
+      replacingTypedText
+      && !window.confirm("Replace the current Title and Author with this lookup result?")
+    ) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      title: candidate.title,
+      author: candidate.authors.join(" & "),
+    }));
+    setBatchMessage("");
+    window.setTimeout(() => titleInput.current?.focus(), 0);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -1513,6 +1601,9 @@ function BookDialog({
                 : "; position 1 reached—enter another position or switch direction."
           }`,
         );
+        setIsbnInput("");
+        setIsbnLookup(null);
+        setIsbnError("");
         window.setTimeout(() => titleInput.current?.focus(), 0);
       }
     } catch (err) {
@@ -1552,6 +1643,149 @@ function BookDialog({
             </div>
           )}
           <div className="form-grid">
+            {!book && (
+              <fieldset className="wide isbn-field">
+                <legend>Find by ISBN</legend>
+                <div className="isbn-lookup-row">
+                  <label>
+                    ISBN-10 or ISBN-13
+                    <input
+                      value={isbnInput}
+                      maxLength={40}
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      placeholder="978-…"
+                      onChange={(event) => {
+                        setIsbnInput(event.target.value);
+                        setIsbnLookup(null);
+                        setIsbnError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void lookUpIsbn();
+                        }
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="outline-button"
+                    disabled={isbnLoading}
+                    onClick={() => void lookUpIsbn()}
+                  >
+                    <ScanBarcode size={17} />
+                    {isbnLoading ? "Looking up…" : "Look up ISBN"}
+                  </button>
+                  <label
+                    className={`outline-button barcode-photo-button${
+                      barcodeDecoding ? " busy" : ""
+                    }`}
+                    aria-disabled={barcodeDecoding || isbnLoading}
+                  >
+                    {barcodeDecoding ? (
+                      <LoaderCircle size={17} />
+                    ) : (
+                      <Camera size={17} />
+                    )}
+                    {barcodeDecoding ? "Reading photo…" : "Photograph barcode"}
+                    <input
+                      ref={barcodePhotoInput}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      capture="environment"
+                      disabled={barcodeDecoding || isbnLoading}
+                      onChange={(event) =>
+                        void decodeBarcodePhoto(event.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                </div>
+                <small>
+                  The lookup is read-only. It checks the catalogue before filling
+                  Title and Author; nothing is saved automatically.
+                </small>
+                {isbnLoading && (
+                  <div className="isbn-progress" role="status" aria-live="polite">
+                    <LoaderCircle size={18} />
+                    <span>
+                      {isbnWaitStage === 0
+                        ? "Checking Open Library and your BOOKPILE catalogue…"
+                        : isbnWaitStage === 1
+                          ? "Still searching—some editions take a little longer…"
+                          : "Trying the available bibliographic sources…"}
+                    </span>
+                  </div>
+                )}
+                {barcodeDecoding && (
+                  <div className="isbn-progress" role="status" aria-live="polite">
+                    <LoaderCircle size={18} />
+                    <span>Reading the barcode locally; the photo is not uploaded…</span>
+                  </div>
+                )}
+                {isbnError && <div className="isbn-message error">{isbnError}</div>}
+                {isbnLookup && isbnLookup.candidates.length === 0 && (
+                  <div className="isbn-message">
+                    No bibliographic result was found for {isbnLookup.isbn}. You
+                    can continue with manual entry.
+                  </div>
+                )}
+                {isbnLookup?.candidates.map((candidate, candidateIndex) => (
+                  <article
+                    className="isbn-candidate"
+                    key={`${candidate.source}-${candidate.source_record_id ?? candidateIndex}`}
+                  >
+                    <div className="isbn-candidate-copy">
+                      <span>{candidate.source.replaceAll("_", " ")}</span>
+                      <strong>{candidate.title}</strong>
+                      <p>{candidate.authors.join(" · ")}</p>
+                      {(candidate.publisher || candidate.published_date) && (
+                        <small>
+                          {[candidate.publisher, candidate.published_date]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => applyIsbnCandidate(candidate)}
+                    >
+                      Use Title & Author
+                    </button>
+                    {candidate.catalogue_matches.length > 0 && (
+                      <div className="isbn-matches">
+                        <strong>
+                          {candidate.catalogue_matches.some(
+                            (match) => match.match_class === "strong",
+                          )
+                            ? "Likely already in BOOKPILE"
+                            : "Possible catalogue match"}
+                        </strong>
+                        {candidate.catalogue_matches.map((match) => (
+                          <div className="isbn-match" key={match.book_id}>
+                            <span>
+                              <b>{match.title}</b> · {match.author}
+                              {match.location_label && (
+                                <small>{match.location_label}</small>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() => onOpenExisting(match.book_id, match.title)}
+                            >
+                              Open existing
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </fieldset>
+            )}
             <fieldset className="wide cover-field">
               <legend>Cover image</legend>
               <div className="cover-editor">

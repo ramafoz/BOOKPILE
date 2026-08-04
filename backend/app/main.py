@@ -24,8 +24,11 @@ from starlette.background import BackgroundTask
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
+from .bibliography import BibliographicProvidersUnavailable, lookup_isbn
+from .catalogue_matching import add_catalogue_matches
 from .database import connect, database_path, init_database
 from .exports import create_full_backup, write_books_csv
+from .isbn import InvalidISBN, normalize_isbn
 from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
 from .schemas import (
     Book,
@@ -37,6 +40,7 @@ from .schemas import (
     BookcaseUpdate,
     ContainerCreate,
     ContainerUpdate,
+    ISBNLookupResult,
     ShelfCreate,
     ShelfUpdate,
     Stats,
@@ -257,6 +261,21 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/bibliography/isbn", response_model=ISBNLookupResult)
+def lookup_isbn_metadata(isbn: str = Query(min_length=1, max_length=40)) -> dict[str, Any]:
+    try:
+        normalized = normalize_isbn(isbn)
+        candidates = add_catalogue_matches(lookup_isbn(normalized))
+    except InvalidISBN as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except BibliographicProvidersUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Bibliographic lookup services are temporarily unavailable",
+        ) from exc
+    return {"isbn": normalized, "candidates": candidates}
 
 
 @app.get("/exports/full-backup")

@@ -198,12 +198,33 @@ fields.
 
 ### Faster book capture
 
-- [ ] Scan an ISBN/barcode from a phone as described in `SCANNING_PLAN.md`.
-- [ ] Use the scanned code to look up title and author without storing new
-  metadata.
-- [ ] Integrate scanning into Batch Add while preserving its current container,
-  position, and direction.
-- [ ] Add OCR later as a fallback for books without a usable barcode.
+- [x] Implement the shared recognition and catalogue-matching foundation in
+  `SCANNING_PLAN.md`.
+  - Normalize and validate ISBN-10 and ISBN-13.
+  - Normalize external provider responses into a future-ready candidate shape.
+  - Compare recognized books with the current catalogue using Title/Author and
+    show strong, possible, or no-match outcomes.
+  - Open a likely existing record, or suggest adding a new book when no match
+    is found.
+- [x] Add typed/pasted ISBN lookup to Add Book and Batch Add.
+  - In this phase, apply only Title and Author and do not store the ISBN.
+  - Keep all lookup results reviewable and never write automatically.
+- [x] Decode an ISBN barcode from a temporary phone photograph.
+  - Prefer browser-side decoding that works over the current local Wi-Fi URL.
+  - Discard the image after recognition and keep it separate from the stored
+    cover photograph.
+- [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
+  while preserving its current container, position, direction, and collision
+  handling.
+- [ ] Add optional OCR from a temporary front-cover photograph.
+  - Let the user select or correct recognized Title and Author text.
+  - Optionally resolve the corrected text against bibliographic providers.
+  - Check catalogue matches before suggesting addition.
+- [ ] Evaluate live continuous barcode scanning as a later capture mode.
+  - First provide and validate a trusted HTTPS or installable-app approach for
+    phone camera-stream access.
+  - Keep typed ISBN and temporary-photo scanning as permanent fallbacks.
+  - Stop camera streams reliably and debounce repeated detections.
 
 ## B. Features requiring a safe database expansion
 
@@ -237,15 +258,23 @@ protects the completed catalogue.
 ### Additional book metadata
 
 - [ ] Add optional number of pages.
-- [ ] Add optional ISBN.
+- [ ] Add optional normalized ISBN-10 and ISBN-13 identifiers.
+  - Index ISBNs for exact matching but allow intentional duplicate copies.
+  - Distinguish an exact-edition match from a probable same-work match.
 - [ ] Add optional publisher.
-- [ ] Add optional publication year.
+- [ ] Add optional publication date with support for year-only or otherwise
+  incomplete known dates.
 - [ ] Add optional language.
 - [ ] Add optional edition.
+- [ ] Add structured subjects.
 - [ ] Add structured genres.
 - [ ] Add a fiction/non-fiction classification.
+- [ ] Add an optional format such as hardback, paperback, or comic book.
 - [ ] Add free-form tags.
 - [ ] Add an optional personal rating.
+- [ ] After these fields exist, allow reviewed scanning results to populate the
+  selected supported metadata instead of permanently limiting lookup to Title
+  and Author.
 
 ### Features enabled by additional metadata
 

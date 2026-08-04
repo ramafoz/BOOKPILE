@@ -9,6 +9,7 @@ import type {
   CatalogueStatistics,
   ReadingSuggestion,
   LibraryMapData,
+  ISBNLookupResult,
   VisualLayout,
 } from "./types";
 
@@ -130,6 +131,10 @@ export const api = {
   },
   library: () => request<Bookcase[]>("/library"),
   libraryMap: () => request<LibraryMapData>("/library-map"),
+  lookupIsbn: (isbn: string) => {
+    const params = new URLSearchParams({ isbn });
+    return request<ISBNLookupResult>(`/bibliography/isbn?${params}`);
+  },
   updateVisualLayout: (layout: VisualLayout) =>
     request<VisualLayout>("/visual-layout", {
       method: "PUT",

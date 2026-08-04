@@ -143,6 +143,45 @@ export interface ReadingSuggestion {
   waiting_days: number | null;
 }
 
+export interface CatalogueMatch {
+  book_id: number;
+  title: string;
+  author: string;
+  status: BookStatus;
+  cover_filename: string | null;
+  location_label: string | null;
+  match_class: "strong" | "possible";
+  reason: string;
+}
+
+export interface BibliographicCandidate {
+  source: string;
+  source_record_id: string | null;
+  identifiers: {
+    isbn_10: string | null;
+    isbn_13: string | null;
+  };
+  title: string;
+  subtitle: string | null;
+  authors: string[];
+  publisher: string | null;
+  published_date: string | null;
+  page_count: number | null;
+  subjects: string[];
+  language: string | null;
+  edition: string | null;
+  genres: string[];
+  category: string | null;
+  format: string | null;
+  confidence_or_match_notes: string | null;
+  catalogue_matches: CatalogueMatch[];
+}
+
+export interface ISBNLookupResult {
+  isbn: string;
+  candidates: BibliographicCandidate[];
+}
+
 export interface BookPayload {
   title: string;
   author: string;

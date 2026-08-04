@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -139,6 +140,47 @@ class Stats(BaseModel):
     pending: int
     currently_reading: int
     read: int
+
+
+class BibliographicIdentifiers(BaseModel):
+    isbn_10: str | None = None
+    isbn_13: str | None = None
+
+
+class CatalogueMatch(BaseModel):
+    book_id: int
+    title: str
+    author: str
+    status: BookStatus
+    cover_filename: str | None = None
+    location_label: str | None = None
+    match_class: Literal["strong", "possible"]
+    reason: str
+
+
+class BibliographicCandidate(BaseModel):
+    source: str
+    source_record_id: str | None = None
+    identifiers: BibliographicIdentifiers
+    title: str
+    subtitle: str | None = None
+    authors: list[str]
+    publisher: str | None = None
+    published_date: str | None = None
+    page_count: int | None = None
+    subjects: list[str]
+    language: str | None = None
+    edition: str | None = None
+    genres: list[str]
+    category: str | None = None
+    format: str | None = None
+    confidence_or_match_notes: str | None = None
+    catalogue_matches: list[CatalogueMatch] = Field(default_factory=list)
+
+
+class ISBNLookupResult(BaseModel):
+    isbn: str
+    candidates: list[BibliographicCandidate]
 
 
 class VisualRect(BaseModel):
