@@ -10,6 +10,7 @@ import type {
   ReadingSuggestion,
   LibraryMapData,
   ISBNLookupResult,
+  CatalogueMatch,
   VisualLayout,
 } from "./types";
 
@@ -135,6 +136,11 @@ export const api = {
     const params = new URLSearchParams({ isbn });
     return request<ISBNLookupResult>(`/bibliography/isbn?${params}`);
   },
+  matchBibliography: (title: string, authors: string[]) =>
+    request<CatalogueMatch[]>("/bibliography/matches", {
+      method: "POST",
+      body: JSON.stringify({ title, authors }),
+    }),
   updateVisualLayout: (layout: VisualLayout) =>
     request<VisualLayout>("/visual-layout", {
       method: "PUT",

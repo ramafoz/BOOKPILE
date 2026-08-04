@@ -25,7 +25,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
 from .bibliography import BibliographicProvidersUnavailable, lookup_isbn
-from .catalogue_matching import add_catalogue_matches
+from .catalogue_matching import add_catalogue_matches, find_catalogue_matches
 from .database import connect, database_path, init_database
 from .exports import create_full_backup, write_books_csv
 from .isbn import InvalidISBN, normalize_isbn
@@ -38,6 +38,8 @@ from .schemas import (
     BookUpdate,
     BookcaseCreate,
     BookcaseUpdate,
+    CatalogueMatch,
+    CatalogueMatchRequest,
     ContainerCreate,
     ContainerUpdate,
     ISBNLookupResult,
@@ -276,6 +278,11 @@ def lookup_isbn_metadata(isbn: str = Query(min_length=1, max_length=40)) -> dict
             detail="Bibliographic lookup services are temporarily unavailable",
         ) from exc
     return {"isbn": normalized, "candidates": candidates}
+
+
+@app.post("/bibliography/matches", response_model=list[CatalogueMatch])
+def match_bibliographic_text(payload: CatalogueMatchRequest) -> list[dict[str, Any]]:
+    return find_catalogue_matches(payload.title, payload.authors)
 
 
 @app.get("/exports/full-backup")

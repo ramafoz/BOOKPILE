@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { ApiError, api, type RestoreInspection } from "./api";
 import { decodeIsbnBarcodePhoto } from "./barcode";
+import { readCoverText, type CoverOcrProgress } from "./ocr";
 import type {
   Book,
   BookPayload,
@@ -40,6 +41,7 @@ import type {
   BookStatus,
   CatalogueStatistics,
   BibliographicCandidate,
+  CatalogueMatch,
   ContainerType,
   Layer,
   LibraryMapData,
@@ -1415,6 +1417,17 @@ function BookDialog({
   const [isbnWaitStage, setIsbnWaitStage] = useState(0);
   const [barcodeDecoding, setBarcodeDecoding] = useState(false);
   const barcodePhotoInput = useRef<HTMLInputElement>(null);
+  const [ocrLanguages, setOcrLanguages] = useState("eng+spa");
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<CoverOcrProgress | null>(null);
+  const [ocrLines, setOcrLines] = useState<string[]>([]);
+  const [ocrTitle, setOcrTitle] = useState("");
+  const [ocrAuthor, setOcrAuthor] = useState("");
+  const [ocrMatches, setOcrMatches] = useState<CatalogueMatch[] | null>(null);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrMatching, setOcrMatching] = useState(false);
+  const ocrPhotoInput = useRef<HTMLInputElement>(null);
+  const ocrAbortController = useRef<AbortController | null>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const containers = useMemo(
     () =>
@@ -1453,6 +1466,13 @@ function BookDialog({
     };
   }, [isbnLoading]);
 
+  useEffect(
+    () => () => {
+      ocrAbortController.current?.abort();
+    },
+    [],
+  );
+
   async function lookUpIsbn(value = isbnInput) {
     if (!value.trim()) {
       setIsbnError("Enter an ISBN-10 or ISBN-13 first.");
@@ -1489,21 +1509,82 @@ function BookDialog({
     }
   }
 
-  function applyIsbnCandidate(candidate: BibliographicCandidate) {
+  async function recognizeCoverText(file: File | null) {
+    if (!file) return;
+    const controller = new AbortController();
+    ocrAbortController.current?.abort();
+    ocrAbortController.current = controller;
+    setOcrRunning(true);
+    setOcrProgress({ status: "loading OCR engine", progress: 0 });
+    setOcrLines([]);
+    setOcrTitle("");
+    setOcrAuthor("");
+    setOcrMatches(null);
+    setOcrError("");
+    try {
+      const result = await readCoverText(
+        file,
+        ocrLanguages.split("+"),
+        setOcrProgress,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      setOcrLines(result.lines);
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setOcrError(err instanceof Error ? err.message : "Unable to read cover text");
+      }
+    } finally {
+      if (ocrAbortController.current === controller) {
+        ocrAbortController.current = null;
+        setOcrRunning(false);
+        setOcrProgress(null);
+      }
+      if (ocrPhotoInput.current) ocrPhotoInput.current.value = "";
+    }
+  }
+
+  function addOcrLine(target: "title" | "author", line: string) {
+    const update = (current: string) => current ? `${current} ${line}` : line;
+    if (target === "title") setOcrTitle(update);
+    else setOcrAuthor(update);
+    setOcrMatches(null);
+    setOcrError("");
+  }
+
+  async function checkOcrCatalogue() {
+    if (!ocrTitle.trim() || !ocrAuthor.trim()) {
+      setOcrError("Assign or type both a Title and an Author before checking.");
+      return;
+    }
+    setOcrMatching(true);
+    setOcrError("");
+    try {
+      setOcrMatches(await api.matchBibliography(ocrTitle, [ocrAuthor]));
+    } catch (err) {
+      setOcrError(
+        err instanceof Error ? err.message : "Unable to check the catalogue",
+      );
+    } finally {
+      setOcrMatching(false);
+    }
+  }
+
+  function applyRecognizedText(title: string, author: string) {
     const replacingTypedText = Boolean(form.title.trim() || form.author.trim());
     if (
       replacingTypedText
-      && !window.confirm("Replace the current Title and Author with this lookup result?")
+      && !window.confirm("Replace the current Title and Author with this result?")
     ) {
       return;
     }
-    setForm((current) => ({
-      ...current,
-      title: candidate.title,
-      author: candidate.authors.join(" & "),
-    }));
+    setForm((current) => ({ ...current, title, author }));
     setBatchMessage("");
     window.setTimeout(() => titleInput.current?.focus(), 0);
+  }
+
+  function applyIsbnCandidate(candidate: BibliographicCandidate) {
+    applyRecognizedText(candidate.title, candidate.authors.join(" & "));
   }
 
   async function submit(event: FormEvent) {
@@ -1604,6 +1685,11 @@ function BookDialog({
         setIsbnInput("");
         setIsbnLookup(null);
         setIsbnError("");
+        setOcrLines([]);
+        setOcrTitle("");
+        setOcrAuthor("");
+        setOcrMatches(null);
+        setOcrError("");
         window.setTimeout(() => titleInput.current?.focus(), 0);
       }
     } catch (err) {
@@ -1645,7 +1731,7 @@ function BookDialog({
           <div className="form-grid">
             {!book && (
               <fieldset className="wide isbn-field">
-                <legend>Find by ISBN</legend>
+                <legend>Identify book</legend>
                 <div className="isbn-lookup-row">
                   <label>
                     ISBN-10 or ISBN-13
@@ -1705,6 +1791,40 @@ function BookDialog({
                   The lookup is read-only. It checks the catalogue before filling
                   Title and Author; nothing is saved automatically.
                 </small>
+                <div className="ocr-tools">
+                  <label>
+                    Cover OCR language
+                    <select
+                      value={ocrLanguages}
+                      disabled={ocrRunning}
+                      onChange={(event) => setOcrLanguages(event.target.value)}
+                    >
+                      <option value="eng+spa">English + Spanish</option>
+                      <option value="eng">English</option>
+                      <option value="spa">Spanish</option>
+                      <option value="glg">Galician</option>
+                    </select>
+                  </label>
+                  <label
+                    className={`outline-button ocr-photo-button${
+                      ocrRunning ? " busy" : ""
+                    }`}
+                    aria-disabled={ocrRunning}
+                  >
+                    {ocrRunning ? <LoaderCircle size={17} /> : <Camera size={17} />}
+                    {ocrRunning ? "Reading cover…" : "Read cover text"}
+                    <input
+                      ref={ocrPhotoInput}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      capture="environment"
+                      disabled={ocrRunning}
+                      onChange={(event) =>
+                        void recognizeCoverText(event.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                </div>
                 {isbnLoading && (
                   <div className="isbn-progress" role="status" aria-live="polite">
                     <LoaderCircle size={18} />
@@ -1721,6 +1841,134 @@ function BookDialog({
                   <div className="isbn-progress" role="status" aria-live="polite">
                     <LoaderCircle size={18} />
                     <span>Reading the barcode locally; the photo is not uploaded…</span>
+                  </div>
+                )}
+                {ocrRunning && (
+                  <div className="ocr-progress" role="status" aria-live="polite">
+                    <div>
+                      <LoaderCircle size={18} />
+                      <span>
+                        {ocrProgress?.status.replaceAll("_", " ")
+                          ?? "Loading OCR engine"}
+                      </span>
+                      <strong>
+                        {Math.round((ocrProgress?.progress ?? 0) * 100)}%
+                      </strong>
+                    </div>
+                    <progress value={ocrProgress?.progress ?? 0} max={1} />
+                    <small>
+                      The first use downloads language data. Recognition then runs
+                      locally; the cover photo is not uploaded.
+                    </small>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => ocrAbortController.current?.abort()}
+                    >
+                      Cancel OCR
+                    </button>
+                  </div>
+                )}
+                {ocrError && <div className="isbn-message error">{ocrError}</div>}
+                {ocrLines.length > 0 && (
+                  <div className="ocr-result">
+                    <div className="ocr-result-heading">
+                      <strong>Recognized cover lines</strong>
+                      <span>Tap lines in reading order, then correct the fields.</span>
+                    </div>
+                    <div className="ocr-lines">
+                      {ocrLines.map((line, index) => (
+                        <div className="ocr-line" key={`${line}-${index}`}>
+                          <span>{line}</span>
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => addOcrLine("title", line)}
+                            >
+                              → Title
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addOcrLine("author", line)}
+                            >
+                              → Author
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="ocr-draft">
+                      <label>
+                        Proposed Title
+                        <input
+                          value={ocrTitle}
+                          onChange={(event) => {
+                            setOcrTitle(event.target.value);
+                            setOcrMatches(null);
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Proposed Author
+                        <input
+                          value={ocrAuthor}
+                          onChange={(event) => {
+                            setOcrAuthor(event.target.value);
+                            setOcrMatches(null);
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="outline-button ocr-check-button"
+                      disabled={ocrMatching}
+                      onClick={() => void checkOcrCatalogue()}
+                    >
+                      <Search size={16} />
+                      {ocrMatching ? "Checking…" : "Check BOOKPILE catalogue"}
+                    </button>
+                    {ocrMatches !== null && (
+                      <div className="ocr-match-result">
+                        {ocrMatches.length === 0 ? (
+                          <p>No likely catalogue match was found.</p>
+                        ) : (
+                          <div className="isbn-matches">
+                            <strong>
+                              {ocrMatches.some((match) => match.match_class === "strong")
+                                ? "Likely already in BOOKPILE"
+                                : "Possible catalogue match"}
+                            </strong>
+                            {ocrMatches.map((match) => (
+                              <div className="isbn-match" key={match.book_id}>
+                                <span>
+                                  <b>{match.title}</b> · {match.author}
+                                  {match.location_label && (
+                                    <small>{match.location_label}</small>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  onClick={() =>
+                                    onOpenExisting(match.book_id, match.title)
+                                  }
+                                >
+                                  Open existing
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => applyRecognizedText(ocrTitle, ocrAuthor)}
+                        >
+                          {ocrMatches.length ? "Use Title & Author anyway" : "Use Title & Author"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {isbnError && <div className="isbn-message error">{isbnError}</div>}

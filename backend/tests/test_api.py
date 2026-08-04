@@ -203,6 +203,25 @@ def test_isbn_lookup_endpoint_returns_existing_catalogue_matches() -> None:
     ]
 
 
+def test_bibliographic_text_match_endpoint_is_read_only() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={"title": "The Dispossessed", "author": "Ursula K. Le Guin"},
+        ).json()
+        before = client.get("/stats").json()
+        response = client.post(
+            "/bibliography/matches",
+            json={"title": "The Dispossessed", "authors": ["Ursula Le Guin"]},
+        )
+        after = client.get("/stats").json()
+
+    assert response.status_code == 200
+    assert response.json()[0]["book_id"] == created["id"]
+    assert response.json()[0]["match_class"] == "strong"
+    assert before == after
+
+
 def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
     with TestClient(app) as client:
         books = [

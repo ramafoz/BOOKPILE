@@ -183,6 +183,24 @@ class ISBNLookupResult(BaseModel):
     candidates: list[BibliographicCandidate]
 
 
+class CatalogueMatchRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    authors: list[str] = Field(min_length=1, max_length=20)
+
+    @field_validator("title")
+    @classmethod
+    def strip_match_title(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("authors")
+    @classmethod
+    def strip_match_authors(cls, values: list[str]) -> list[str]:
+        stripped = [value.strip() for value in values if value.strip()]
+        if not stripped:
+            raise ValueError("At least one author is required")
+        return stripped
+
+
 class VisualRect(BaseModel):
     x: float = Field(ge=0, le=100)
     y: float = Field(ge=0, le=100)

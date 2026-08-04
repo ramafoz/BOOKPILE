@@ -216,7 +216,7 @@ fields.
 - [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
   while preserving its current container, position, direction, and collision
   handling.
-- [ ] Add optional OCR from a temporary front-cover photograph.
+- [x] Add optional OCR from a temporary front-cover photograph.
   - Let the user select or correct recognized Title and Author text.
   - Optionally resolve the corrected text against bibliographic providers.
   - Check catalogue matches before suggesting addition.
@@ -225,6 +225,11 @@ fields.
     phone camera-stream access.
   - Keep typed ISBN and temporary-photo scanning as permanent fallbacks.
   - Stop camera streams reliably and debounce repeated detections.
+- [ ] Very long-term: evaluate a more capable OCR experience only if its
+  practical value justifies the complexity.
+  - Consider user-selected image regions, live framing guidance, or
+    platform-native text recognition in a future installable/native app.
+  - Keep the current temporary-photo OCR as the simple, private fallback.
 
 ## B. Features requiring a safe database expansion
 

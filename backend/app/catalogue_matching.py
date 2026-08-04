@@ -44,6 +44,14 @@ def add_catalogue_matches(
     ]
 
 
+def find_catalogue_matches(title: str, authors: list[str]) -> list[dict[str, Any]]:
+    """Find current-catalogue matches for user-reviewed bibliographic text."""
+
+    with connect() as connection:
+        books = [dict(row) for row in connection.execute(MATCHABLE_BOOKS)]
+    return match_candidate({"title": title, "authors": authors}, books)
+
+
 def match_candidate(
     candidate: dict[str, Any],
     books: list[dict[str, Any]],
