@@ -68,6 +68,26 @@ This roadmap separates future work by its effect on the current data model.
   overlap through either direct manipulation or precise sliders.
   - Continue allowing overlap between background and foreground layers.
   - Validate the same rule in the backend before saving a layout.
+- [x] Add visual book rearrangement to the library map.
+  - Choose the old-position and new-position behaviours before selecting a
+    book.
+  - Select books on pointer-down and choose destinations visually or through
+    precise container-and-position controls.
+  - Support continuous press-and-drag with a visible book ghost, while
+    retaining sequential tap-based operation for mobile browsers.
+  - Support collapsing or temporarily retaining the old gap.
+  - Support squeezing, swapping, and chained continuation at occupied
+    destinations.
+  - Preview every affected movement and require explicit Apply or Cancel.
+  - Reject incomplete chains, persistent gaps, stale previews, and invalid
+    destinations without changing the catalogue.
+  - Keep the entire Apply operation atomic.
+  - Move Pending books into the Reading area without losing their retained
+    physical position.
+  - Present explicit Pending and Read choices when returning a Reading book to
+    the physical library, then resume the pending destination preview.
+  - Keep Read-to-Reading moves unavailable until reading sessions and
+    re-reading are supported.
 
 ### Catalogue entry, dates, sorting, and filtering
 
@@ -190,11 +210,6 @@ fields.
 
 - [ ] Document manual recovery procedures and recommendations for storing
   backups safely.
-
-### Visual-map future ideas
-
-- [ ] Keep visual book dragging and visual reordering as a possible future
-  improvement; it is outside the current read-only visual-map scope.
 
 ### Faster book capture
 
@@ -375,5 +390,6 @@ decisions in addition to application code.
 ## Explicitly not planned
 
 - [N] Excel export; CSV and full ZIP backups are sufficient.
-- [N] Empty-position markers on the visual map.
+- [N] Persistent empty-position markers on the normal visual map. Temporary
+  destination slots are shown only while visual rearrangement is active.
 - [N] Visual duplicate/conflicting-position warnings.

@@ -29,6 +29,12 @@ from .catalogue_matching import add_catalogue_matches, find_catalogue_matches
 from .database import connect, database_path, init_database
 from .exports import create_full_backup, write_books_csv
 from .isbn import InvalidISBN, normalize_isbn
+from .rearrangement import (
+    apply_planned_books,
+    load_rearrangement_state,
+    plan_rearrangement,
+    rearrangement_revision,
+)
 from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
 from .schemas import (
     Book,
@@ -43,6 +49,9 @@ from .schemas import (
     ContainerCreate,
     ContainerUpdate,
     ISBNLookupResult,
+    RearrangementApplyRequest,
+    RearrangementRequest,
+    RearrangementResult,
     ShelfCreate,
     ShelfUpdate,
     Stats,
@@ -283,6 +292,36 @@ def lookup_isbn_metadata(isbn: str = Query(min_length=1, max_length=40)) -> dict
 @app.post("/bibliography/matches", response_model=list[CatalogueMatch])
 def match_bibliographic_text(payload: CatalogueMatchRequest) -> list[dict[str, Any]]:
     return find_catalogue_matches(payload.title, payload.authors)
+
+
+@app.post("/rearrangements/preview", response_model=RearrangementResult)
+def preview_rearrangement(payload: RearrangementRequest) -> dict[str, Any]:
+    with connect() as connection:
+        books, containers = load_rearrangement_state(connection)
+    return plan_rearrangement(books, containers, payload)
+
+
+@app.post("/rearrangements/apply", response_model=RearrangementResult)
+def apply_rearrangement(payload: RearrangementApplyRequest) -> dict[str, Any]:
+    try:
+        with connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            books, containers = load_rearrangement_state(connection)
+            if rearrangement_revision(books) != payload.revision:
+                raise HTTPException(
+                    status_code=409,
+                    detail="The catalogue changed after this rearrangement was previewed",
+                )
+            result = plan_rearrangement(books, containers, payload)
+            if not result["valid_to_apply"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Complete the chain and resolve every gap before applying",
+                )
+            apply_planned_books(connection, books, result["_planned_books"])
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return result
 
 
 @app.get("/exports/full-backup")
@@ -1189,7 +1228,7 @@ def library_map() -> dict[str, Any]:
             for row in connection.execute(
                 """
                 SELECT
-                    id, title, status, container_id, position,
+                    id, title, author, status, container_id, position,
                     acquisition_date, reading_started_date, read_date
                 FROM books
                 WHERE container_id IS NOT NULL
@@ -1203,7 +1242,7 @@ def library_map() -> dict[str, Any]:
             for row in connection.execute(
                 """
                 SELECT
-                    id, title, status, container_id, NULL AS position,
+                    id, title, author, status, container_id, position,
                     acquisition_date, reading_started_date, read_date
                 FROM books
                 WHERE status = 'CURRENTLY_READING'

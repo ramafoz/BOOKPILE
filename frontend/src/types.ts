@@ -28,6 +28,7 @@ export interface Bookcase {
 export interface MapBook {
   id: number;
   title: string;
+  author: string;
   status: BookStatus;
   container_id: number | null;
   position: number | null;
@@ -180,6 +181,40 @@ export interface BibliographicCandidate {
 export interface ISBNLookupResult {
   isbn: string;
   candidates: BibliographicCandidate[];
+}
+
+export type OldPositionMode = "COLLAPSE" | "LEAVE_GAP";
+export type NewPositionMode = "SQUEEZE" | "SWAP" | "CONTINUE";
+
+export interface RearrangementStep {
+  destination_kind?: "PHYSICAL" | "READING";
+  container_id?: number | null;
+  position?: number | null;
+  new_position_mode?: NewPositionMode;
+  reading_exit_status?: "PENDING" | "READ" | null;
+}
+
+export interface RearrangementRequest {
+  book_id: number;
+  old_position_mode: OldPositionMode;
+  steps: RearrangementStep[];
+}
+
+export interface RearrangementResult {
+  revision: string;
+  valid_to_apply: boolean;
+  complete: boolean;
+  effective_old_position_mode: OldPositionMode;
+  next_active_book_id: number | null;
+  placements: Array<{
+    book_id: number;
+    container_id: number | null;
+    position: number | null;
+    status: BookStatus;
+  }>;
+  gaps: Array<{ container_id: number; positions: number[] }>;
+  movement_log: string[];
+  warnings: string[];
 }
 
 export interface BookPayload {

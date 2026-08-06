@@ -376,9 +376,34 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-legend i.read { background: #4f887b; }
 .map-legend-note { margin-left: auto; color: #7a827f; }
 .map-edit-button { margin-left: 4px; }
+.map-edit-button.active { color: #fff; background: #28574d; }
 .map-edit-actions { display: flex; align-items: center; gap: 8px; margin-left: 4px; }
 .map-edit-actions button { padding: 7px 10px; }
 .map-layout-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #d4c8b7; border-radius: 10px; background: #f4eee4; }
+.map-rearrangement-panel { display: grid; gap: 13px; margin-bottom: 16px; padding: 15px; border: 1px solid #b9c9c2; border-radius: 10px; background: #edf3f0; }
+.map-rearrangement-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.map-rearrangement-heading h3 { margin: 2px 0 0; color: #203a33; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
+.map-rearrangement-heading h3 small { color: #65736e; font-family: inherit; font-size: 14px; font-weight: 400; }
+.map-rearrangement-help { margin: 0; color: #5f6f69; font-size: 13px; line-height: 1.5; }
+.map-current-position { display: flex; align-items: flex-start; gap: 8px; padding: 9px 11px; border-radius: 7px; color: #596963; background: #fffaf1; font-size: 12px; }
+.map-current-position span { display: grid; gap: 2px; }
+.map-current-position strong { color: #2b443d; }
+.map-move-modes, .map-precise-move { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.map-precise-move { grid-template-columns: minmax(180px, 1.35fr) minmax(180px, 1.35fr) minmax(80px, .4fr) auto; align-items: end; padding-top: 12px; border-top: 1px solid #c9d5d0; }
+.map-move-modes label, .map-precise-move label { display: grid; gap: 5px; color: #425750; font-size: 12px; font-weight: 700; }
+.map-move-modes select, .map-precise-move select, .map-precise-move input { min-width: 0; width: 100%; padding: 8px; border: 1px solid #c8bcaa; border-radius: 6px; color: #2d433c; background: #fffaf1; }
+.map-reading-return-choice { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border: 1px solid #c89d68; border-radius: 8px; color: #4b5c56; background: #fff6e6; }
+.map-reading-return-choice > div:first-child { display: grid; gap: 3px; }
+.map-reading-return-choice strong { color: #344b43; font-size: 13px; }
+.map-reading-return-choice span { font-size: 12px; line-height: 1.4; }
+.map-reading-return-choice > div:last-child { display: flex; flex: 0 0 auto; gap: 7px; }
+.map-reading-return-choice button { padding: 8px 13px; border: 1px solid #a88d69; border-radius: 6px; color: #40554e; background: #fffaf1; font-weight: 700; }
+.map-reading-return-choice button.active { border-color: #28574d; color: #fff; background: #28574d; }
+.map-movement-summary { padding: 11px 13px; border-radius: 7px; background: #fffaf1; }
+.map-movement-summary ol { display: grid; gap: 5px; margin: 0; padding-left: 22px; color: #43554f; font-size: 12px; line-height: 1.45; }
+.map-gap-warning, .map-chain-warning { margin: 9px 0 0; color: #943f2d; font-size: 12px; font-weight: 700; }
+.map-chain-warning { color: #526b62; }
+.map-rearrangement-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .map-direct-help { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border-radius: 7px; color: #51625c; background: #dfeae5; font-size: 12px; line-height: 1.45; }
 .map-direct-help strong { color: #8a452f; }
 .map-editor-section { min-width: 0; padding: 12px; border-radius: 8px; background: #fffaf1; }
@@ -392,6 +417,7 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-range input { width: 100%; accent-color: #28574d; }
 .map-room { position: relative; width: 100%; aspect-ratio: 5 / 3; min-height: 520px; overflow: hidden; border: 1px solid #cfc4b4; border-radius: 12px; background: linear-gradient(#eee8dd 0 76%, #d8cec0 76%); box-shadow: inset 0 0 50px #4d403314; }
 .map-room.editing { background-image: linear-gradient(#28574d12 1px, transparent 1px), linear-gradient(90deg, #28574d12 1px, transparent 1px), linear-gradient(#eee8dd 0 76%, #d8cec0 76%); background-size: 5% 5%, 5% 5%, 100% 100%; }
+.map-room.rearranging { box-shadow: inset 0 0 0 2px #28574d66, inset 0 0 50px #4d403314; }
 .map-direct-handle { position: absolute; z-index: 8; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid #f8f3e9; border-radius: 50%; color: #fff; background: #28574d; box-shadow: 0 2px 8px #173d3540; font-size: 16px; font-weight: 800; line-height: 1; touch-action: none; }
 .map-direct-handle:hover, .map-direct-handle:focus { background: #a85835; outline: 2px solid #fff; }
 .map-direct-handle.move { top: 5px; left: 50%; cursor: move; transform: translateX(-50%); }
@@ -399,6 +425,7 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-outside { position: absolute; z-index: 3; display: flex; overflow: hidden; align-items: center; justify-content: center; padding: 7px; border: 1px solid #9db8c1; border-radius: 9px; background: #e7f0f3; box-shadow: 0 5px 16px #31495120; cursor: pointer; }
 .map-outside:focus { outline: 2px solid #a85835; outline-offset: 2px; }
 .map-outside:hover { border-color: #a85835; box-shadow: 0 6px 18px #31495130; }
+.map-room.rearranging .map-outside { border-style: dashed; touch-action: none; }
 .map-outside-books { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .map-outside-books span { display: inline-flex; align-items: center; padding: 2px; background: #f7fbfc; border-radius: 3px; cursor: pointer; }
 .map-outside-books i { width: 10px; height: 22px; border: 1px solid #26332f80; border-radius: 1px; }
@@ -427,8 +454,14 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-svg-resize-handle:hover { fill: #a85835; }
 .map-book { pointer-events: all; cursor: pointer; stroke: #26332f99; stroke-width: .35; shape-rendering: crispEdges; }
 .map-container.editing .map-book { pointer-events: none; cursor: move; }
+.map-container.rearranging .map-book { touch-action: none; }
+.map-rearrange-target { fill: #fffaf108; stroke: #28574d45; stroke-width: .7; stroke-dasharray: 2 2; pointer-events: all; cursor: crosshair; }
+.map-rearrange-target:hover { fill: #e1ad5855; stroke: #a85835; stroke-width: 2; }
+.map-book.active-move { stroke: #0e527f; stroke-width: 2.2; filter: drop-shadow(0 0 4px #287fbdcc); }
+.map-book.reserved { fill: #9bb8c1; opacity: .4; stroke: #486d78; stroke-width: 1; stroke-dasharray: 2 1; }
 .map-book.muted { opacity: .16; fill: #9da5a2; stroke: #6e7573aa; }
 .map-book.focused { opacity: 1; stroke: #0e527f; stroke-width: 1.4; filter: drop-shadow(0 0 3px #287fbd99); }
+.map-drag-ghost { position: fixed; z-index: 1000; display: flex; align-items: center; gap: 7px; max-width: 260px; padding: 8px 10px; border: 1px solid #fffaf1; border-radius: 7px; color: #fff; background: #28574de8; box-shadow: 0 8px 20px #173d3555; font-size: 12px; font-weight: 700; pointer-events: none; }
 
 @media (max-width: 850px) {
   .shelf-art { opacity: .25; right: -80px; }
@@ -441,6 +474,7 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .layout-forms { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .map-layout-editor { grid-template-columns: 1fr; }
+  .map-precise-move { grid-template-columns: 1fr 1fr; }
   .map-room { min-width: 900px; }
   .map-dialog { overflow-x: auto; }
 }
@@ -513,6 +547,10 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .map-bookcase-heading { align-items: flex-start; flex-direction: column; }
   .map-outside { align-items: flex-start; flex-direction: column; }
   .map-range-grid { grid-template-columns: 1fr; }
+  .map-rearrangement-heading { flex-direction: column; }
+  .map-move-modes, .map-precise-move { grid-template-columns: 1fr; }
+  .map-reading-return-choice { align-items: stretch; flex-direction: column; }
+  .map-reading-return-choice > div:last-child button { flex: 1; }
 }
 
 @media (max-width: 420px) {

@@ -8,6 +8,8 @@ import type {
   Stats,
   CatalogueStatistics,
   ReadingSuggestion,
+  RearrangementRequest,
+  RearrangementResult,
   LibraryMapData,
   ISBNLookupResult,
   CatalogueMatch,
@@ -140,6 +142,19 @@ export const api = {
     request<CatalogueMatch[]>("/bibliography/matches", {
       method: "POST",
       body: JSON.stringify({ title, authors }),
+    }),
+  previewRearrangement: (payload: RearrangementRequest) =>
+    request<RearrangementResult>("/rearrangements/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  applyRearrangement: (
+    payload: RearrangementRequest,
+    revision: string,
+  ) =>
+    request<RearrangementResult>("/rearrangements/apply", {
+      method: "POST",
+      body: JSON.stringify({ ...payload, revision }),
     }),
   updateVisualLayout: (layout: VisualLayout) =>
     request<VisualLayout>("/visual-layout", {

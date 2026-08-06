@@ -50,6 +50,10 @@ import type {
   MapContainer,
   MapShelf,
   ReadingSuggestion,
+  NewPositionMode,
+  OldPositionMode,
+  RearrangementResult,
+  RearrangementStep,
   ISBNLookupResult,
   Stats,
   VisualLayout,
@@ -90,7 +94,6 @@ function App() {
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
   const [batchAdding, setBatchAdding] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
-  const [showReorganize, setShowReorganize] = useState(false);
   const [showData, setShowData] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
@@ -400,10 +403,6 @@ function App() {
                     setActiveMenu(null);
                     setBatchAdding(true);
                   }}><ListPlus size={16} /> Add Batch</button>
-                  <button role="menuitem" onClick={() => {
-                    setActiveMenu(null);
-                    setShowReorganize(true);
-                  }}><ArrowRightLeft size={16} /> Reorganize</button>
                 </div>
               )}
             </div>
@@ -862,13 +861,6 @@ function App() {
           onChanged={refresh}
         />
       )}
-      {showReorganize && (
-        <ReorganizeDialog
-          library={library}
-          onClose={() => setShowReorganize(false)}
-          onChanged={refresh}
-        />
-      )}
       {showData && <DataDialog onClose={() => setShowData(false)} />}
       {showStatistics && (
         <StatisticsDialog onClose={() => setShowStatistics(false)} />
@@ -907,6 +899,7 @@ function App() {
           onFilter={openCatalogueAt}
           onReadingFilter={openReadingCatalogue}
           onBookFilter={openExactBookCatalogue}
+          onChanged={refresh}
         />
       )}
     </main>
@@ -2601,158 +2594,6 @@ function LibraryDialog({
   );
 }
 
-function ReorganizeDialog({
-  library,
-  onClose,
-  onChanged,
-}: {
-  library: Bookcase[];
-  onClose: () => void;
-  onChanged: () => Promise<void>;
-}) {
-  const [allBooks, setAllBooks] = useState<Book[]>([]);
-  const [selectedBook, setSelectedBook] = useState("");
-  const [selectedContainer, setSelectedContainer] = useState("");
-  const [position, setPosition] = useState(1);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const containers = useMemo(
-    () =>
-      library.flatMap((bookcase) =>
-        bookcase.shelves.flatMap((shelf) =>
-          shelf.containers.map((container) => ({
-            ...container,
-            label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${
-              container.layer === "BACKGROUND" ? "Background" : "Foreground"
-            } ${container.container_type === "ROW" ? "Row" : "Pile"} ${
-              container.container_number
-            }`,
-          })),
-        ),
-      ),
-    [library],
-  );
-
-  const loadBooks = useCallback(async () => {
-    try {
-      setAllBooks(await api.books({
-        bookId: "",
-        status: "ALL",
-        search: "",
-        sortBy: "title",
-        sortOrder: "asc",
-        bookcaseId: "",
-        shelfId: "",
-        containerId: "",
-        dateField: "acquisition_date",
-        dateFrom: "",
-        dateTo: "",
-        quickView: "",
-        catalogueCheck: "",
-        includeUnknownSelectedDates: false,
-        includeUnknownSortDates: false,
-      }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load books");
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadBooks();
-  }, [loadBooks]);
-
-  const movableBooks = allBooks;
-  const chosenBook = movableBooks.find(
-    (book) => book.id === Number(selectedBook),
-  );
-
-  async function move(event: FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      await api.moveBook(
-        Number(selectedBook),
-        Number(selectedContainer),
-        position,
-      );
-      await Promise.all([loadBooks(), onChanged()]);
-      setSelectedBook("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to move book");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className="dialog reorganize-dialog" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-header">
-          <div>
-            <p className="eyebrow dark">Change of place</p>
-            <h2>Reorganize books</h2>
-          </div>
-          <button className="icon-button" onClick={onClose}><X /></button>
-        </div>
-        <p className="dialog-intro">
-          Choose a book and its destination. If another book occupies that
-          position, BOOKPILE swaps their places automatically.
-        </p>
-        <form onSubmit={(event) => void move(event)}>
-          <div className="move-grid">
-            <label>Book
-              <select required value={selectedBook} onChange={(event) => setSelectedBook(event.target.value)}>
-                <option value="">Choose book</option>
-                {movableBooks.map((book) => (
-                  <option key={book.id} value={book.id}>
-                    {book.title} — {book.author}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="current-location">
-              <MapPin size={17} />
-              <span>{chosenBook?.location_label ?? "Current location not assigned"}</span>
-            </div>
-            <label>Destination container
-              <select required value={selectedContainer} onChange={(event) => setSelectedContainer(event.target.value)}>
-                <option value="">Choose container</option>
-                {containers.map((container) => (
-                  <option key={container.id} value={container.id}>
-                    {container.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>Destination position
-              <input
-                required
-                type="number"
-                min="1"
-                value={position}
-                onChange={(event) => setPosition(Number(event.target.value))}
-              />
-            </label>
-          </div>
-          {error && <div className="form-error">{error}</div>}
-          <div className="dialog-actions">
-            <button type="button" className="text-button" onClick={onClose}>Close</button>
-            <button
-              className="primary-button"
-              disabled={saving || !selectedBook || !selectedContainer}
-            >
-              <ArrowRightLeft size={17} />
-              {saving ? "Moving…" : "Move book"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 const MAP_WIDTH = 960;
 const MAP_INSET = 22;
 const MAP_HEIGHT = 620;
@@ -2991,9 +2832,15 @@ function MapContainerGraphic({
   focusedBookId,
   colourScale,
   editing,
+  rearranging,
+  activeBookId,
+  reservedBooks,
   onEdit,
   onRectPointerDown,
   onBookSelect,
+  onRearrangeBookSelect,
+  onDestination,
+  onBookPointerDown,
 }: {
   container: MapContainer;
   x: number;
@@ -3005,33 +2852,47 @@ function MapContainerGraphic({
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
+  rearranging: boolean;
+  activeBookId: number | null;
+  reservedBooks: MapBook[];
   onEdit: () => void;
   onRectPointerDown: (
     event: React.PointerEvent<SVGGElement | SVGRectElement>,
     mode: "move" | "resize",
   ) => void;
   onBookSelect: (book: MapBook) => void;
+  onRearrangeBookSelect: (book: MapBook) => void;
+  onDestination: (containerId: number, position: number) => void;
+  onBookPointerDown: (
+    book: MapBook,
+    event: React.PointerEvent<Element>,
+  ) => void;
 }) {
   const padding = 3;
   const bookAreaHeight = Math.max(6, height - padding * 2);
   const availableWidth = Math.max(20, width - padding * 2);
   const books = container.books;
+  const occupiedBooks = rearranging ? [...books, ...reservedBooks] : books;
   const isRow = container.container_type === "ROW";
   const maxPosition = Math.max(
-    1,
-    ...books.map((book) => book.position ?? 1),
+    0,
+    ...occupiedBooks.map((book) => book.position ?? 1),
   );
+  const targetPositions = rearranging
+    ? Array.from({ length: maxPosition + 1 }, (_, index) => index + 1)
+    : [];
+  const slotCount = Math.max(1, rearranging ? maxPosition + 1 : maxPosition);
   const activate = (event: React.KeyboardEvent<SVGGElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (editing) onEdit();
-      else onSelect();
+      else if (!rearranging) onSelect();
     }
   };
 
   return (
     <g
-      className={`map-container ${editing ? "editing" : ""} ${obscured ? "obscured" : ""} ${
+      className={`map-container ${editing ? "editing" : ""} ${rearranging ? "rearranging" : ""} ${obscured ? "obscured" : ""} ${
         container.layer === "FOREGROUND" ? "foreground" : ""
       }`}
       role="button"
@@ -3039,7 +2900,7 @@ function MapContainerGraphic({
       onClick={(event) => {
         event.stopPropagation();
         if (editing) onEdit();
-        else onSelect();
+        else if (!rearranging) onSelect();
       }}
       onPointerDown={(event) => {
         if (editing) onRectPointerDown(event, "move");
@@ -3052,14 +2913,40 @@ function MapContainerGraphic({
         {container.container_number} · {container.book_count} books
       </title>
       <rect x={x} y={y} width={width} height={height} rx="2" />
-      {container.book_count > 0 && isRow ? (
+      {targetPositions.map((position) => {
+        const slotWidth = availableWidth / slotCount;
+        const slotHeight = bookAreaHeight / slotCount;
+        return (
+          <rect
+            key={`target-${position}`}
+            className="map-rearrange-target"
+            data-container-id={container.id}
+            data-position={position}
+            x={isRow
+              ? x + padding + (position - 1) * slotWidth
+              : x + padding}
+            y={isRow
+              ? y + padding
+              : y + padding + (position - 1) * slotHeight}
+            width={isRow ? Math.max(1, slotWidth - 0.5) : availableWidth}
+            height={isRow ? bookAreaHeight : Math.max(1, slotHeight - 0.5)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDestination(container.id, position);
+            }}
+          >
+            <title>Move to position {position}</title>
+          </rect>
+        );
+      })}
+      {books.length > 0 && isRow ? (
         books.map((book) => {
-          const slotWidth = availableWidth / maxPosition;
+          const slotWidth = availableWidth / slotCount;
           const bookWidth = Math.max(1, slotWidth - 0.7);
           return (
             <rect
               key={book.id}
-              className={`map-book ${
+              className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
                 focusedBookId === null
                   ? ""
                   : book.id === focusedBookId
@@ -3074,10 +2961,16 @@ function MapContainerGraphic({
               role={editing ? undefined : "button"}
               tabIndex={editing ? -1 : 0}
               aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
+              data-container-id={container.id}
+              data-position={book.position ?? 1}
+              onPointerDown={(event) => {
+                if (rearranging) onBookPointerDown(book, event);
+              }}
               onClick={(event) => {
                 if (editing) return;
                 event.stopPropagation();
-                onBookSelect(book);
+                if (rearranging) onRearrangeBookSelect(book);
+                else onBookSelect(book);
               }}
               onKeyDown={(event) => {
                 if (
@@ -3086,7 +2979,8 @@ function MapContainerGraphic({
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
-                  onBookSelect(book);
+                  if (rearranging) onRearrangeBookSelect(book);
+                  else onBookSelect(book);
                 }
               }}
             >
@@ -3097,14 +2991,14 @@ function MapContainerGraphic({
             </rect>
           );
         })
-      ) : container.book_count > 0 ? (
+      ) : books.length > 0 ? (
         books.map((book) => {
-          const slotHeight = bookAreaHeight / maxPosition;
+          const slotHeight = bookAreaHeight / slotCount;
           const bookHeight = Math.max(1, slotHeight - 0.7);
           return (
             <rect
               key={book.id}
-              className={`map-book ${
+              className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
                 focusedBookId === null
                   ? ""
                   : book.id === focusedBookId
@@ -3119,10 +3013,16 @@ function MapContainerGraphic({
               role={editing ? undefined : "button"}
               tabIndex={editing ? -1 : 0}
               aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
+              data-container-id={container.id}
+              data-position={book.position ?? 1}
+              onPointerDown={(event) => {
+                if (rearranging) onBookPointerDown(book, event);
+              }}
               onClick={(event) => {
                 if (editing) return;
                 event.stopPropagation();
-                onBookSelect(book);
+                if (rearranging) onRearrangeBookSelect(book);
+                else onBookSelect(book);
               }}
               onKeyDown={(event) => {
                 if (
@@ -3131,7 +3031,8 @@ function MapContainerGraphic({
                 ) {
                   event.preventDefault();
                   event.stopPropagation();
-                  onBookSelect(book);
+                  if (rearranging) onRearrangeBookSelect(book);
+                  else onBookSelect(book);
                 }
               }}
             >
@@ -3143,6 +3044,36 @@ function MapContainerGraphic({
           );
         })
       ) : null}
+      {rearranging && reservedBooks.map((book) => {
+        const slotWidth = availableWidth / slotCount;
+        const slotHeight = bookAreaHeight / slotCount;
+        return (
+          <rect
+            key={`reserved-${book.id}`}
+            className={`map-book reserved ${book.id === activeBookId ? "active-move" : ""}`}
+            data-container-id={container.id}
+            data-position={book.position ?? 1}
+            x={isRow
+              ? x + padding + ((book.position ?? 1) - 1) * slotWidth
+              : x + padding}
+            y={isRow
+              ? y + padding
+              : y + padding + ((book.position ?? 1) - 1) * slotHeight}
+            width={isRow ? Math.max(1, slotWidth - 0.7) : availableWidth}
+            height={isRow ? bookAreaHeight : Math.max(1, slotHeight - 0.7)}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (book.id === activeBookId) {
+                onDestination(container.id, book.position ?? 1);
+              } else {
+                onRearrangeBookSelect(book);
+              }
+            }}
+          >
+            <title>{book.title} · retained position while Reading</title>
+          </rect>
+        );
+      })}
       {editing && (
         <rect
           className="map-svg-resize-handle"
@@ -3168,10 +3099,16 @@ function MapShelfGraphic({
   focusedBookId,
   colourScale,
   editing,
+  rearranging,
+  activeBookId,
+  reservedBooksByContainer,
   onEditShelf,
   onEditContainer,
   onContainerLayoutChange,
   onBookSelect,
+  onRearrangeBookSelect,
+  onDestination,
+  onBookPointerDown,
 }: {
   shelf: MapShelf;
   y: number;
@@ -3182,10 +3119,19 @@ function MapShelfGraphic({
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
+  rearranging: boolean;
+  activeBookId: number | null;
+  reservedBooksByContainer: Map<number, MapBook[]>;
   onEditShelf: () => void;
   onEditContainer: (container: MapContainer) => void;
   onContainerLayoutChange: (containerId: number, rect: VisualRect) => void;
   onBookSelect: (book: MapBook) => void;
+  onRearrangeBookSelect: (book: MapBook) => void;
+  onDestination: (containerId: number, position: number) => void;
+  onBookPointerDown: (
+    book: MapBook,
+    event: React.PointerEvent<Element>,
+  ) => void;
 }) {
   const contentY = y + 7;
   const contentHeight = Math.max(8, height - 17);
@@ -3201,13 +3147,13 @@ function MapShelfGraphic({
       onClick={(event) => {
         event.stopPropagation();
         if (editing) onEditShelf();
-        else onShelf();
+        else if (!rearranging) onShelf();
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.stopPropagation();
           if (editing) onEditShelf();
-          else onShelf();
+          else if (!rearranging) onShelf();
         }
       }}
     >
@@ -3241,8 +3187,14 @@ function MapShelfGraphic({
             focusedBookId={focusedBookId}
             colourScale={colourScale}
             editing={editing}
+            rearranging={rearranging}
+            activeBookId={activeBookId}
+            reservedBooks={reservedBooksByContainer.get(container.id) ?? []}
             onEdit={() => onEditContainer(container)}
             onBookSelect={onBookSelect}
+            onRearrangeBookSelect={onRearrangeBookSelect}
+            onDestination={onDestination}
+            onBookPointerDown={onBookPointerDown}
             onRectPointerDown={(event, mode) => {
               event.preventDefault();
               event.stopPropagation();
@@ -3306,6 +3258,9 @@ function MapBookcaseGraphic({
   focusedBookId,
   colourScale,
   editing,
+  rearranging,
+  activeBookId,
+  reservedBooksByContainer,
   onEditBookcase,
   onEditShelf,
   onEditContainer,
@@ -3313,6 +3268,9 @@ function MapBookcaseGraphic({
   onShelfWeightsChange,
   onRectPointerDown,
   onBookSelect,
+  onRearrangeBookSelect,
+  onDestination,
+  onBookPointerDown,
 }: {
   bookcase: MapBookcase;
   onBookcase: () => void;
@@ -3324,6 +3282,9 @@ function MapBookcaseGraphic({
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
+  rearranging: boolean;
+  activeBookId: number | null;
+  reservedBooksByContainer: Map<number, MapBook[]>;
   onEditBookcase: () => void;
   onEditShelf: (shelf: MapShelf) => void;
   onEditContainer: (container: MapContainer) => void;
@@ -3339,6 +3300,12 @@ function MapBookcaseGraphic({
     mode: "move" | "resize",
   ) => void;
   onBookSelect: (book: MapBook) => void;
+  onRearrangeBookSelect: (book: MapBook) => void;
+  onDestination: (containerId: number, position: number) => void;
+  onBookPointerDown: (
+    book: MapBook,
+    event: React.PointerEvent<Element>,
+  ) => void;
 }) {
   const height = MAP_HEIGHT;
   const availableHeight = height - 22;
@@ -3358,11 +3325,11 @@ function MapBookcaseGraphic({
       className="map-bookcase-card"
       role="button"
       tabIndex={0}
-      onClick={editing ? onEditBookcase : onBookcase}
+      onClick={editing ? onEditBookcase : rearranging ? undefined : onBookcase}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           if (editing) onEditBookcase();
-          else onBookcase();
+          else if (!rearranging) onBookcase();
         }
       }}
       style={{
@@ -3403,10 +3370,16 @@ function MapBookcaseGraphic({
                 focusedBookId={focusedBookId}
                 colourScale={colourScale}
                 editing={editing}
+                rearranging={rearranging}
+                activeBookId={activeBookId}
+                reservedBooksByContainer={reservedBooksByContainer}
                 onEditShelf={() => onEditShelf(shelf)}
                 onEditContainer={onEditContainer}
                 onContainerLayoutChange={onContainerLayoutChange}
                 onBookSelect={onBookSelect}
+                onRearrangeBookSelect={onRearrangeBookSelect}
+                onDestination={onDestination}
+                onBookPointerDown={onBookPointerDown}
               />
               {editing && nextShelf && (
                 <line
@@ -3523,6 +3496,7 @@ function LibraryMapDialog({
   onFilter,
   onReadingFilter,
   onBookFilter,
+  onChanged,
   focusedBook,
 }: {
   onClose: () => void;
@@ -3533,6 +3507,7 @@ function LibraryMapDialog({
   ) => void;
   onReadingFilter: () => void;
   onBookFilter: (book: MapBook) => void;
+  onChanged: () => Promise<void>;
   focusedBook: Book | null;
 }) {
   const [map, setMap] = useState<LibraryMapData>({
@@ -3549,24 +3524,55 @@ function LibraryMapDialog({
   const [selectedContainer, setSelectedContainer] = useState("");
   const [saving, setSaving] = useState(false);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
+  const [rearranging, setRearranging] = useState(false);
+  const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
+  const [oldPositionMode, setOldPositionMode] =
+    useState<OldPositionMode>("COLLAPSE");
+  const [newPositionMode, setNewPositionMode] =
+    useState<NewPositionMode>("SQUEEZE");
+  const [rearrangementSteps, setRearrangementSteps] =
+    useState<RearrangementStep[]>([]);
+  const [rearrangementPreview, setRearrangementPreview] =
+    useState<RearrangementResult | null>(null);
+  const [previewingMove, setPreviewingMove] = useState(false);
+  const [applyingMove, setApplyingMove] = useState(false);
+  const [preciseContainer, setPreciseContainer] = useState("");
+  const [precisePosition, setPrecisePosition] = useState(1);
+  const [readingExitStatus, setReadingExitStatus] =
+    useState<"" | "PENDING" | "READ">("");
+  const [pendingReadingDestination, setPendingReadingDestination] = useState<{
+    containerId: number;
+    position: number;
+  } | null>(null);
+  const [dragGhost, setDragGhost] = useState<{
+    title: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const roomRef = useRef<HTMLDivElement>(null);
+  const ignoreNextBookClick = useRef(false);
+
+  const loadMap = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api.libraryMap();
+      setMap(result);
+      setDraft(structuredClone(result.layout));
+      setSelectedBookcase(String(result.bookcases[0]?.id ?? ""));
+      setSelectedShelf(String(result.bookcases[0]?.shelves[0]?.id ?? ""));
+      setSelectedContainer(
+        String(result.bookcases[0]?.shelves[0]?.containers[0]?.id ?? ""),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load map");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void api.libraryMap()
-      .then((result) => {
-        setMap(result);
-        setDraft(structuredClone(result.layout));
-        setSelectedBookcase(String(result.bookcases[0]?.id ?? ""));
-        setSelectedShelf(String(result.bookcases[0]?.shelves[0]?.id ?? ""));
-        setSelectedContainer(
-          String(result.bookcases[0]?.shelves[0]?.containers[0]?.id ?? ""),
-        );
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Unable to load map");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    void loadMap();
+  }, [loadMap]);
 
   const activeLayout = editingLayout ? draft : map.layout;
   const bookcaseRects = new Map(
@@ -3638,9 +3644,94 @@ function LibraryMapDialog({
     ],
     [map],
   );
+  const mapContainers = useMemo(
+    () => map.bookcases.flatMap((bookcase) =>
+      bookcase.shelves.flatMap((shelf) =>
+        shelf.containers.map((container) => ({
+          ...container,
+          shelfId: shelf.id,
+          label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${
+            container.layer === "BACKGROUND" ? "Background" : "Foreground"
+          } ${container.container_type === "ROW" ? "Row" : "Pile"} ${
+            container.container_number
+          }`,
+        })),
+      ),
+    ),
+    [map],
+  );
+  const projectedBooks = useMemo(() => {
+    const placements = new Map(
+      (rearrangementPreview?.placements ?? []).map((item) => [item.book_id, item]),
+    );
+    return allMapBooks.map((book) => {
+      const placement = placements.get(book.id);
+      return placement ? {
+        ...book,
+        container_id: placement.container_id,
+        position: placement.position,
+        status: placement.status,
+      } : book;
+    });
+  }, [allMapBooks, rearrangementPreview]);
+  const displayMap = useMemo<LibraryMapData>(() => ({
+    ...map,
+    bookcases: map.bookcases.map((bookcase) => ({
+      ...bookcase,
+      shelves: bookcase.shelves.map((shelf) => ({
+        ...shelf,
+        containers: shelf.containers.map((container) => ({
+          ...container,
+          books: projectedBooks.filter((book) =>
+            book.status !== "CURRENTLY_READING" &&
+            book.container_id === container.id &&
+            book.position !== null,
+          ),
+        })),
+      })),
+    })),
+    outside_books: projectedBooks.filter(
+      (book) => book.status === "CURRENTLY_READING",
+    ),
+  }), [map, projectedBooks]);
+  const reservedBooksByContainer = useMemo(() => {
+    const result = new Map<number, MapBook[]>();
+    if (!rearranging) return result;
+    for (const book of projectedBooks) {
+      if (
+        book.status === "CURRENTLY_READING" &&
+        book.container_id !== null &&
+        book.position !== null
+      ) {
+        result.set(book.container_id, [
+          ...(result.get(book.container_id) ?? []),
+          book,
+        ]);
+      }
+    }
+    return result;
+  }, [projectedBooks, rearranging]);
+  const activeMoveBookId = rearrangementPreview?.next_active_book_id ??
+    selectedMoveBookId;
+  const selectedMoveBook = projectedBooks.find(
+    (book) => book.id === selectedMoveBookId,
+  ) ?? null;
+  const activeMoveBook = projectedBooks.find(
+    (book) => book.id === activeMoveBookId,
+  ) ?? null;
+  const selectedOriginalMoveBook = allMapBooks.find(
+    (book) => book.id === selectedMoveBookId,
+  ) ?? null;
+  const selectedOriginalContainer = mapContainers.find(
+    (container) => container.id === selectedOriginalMoveBook?.container_id,
+  );
+  const selectedOriginalLocation = selectedOriginalContainer &&
+    selectedOriginalMoveBook?.position
+    ? `${selectedOriginalContainer.label} · Position ${selectedOriginalMoveBook.position}`
+    : "No retained physical position";
   const colourScale = useMemo(
-    () => buildMapColourScale(colourMode, allMapBooks),
-    [allMapBooks, colourMode],
+    () => buildMapColourScale(colourMode, projectedBooks),
+    [projectedBooks, colourMode],
   );
 
   function updateBookcaseRect(field: keyof VisualRect, value: number) {
@@ -3749,6 +3840,249 @@ function LibraryMapDialog({
     window.addEventListener("pointerup", stop, { once: true });
   }
 
+  function resetRearrangement(leaveMode = false) {
+    setSelectedMoveBookId(null);
+    setRearrangementSteps([]);
+    setRearrangementPreview(null);
+    setPreciseContainer("");
+    setPrecisePosition(1);
+    setReadingExitStatus("");
+    setPendingReadingDestination(null);
+    setDragGhost(null);
+    setError("");
+    if (!leaveMode) {
+      setOldPositionMode("COLLAPSE");
+      setNewPositionMode("SQUEEZE");
+    }
+  }
+
+  async function previewSteps(
+    bookId: number,
+    steps: RearrangementStep[],
+    oldMode = oldPositionMode,
+  ) {
+    setPreviewingMove(true);
+    setError("");
+    try {
+      const result = await api.previewRearrangement({
+        book_id: bookId,
+        old_position_mode: oldMode,
+        steps,
+      });
+      setRearrangementSteps(steps);
+      setRearrangementPreview(result);
+      setOldPositionMode(result.effective_old_position_mode);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to preview movement");
+    } finally {
+      setPreviewingMove(false);
+    }
+  }
+
+  function startMoveBook(book: MapBook) {
+    setSelectedMoveBookId(book.id);
+    setRearrangementSteps([]);
+    setRearrangementPreview(null);
+    setReadingExitStatus("");
+    setPendingReadingDestination(null);
+    setError("");
+    if (book.container_id !== null) {
+      setPreciseContainer(String(book.container_id));
+      setPrecisePosition(book.position ?? 1);
+    }
+  }
+
+  function selectMoveBook(book: MapBook) {
+    if (ignoreNextBookClick.current) {
+      ignoreNextBookClick.current = false;
+      return;
+    }
+    if (selectedMoveBookId !== null) {
+      if (rearrangementPreview?.complete) {
+        setError("Apply or cancel the current movement before selecting another book.");
+        return;
+      }
+      if (book.id === activeMoveBookId) return;
+      if (book.container_id !== null && book.position !== null) {
+        void addPhysicalDestination(book.container_id, book.position);
+      }
+      return;
+    }
+    startMoveBook(book);
+  }
+
+  async function addPhysicalDestination(
+    containerId: number,
+    position: number,
+    context?: {
+      bookId: number;
+      steps: RearrangementStep[];
+      sourceBook: MapBook;
+      readingStatus?: "PENDING" | "READ";
+    },
+  ) {
+    const bookId = context?.bookId ?? selectedMoveBookId;
+    const steps = context?.steps ?? rearrangementSteps;
+    const sourceBook = context?.sourceBook ?? selectedMoveBook;
+    const returnStatus = context?.readingStatus ?? readingExitStatus;
+    if (bookId === null || !sourceBook || (!context && rearrangementPreview?.complete)) {
+      return;
+    }
+    if (sourceBook.status === "CURRENTLY_READING" && !returnStatus) {
+      setPendingReadingDestination({ containerId, position });
+      setError("");
+      return;
+    }
+    setPendingReadingDestination(null);
+    const step: RearrangementStep = {
+      destination_kind: "PHYSICAL",
+      container_id: containerId,
+      position,
+      new_position_mode: newPositionMode,
+      reading_exit_status: sourceBook.status === "CURRENTLY_READING"
+        ? returnStatus || null
+        : null,
+    };
+    await previewSteps(bookId, [...steps, step]);
+  }
+
+  async function addReadingDestination(context?: {
+    bookId: number;
+    steps: RearrangementStep[];
+    sourceBook: MapBook;
+  }) {
+    const bookId = context?.bookId ?? selectedMoveBookId;
+    const steps = context?.steps ?? rearrangementSteps;
+    const sourceBook = context?.sourceBook ?? selectedMoveBook;
+    if (bookId === null || !sourceBook || steps.length > 0) return;
+    if (sourceBook.status === "READ") {
+      setError("Read books cannot be moved back to Reading until reading sessions are supported.");
+      return;
+    }
+    if (sourceBook.status === "CURRENTLY_READING") return;
+    await previewSteps(bookId, [{ destination_kind: "READING" }]);
+  }
+
+  function chooseReadingReturnStatus(status: "PENDING" | "READ") {
+    setReadingExitStatus(status);
+    setError("");
+    if (pendingReadingDestination && selectedMoveBookId && selectedMoveBook) {
+      void addPhysicalDestination(
+        pendingReadingDestination.containerId,
+        pendingReadingDestination.position,
+        {
+          bookId: selectedMoveBookId,
+          steps: rearrangementSteps,
+          sourceBook: selectedMoveBook,
+          readingStatus: status,
+        },
+      );
+    }
+  }
+
+  async function undoRearrangementStep() {
+    if (selectedMoveBookId === null || rearrangementSteps.length === 0) return;
+    const next = rearrangementSteps.slice(0, -1);
+    if (next.length === 0) {
+      setRearrangementSteps([]);
+      setRearrangementPreview(null);
+      setError("");
+      return;
+    }
+    await previewSteps(selectedMoveBookId, next);
+  }
+
+  async function applyRearrangement() {
+    if (
+      selectedMoveBookId === null ||
+      !rearrangementPreview?.valid_to_apply
+    ) return;
+    const statusChanges = rearrangementPreview.placements.some((placement) => {
+      const original = allMapBooks.find((book) => book.id === placement.book_id);
+      return original && original.status !== placement.status;
+    });
+    const summary = rearrangementPreview.movement_log.join("\n");
+    if (!window.confirm(
+      `${statusChanges ? "This also changes a reading status.\n\n" : ""}${summary}\n\nApply these changes?`,
+    )) return;
+    setApplyingMove(true);
+    setError("");
+    try {
+      await api.applyRearrangement(
+        {
+          book_id: selectedMoveBookId,
+          old_position_mode: oldPositionMode,
+          steps: rearrangementSteps,
+        },
+        rearrangementPreview.revision,
+      );
+      resetRearrangement();
+      await Promise.all([loadMap(), onChanged()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to apply movement");
+    } finally {
+      setApplyingMove(false);
+    }
+  }
+
+  function beginBookDrag(
+    book: MapBook,
+    event: React.PointerEvent<Element>,
+  ) {
+    const beginningSelection = selectedMoveBookId === null;
+    if (
+      (!beginningSelection && book.id !== activeMoveBookId) ||
+      rearrangementPreview?.complete
+    ) return;
+    event.stopPropagation();
+    if (beginningSelection) startMoveBook(book);
+    const dragBookId = beginningSelection ? book.id : selectedMoveBookId;
+    const dragSteps = beginningSelection ? [] : rearrangementSteps;
+    const dragSourceBook = beginningSelection ? book : selectedMoveBook;
+    if (dragBookId === null || !dragSourceBook) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let dragging = false;
+    const move = (moveEvent: PointerEvent) => {
+      if (
+        !dragging &&
+        Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 6
+      ) dragging = true;
+      if (dragging) {
+        setDragGhost({ title: book.title, x: moveEvent.clientX, y: moveEvent.clientY });
+      }
+    };
+    const stop = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      setDragGhost(null);
+      if (!dragging) return;
+      ignoreNextBookClick.current = true;
+      const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY)
+        ?.closest<SVGElement>("[data-container-id][data-position]");
+      const readingTarget = document.elementFromPoint(
+        upEvent.clientX,
+        upEvent.clientY,
+      )?.closest("[data-reading-target]");
+      const containerId = Number(target?.dataset.containerId);
+      const position = Number(target?.dataset.position);
+      if (containerId > 0 && position > 0) {
+        void addPhysicalDestination(containerId, position, {
+          bookId: dragBookId,
+          steps: dragSteps,
+          sourceBook: dragSourceBook,
+        });
+      } else if (readingTarget) {
+        void addReadingDestination({
+          bookId: dragBookId,
+          steps: dragSteps,
+          sourceBook: dragSourceBook,
+        });
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  }
+
   async function saveLayout() {
     setSaving(true);
     setError("");
@@ -3772,7 +4106,9 @@ function LibraryMapDialog({
       >
         <div className="dialog-header">
           <div>
-            <p className="eyebrow dark">Read-only visual index</p>
+            <p className="eyebrow dark">
+              {rearranging ? "Visual rearrangement" : "Visual library index"}
+            </p>
             <h2>Library map</h2>
           </div>
           <button className="icon-button" onClick={onClose}><X /></button>
@@ -3827,15 +4163,29 @@ function LibraryMapDialog({
           )}
           <span className="map-legend-note">Rows run left → right · piles stack top → bottom</span>
           {!editingLayout ? (
-            <button
-              className="text-button map-edit-button"
-              onClick={() => {
-                setDraft(structuredClone(map.layout));
-                setEditingLayout(true);
-              }}
-            >
-              <Pencil size={15} /> Edit layout
-            </button>
+            <>
+              <button
+                className={`text-button map-edit-button ${rearranging ? "active" : ""}`}
+                onClick={() => {
+                  if (rearranging) resetRearrangement();
+                  setRearranging((current) => !current);
+                }}
+              >
+                <ArrowRightLeft size={15} />
+                {rearranging ? "Exit rearrange" : "Rearrange books"}
+              </button>
+              {!rearranging && (
+                <button
+                  className="text-button map-edit-button"
+                  onClick={() => {
+                    setDraft(structuredClone(map.layout));
+                    setEditingLayout(true);
+                  }}
+                >
+                  <Pencil size={15} /> Edit layout
+                </button>
+              )}
+            </>
           ) : (
             <div className="map-edit-actions">
               <button
@@ -4035,21 +4385,237 @@ function LibraryMapDialog({
                 </div>
               </aside>
             )}
+            {rearranging && (
+              <aside className="map-rearrangement-panel">
+                <div className="map-rearrangement-heading">
+                  <div>
+                    <p className="eyebrow dark">Draft movement</p>
+                    {activeMoveBook ? (
+                      <h3>{activeMoveBook.title} <small>— {activeMoveBook.author}</small></h3>
+                    ) : (
+                      <h3>Select a book on the map</h3>
+                    )}
+                  </div>
+                  {selectedMoveBookId !== null && (
+                    <button className="text-button" onClick={() => resetRearrangement()}>
+                      <RotateCcw size={15} /> Cancel draft
+                    </button>
+                  )}
+                </div>
+                <div className="map-move-modes">
+                  <label>
+                    Old position
+                    <select
+                      value={oldPositionMode}
+                      disabled={
+                        rearrangementSteps.length > 0 ||
+                        newPositionMode === "SWAP"
+                      }
+                      onChange={(event) => setOldPositionMode(
+                        event.target.value as OldPositionMode,
+                      )}
+                    >
+                      <option value="COLLAPSE">Collapse</option>
+                      <option value="LEAVE_GAP">Leave gap</option>
+                    </select>
+                  </label>
+                  <label>
+                    New position
+                    <select
+                      value={newPositionMode}
+                      disabled={Boolean(rearrangementPreview?.complete)}
+                      onChange={(event) => {
+                        const value = event.target.value as NewPositionMode;
+                        setNewPositionMode(value);
+                        if (value === "SWAP") setOldPositionMode("LEAVE_GAP");
+                      }}
+                    >
+                      <option value="SQUEEZE">Squeeze</option>
+                      <option value="SWAP">Swap</option>
+                      <option value="CONTINUE">Continue</option>
+                    </select>
+                  </label>
+                </div>
+                {selectedMoveBookId === null ? (
+                  <p className="map-rearrangement-help">
+                    Tap a book, or choose one with the precise controls below.
+                    Then tap its destination or drag the selected book there.
+                  </p>
+                ) : (
+                  <>
+                    <div className="map-current-position">
+                      <MapPin size={16} />
+                      <span><strong>Original position</strong>{selectedOriginalLocation}</span>
+                    </div>
+                    {selectedOriginalMoveBook?.status === "CURRENTLY_READING" && (
+                      <div className="map-reading-return-choice">
+                        <div>
+                          <strong>Return this Reading book to the library as:</strong>
+                          <span>
+                            {pendingReadingDestination
+                              ? "The destination is selected. Confirm the new status to preview the move."
+                              : "Moving it back changes its reading status; choose before applying a destination."}
+                          </span>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            className={readingExitStatus === "PENDING" ? "active" : ""}
+                            disabled={rearrangementSteps.length > 0}
+                            onClick={() => chooseReadingReturnStatus("PENDING")}
+                          >
+                            Pending
+                          </button>
+                          <button
+                            type="button"
+                            className={readingExitStatus === "READ" ? "active" : ""}
+                            disabled={rearrangementSteps.length > 0}
+                            onClick={() => chooseReadingReturnStatus("READ")}
+                          >
+                            Read
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="map-precise-move">
+                  <label>
+                    Book
+                    <select
+                      value={selectedMoveBookId ?? ""}
+                      disabled={rearrangementSteps.length > 0}
+                      onChange={(event) => {
+                        const book = allMapBooks.find(
+                          (item) => item.id === Number(event.target.value),
+                        );
+                        if (book) startMoveBook(book);
+                        else resetRearrangement(true);
+                      }}
+                    >
+                      <option value="">Choose book</option>
+                      {[...allMapBooks]
+                        .sort((first, second) => first.title.localeCompare(second.title))
+                        .map((book) => (
+                          <option key={book.id} value={book.id}>
+                            {book.title} — {book.author}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Destination container
+                    <select
+                      value={preciseContainer}
+                      onChange={(event) => setPreciseContainer(event.target.value)}
+                    >
+                      <option value="">Choose container</option>
+                      {mapContainers.map((container) => (
+                        <option key={container.id} value={container.id}>
+                          {container.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Position
+                    <input
+                      type="number"
+                      min="1"
+                      value={precisePosition}
+                      onChange={(event) => setPrecisePosition(Number(event.target.value))}
+                    />
+                  </label>
+                  <button
+                    className="outline-button"
+                    disabled={
+                      previewingMove ||
+                      selectedMoveBookId === null ||
+                      !preciseContainer ||
+                      Boolean(rearrangementPreview?.complete)
+                    }
+                    onClick={() => void addPhysicalDestination(
+                      Number(preciseContainer),
+                      precisePosition,
+                    )}
+                  >
+                    <ArrowRightLeft size={15} /> Preview destination
+                  </button>
+                </div>
+                {rearrangementPreview && (
+                  <div className="map-movement-summary">
+                    <ol>
+                      {rearrangementPreview.movement_log.map((line, index) => (
+                        <li key={`${index}-${line}`}>{line}</li>
+                      ))}
+                    </ol>
+                    {rearrangementPreview.gaps.map((gap) => {
+                      const container = mapContainers.find(
+                        (item) => item.id === gap.container_id,
+                      );
+                      return (
+                        <p className="map-gap-warning" key={gap.container_id}>
+                          Gap in {container?.label ?? `container ${gap.container_id}`}:
+                          {" "}{gap.positions.join(", ")}
+                        </p>
+                      );
+                    })}
+                    {!rearrangementPreview.complete && (
+                      <p className="map-chain-warning">
+                        Continue by choosing a destination for {activeMoveBook?.title}.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="map-rearrangement-actions">
+                  {rearrangementSteps.length > 0 && (
+                    <button
+                      className="text-button"
+                      disabled={previewingMove || applyingMove}
+                      onClick={() => void undoRearrangementStep()}
+                    >
+                      <RotateCcw size={15} /> Undo last step
+                    </button>
+                  )}
+                  <button
+                    className="primary-button"
+                    disabled={
+                      previewingMove ||
+                      applyingMove ||
+                      !rearrangementPreview?.valid_to_apply
+                    }
+                    onClick={() => void applyRearrangement()}
+                  >
+                    <Check size={15} /> {applyingMove ? "Applying…" : "Apply"}
+                  </button>
+                </div>
+              </aside>
+            )}
             <div
               ref={roomRef}
-              className={`map-room ${editingLayout ? "editing" : ""}`}
+              className={`map-room ${editingLayout ? "editing" : ""} ${
+                rearranging ? "rearranging" : ""
+              }`}
             >
-              {(editingLayout || map.outside_books.length > 0) && (
+              {(editingLayout || rearranging || displayMap.outside_books.length > 0) && (
                 <section
                   className="map-outside"
+                  data-reading-target
                   role="button"
                   tabIndex={0}
                   title="Show currently reading books"
-                  onClick={editingLayout ? undefined : onReadingFilter}
+                  onClick={editingLayout
+                    ? undefined
+                    : rearranging
+                      ? () => void addReadingDestination()
+                      : onReadingFilter}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      if (!editingLayout) onReadingFilter();
+                      if (!editingLayout) {
+                        if (rearranging) void addReadingDestination();
+                        else onReadingFilter();
+                      }
                     }
                   }}
                   style={{
@@ -4060,7 +4626,7 @@ function LibraryMapDialog({
                   }}
                 >
                   <div className="map-outside-books">
-                    {map.outside_books.map((book) => (
+                    {displayMap.outside_books.map((book) => (
                       <span
                         key={book.id}
                         role={editingLayout ? undefined : "button"}
@@ -4080,7 +4646,11 @@ function LibraryMapDialog({
                         onClick={(event) => {
                           if (editingLayout) return;
                           event.stopPropagation();
-                          onBookFilter(book);
+                          if (rearranging) selectMoveBook(book);
+                          else onBookFilter(book);
+                        }}
+                        onPointerDown={(event) => {
+                          if (rearranging) beginBookDrag(book, event);
                         }}
                         onKeyDown={(event) => {
                           if (
@@ -4089,7 +4659,8 @@ function LibraryMapDialog({
                           ) {
                             event.preventDefault();
                             event.stopPropagation();
-                            onBookFilter(book);
+                            if (rearranging) selectMoveBook(book);
+                            else onBookFilter(book);
                           }
                         }}
                       >
@@ -4142,7 +4713,7 @@ function LibraryMapDialog({
                   )}
                 </section>
               )}
-              {map.bookcases.map((bookcase) => (
+              {displayMap.bookcases.map((bookcase) => (
                 <MapBookcaseGraphic
                   key={bookcase.id}
                   bookcase={bookcase}
@@ -4154,6 +4725,9 @@ function LibraryMapDialog({
                   focusedBookId={focusedBook?.id ?? null}
                   colourScale={colourScale}
                   editing={editingLayout}
+                  rearranging={rearranging}
+                  activeBookId={activeMoveBookId}
+                  reservedBooksByContainer={reservedBooksByContainer}
                   onEditBookcase={() => setSelectedBookcase(String(bookcase.id))}
                   onEditShelf={(shelf) => setSelectedShelf(String(shelf.id))}
                   onEditContainer={(container) =>
@@ -4161,6 +4735,10 @@ function LibraryMapDialog({
                   onContainerLayoutChange={updateContainerRect}
                   onShelfWeightsChange={updateShelfWeights}
                   onBookSelect={onBookFilter}
+                  onRearrangeBookSelect={selectMoveBook}
+                  onDestination={(containerId, position) =>
+                    void addPhysicalDestination(containerId, position)}
+                  onBookPointerDown={beginBookDrag}
                   onRectPointerDown={(event, mode) => {
                     setSelectedBookcase(String(bookcase.id));
                     const rect = bookcaseRects.get(bookcase.id);
@@ -4188,6 +4766,14 @@ function LibraryMapDialog({
                 />
               ))}
             </div>
+            {dragGhost && (
+              <div
+                className="map-drag-ghost"
+                style={{ left: dragGhost.x + 14, top: dragGhost.y + 14 }}
+              >
+                <BookOpen size={15} /> {dragGhost.title}
+              </div>
+            )}
           </>
         )}
       </div>

@@ -222,6 +222,346 @@ def test_bibliographic_text_match_endpoint_is_read_only() -> None:
     assert before == after
 
 
+def create_rearrangement_fixture(client: TestClient) -> tuple[dict, dict, list[dict]]:
+    bookcase = client.post("/bookcases", json={"name": "Move room"}).json()
+    shelf = client.post(
+        "/shelves",
+        json={"bookcase_id": bookcase["id"], "shelf_number": 1},
+    ).json()
+    first_container = client.post(
+        "/containers",
+        json={
+            "shelf_id": shelf["id"],
+            "container_type": "ROW",
+            "layer": "BACKGROUND",
+            "container_number": 1,
+        },
+    ).json()
+    second_container = client.post(
+        "/containers",
+        json={
+            "shelf_id": shelf["id"],
+            "container_type": "ROW",
+            "layer": "BACKGROUND",
+            "container_number": 2,
+        },
+    ).json()
+    books = [
+        client.post(
+            "/books",
+            json={
+                "title": f"Move {position}",
+                "author": "Mover",
+                "container_id": first_container["id"],
+                "position": position,
+            },
+        ).json()
+        for position in range(1, 5)
+    ]
+    return first_container, second_container, books
+
+
+def test_rearrangement_preview_is_read_only_and_squeeze_stops_at_gap() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        payload = {
+            "book_id": books[3]["id"],
+            "old_position_mode": "LEAVE_GAP",
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 2,
+                    "new_position_mode": "SQUEEZE",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload)
+        unchanged = client.get(
+            "/books", params={"container_id": first["id"], "sort_by": "physical"}
+        ).json()
+
+    assert preview.status_code == 200
+    assert preview.json()["valid_to_apply"] is True
+    placements = {
+        item["book_id"]: item["position"]
+        for item in preview.json()["placements"]
+    }
+    assert placements == {
+        books[1]["id"]: 3,
+        books[2]["id"]: 4,
+        books[3]["id"]: 2,
+    }
+    assert [(book["id"], book["position"]) for book in unchanged] == [
+        (book["id"], index) for index, book in enumerate(books, 1)
+    ]
+
+
+def test_rearrangement_swap_overrides_collapse() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        target = client.post(
+            "/books",
+            json={
+                "title": "Swap target",
+                "author": "Mover",
+                "container_id": second["id"],
+                "position": 1,
+            },
+        ).json()
+        preview = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[0]["id"],
+                "old_position_mode": "COLLAPSE",
+                "steps": [
+                    {
+                        "container_id": second["id"],
+                        "position": 1,
+                        "new_position_mode": "SWAP",
+                    }
+                ],
+            },
+        ).json()
+
+    placements = {
+        item["book_id"]: (item["container_id"], item["position"])
+        for item in preview["placements"]
+    }
+    assert preview["effective_old_position_mode"] == "LEAVE_GAP"
+    assert placements[books[0]["id"]] == (second["id"], 1)
+    assert placements[target["id"]] == (first["id"], 1)
+    assert books[1]["id"] not in placements
+
+
+def test_rearrangement_continue_chain_is_provisional_and_atomic() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        payload = {
+            "book_id": books[0]["id"],
+            "old_position_mode": "LEAVE_GAP",
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 2,
+                    "new_position_mode": "CONTINUE",
+                },
+                {
+                    "container_id": first["id"],
+                    "position": 3,
+                    "new_position_mode": "CONTINUE",
+                },
+                {
+                    "container_id": first["id"],
+                    "position": 1,
+                    "new_position_mode": "CONTINUE",
+                },
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+        ordered = client.get(
+            "/books", params={"container_id": first["id"], "sort_by": "physical"}
+        ).json()
+
+    assert preview["complete"] is True
+    assert preview["valid_to_apply"] is True
+    assert preview["gaps"] == []
+    assert applied.status_code == 200
+    assert [book["title"] for book in ordered] == [
+        "Move 3",
+        "Move 1",
+        "Move 2",
+        "Move 4",
+    ]
+
+
+def test_incomplete_or_gapped_rearrangement_cannot_be_applied() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        payload = {
+            "book_id": books[0]["id"],
+            "old_position_mode": "LEAVE_GAP",
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 2,
+                    "new_position_mode": "CONTINUE",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+
+    assert preview["complete"] is False
+    assert preview["next_active_book_id"] == books[1]["id"]
+    assert preview["valid_to_apply"] is False
+    assert applied.status_code == 409
+
+
+def test_reading_area_rearrangements_preserve_or_confirm_physical_position() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        to_reading_payload = {
+            "book_id": books[0]["id"],
+            "steps": [{"destination_kind": "READING"}],
+        }
+        reading_preview = client.post(
+            "/rearrangements/preview", json=to_reading_payload
+        ).json()
+        client.post(
+            "/rearrangements/apply",
+            json={**to_reading_payload, "revision": reading_preview["revision"]},
+        )
+        reading_book = client.get(
+            "/books", params={"book_id": books[0]["id"]}
+        ).json()[0]
+
+        return_payload = {
+            "book_id": books[0]["id"],
+            "old_position_mode": "COLLAPSE",
+            "steps": [
+                {
+                    "container_id": second["id"],
+                    "position": 1,
+                    "new_position_mode": "SQUEEZE",
+                    "reading_exit_status": "READ",
+                }
+            ],
+        }
+        return_preview = client.post(
+            "/rearrangements/preview", json=return_payload
+        ).json()
+        returned = client.post(
+            "/rearrangements/apply",
+            json={**return_payload, "revision": return_preview["revision"]},
+        )
+        returned_book = client.get(
+            "/books", params={"book_id": books[0]["id"]}
+        ).json()[0]
+
+    assert reading_book["status"] == "CURRENTLY_READING"
+    assert reading_book["container_id"] == first["id"]
+    assert reading_book["position"] == 1
+    assert returned.status_code == 200
+    assert returned_book["status"] == "READ"
+    assert returned_book["container_id"] == second["id"]
+    assert returned_book["position"] == 1
+
+
+def test_completed_rearrangement_with_a_gap_cannot_be_applied() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        payload = {
+            "book_id": books[1]["id"],
+            "old_position_mode": "LEAVE_GAP",
+            "steps": [
+                {
+                    "container_id": second["id"],
+                    "position": 1,
+                    "new_position_mode": "SQUEEZE",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+
+    assert preview["complete"] is True
+    assert preview["gaps"] == [{"container_id": first["id"], "positions": [2]}]
+    assert preview["valid_to_apply"] is False
+    assert applied.status_code == 409
+
+
+def test_rearrangement_rejects_positions_beyond_next_end() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        response = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[0]["id"],
+                "steps": [{"container_id": first["id"], "position": 8}],
+            },
+        )
+
+    assert response.status_code == 422
+    assert "next end position" in response.json()["detail"]
+
+
+def test_rearrangement_apply_rejects_a_stale_preview() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        payload = {
+            "book_id": books[0]["id"],
+            "steps": [{"container_id": second["id"], "position": 1}],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        changed = {**books[2], "status": "READ", "read_date": "2026-08-06"}
+        assert client.patch(f'/books/{books[2]["id"]}', json=changed).status_code == 200
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+
+    assert applied.status_code == 409
+    assert "changed" in applied.json()["detail"]
+
+
+def test_reading_book_can_return_to_its_retained_position_as_status_only() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        reading = {**books[1], "status": "CURRENTLY_READING"}
+        assert client.patch(f'/books/{books[1]["id"]}', json=reading).status_code == 200
+        payload = {
+            "book_id": books[1]["id"],
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 2,
+                    "reading_exit_status": "PENDING",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+        returned = client.get(
+            "/books", params={"book_id": books[1]["id"]}
+        ).json()[0]
+
+    assert preview["valid_to_apply"] is True
+    assert applied.status_code == 200
+    assert returned["status"] == "PENDING"
+    assert returned["container_id"] == first["id"]
+    assert returned["position"] == 2
+
+
+def test_read_book_cannot_move_to_reading_without_reading_sessions() -> None:
+    with TestClient(app) as client:
+        _, _, books = create_rearrangement_fixture(client)
+        read = {**books[0], "status": "READ", "read_date": "2026-08-06"}
+        assert client.patch(f'/books/{books[0]["id"]}', json=read).status_code == 200
+        response = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[0]["id"],
+                "steps": [{"destination_kind": "READING"}],
+            },
+        )
+
+    assert response.status_code == 422
+    assert "reading-session support" in response.json()["detail"]
+
+
 def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
     with TestClient(app) as client:
         books = [
@@ -1982,9 +2322,10 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             {
                 "id": reading["id"],
                 "title": "Reading away from shelf",
+                "author": "Author",
                 "status": "CURRENTLY_READING",
                 "container_id": background["id"],
-                "position": None,
+                "position": 3,
                 "acquisition_date": "2025-05-01",
                 "reading_started_date": "2025-05-04",
                 "read_date": None,

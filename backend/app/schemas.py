@@ -26,6 +26,22 @@ class ShiftDirection(str, Enum):
     down = "DOWN"
 
 
+class OldPositionMode(str, Enum):
+    collapse = "COLLAPSE"
+    leave_gap = "LEAVE_GAP"
+
+
+class NewPositionMode(str, Enum):
+    squeeze = "SQUEEZE"
+    swap = "SWAP"
+    continue_chain = "CONTINUE"
+
+
+class RearrangementDestinationKind(str, Enum):
+    physical = "PHYSICAL"
+    reading = "READING"
+
+
 class BookcaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=500)
@@ -73,6 +89,50 @@ class BookMove(BaseModel):
     container_id: int
     position: int = Field(gt=0)
     swap_if_occupied: bool = True
+
+
+class RearrangementStep(BaseModel):
+    destination_kind: RearrangementDestinationKind = (
+        RearrangementDestinationKind.physical
+    )
+    container_id: int | None = None
+    position: int | None = Field(default=None, gt=0)
+    new_position_mode: NewPositionMode = NewPositionMode.squeeze
+    reading_exit_status: Literal["PENDING", "READ"] | None = None
+
+
+class RearrangementRequest(BaseModel):
+    book_id: int
+    old_position_mode: OldPositionMode = OldPositionMode.collapse
+    steps: list[RearrangementStep] = Field(default_factory=list, max_length=100)
+
+
+class RearrangementApplyRequest(RearrangementRequest):
+    revision: str = Field(min_length=64, max_length=64)
+
+
+class RearrangementPlacement(BaseModel):
+    book_id: int
+    container_id: int | None
+    position: int | None
+    status: BookStatus
+
+
+class RearrangementGap(BaseModel):
+    container_id: int
+    positions: list[int]
+
+
+class RearrangementResult(BaseModel):
+    revision: str
+    valid_to_apply: bool
+    complete: bool
+    effective_old_position_mode: OldPositionMode
+    next_active_book_id: int | None = None
+    placements: list[RearrangementPlacement]
+    gaps: list[RearrangementGap]
+    movement_log: list[str]
+    warnings: list[str]
 
 
 class BookBase(BaseModel):
