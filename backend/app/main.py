@@ -32,7 +32,7 @@ from .isbn import InvalidISBN, normalize_isbn
 from .rearrangement import (
     apply_planned_books,
     load_rearrangement_state,
-    plan_rearrangement,
+    plan_rearrangement_draft,
     rearrangement_revision,
 )
 from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
@@ -298,7 +298,7 @@ def match_bibliographic_text(payload: CatalogueMatchRequest) -> list[dict[str, A
 def preview_rearrangement(payload: RearrangementRequest) -> dict[str, Any]:
     with connect() as connection:
         books, containers = load_rearrangement_state(connection)
-    return plan_rearrangement(books, containers, payload)
+    return plan_rearrangement_draft(books, containers, payload)
 
 
 @app.post("/rearrangements/apply", response_model=RearrangementResult)
@@ -312,7 +312,7 @@ def apply_rearrangement(payload: RearrangementApplyRequest) -> dict[str, Any]:
                     status_code=409,
                     detail="The catalogue changed after this rearrangement was previewed",
                 )
-            result = plan_rearrangement(books, containers, payload)
+            result = plan_rearrangement_draft(books, containers, payload)
             if not result["valid_to_apply"]:
                 raise HTTPException(
                     status_code=409,

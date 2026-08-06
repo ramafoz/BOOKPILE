@@ -101,10 +101,17 @@ class RearrangementStep(BaseModel):
     reading_exit_status: Literal["PENDING", "READ"] | None = None
 
 
-class RearrangementRequest(BaseModel):
+class RearrangementOperation(BaseModel):
     book_id: int
     old_position_mode: OldPositionMode = OldPositionMode.collapse
     steps: list[RearrangementStep] = Field(default_factory=list, max_length=100)
+
+
+class RearrangementRequest(RearrangementOperation):
+    completed_operations: list[RearrangementOperation] = Field(
+        default_factory=list,
+        max_length=100,
+    )
 
 
 class RearrangementApplyRequest(RearrangementRequest):
@@ -132,6 +139,7 @@ class RearrangementResult(BaseModel):
     placements: list[RearrangementPlacement]
     gaps: list[RearrangementGap]
     movement_log: list[str]
+    movement_groups: list[list[str]]
     warnings: list[str]
 
 

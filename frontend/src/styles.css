@@ -400,9 +400,13 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-reading-return-choice button { padding: 8px 13px; border: 1px solid #a88d69; border-radius: 6px; color: #40554e; background: #fffaf1; font-weight: 700; }
 .map-reading-return-choice button.active { border-color: #28574d; color: #fff; background: #28574d; }
 .map-movement-summary { padding: 11px 13px; border-radius: 7px; background: #fffaf1; }
-.map-movement-summary ol { display: grid; gap: 5px; margin: 0; padding-left: 22px; color: #43554f; font-size: 12px; line-height: 1.45; }
+.map-movement-summary { display: grid; gap: 10px; }
+.map-movement-summary section { display: grid; gap: 5px; }
+.map-movement-summary h4 { margin: 0; color: #28574d; font-family: Georgia, "Times New Roman", serif; font-size: 14px; }
+.map-movement-summary ul { display: grid; gap: 5px; margin: 0; padding-left: 22px; color: #43554f; font-size: 12px; line-height: 1.45; }
 .map-gap-warning, .map-chain-warning { margin: 9px 0 0; color: #943f2d; font-size: 12px; font-weight: 700; }
 .map-chain-warning { color: #526b62; }
+.map-no-net-change { margin: 2px 0 0; padding: 9px 11px; border-left: 3px solid #b88738; border-radius: 4px; color: #695633; background: #f4ead3; font-size: 12px; font-weight: 700; line-height: 1.45; }
 .map-rearrangement-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .map-direct-help { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border-radius: 7px; color: #51625c; background: #dfeae5; font-size: 12px; line-height: 1.45; }
 .map-direct-help strong { color: #8a452f; }

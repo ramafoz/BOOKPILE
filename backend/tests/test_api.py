@@ -562,6 +562,84 @@ def test_read_book_cannot_move_to_reading_without_reading_sessions() -> None:
     assert "reading-session support" in response.json()["detail"]
 
 
+def test_rearrangement_summarizes_automatic_shifts() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        collapse_preview = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[0]["id"],
+                "steps": [{"container_id": first["id"], "position": 3}],
+            },
+        ).json()
+        squeeze_preview = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[3]["id"],
+                "steps": [{"container_id": first["id"], "position": 1}],
+            },
+        ).json()
+
+    assert collapse_preview["movement_log"][1] == (
+        "2 books shifted to fill the gap and make new room."
+    )
+    assert squeeze_preview["movement_log"][1] == (
+        "3 books shifted to fill the gap and make new room."
+    )
+    assert all("Move 2" not in line for line in collapse_preview["movement_log"])
+
+
+def test_multiple_completed_movement_chains_share_one_preview_and_apply() -> None:
+    with TestClient(app) as client:
+        first, _, books = create_rearrangement_fixture(client)
+        first_operation = {
+            "book_id": books[0]["id"],
+            "old_position_mode": "COLLAPSE",
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 4,
+                    "new_position_mode": "SQUEEZE",
+                }
+            ],
+        }
+        payload = {
+            "completed_operations": [first_operation],
+            "book_id": books[1]["id"],
+            "old_position_mode": "COLLAPSE",
+            "steps": [
+                {
+                    "container_id": first["id"],
+                    "position": 4,
+                    "new_position_mode": "SQUEEZE",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        before = client.get(
+            "/books", params={"container_id": first["id"], "sort_by": "physical"}
+        ).json()
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+        after = client.get(
+            "/books", params={"container_id": first["id"], "sort_by": "physical"}
+        ).json()
+
+    assert preview["valid_to_apply"] is True
+    assert len(preview["movement_groups"]) == 2
+    assert preview["movement_groups"][0][0].startswith('“Move 1”')
+    assert preview["movement_groups"][1][0].startswith('“Move 2”')
+    assert [book["title"] for book in before] == [
+        "Move 1", "Move 2", "Move 3", "Move 4"
+    ]
+    assert applied.status_code == 200
+    assert [book["title"] for book in after] == [
+        "Move 3", "Move 4", "Move 1", "Move 2"
+    ]
+
+
 def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
     with TestClient(app) as client:
         books = [

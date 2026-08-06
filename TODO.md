@@ -78,6 +78,12 @@ This roadmap separates future work by its effect on the current data model.
   - Support collapsing or temporarily retaining the old gap.
   - Support squeezing, swapping, and chained continuation at occupied
     destinations.
+  - Allow several completed movement chains to be assembled against the
+    projected layout before one atomic Apply.
+  - Group the preview as Move 1, Move 2, and so on, and summarize automatic
+    shifts by count instead of listing every shifted book.
+  - Explain when a sequence cancels itself out and leaves no net changes to
+    apply.
   - Preview every affected movement and require explicit Apply or Cancel.
   - Reject incomplete chains, persistent gaps, stale previews, and invalid
     destinations without changing the catalogue.

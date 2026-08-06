@@ -194,10 +194,14 @@ export interface RearrangementStep {
   reading_exit_status?: "PENDING" | "READ" | null;
 }
 
-export interface RearrangementRequest {
+export interface RearrangementOperation {
   book_id: number;
   old_position_mode: OldPositionMode;
   steps: RearrangementStep[];
+}
+
+export interface RearrangementRequest extends RearrangementOperation {
+  completed_operations?: RearrangementOperation[];
 }
 
 export interface RearrangementResult {
@@ -214,6 +218,7 @@ export interface RearrangementResult {
   }>;
   gaps: Array<{ container_id: number; positions: number[] }>;
   movement_log: string[];
+  movement_groups?: string[][];
   warnings: string[];
 }
 

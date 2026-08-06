@@ -11,7 +11,9 @@ from .schemas import (
     NewPositionMode,
     OldPositionMode,
     RearrangementDestinationKind,
+    RearrangementOperation,
     RearrangementRequest,
+    RearrangementStep,
 )
 
 
@@ -107,7 +109,7 @@ def rearrangement_revision(books: dict[int, PlannedBook]) -> str:
 def plan_rearrangement(
     original: dict[int, PlannedBook],
     containers: dict[int, str],
-    request: RearrangementRequest,
+    request: RearrangementOperation,
 ) -> dict[str, Any]:
     if request.book_id not in original:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -212,7 +214,7 @@ def plan_rearrangement(
     ):
         effective_old_mode = OldPositionMode.leave_gap
 
-    remove_active(
+    collapsed_count = remove_active(
         books,
         occupancy,
         initial.id,
@@ -266,6 +268,12 @@ def plan_rearrangement(
             movement_log.append(
                 f'“{active.title}”: {active_source_label} → {destination_label}'
             )
+            if is_single_same_container_move(request, initial_source, step):
+                append_net_shift_summary(movement_log, original, books, initial.id)
+            elif step_index == 0 and collapsed_count:
+                movement_log.append(
+                    shifted_summary(collapsed_count, "to occupy the gap")
+                )
             active_id = None
             continue
 
@@ -281,10 +289,17 @@ def plan_rearrangement(
             movement_log.append(
                 f'“{active.title}”: {active_source_label} → {destination_label}'
             )
-            movement_log.extend(
-                f'“{books[book_id].title}”: shifted to {position_label(containers, step.container_id, new_position)}'
-                for book_id, new_position in shifted
-            )
+            if is_single_same_container_move(request, initial_source, step):
+                append_net_shift_summary(movement_log, original, books, initial.id)
+            else:
+                if step_index == 0 and collapsed_count:
+                    movement_log.append(
+                        shifted_summary(collapsed_count, "to occupy the gap")
+                    )
+                if shifted:
+                    movement_log.append(
+                        shifted_summary(len(shifted), "to make room")
+                    )
             active_id = None
             continue
 
@@ -310,6 +325,10 @@ def plan_rearrangement(
             movement_log.append(
                 f'“{active.title}”: {active_source_label} → {destination_label}'
             )
+            if step_index == 0 and collapsed_count:
+                movement_log.append(
+                    shifted_summary(collapsed_count, "to occupy the gap")
+                )
             movement_log.append(
                 f'“{books[target_id].title}”: {destination_label} → {position_label(containers, swap_container, swap_position)}'
             )
@@ -323,6 +342,10 @@ def plan_rearrangement(
         movement_log.append(
             f'“{active.title}”: {active_source_label} → {destination_label}'
         )
+        if step_index == 0 and collapsed_count:
+            movement_log.append(
+                shifted_summary(collapsed_count, "to occupy the gap")
+            )
         active_id = target_id
         active_source_label = destination_label
         books[target_id] = replace(
@@ -344,6 +367,66 @@ def plan_rearrangement(
         active_id,
         complete=complete,
     )
+
+
+def plan_rearrangement_draft(
+    original: dict[int, PlannedBook],
+    containers: dict[int, str],
+    request: RearrangementRequest,
+) -> dict[str, Any]:
+    operations = [
+        *request.completed_operations,
+        RearrangementOperation(
+            book_id=request.book_id,
+            old_position_mode=request.old_position_mode,
+            steps=request.steps,
+        ),
+    ]
+    books = original
+    movement_groups: list[list[str]] = []
+    warnings: list[str] = []
+    current_result: dict[str, Any] | None = None
+
+    for index, operation in enumerate(operations):
+        current_result = plan_rearrangement(books, containers, operation)
+        if index < len(operations) - 1 and not current_result["complete"]:
+            raise HTTPException(
+                status_code=422,
+                detail="Every earlier movement chain must be complete",
+            )
+        if current_result["movement_log"]:
+            movement_groups.append(current_result["movement_log"])
+        warnings.extend(current_result["warnings"])
+        books = current_result["_planned_books"]
+
+    assert current_result is not None
+    affected = {
+        container_id
+        for book_id, book in books.items()
+        for container_id in (
+            original[book_id].container_id,
+            book.container_id,
+        )
+        if container_id is not None
+        and (
+            original[book_id].container_id,
+            original[book_id].position,
+        ) != (book.container_id, book.position)
+    }
+    flattened_log = [line for group in movement_groups for line in group]
+    result = result_payload(
+        original,
+        books,
+        containers,
+        affected,
+        flattened_log,
+        warnings,
+        OldPositionMode(current_result["effective_old_position_mode"]),
+        current_result["next_active_book_id"],
+        complete=current_result["complete"],
+    )
+    result["movement_groups"] = movement_groups
+    return result
 
 
 def build_occupancy(books: dict[int, PlannedBook]) -> dict[int, dict[int, int]]:
@@ -381,10 +464,10 @@ def remove_active(
     book_id: int,
     mode: OldPositionMode,
     affected: set[int],
-) -> None:
+) -> int:
     book = books[book_id]
     if book.container_id is None or book.position is None:
-        return
+        return 0
     container_id = book.container_id
     old_position = book.position
     remove_from_occupancy(occupancy, book_id)
@@ -392,12 +475,52 @@ def remove_active(
     affected.add(container_id)
     if mode == OldPositionMode.collapse:
         positions = occupancy.setdefault(container_id, {})
+        shifted_count = 0
         for position in sorted(
             [position for position in positions if position > old_position]
         ):
             shifted_id = positions.pop(position)
             positions[position - 1] = shifted_id
             books[shifted_id] = replace(books[shifted_id], position=position - 1)
+            shifted_count += 1
+        return shifted_count
+    return 0
+
+
+def shifted_summary(count: int, reason: str) -> str:
+    noun = "book" if count == 1 else "books"
+    return f"{count} {noun} shifted {reason}."
+
+
+def is_single_same_container_move(
+    request: RearrangementOperation,
+    initial_source: tuple[int | None, int | None],
+    step: RearrangementStep,
+) -> bool:
+    return (
+        len(request.steps) == 1
+        and initial_source[0] is not None
+        and initial_source[0] == step.container_id
+    )
+
+
+def append_net_shift_summary(
+    movement_log: list[str],
+    original: dict[int, PlannedBook],
+    books: dict[int, PlannedBook],
+    moving_book_id: int,
+) -> None:
+    count = sum(
+        1
+        for book_id, book in books.items()
+        if book_id != moving_book_id
+        and (book.container_id, book.position)
+        != (original[book_id].container_id, original[book_id].position)
+    )
+    if count:
+        movement_log.append(
+            shifted_summary(count, "to fill the gap and make new room")
+        )
 
 
 def validate_destination_position(
@@ -507,6 +630,7 @@ def result_payload(
         "placements": placements,
         "gaps": gaps,
         "movement_log": movement_log,
+        "movement_groups": [movement_log] if movement_log else [],
         "warnings": warnings,
         "_planned_books": books,
     }

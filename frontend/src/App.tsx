@@ -52,6 +52,7 @@ import type {
   ReadingSuggestion,
   NewPositionMode,
   OldPositionMode,
+  RearrangementOperation,
   RearrangementResult,
   RearrangementStep,
   ISBNLookupResult,
@@ -3532,6 +3533,10 @@ function LibraryMapDialog({
     useState<NewPositionMode>("SQUEEZE");
   const [rearrangementSteps, setRearrangementSteps] =
     useState<RearrangementStep[]>([]);
+  const [completedRearrangements, setCompletedRearrangements] =
+    useState<RearrangementOperation[]>([]);
+  const [completedPreviewStack, setCompletedPreviewStack] =
+    useState<RearrangementResult[]>([]);
   const [rearrangementPreview, setRearrangementPreview] =
     useState<RearrangementResult | null>(null);
   const [previewingMove, setPreviewingMove] = useState(false);
@@ -3719,7 +3724,14 @@ function LibraryMapDialog({
   const activeMoveBook = projectedBooks.find(
     (book) => book.id === activeMoveBookId,
   ) ?? null;
-  const selectedOriginalMoveBook = allMapBooks.find(
+  const movementGroups = rearrangementPreview
+    ? rearrangementPreview.movement_groups?.length
+      ? rearrangementPreview.movement_groups
+      : rearrangementPreview.movement_log.length
+        ? [rearrangementPreview.movement_log]
+        : []
+    : [];
+  const selectedOriginalMoveBook = projectedBooks.find(
     (book) => book.id === selectedMoveBookId,
   ) ?? null;
   const selectedOriginalContainer = mapContainers.find(
@@ -3843,6 +3855,8 @@ function LibraryMapDialog({
   function resetRearrangement(leaveMode = false) {
     setSelectedMoveBookId(null);
     setRearrangementSteps([]);
+    setCompletedRearrangements([]);
+    setCompletedPreviewStack([]);
     setRearrangementPreview(null);
     setPreciseContainer("");
     setPrecisePosition(1);
@@ -3865,6 +3879,7 @@ function LibraryMapDialog({
     setError("");
     try {
       const result = await api.previewRearrangement({
+        completed_operations: completedRearrangements,
         book_id: bookId,
         old_position_mode: oldMode,
         steps,
@@ -3882,7 +3897,7 @@ function LibraryMapDialog({
   function startMoveBook(book: MapBook) {
     setSelectedMoveBookId(book.id);
     setRearrangementSteps([]);
-    setRearrangementPreview(null);
+    if (completedRearrangements.length === 0) setRearrangementPreview(null);
     setReadingExitStatus("");
     setPendingReadingDestination(null);
     setError("");
@@ -3898,7 +3913,7 @@ function LibraryMapDialog({
       return;
     }
     if (selectedMoveBookId !== null) {
-      if (rearrangementPreview?.complete) {
+      if (rearrangementSteps.length > 0 && rearrangementPreview?.complete) {
         setError("Apply or cancel the current movement before selecting another book.");
         return;
       }
@@ -3925,7 +3940,11 @@ function LibraryMapDialog({
     const steps = context?.steps ?? rearrangementSteps;
     const sourceBook = context?.sourceBook ?? selectedMoveBook;
     const returnStatus = context?.readingStatus ?? readingExitStatus;
-    if (bookId === null || !sourceBook || (!context && rearrangementPreview?.complete)) {
+    if (
+      bookId === null ||
+      !sourceBook ||
+      (!context && rearrangementSteps.length > 0 && rearrangementPreview?.complete)
+    ) {
       return;
     }
     if (sourceBook.status === "CURRENTLY_READING" && !returnStatus) {
@@ -3980,10 +3999,31 @@ function LibraryMapDialog({
     }
   }
 
+  function restoreLastCompletedOperation() {
+    const previous = completedRearrangements.at(-1);
+    if (!previous) return false;
+    setCompletedRearrangements((current) => current.slice(0, -1));
+    setRearrangementPreview(completedPreviewStack.at(-1) ?? null);
+    setCompletedPreviewStack((current) => current.slice(0, -1));
+    setSelectedMoveBookId(previous.book_id);
+    setOldPositionMode(previous.old_position_mode);
+    setRearrangementSteps(previous.steps);
+    setNewPositionMode(
+      previous.steps.at(-1)?.new_position_mode ?? "SQUEEZE",
+    );
+    setError("");
+    return true;
+  }
+
   async function undoRearrangementStep() {
-    if (selectedMoveBookId === null || rearrangementSteps.length === 0) return;
+    if (rearrangementSteps.length === 0) {
+      restoreLastCompletedOperation();
+      return;
+    }
+    if (selectedMoveBookId === null) return;
     const next = rearrangementSteps.slice(0, -1);
     if (next.length === 0) {
+      if (restoreLastCompletedOperation()) return;
       setRearrangementSteps([]);
       setRearrangementPreview(null);
       setError("");
@@ -3995,13 +4035,20 @@ function LibraryMapDialog({
   async function applyRearrangement() {
     if (
       selectedMoveBookId === null ||
+      rearrangementSteps.length === 0 ||
       !rearrangementPreview?.valid_to_apply
     ) return;
     const statusChanges = rearrangementPreview.placements.some((placement) => {
       const original = allMapBooks.find((book) => book.id === placement.book_id);
       return original && original.status !== placement.status;
     });
-    const summary = rearrangementPreview.movement_log.join("\n");
+    const summary = movementGroups
+      .map((group, index) => (
+        movementGroups.length > 1
+          ? `Move ${index + 1}\n${group.join("\n")}`
+          : group.join("\n")
+      ))
+      .join("\n\n");
     if (!window.confirm(
       `${statusChanges ? "This also changes a reading status.\n\n" : ""}${summary}\n\nApply these changes?`,
     )) return;
@@ -4010,6 +4057,7 @@ function LibraryMapDialog({
     try {
       await api.applyRearrangement(
         {
+          completed_operations: completedRearrangements,
           book_id: selectedMoveBookId,
           old_position_mode: oldPositionMode,
           steps: rearrangementSteps,
@@ -4025,6 +4073,35 @@ function LibraryMapDialog({
     }
   }
 
+  function startAnotherRearrangement() {
+    if (
+      selectedMoveBookId === null ||
+      !rearrangementPreview?.complete ||
+      rearrangementSteps.length === 0
+    ) return;
+    setCompletedRearrangements((current) => [
+      ...current,
+      {
+        book_id: selectedMoveBookId,
+        old_position_mode: oldPositionMode,
+        steps: rearrangementSteps,
+      },
+    ]);
+    setCompletedPreviewStack((current) => [
+      ...current,
+      rearrangementPreview,
+    ]);
+    setSelectedMoveBookId(null);
+    setRearrangementSteps([]);
+    setOldPositionMode("COLLAPSE");
+    setNewPositionMode("SQUEEZE");
+    setReadingExitStatus("");
+    setPendingReadingDestination(null);
+    setPreciseContainer("");
+    setPrecisePosition(1);
+    setError("");
+  }
+
   function beginBookDrag(
     book: MapBook,
     event: React.PointerEvent<Element>,
@@ -4032,7 +4109,7 @@ function LibraryMapDialog({
     const beginningSelection = selectedMoveBookId === null;
     if (
       (!beginningSelection && book.id !== activeMoveBookId) ||
-      rearrangementPreview?.complete
+      (!beginningSelection && rearrangementPreview?.complete)
     ) return;
     event.stopPropagation();
     if (beginningSelection) startMoveBook(book);
@@ -4423,7 +4500,10 @@ function LibraryMapDialog({
                     New position
                     <select
                       value={newPositionMode}
-                      disabled={Boolean(rearrangementPreview?.complete)}
+                      disabled={
+                        rearrangementSteps.length > 0 &&
+                        Boolean(rearrangementPreview?.complete)
+                      }
                       onChange={(event) => {
                         const value = event.target.value as NewPositionMode;
                         setNewPositionMode(value);
@@ -4486,7 +4566,7 @@ function LibraryMapDialog({
                       value={selectedMoveBookId ?? ""}
                       disabled={rearrangementSteps.length > 0}
                       onChange={(event) => {
-                        const book = allMapBooks.find(
+                        const book = projectedBooks.find(
                           (item) => item.id === Number(event.target.value),
                         );
                         if (book) startMoveBook(book);
@@ -4494,7 +4574,7 @@ function LibraryMapDialog({
                       }}
                     >
                       <option value="">Choose book</option>
-                      {[...allMapBooks]
+                      {[...projectedBooks]
                         .sort((first, second) => first.title.localeCompare(second.title))
                         .map((book) => (
                           <option key={book.id} value={book.id}>
@@ -4532,7 +4612,10 @@ function LibraryMapDialog({
                       previewingMove ||
                       selectedMoveBookId === null ||
                       !preciseContainer ||
-                      Boolean(rearrangementPreview?.complete)
+                      (
+                        rearrangementSteps.length > 0 &&
+                        Boolean(rearrangementPreview?.complete)
+                      )
                     }
                     onClick={() => void addPhysicalDestination(
                       Number(preciseContainer),
@@ -4544,11 +4627,18 @@ function LibraryMapDialog({
                 </div>
                 {rearrangementPreview && (
                   <div className="map-movement-summary">
-                    <ol>
-                      {rearrangementPreview.movement_log.map((line, index) => (
-                        <li key={`${index}-${line}`}>{line}</li>
-                      ))}
-                    </ol>
+                    {movementGroups.map((group, groupIndex) => (
+                      <section key={`move-${groupIndex}`}>
+                        {movementGroups.length > 1 && (
+                          <h4>Move {groupIndex + 1}</h4>
+                        )}
+                        <ul>
+                          {group.map((line, lineIndex) => (
+                            <li key={`${lineIndex}-${line}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
                     {rearrangementPreview.gaps.map((gap) => {
                       const container = mapContainers.find(
                         (item) => item.id === gap.container_id,
@@ -4565,10 +4655,20 @@ function LibraryMapDialog({
                         Continue by choosing a destination for {activeMoveBook?.title}.
                       </p>
                     )}
+                    {rearrangementPreview.complete &&
+                      rearrangementPreview.placements.length === 0 &&
+                      rearrangementPreview.gaps.length === 0 && (
+                        <p className="map-no-net-change">
+                          These moves cancel one another out: every book ends in
+                          its original position, so there are no changes to
+                          apply. Undo a step, add another move, or cancel the
+                          draft.
+                        </p>
+                      )}
                   </div>
                 )}
                 <div className="map-rearrangement-actions">
-                  {rearrangementSteps.length > 0 && (
+                  {(rearrangementSteps.length > 0 || completedRearrangements.length > 0) && (
                     <button
                       className="text-button"
                       disabled={previewingMove || applyingMove}
@@ -4577,11 +4677,21 @@ function LibraryMapDialog({
                       <RotateCcw size={15} /> Undo last step
                     </button>
                   )}
+                  {rearrangementSteps.length > 0 && rearrangementPreview?.complete && (
+                    <button
+                      className="outline-button"
+                      disabled={previewingMove || applyingMove}
+                      onClick={startAnotherRearrangement}
+                    >
+                      <Plus size={15} /> Add another move
+                    </button>
+                  )}
                   <button
                     className="primary-button"
                     disabled={
                       previewingMove ||
                       applyingMove ||
+                      rearrangementSteps.length === 0 ||
                       !rearrangementPreview?.valid_to_apply
                     }
                     onClick={() => void applyRearrangement()}
