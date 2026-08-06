@@ -1,47 +1,139 @@
 # BOOKPILE
 
-A local-first personal library manager for cataloguing books and finding their
-exact physical location.
+BOOKPILE is a local-first personal library manager for cataloguing books,
+recording reading history, and finding each physical copy in a real room.
 
-## Version 1
+It is currently a single-user application intended to run on a Windows PC and
+be used from that computer or from a phone on the same private Wi-Fi network.
+The catalogue, covers, and physical layout remain under the user's control.
 
-- Create, edit, delete, search, and filter books.
-- Track `PENDING`, `CURRENTLY_READING`, and `READ` status.
-- Show total, pending, currently-reading, and read counts.
-- Model the library as `Bookcase → Shelf → Container → Book`.
-- Locate a book by bookcase, shelf, layer, row/pile, container number, and
-  position.
-- Inspect and safely delete shelves and containers without deleting books.
-- Reorganize books quickly, swapping positions when the destination is occupied.
-- Record optional acquisition, reading-started, and finished-reading dates,
-  including read books whose exact reading date is unknown.
-- Keep lifecycle dates chronologically consistent and clear acquisition dates
-  automatically for original-collection books.
-- Preserve the original collection as historical books with unknown acquisition
-  dates.
-- Add, replace, and remove optimized cover photos from desktop or mobile.
-- Download a verified ZIP backup containing SQLite, covers, manifest, and
-  checksums.
-- Export all books, dates, and physical locations as an Excel-friendly CSV.
-- Inspect and restore validated BOOKPILE backups with an automatic pre-restore
-  safety backup and rollback protection.
-- Add books rapidly in batches while retaining the physical container and
-  advancing positions upward or downward.
-- Sort by title, author, physical position, or lifecycle dates and filter by
-  date ranges and physical location.
-- Insert a new book into an occupied container position by shifting the
-  contiguous books one place after explicit confirmation.
-- Browse a read-only visual library index with exploded background/foreground
-  layers and click-through catalogue filters.
+## Current capabilities
 
-## Stack
+### Catalogue and reading history
 
-- Backend: FastAPI + SQLite
-- Frontend: React + Vite + TypeScript
+- Create, edit, delete, search, sort, and filter books.
+- Track `Pending`, `Reading...`, and `Read` status.
+- Record acquisition, reading-started, and finished-reading dates.
+- Represent original-collection books whose acquisition date is unknown.
+- Represent read books whose exact finished-reading date is unknown.
+- Validate chronological consistency between lifecycle dates.
+- Sort by title, author, physical position, or lifecycle dates in either
+  direction.
+- Filter by status, physical hierarchy, date ranges, known or unknown dates,
+  and catalogue-quality checks.
+- Use quick views for missing covers, missing locations, and incomplete dates.
+- See how many books pass the current filters.
+- Add books individually or through Batch Add, retaining the selected
+  container and advancing positions upward or downward.
 
-## Run locally
+### Physical library
 
-### One-command start
+BOOKPILE models the hierarchy as:
+
+```text
+Bookcase → Shelf → Container → Book position
+```
+
+A container can be a background or foreground row or pile. Rows run from left
+to right; piles stack from top to bottom.
+
+- Create and edit bookcases; create, renumber, inspect, and safely remove
+  shelves and containers from the dedicated Library Layout interface.
+- Insert books into occupied positions by shifting existing books safely.
+- Keep container positions continuous during normal catalogue changes.
+- Preserve a book's retained physical position while it is `Reading...`.
+- Reorganize books using precise controls or directly on the visual map.
+
+Visual rearrangement supports:
+
+- Click/tap selection and continuous press-and-drag.
+- `Collapse` or temporary `Leave gap` behaviour at the old position.
+- `Squeeze`, `Swap`, or chained `Continue` behaviour at the destination.
+- Several completed movement chains in one provisional draft.
+- A projected map and grouped movement history before applying anything.
+- Atomic Apply, Undo, Cancel, stale-preview protection, and rejection of
+  unfinished chains or persistent gaps.
+- Explicit status confirmation when moving books into or out of the Reading
+  area.
+
+### Visual library map
+
+- Display furniture, shelves, foreground/background containers, and books as
+  a room-scale visual index.
+- Position and resize furniture and the separate Reading area.
+- Customize relative shelf heights and each container's position, width, and
+  height.
+- Allow controlled foreground/background overlap while preventing accidental
+  same-layer container overlap.
+- Preserve the visual layout independently from catalogue locations.
+- Open the catalogue filtered by a bookcase, shelf, or container.
+- Click an individual visual book to open its exact catalogue record.
+- Open the map from a catalogue location and highlight one book while fading
+  the rest.
+- Colour visual books by:
+  - Reading status.
+  - Acquisition recency.
+  - Finished-reading recency.
+  - Time spent pending.
+  - Reading duration.
+- Use percentile-clipped colour scales and separate missing/not-applicable
+  states so outliers do not flatten the useful range.
+
+### Covers and capture aids
+
+- Add, replace, and remove optimized cover photographs from desktop or mobile.
+- Accept JPEG, PNG, WebP, and iPhone HEIC input within the configured size
+  limit.
+- Type or paste an ISBN and retrieve reviewed bibliographic candidates.
+- Photograph a barcode temporarily on a phone and decode book ISBNs while
+  rejecting non-book barcodes.
+- Photograph a front cover temporarily and use optional OCR to prepare
+  title/author text for review.
+- Check recognized candidates against the existing catalogue before offering
+  to add a book.
+- Keep manual entry fully available when recognition or an external provider
+  is unavailable.
+
+ISBN and OCR evidence currently fill only Title and Author after user review.
+ISBN and richer metadata are not yet stored in the database. The user's own
+cover photograph remains authoritative; external cover images are not
+imported.
+
+### Suggestions and statistics
+
+- Suggest a random pending book, the oldest pending book, or a book based on
+  time spent pending.
+- Exclude already-shown suggestions and open the selected catalogue record.
+- Show read-only yearly and monthly acquisition/reading totals.
+- Show known reading and pending-duration statistics with excluded-data
+  counts.
+- Compare original-collection and later-acquisition status totals.
+- Start or finish reading through confirmation prompts without losing the
+  physical position.
+
+### Backup, restore, and export
+
+- Download a verified full ZIP backup containing:
+  - The SQLite catalogue.
+  - Every stored cover.
+  - Integrity metadata and format version.
+  - SHA-256 checksums.
+- Inspect and validate a backup before restoration.
+- Create an automatic safety backup before replacing the current catalogue.
+- Restore the database and covers atomically with rollback protection.
+- Export catalogue data, dates, links, and physical locations as an
+  Excel-friendly CSV.
+
+## Technology
+
+- Backend: FastAPI, SQLite, Pillow, and pillow-heif.
+- Frontend: React, TypeScript, and Vite.
+- Barcode decoding: ZXing in the browser.
+- Temporary cover OCR: Tesseract.js in the browser.
+
+## Running BOOKPILE
+
+### Recommended launcher
 
 From the project root:
 
@@ -49,27 +141,42 @@ From the project root:
 .\start-bookpile.ps1
 ```
 
-This builds the optimized frontend when necessary, opens the backend and
-frontend in separate PowerShell windows, and prints the single LAN URL to use
-from the computer or another device on the same Wi-Fi. Keep both windows open
-while using BOOKPILE.
+The launcher starts the backend and optimized frontend, then displays the LAN
+URL for this computer and other devices on the same Wi-Fi.
 
-### Desktop shortcuts
-
-Install the shortcuts once:
+For future starts, install the desktop shortcuts once:
 
 ```powershell
 .\install-desktop-shortcuts.ps1
 ```
 
-After that:
+Then use:
 
-- Double-click **Start BOOKPILE** to start both servers invisibly. A confirmation
-  displays the mobile URL and copies it to the clipboard.
-- Double-click **Stop BOOKPILE** to stop only the BOOKPILE processes.
-- Runtime logs are stored locally in `.bookpile-runtime/`.
+- **Start BOOKPILE** to launch the application in the background, display the
+  mobile URL, and copy it to the clipboard.
+- **Stop BOOKPILE** to stop only BOOKPILE's processes.
 
-### Backend
+Runtime logs are stored locally in `.bookpile-runtime/`.
+
+### Use from a phone
+
+Open the LAN address shown by the launcher, for example:
+
+```text
+http://192.168.1.50:5173
+```
+
+The phone and host computer must be on the same private Wi-Fi. The optimized
+frontend proxies API requests to the backend, so no phone-side configuration
+is required. If Windows asks about network access, allow it for private
+networks only.
+
+BOOKPILE currently uses local HTTP. Browser features that require a trusted
+HTTPS context, such as continuous live-camera streams, remain deferred.
+
+### Manual development start
+
+Backend:
 
 ```powershell
 cd backend
@@ -79,12 +186,10 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API runs at <http://localhost:8000> and its interactive documentation at
-<http://localhost:8000/docs>.
+The API is available at <http://localhost:8000> and its interactive
+documentation at <http://localhost:8000/docs>.
 
-### Frontend
-
-In a second terminal:
+Frontend, in a second terminal:
 
 ```powershell
 cd frontend
@@ -94,59 +199,89 @@ npm run dev
 
 Open <http://localhost:5173>.
 
-## Use from a phone on the same Wi-Fi
+## Data and safety
 
-Run `.\start-bookpile.ps1`, then open the displayed LAN URL on the phone, for
-example:
+The live SQLite catalogue and cover images are intentionally excluded from
+Git. The main local data lives under `backend/data/`.
 
-```text
-http://192.168.1.50:5173
-```
+Use **Settings → Data & backups → Download full backup** before major catalogue
+work or application upgrades. A full ZIP is safer than copying only the SQLite
+file because it also preserves covers and includes integrity information.
 
-The optimized frontend proxies API requests to FastAPI on the host computer, so
-no mobile configuration is required. Vite development mode is not used for this
-launcher, which substantially reduces the number of files transferred to the
-phone. Windows may ask once whether Node.js may communicate on private
-networks; allow access for **private networks only**.
-
-## Data
-
-SQLite data is stored in `backend/data/bookpile.db` and is intentionally
-excluded from Git. Back up that file to preserve your catalogue.
+Generated backups under `backend/backups/`, runtime files, reports, and local
+project context are also excluded from the repository where appropriate.
 
 ## Catalogue maintenance checks
 
-The project includes read-only utilities that never modify the database.
-Double-click either `.cmd` launcher:
+The maintenance utilities are read-only and never modify the catalogue.
+Double-click either launcher:
 
 - `check-bookpile-dates.cmd` audits lifecycle chronology, unexplained missing
-  reading dates, original-collection conflicts, and suspicious future dates.
-- `check-bookpile-goodreads.cmd` checks Goodreads URLs and compares public book
-  metadata with BOOKPILE title and author. It always checks that every URL is
-  unique before accessing Goodreads.
+  dates, original-collection conflicts, and suspicious future dates.
+- `check-bookpile-goodreads.cmd` checks URL uniqueness and helps compare
+  Goodreads pages with BOOKPILE title and author data.
 
 Reports are written as Excel-friendly CSV files under `maintenance/reports/`.
-Goodreads review links normally require an authenticated browser session, so
-the Goodreads launcher opens them one at a time in the default signed-in
-browser. Answer yes, no, skip, or quit; decisions made so far are retained in
-the generated report. For a network-only report without opening the browser,
-run:
+Goodreads review can open links one at a time in the default signed-in browser
+and retain the decisions made so far.
+
+For a network-only Goodreads report:
 
 ```powershell
 backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py
 ```
 
-For an immediate offline duplicate check without contacting Goodreads:
+For an immediate offline duplicate-URL check:
 
 ```powershell
 backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py --duplicates-only
 ```
 
-## Roadmap
+## Verification
 
-1. Random and oldest-pending reading suggestions.
-2. Acquisition and reading dates.
-3. Visual shelf representation.
-4. Goodreads metadata.
-5. Cover images.
-6. OCR/camera recognition.
+Backend tests:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Frontend checks:
+
+```powershell
+cd frontend
+npm run lint
+npm run build
+```
+
+Automated provider tests use mocked responses and do not depend on live
+third-party services.
+
+## Project documentation
+
+- `TODO.md` is the authoritative roadmap and separates work possible with the
+  current database from schema expansion and product-scale development.
+- `SCANNING_PLAN.md` documents ISBN, barcode, OCR, catalogue matching, and
+  future live-camera work.
+- `BACKUP_EXPORT_PLAN.md` documents the backup format, restore validation, and
+  CSV export design.
+- `BOOKPILE_PROJECT_CONTEXT_LOCAL.md` contains detailed local project history
+  and is intentionally excluded from Git.
+
+## Near-term roadmap
+
+The next milestone is safe database expansion:
+
+1. Introduce versioned database migrations.
+2. Create and verify a full automatic backup before every migration.
+3. Test migrations against a copy of the populated catalogue and compare all
+   existing records before and after.
+4. Record schema versions in backup metadata and document failed-migration
+   recovery.
+5. Use stored, normalized ISBN-10/ISBN-13 fields as the first small additive
+   migration.
+
+Later database phases include richer bibliographic metadata, structured
+authors, reading-session history and re-reading, and optional loan history.
+Multi-user accounts and publication as a hosted application are a separate,
+larger product phase rather than assumptions in the current local-first build.
