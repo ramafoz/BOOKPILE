@@ -20,10 +20,9 @@ changed until the user reviews the result and explicitly saves a book.
 
 ## Current phase versus future metadata
 
-The initial implementation will apply only `Title` and `Author` because those
-are the bibliographic fields supported by the current book-entry workflow.
-This is a temporary field-application limit, not the long-term scope of
-scanning.
+The current schema-v2 implementation applies reviewed `Title`, `Author`,
+`ISBN-10`, and `ISBN-13` values. This remains a temporary field-application
+limit, not the long-term scope of scanning.
 
 The lookup layer should use a future-ready result shape so it can later supply:
 
@@ -35,10 +34,9 @@ The lookup layer should use a future-ready result shape so it can later supply:
 - Genre and fiction/non-fiction category.
 - Format, such as hardback, paperback, or comic book.
 
-Until the safe schema-expansion work in `TODO.md` is complete, these additional
-values must not be written to the database. They may be retained in the lookup
-response or displayed as supporting information, but accepting a result fills
-only Title and Author.
+Other values must not be written until their own safe incremental migrations
+and reviewed form fields exist. They may be retained in the lookup response or
+displayed as supporting information without being persisted.
 
 The user's own cover photograph remains authoritative. No external cover image
 will be imported. A photo used for barcode decoding or OCR is temporary and
@@ -89,8 +87,8 @@ Every input method should feed the same pipeline:
      it.
    - `Not found in catalogue`: offer **Add to BOOKPILE**.
 6. **Apply only after review**
-   - In the current phase, accepting a candidate copies only Title and Author
-     into the current Add Book or Batch Add form.
+   - Accepting an ISBN candidate copies reviewed Title, Author, ISBN-10, and
+     ISBN-13 values into Add Book, Edit Book, or Batch Add.
    - Saving remains the existing, explicit final action.
 
 ### Common lookup result
@@ -122,12 +120,11 @@ or authoritative without user review.
 
 ## Catalogue matching
 
-### Matching with the current database
+### Current matching
 
-Because ISBN is not currently stored, an ISBN can identify external metadata
-but cannot prove that the same edition is already in BOOKPILE. The current
-matcher should therefore compare the returned Title and Author against the
-catalogue:
+Schema v2 provides durable normalized ISBN-10 and ISBN-13 fields. Matching now
+uses exact ISBNs first, including the ISBN-13 equivalent of a stored ISBN-10,
+then falls back to these Title/Author rules:
 
 1. Normalize case, whitespace, punctuation, and diacritics for comparison
    without changing displayed values.
@@ -141,13 +138,7 @@ catalogue:
 The API should return the reason and confidence class (`strong`, `possible`, or
 `none`) rather than a single true/false duplicate value.
 
-This limitation must be visible in the interface: a title/author match can find
-an existing work, but it cannot reliably distinguish editions or intentional
-duplicate copies.
-
-### Matching after safe database expansion
-
-Once normalized ISBN identifiers can be stored safely:
+The implemented ISBN rules are:
 
 1. Match ISBN-13 exactly first, including a normalized ISBN-10-to-ISBN-13
    comparison where possible.
@@ -156,8 +147,8 @@ Once normalized ISBN identifiers can be stored safely:
    copies of one edition.
 4. Distinguish `same ISBN already owned` from `same work, possibly another
    edition`.
-5. Allow a confirmed scan to enrich only fields the user selects; never
-   silently replace existing catalogue data.
+5. Allow a confirmed scan to fill the reviewed form; never silently replace or
+   save existing catalogue data.
 
 ## Phase 0: shared foundation
 
@@ -194,8 +185,9 @@ without camera complexity.
 5. BOOKPILE checks the candidates against the existing catalogue.
 6. The user opens a likely existing record, selects another provider candidate,
    or chooses **Add to BOOKPILE**.
-7. For a new book, accepting the result fills Title and Author only. The ISBN
-   remains transient in this phase.
+7. For a new or existing book, accepting the result fills reviewed Title,
+   Author, ISBN-10, and ISBN-13 values. Nothing is persisted until the user
+   submits the Add, Edit, or Batch Add form.
 
 ### Acceptance criteria
 
@@ -205,6 +197,9 @@ without camera complexity.
 - Strong, possible, and no catalogue match outcomes are distinguishable.
 - Provider timeout or loss of Wi-Fi leaves manual entry intact.
 - Add Book and Batch Add use the same component and behaviour.
+- Edit Book exposes the same stored ISBN fields and barcode/lookup tools.
+- Stored ISBNs are normalized, searchable, and used for exact catalogue
+  matching while intentional duplicate copies remain allowed.
 
 ## Phase 2: barcode from a temporary phone photo
 
@@ -346,8 +341,8 @@ physical-cataloguing behaviour:
 1. Enter Batch Add and choose a container, starting position, and direction.
 2. Choose Type ISBN, Photograph barcode, or—after Phase 3—Read cover text.
 3. Resolve external candidates and existing catalogue matches.
-4. If adding, review/correct Title and Author and take the user's own stored
-   cover photo separately.
+4. If adding, review/correct Title, Author, and ISBN fields and take the user's
+   own stored cover photo separately.
 5. Save through the existing collision-and-shift rules.
 6. Preserve container and direction, advance the position, and clear
    book-specific values.

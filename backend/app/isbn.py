@@ -47,6 +47,35 @@ def is_valid_isbn(value: str) -> bool:
     return True
 
 
+def isbn_10_to_isbn_13(value: str) -> str:
+    """Return the equivalent 978-prefixed ISBN-13 for a valid ISBN-10."""
+
+    isbn_10 = normalize_isbn(value)
+    if len(isbn_10) != 10:
+        raise InvalidISBN("Only ISBN-10 values can be converted to ISBN-13")
+    first_twelve = f"978{isbn_10[:9]}"
+    weighted_sum = sum(
+        int(character) * (1 if index % 2 == 0 else 3)
+        for index, character in enumerate(first_twelve)
+    )
+    check_digit = (10 - weighted_sum % 10) % 10
+    return f"{first_twelve}{check_digit}"
+
+
+def equivalent_isbns(*values: str | None) -> set[str]:
+    """Return normalized identifiers, including ISBN-13 equivalents."""
+
+    equivalents: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        normalized = normalize_isbn(value)
+        equivalents.add(normalized)
+        if len(normalized) == 10:
+            equivalents.add(isbn_10_to_isbn_13(normalized))
+    return equivalents
+
+
 def _has_valid_isbn_10_checksum(isbn: str) -> bool:
     values = [int(character) for character in isbn[:9]]
     values.append(10 if isbn[-1] == "X" else int(isbn[-1]))

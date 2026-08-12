@@ -1,6 +1,12 @@
 import pytest
 
-from app.isbn import InvalidISBN, is_valid_isbn, normalize_isbn
+from app.isbn import (
+    InvalidISBN,
+    equivalent_isbns,
+    is_valid_isbn,
+    isbn_10_to_isbn_13,
+    normalize_isbn,
+)
 
 
 @pytest.mark.parametrize(
@@ -45,3 +51,11 @@ def test_normalize_isbn_requires_text() -> None:
 def test_is_valid_isbn_returns_a_boolean() -> None:
     assert is_valid_isbn("9780306406157") is True
     assert is_valid_isbn("9780306406158") is False
+
+
+def test_isbn_10_and_isbn_13_equivalence() -> None:
+    assert isbn_10_to_isbn_13("0-306-40615-2") == "9780306406157"
+    assert equivalent_isbns("0306406152") == {
+        "0306406152",
+        "9780306406157",
+    }

@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .database import database_path
+from .migrations import LATEST_SCHEMA_VERSION, schema_version as detect_schema_version
 
 
 BACKUP_FORMAT_VERSION = 1
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = LATEST_SCHEMA_VERSION
 
 
 def sha256_file(path: Path) -> str:
@@ -23,9 +24,12 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def create_database_snapshot(destination: Path) -> None:
+def create_database_snapshot(
+    destination: Path,
+    source_database: Path | None = None,
+) -> None:
     with (
-        closing(sqlite3.connect(database_path())) as source,
+        closing(sqlite3.connect(source_database or database_path())) as source,
         closing(sqlite3.connect(destination)) as target,
     ):
         source.backup(target)
@@ -65,14 +69,23 @@ def database_summary(path: Path) -> dict:
     }
 
 
-def create_full_backup(destination: Path) -> dict:
-    data_directory = database_path().parent
-    covers_directory = data_directory / "covers"
+def create_full_backup(
+    destination: Path,
+    *,
+    source_database: Path | None = None,
+    source_covers: Path | None = None,
+    schema_version: int | None = None,
+) -> dict:
+    source_database = source_database or database_path()
+    covers_directory = source_covers or source_database.parent / "covers"
 
     with tempfile.TemporaryDirectory(prefix="bookpile-backup-") as temporary:
         snapshot = Path(temporary) / "bookpile.db"
-        create_database_snapshot(snapshot)
+        create_database_snapshot(snapshot, source_database)
         summary = database_summary(snapshot)
+        with closing(sqlite3.connect(snapshot)) as snapshot_connection:
+            snapshot_connection.row_factory = sqlite3.Row
+            detected_schema_version = detect_schema_version(snapshot_connection)
 
         files = {
             "bookpile.db": {
@@ -97,7 +110,7 @@ def create_full_backup(destination: Path) -> dict:
         manifest = {
             "format": "BOOKPILE_BACKUP",
             "backup_format_version": BACKUP_FORMAT_VERSION,
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": schema_version or detected_schema_version,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "integrity_check": summary["integrity_check"],
             "counts": {
@@ -127,6 +140,8 @@ CSV_COLUMNS = (
     "id",
     "title",
     "author",
+    "isbn_10",
+    "isbn_13",
     "status",
     "goodreads_url",
     "notes",
@@ -154,6 +169,8 @@ def write_books_csv(destination: Path) -> int:
         b.id,
         b.title,
         b.author,
+        b.isbn_10,
+        b.isbn_13,
         b.status,
         b.goodreads_url,
         b.notes,

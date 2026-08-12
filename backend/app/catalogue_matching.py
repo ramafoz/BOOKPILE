@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 from .database import connect
+from .isbn import equivalent_isbns
 
 
 MATCHABLE_BOOKS = """
@@ -11,6 +12,8 @@ SELECT
     b.id,
     b.title,
     b.author,
+    b.isbn_10,
+    b.isbn_13,
     b.status,
     b.cover_filename,
     bc.name AS bookcase_name,
@@ -52,6 +55,22 @@ def find_catalogue_matches(title: str, authors: list[str]) -> list[dict[str, Any
     return match_candidate({"title": title, "authors": authors}, books)
 
 
+def find_isbn_catalogue_matches(isbn: str) -> list[dict[str, Any]]:
+    """Find exact local matches without depending on metadata providers."""
+
+    with connect() as connection:
+        books = [dict(row) for row in connection.execute(MATCHABLE_BOOKS)]
+    identifier_key = f"isbn_{len(isbn)}"
+    return match_candidate(
+        {
+            "title": "",
+            "authors": [],
+            "identifiers": {identifier_key: isbn},
+        },
+        books,
+    )
+
+
 def match_candidate(
     candidate: dict[str, Any],
     books: list[dict[str, Any]],
@@ -62,6 +81,10 @@ def match_candidate(
         for author in candidate.get("authors", [])
         if comparison_text(author)
     ]
+    candidate_isbns = equivalent_isbns(
+        candidate.get("identifiers", {}).get("isbn_10"),
+        candidate.get("identifiers", {}).get("isbn_13"),
+    )
     matches = []
 
     for book in books:
@@ -72,8 +95,12 @@ def match_candidate(
             author_text_matches(author, book_author)
             for author in candidate_authors
         )
+        book_isbns = equivalent_isbns(book.get("isbn_10"), book.get("isbn_13"))
 
-        if candidate_title == book_title and authors_overlap:
+        if candidate_isbns & book_isbns:
+            match_class = "strong"
+            reason = "Exact ISBN already stored in BOOKPILE"
+        elif candidate_title == book_title and authors_overlap:
             match_class = "strong"
             reason = "Same normalized title and matching author text"
         elif candidate_title == book_title:

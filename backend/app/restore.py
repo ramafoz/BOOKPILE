@@ -22,6 +22,7 @@ from .exports import (
     database_summary,
     sha256_file,
 )
+from .migrations import run_migrations
 
 
 MAX_BACKUP_BYTES = 1024 * 1024 * 1024
@@ -269,6 +270,16 @@ def perform_restore(token: str) -> dict:
                 incoming_covers.mkdir()
 
             try:
+                # Upgrade an older valid backup while it is still isolated.
+                # The migration runner creates and validates its own complete
+                # safety ZIP before changing this incoming copy.
+                run_migrations(
+                    incoming_database,
+                    covers=incoming_covers,
+                    backup_directory=backups_directory(),
+                    approved=True,
+                )
+
                 os.replace(incoming_database, live_database)
                 old_covers = data_directory / "covers.restore-old"
                 shutil.rmtree(old_covers, ignore_errors=True)
@@ -276,9 +287,9 @@ def perform_restore(token: str) -> dict:
                     os.replace(live_covers, old_covers)
                 os.replace(incoming_covers, live_covers)
 
-                # Older valid backups may predate additive feature tables.
-                # Bring the restored database up to the current schema before
-                # handing it back to the running application.
+                # Keep the legacy additive initializers for backups from early
+                # project versions; versioned migrations have already run on
+                # the isolated incoming database above.
                 init_database()
                 final_summary = database_summary(live_database)
                 final_counts = {

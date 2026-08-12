@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileSpreadsheet,
   GalleryVerticalEnd,
+  Info,
   LibraryBig,
   ListPlus,
   LoaderCircle,
@@ -73,6 +74,8 @@ const emptyStats: Stats = {
 const emptyBook: BookPayload = {
   title: "",
   author: "",
+  isbn_10: null,
+  isbn_13: null,
   status: "PENDING",
   goodreads_url: null,
   notes: null,
@@ -93,6 +96,7 @@ function App() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
+  const [detailsBook, setDetailsBook] = useState<Book | null>(null);
   const [batchAdding, setBatchAdding] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -472,7 +476,7 @@ function App() {
             <Search size={18} />
             <input
               aria-label="Search books"
-              placeholder="Search by title or author…"
+              placeholder="Search by title, author or ISBN…"
               value={search}
               onChange={(event) => {
                 setExactBookFilter(null);
@@ -803,6 +807,13 @@ function App() {
                     )}
                   </button>
                   <div className="row-actions">
+                    <button
+                      aria-label="Show complete book information"
+                      title="Show complete book information"
+                      onClick={() => setDetailsBook(book)}
+                    >
+                      <Info size={17} />
+                    </button>
                     {book.goodreads_url && (
                       <a
                         aria-label="Open Goodreads"
@@ -827,6 +838,12 @@ function App() {
         </div>
       </section>
 
+      {detailsBook && (
+        <BookDetailsDialog
+          book={detailsBook}
+          onClose={() => setDetailsBook(null)}
+        />
+      )}
       {editing !== undefined && (
         <BookDialog
           book={editing}
@@ -949,6 +966,138 @@ function BookDates({ book }: { book: Book }) {
   ].filter(Boolean);
 
   return dates.length ? <small className="book-dates">{dates.join(" · ")}</small> : null;
+}
+
+function formatTimestamp(value: string) {
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function BookDetailsDialog({
+  book,
+  onClose,
+}: {
+  book: Book;
+  onClose: () => void;
+}) {
+  const acquisition = book.acquisition_date
+    ? formatDate(book.acquisition_date)
+    : book.is_original_collection
+      ? "Original collection · exact date unknown"
+      : "Not recorded";
+  const finishedReading = book.read_date
+    ? formatDate(book.read_date)
+    : book.status === "READ" && book.is_read_date_unknown
+      ? "Read · exact date unknown"
+      : "Not recorded";
+  const location = book.container_id
+    ? `${book.bookcase_name} · Shelf ${book.shelf_number} · ${
+      book.layer === "BACKGROUND" ? "Background" : "Foreground"
+    } ${book.container_type === "ROW" ? "Row" : "Pile"} ${
+      book.container_number
+    } · Position ${book.position}`
+    : "No physical location assigned";
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div
+        className="dialog book-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="book-details-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Read-only catalogue record</p>
+            <h2 id="book-details-title">Book information</h2>
+          </div>
+          <button className="icon-button" aria-label="Close" onClick={onClose}>
+            <X />
+          </button>
+        </div>
+
+        <div className="book-details-summary">
+          {book.cover_filename ? (
+            <img src={api.coverUrl(book.cover_filename)} alt={`Cover of ${book.title}`} />
+          ) : (
+            <div className="book-details-cover-placeholder"><BookOpen size={34} /></div>
+          )}
+          <div>
+            <span className={`status ${book.status.toLowerCase()}`}>
+              {statusLabel(book.status)}
+            </span>
+            <h3>{book.title}</h3>
+            <p>{book.author}</p>
+          </div>
+        </div>
+
+        <section className="book-details-section">
+          <h3>Bibliographic identifiers</h3>
+          <dl className="book-details-grid">
+            <div><dt>ISBN-10</dt><dd>{book.isbn_10 ?? "Not recorded"}</dd></div>
+            <div><dt>ISBN-13</dt><dd>{book.isbn_13 ?? "Not recorded"}</dd></div>
+            <div className="wide">
+              <dt>Goodreads review</dt>
+              <dd>
+                {book.goodreads_url ? (
+                  <a href={book.goodreads_url} target="_blank" rel="noreferrer">
+                    Open Goodreads <ExternalLink size={14} />
+                  </a>
+                ) : "Not recorded"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="book-details-section">
+          <h3>Reading and acquisition history</h3>
+          <dl className="book-details-grid three-columns">
+            <div><dt>Acquired</dt><dd>{acquisition}</dd></div>
+            <div>
+              <dt>Reading started</dt>
+              <dd>{book.reading_started_date ? formatDate(book.reading_started_date) : "Not recorded"}</dd>
+            </div>
+            <div><dt>Finished reading</dt><dd>{finishedReading}</dd></div>
+          </dl>
+        </section>
+
+        <section className="book-details-section">
+          <h3>Physical catalogue</h3>
+          <dl className="book-details-grid">
+            <div className="wide">
+              <dt>{book.status === "CURRENTLY_READING" ? "Saved return location" : "Location"}</dt>
+              <dd>{location}</dd>
+            </div>
+            <div><dt>BOOKPILE record</dt><dd>#{book.id}</dd></div>
+            <div><dt>Stored cover</dt><dd>{book.cover_filename ? "Yes" : "No"}</dd></div>
+          </dl>
+          {book.status === "CURRENTLY_READING" && (
+            <p className="book-details-note">
+              This book currently appears in the map's Reading area; its saved
+              physical position remains available for its return.
+            </p>
+          )}
+        </section>
+
+        <section className="book-details-section">
+          <h3>Notes and record history</h3>
+          <dl className="book-details-grid">
+            <div className="wide book-details-notes">
+              <dt>Notes</dt><dd>{book.notes || "No notes"}</dd>
+            </div>
+            <div><dt>Added to BOOKPILE</dt><dd>{formatTimestamp(book.created_at)}</dd></div>
+            <div><dt>Last updated</dt><dd>{formatTimestamp(book.updated_at)}</dd></div>
+          </dl>
+        </section>
+
+        <div className="dialog-actions">
+          <button type="button" className="primary-button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function StatCard({
@@ -1382,6 +1531,8 @@ function BookDialog({
       ? {
           title: book.title,
           author: book.author,
+          isbn_10: book.isbn_10,
+          isbn_13: book.isbn_13,
           status: book.status,
           goodreads_url: book.goodreads_url,
           notes: book.notes,
@@ -1404,7 +1555,7 @@ function BookDialog({
   );
   const [batchMessage, setBatchMessage] = useState("");
   const [batchDirection, setBatchDirection] = useState<"UP" | "DOWN">("UP");
-  const [isbnInput, setIsbnInput] = useState("");
+  const [isbnInput, setIsbnInput] = useState(book?.isbn_13 ?? book?.isbn_10 ?? "");
   const [isbnLookup, setIsbnLookup] = useState<ISBNLookupResult | null>(null);
   const [isbnLoading, setIsbnLoading] = useState(false);
   const [isbnError, setIsbnError] = useState("");
@@ -1476,7 +1627,15 @@ function BookDialog({
     setIsbnError("");
     setIsbnLookup(null);
     try {
-      setIsbnLookup(await api.lookupIsbn(value));
+      const result = await api.lookupIsbn(value);
+      setIsbnLookup(result);
+      setIsbnInput(result.isbn);
+      setForm((current) => ({
+        ...current,
+        ...(result.isbn.length === 10
+          ? { isbn_10: result.isbn }
+          : { isbn_13: result.isbn }),
+      }));
     } catch (err) {
       setIsbnError(err instanceof Error ? err.message : "Unable to look up ISBN");
     } finally {
@@ -1492,6 +1651,7 @@ function BookDialog({
     try {
       const decodedIsbn = await decodeIsbnBarcodePhoto(file);
       setIsbnInput(decodedIsbn);
+      setForm((current) => ({ ...current, isbn_13: decodedIsbn }));
       await lookUpIsbn(decodedIsbn);
     } catch (err) {
       setIsbnError(
@@ -1564,21 +1724,37 @@ function BookDialog({
     }
   }
 
-  function applyRecognizedText(title: string, author: string) {
+  function applyRecognizedText(title: string, author: string): boolean {
     const replacingTypedText = Boolean(form.title.trim() || form.author.trim());
     if (
       replacingTypedText
       && !window.confirm("Replace the current Title and Author with this result?")
     ) {
-      return;
+      return false;
     }
     setForm((current) => ({ ...current, title, author }));
     setBatchMessage("");
     window.setTimeout(() => titleInput.current?.focus(), 0);
+    return true;
   }
 
   function applyIsbnCandidate(candidate: BibliographicCandidate) {
-    applyRecognizedText(candidate.title, candidate.authors.join(" & "));
+    if (!applyRecognizedText(candidate.title, candidate.authors.join(" & "))) return;
+    const lookedUpIdentifiers = isbnLookup
+      ? isbnLookup.isbn.length === 10
+        ? { isbn_10: isbnLookup.isbn }
+        : { isbn_13: isbnLookup.isbn }
+      : {};
+    setForm((current) => ({
+      ...current,
+      ...lookedUpIdentifiers,
+      ...(candidate.identifiers.isbn_10
+        ? { isbn_10: candidate.identifiers.isbn_10 }
+        : {}),
+      ...(candidate.identifiers.isbn_13
+        ? { isbn_13: candidate.identifiers.isbn_13 }
+        : {}),
+    }));
   }
 
   async function submit(event: FormEvent) {
@@ -1657,6 +1833,8 @@ function BookDialog({
           ...current,
           title: "",
           author: "",
+          isbn_10: null,
+          isbn_13: null,
           goodreads_url: null,
           notes: null,
           reading_started_date: null,
@@ -1723,8 +1901,7 @@ function BookDialog({
             </div>
           )}
           <div className="form-grid">
-            {!book && (
-              <fieldset className="wide isbn-field">
+            <fieldset className="wide isbn-field">
                 <legend>Identify book</legend>
                 <div className="isbn-lookup-row">
                   <label>
@@ -1782,9 +1959,36 @@ function BookDialog({
                   </label>
                 </div>
                 <small>
-                  The lookup is read-only. It checks the catalogue before filling
-                  Title and Author; nothing is saved automatically.
+                  Lookup and barcode recognition fill the stored ISBN fields below
+                  and check the catalogue. Nothing is saved until you submit the book.
                 </small>
+                <div className="isbn-storage-grid">
+                  <label>
+                    Stored ISBN-10
+                    <input
+                      value={form.isbn_10 ?? ""}
+                      maxLength={40}
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      placeholder="0-…"
+                      onChange={(event) =>
+                        setForm({ ...form, isbn_10: event.target.value || null })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Stored ISBN-13
+                    <input
+                      value={form.isbn_13 ?? ""}
+                      maxLength={40}
+                      inputMode="numeric"
+                      placeholder="978-…"
+                      onChange={(event) =>
+                        setForm({ ...form, isbn_13: event.target.value || null })
+                      }
+                    />
+                  </label>
+                </div>
                 <div className="ocr-tools">
                   <label>
                     Cover OCR language
@@ -1966,7 +2170,28 @@ function BookDialog({
                   </div>
                 )}
                 {isbnError && <div className="isbn-message error">{isbnError}</div>}
-                {isbnLookup && isbnLookup.candidates.length === 0 && (
+                {isbnLookup && isbnLookup.catalogue_matches.length > 0 && (
+                  <div className="isbn-matches isbn-direct-matches">
+                    <strong>Exact ISBN already in BOOKPILE</strong>
+                    {isbnLookup.catalogue_matches.map((match) => (
+                      <div className="isbn-match" key={match.book_id}>
+                        <span>
+                          <b>{match.title}</b> · {match.author}
+                          {match.location_label && <small>{match.location_label}</small>}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => onOpenExisting(match.book_id, match.title)}
+                        >
+                          Open existing
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isbnLookup && isbnLookup.candidates.length === 0
+                  && isbnLookup.catalogue_matches.length === 0 && (
                   <div className="isbn-message">
                     No bibliographic result was found for {isbnLookup.isbn}. You
                     can continue with manual entry.
@@ -1994,9 +2219,10 @@ function BookDialog({
                       className="secondary-button"
                       onClick={() => applyIsbnCandidate(candidate)}
                     >
-                      Use Title & Author
+                      Use Title, Author & ISBN
                     </button>
-                    {candidate.catalogue_matches.length > 0 && (
+                    {candidate.catalogue_matches.length > 0
+                      && isbnLookup.catalogue_matches.length === 0 && (
                       <div className="isbn-matches">
                         <strong>
                           {candidate.catalogue_matches.some(
@@ -2027,7 +2253,6 @@ function BookDialog({
                   </article>
                 ))}
               </fieldset>
-            )}
             <fieldset className="wide cover-field">
               <legend>Cover image</legend>
               <div className="cover-editor">

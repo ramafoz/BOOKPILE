@@ -102,7 +102,7 @@ This roadmap separates future work by its effect on the current data model.
   consecutive Batch Add entries.
 - [x] Advance physical positions automatically in ascending or descending
   order.
-- [x] Clear title- and author-specific values between Batch Add entries.
+- [x] Clear title-, author-, and ISBN-specific values between Batch Add entries.
 - [x] Allow leaving Batch Add without affecting normal single-book entry.
 - [x] Sort by physical position, title, author, acquisition date,
   reading-started date, or finished-reading date.
@@ -119,6 +119,9 @@ This roadmap separates future work by its effect on the current data model.
   reading interval is missing one endpoint, and for books with no physical
   location or no cover.
 - [x] Show how many books match the active catalogue filters.
+- [x] Open a read-only complete-information dialog from each catalogue row,
+  including identifiers, dates, status, location, notes, links, cover state,
+  and record timestamps without expanding the main list.
 - [x] Treat unknown dates as earlier than all known dates when sorting any
   lifecycle date, while allowing unknown-date books to be excluded.
 - [x] Mark a read book's finished-reading date as explicitly unknown.
@@ -228,7 +231,7 @@ fields.
   - Open a likely existing record, or suggest adding a new book when no match
     is found.
 - [x] Add typed/pasted ISBN lookup to Add Book and Batch Add.
-  - In this phase, apply only Title and Author and do not store the ISBN.
+  - Apply reviewed Title, Author, ISBN-10, and ISBN-13 values to the form.
   - Keep all lookup results reviewable and never write automatically.
 - [x] Decode an ISBN barcode from a temporary phone photograph.
   - Prefer browser-side decoding that works over the current local Wi-Fi URL.
@@ -260,16 +263,18 @@ protects the completed catalogue.
 
 ### Safe schema-expansion prerequisite
 
-- [ ] Add versioned database migrations.
-- [ ] Create an automatic full ZIP backup before every migration.
-- [ ] Prefer additive, nullable fields and new related tables so all existing
+- [x] Add versioned database migrations with explicit approval and transactional
+  rollback.
+- [x] Create and validate an automatic full ZIP backup before every migration.
+- [x] Prefer additive, nullable fields and new related tables so all existing
   books remain valid without placeholder data.
-- [ ] Test migrations against a copy of the populated database and verify:
+- [x] Test migrations against a copy of the populated database and verify:
   - Book, hierarchy, layout, date, link, and cover counts.
   - Existing catalogue values before and after migration.
   - Backup export and restore compatibility.
-- [ ] Record the database schema version in backups.
-- [ ] Document recovery steps for a failed migration.
+- [x] Record the detected database schema version in backups.
+- [x] Document inspection, rehearsal, approval, and failed-migration recovery in
+  `MIGRATION_RECOVERY.md`.
 
 ### Structured authors
 
@@ -284,9 +289,13 @@ protects the completed catalogue.
 ### Additional book metadata
 
 - [ ] Add optional number of pages.
-- [ ] Add optional normalized ISBN-10 and ISBN-13 identifiers.
-  - Index ISBNs for exact matching but allow intentional duplicate copies.
-  - Distinguish an exact-edition match from a probable same-work match.
+- [x] Complete optional normalized ISBN-10 and ISBN-13 identifiers end to end.
+  - [x] Add nullable indexed storage through the live v1-to-v2 migration.
+  - [x] Expose ISBN fields through book APIs, editing, addition, and reviewed
+    scanning-result acceptance.
+  - [x] Index ISBNs for exact matching but allow intentional duplicate copies.
+  - [x] Distinguish an exact-edition ISBN match from a probable same-work
+    Title/Author match.
 - [ ] Add optional publisher.
 - [ ] Add optional publication date with support for year-only or otherwise
   incomplete known dates.

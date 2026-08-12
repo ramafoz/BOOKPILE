@@ -59,6 +59,8 @@ def init_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 author TEXT NOT NULL,
+                isbn_10 TEXT,
+                isbn_13 TEXT,
                 status TEXT NOT NULL DEFAULT 'PENDING'
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
@@ -120,6 +122,16 @@ def init_database() -> None:
         _migrate_book_dates(connection)
         _migrate_book_covers(connection)
         _migrate_visual_container_layout(connection)
+        book_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(books)")
+        }
+        if {"isbn_10", "isbn_13"} <= book_columns:
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_books_isbn_10 ON books(isbn_10)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_books_isbn_13 ON books(isbn_13)"
+            )
 
 
 def _migrate_visual_container_layout(connection: sqlite3.Connection) -> None:
@@ -267,6 +279,8 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 author TEXT NOT NULL,
+                isbn_10 TEXT,
+                isbn_13 TEXT,
                 status TEXT NOT NULL DEFAULT 'PENDING'
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
@@ -292,13 +306,13 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             );
 
             INSERT INTO books_new (
-                id, title, author, status, goodreads_url, notes,
+                id, title, author, isbn_10, isbn_13, status, goodreads_url, notes,
                 acquisition_date, reading_started_date, read_date,
                 is_read_date_unknown, is_original_collection, cover_filename,
                 container_id, position, created_at, updated_at
             )
             SELECT
-                id, title, author, status, goodreads_url, notes,
+                id, title, author, NULL, NULL, status, goodreads_url, notes,
                 NULL, NULL, NULL, 0, 1, NULL,
                 container_id, position, created_at, updated_at
             FROM books;
@@ -309,6 +323,8 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_books_status ON books(status);
             CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
             CREATE INDEX IF NOT EXISTS idx_books_author ON books(author);
+            CREATE INDEX IF NOT EXISTS idx_books_isbn_10 ON books(isbn_10);
+            CREATE INDEX IF NOT EXISTS idx_books_isbn_13 ON books(isbn_13);
 
             COMMIT;
             """

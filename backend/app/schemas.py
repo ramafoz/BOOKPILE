@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
+from .isbn import normalize_isbn
+
 
 class BookStatus(str, Enum):
     pending = "PENDING"
@@ -143,9 +145,20 @@ class RearrangementResult(BaseModel):
     warnings: list[str]
 
 
+def normalize_optional_isbn(value: str | None, length: int) -> str | None:
+    if value is None or not value.strip():
+        return None
+    normalized = normalize_isbn(value)
+    if len(normalized) != length:
+        raise ValueError(f"ISBN-{length} must be entered in the ISBN-{length} field")
+    return normalized
+
+
 class BookBase(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     author: str = Field(min_length=1, max_length=300)
+    isbn_10: str | None = Field(default=None, max_length=40)
+    isbn_13: str | None = Field(default=None, max_length=40)
     status: BookStatus = BookStatus.pending
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
@@ -167,6 +180,16 @@ class BookBase(BaseModel):
     def blank_notes_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
 
+    @field_validator("isbn_10")
+    @classmethod
+    def validate_isbn_10(cls, value: str | None) -> str | None:
+        return normalize_optional_isbn(value, 10)
+
+    @field_validator("isbn_13")
+    @classmethod
+    def validate_isbn_13(cls, value: str | None) -> str | None:
+        return normalize_optional_isbn(value, 13)
+
 
 class BookCreate(BookBase):
     shift_existing: bool = False
@@ -176,6 +199,8 @@ class BookCreate(BookBase):
 class BookUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
     author: str | None = Field(default=None, min_length=1, max_length=300)
+    isbn_10: str | None = Field(default=None, max_length=40)
+    isbn_13: str | None = Field(default=None, max_length=40)
     status: BookStatus | None = None
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
@@ -186,6 +211,16 @@ class BookUpdate(BaseModel):
     is_original_collection: bool | None = None
     container_id: int | None = None
     position: int | None = Field(default=None, gt=0)
+
+    @field_validator("isbn_10")
+    @classmethod
+    def validate_isbn_10(cls, value: str | None) -> str | None:
+        return normalize_optional_isbn(value, 10)
+
+    @field_validator("isbn_13")
+    @classmethod
+    def validate_isbn_13(cls, value: str | None) -> str | None:
+        return normalize_optional_isbn(value, 13)
 
 
 class Book(BookBase):
@@ -249,6 +284,7 @@ class BibliographicCandidate(BaseModel):
 class ISBNLookupResult(BaseModel):
     isbn: str
     candidates: list[BibliographicCandidate]
+    catalogue_matches: list[CatalogueMatch] = Field(default_factory=list)
 
 
 class CatalogueMatchRequest(BaseModel):

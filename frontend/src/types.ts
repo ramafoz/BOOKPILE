@@ -29,6 +29,8 @@ export interface MapBook {
   id: number;
   title: string;
   author: string;
+  isbn_10: string | null;
+  isbn_13: string | null;
   status: BookStatus;
   container_id: number | null;
   position: number | null;
@@ -86,6 +88,8 @@ export interface Book {
   id: number;
   title: string;
   author: string;
+  isbn_10: string | null;
+  isbn_13: string | null;
   status: BookStatus;
   goodreads_url: string | null;
   notes: string | null;
@@ -181,6 +185,7 @@ export interface BibliographicCandidate {
 export interface ISBNLookupResult {
   isbn: string;
   candidates: BibliographicCandidate[];
+  catalogue_matches: CatalogueMatch[];
 }
 
 export type OldPositionMode = "COLLAPSE" | "LEAVE_GAP";
@@ -225,6 +230,8 @@ export interface RearrangementResult {
 export interface BookPayload {
   title: string;
   author: string;
+  isbn_10: string | null;
+  isbn_13: string | null;
   status: BookStatus;
   goodreads_url: string | null;
   notes: string | null;

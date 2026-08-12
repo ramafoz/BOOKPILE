@@ -5,6 +5,7 @@ import os
 import shutil
 import sqlite3
 import zipfile
+from contextlib import closing
 from unittest.mock import patch
 from datetime import date
 from io import BytesIO
@@ -19,6 +20,7 @@ os.environ["BOOKPILE_DATABASE"] = str(TEST_DATABASE)
 
 from app.main import app  # noqa: E402
 from app.database import init_database  # noqa: E402
+from app.migrations import connect_database, schema_version  # noqa: E402
 
 
 def setup_function() -> None:
@@ -128,6 +130,72 @@ def test_isbn_lookup_endpoint_is_read_only_and_normalized() -> None:
     assert before == after
 
 
+def test_book_isbns_are_normalized_editable_searchable_and_not_unique() -> None:
+    with TestClient(app) as client:
+        first = client.post(
+            "/books",
+            json={
+                "title": "ISBN edition one",
+                "author": "Identifier Author",
+                "isbn_10": "0-306-40615-2",
+                "isbn_13": "978-0-306-40615-7",
+            },
+        )
+        assert first.status_code == 201
+        assert first.json()["isbn_10"] == "0306406152"
+        assert first.json()["isbn_13"] == "9780306406157"
+
+        duplicate = client.post(
+            "/books",
+            json={
+                "title": "ISBN edition two",
+                "author": "Identifier Author",
+                "isbn_13": "9780306406157",
+            },
+        )
+        assert duplicate.status_code == 201
+
+        found = client.get("/books", params={"search": "9780306406157"})
+        assert found.status_code == 200
+        assert {book["id"] for book in found.json()} == {
+            first.json()["id"],
+            duplicate.json()["id"],
+        }
+
+        cleared = client.patch(
+            f'/books/{first.json()["id"]}',
+            json={"isbn_10": "", "isbn_13": None},
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["isbn_10"] is None
+        assert cleared.json()["isbn_13"] is None
+
+
+def test_book_isbn_fields_reject_invalid_or_wrong_length_values() -> None:
+    with TestClient(app) as client:
+        invalid = client.post(
+            "/books",
+            json={
+                "title": "Invalid identifier",
+                "author": "Identifier Author",
+                "isbn_13": "9780306406158",
+            },
+        )
+        wrong_field = client.post(
+            "/books",
+            json={
+                "title": "Wrong identifier field",
+                "author": "Identifier Author",
+                "isbn_10": "9780306406157",
+            },
+        )
+
+    assert invalid.status_code == 422
+    assert "checksum is invalid" in invalid.text
+    assert wrong_field.status_code == 422
+    assert "ISBN-10 field" in wrong_field.text
+
+
 def test_isbn_lookup_endpoint_rejects_an_invalid_checksum() -> None:
     with TestClient(app) as client:
         response = client.get(
@@ -156,6 +224,42 @@ def test_isbn_lookup_endpoint_reports_provider_outage() -> None:
     )
 
 
+def test_isbn_lookup_finds_local_equivalent_when_providers_are_unavailable() -> None:
+    from app.bibliography import BibliographicProvidersUnavailable
+
+    with TestClient(app) as client:
+        existing = client.post(
+            "/books",
+            json={
+                "title": "Locally identified book",
+                "author": "Offline Author",
+                "isbn_10": "0306406152",
+            },
+        ).json()
+        with patch(
+            "app.main.lookup_isbn",
+            side_effect=BibliographicProvidersUnavailable("both failed"),
+        ):
+            response = client.get(
+                "/bibliography/isbn", params={"isbn": "9780306406157"}
+            )
+
+    assert response.status_code == 200
+    assert response.json()["candidates"] == []
+    assert response.json()["catalogue_matches"] == [
+        {
+            "book_id": existing["id"],
+            "title": "Locally identified book",
+            "author": "Offline Author",
+            "status": "PENDING",
+            "cover_filename": None,
+            "location_label": None,
+            "match_class": "strong",
+            "reason": "Exact ISBN already stored in BOOKPILE",
+        }
+    ]
+
+
 def test_isbn_lookup_endpoint_returns_existing_catalogue_matches() -> None:
     candidate = {
         "source": "OPEN_LIBRARY",
@@ -181,6 +285,7 @@ def test_isbn_lookup_endpoint_returns_existing_catalogue_matches() -> None:
             json={
                 "title": "Cien años de soledad",
                 "author": "Gabriel Garcia Marquez",
+                "isbn_10": "0306406152",
             },
         ).json()
         with patch("app.main.lookup_isbn", return_value=[candidate]):
@@ -198,7 +303,7 @@ def test_isbn_lookup_endpoint_returns_existing_catalogue_matches() -> None:
             "cover_filename": None,
             "location_label": None,
             "match_class": "strong",
-            "reason": "Same normalized title and matching author text",
+            "reason": "Exact ISBN already stored in BOOKPILE",
         }
     ]
 
@@ -1506,6 +1611,8 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
             json={
                 "title": "Cien años de soledad",
                 "author": "Gabriel García Márquez",
+                "isbn_10": "0-306-40615-2",
+                "isbn_13": "978-0-306-40615-7",
                 "status": "READ",
                 "read_date": "2026-06-20",
                 "container_id": container["id"],
@@ -1523,6 +1630,8 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
     assert len(rows) == 1
     assert rows[0]["title"] == "Cien años de soledad"
     assert rows[0]["author"] == "Gabriel García Márquez"
+    assert rows[0]["isbn_10"] == "0306406152"
+    assert rows[0]["isbn_13"] == "9780306406157"
     assert rows[0]["read_date"] == "2026-06-20"
     assert rows[0]["is_read_date_unknown"] == "false"
     assert rows[0]["bookcase"] == "Salón"
@@ -1578,6 +1687,46 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         )
         assert restored_cover == covered["cover_filename"]
         assert client.get(f"/covers/{restored_cover}").status_code == 200
+
+        with closing(connect_database(TEST_DATABASE)) as connection:
+            assert schema_version(connection) == 2
+
+    backup_directory = TEST_DATABASE.parent.parent / "backups"
+    for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):
+        for backup_file in backup_directory.glob(pattern):
+            backup_file.unlink(missing_ok=True)
+
+
+def test_restore_keeps_live_catalogue_if_incoming_migration_fails() -> None:
+    with TestClient(app) as client:
+        client.post(
+            "/books",
+            json={"title": "Archived book", "author": "Author One"},
+        )
+        backup = client.get("/exports/full-backup")
+        client.post(
+            "/books",
+            json={"title": "Live-only book", "author": "Author Two"},
+        )
+
+        inspection = client.post(
+            "/restore/inspect",
+            files={"backup": ("saved.zip", backup.content, "application/zip")},
+        )
+        assert inspection.status_code == 200
+
+        with patch(
+            "app.restore.run_migrations",
+            side_effect=ValueError("simulated incoming migration failure"),
+        ):
+            restored = client.post(f'/restore/{inspection.json()["token"]}')
+
+        assert restored.status_code == 409
+        assert "simulated incoming migration failure" in restored.json()["detail"]
+        assert {book["title"] for book in client.get("/books").json()} == {
+            "Archived book",
+            "Live-only book",
+        }
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for backup_file in backup_directory.glob("pre-restore-*.zip"):

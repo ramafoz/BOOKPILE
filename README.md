@@ -23,6 +23,8 @@ The catalogue, covers, and physical layout remain under the user's control.
   and catalogue-quality checks.
 - Use quick views for missing covers, missing locations, and incomplete dates.
 - See how many books pass the current filters.
+- Open a read-only complete-information card for any catalogue book without
+  crowding the main list with additional metadata.
 - Add books individually or through Batch Add, retaining the selected
   container and advancing positions upward or downward.
 
@@ -94,10 +96,13 @@ Visual rearrangement supports:
 - Keep manual entry fully available when recognition or an external provider
   is unavailable.
 
-ISBN and OCR evidence currently fill only Title and Author after user review.
-ISBN and richer metadata are not yet stored in the database. The user's own
-cover photograph remains authoritative; external cover images are not
-imported.
+ISBN lookup and barcode evidence can fill reviewed Title, Author, ISBN-10, and
+ISBN-13 values in Add Book, Edit Book, and Batch Add. Stored identifiers are
+normalized, searchable, and used for exact-edition catalogue matching while
+intentional duplicate copies remain allowed. OCR still supplies reviewed Title
+and Author text only. Richer metadata remains a future incremental expansion.
+The user's own cover photograph remains authoritative; external cover images
+are not imported.
 
 ### Suggestions and statistics
 
@@ -265,21 +270,25 @@ third-party services.
   future live-camera work.
 - `BACKUP_EXPORT_PLAN.md` documents the backup format, restore validation, and
   CSV export design.
+- `MIGRATION_RECOVERY.md` documents versioned schema changes, isolated
+  rehearsals, mandatory pre-migration backups, and recovery.
 - `BOOKPILE_PROJECT_CONTEXT_LOCAL.md` contains detailed local project history
   and is intentionally excluded from Git.
 
 ## Near-term roadmap
 
-The next milestone is safe database expansion:
+The safe database-expansion foundation and its first live migration are now in
+place:
 
-1. Introduce versioned database migrations.
-2. Create and verify a full automatic backup before every migration.
-3. Test migrations against a copy of the populated catalogue and compare all
-   existing records before and after.
-4. Record schema versions in backup metadata and document failed-migration
-   recovery.
-5. Use stored, normalized ISBN-10/ISBN-13 fields as the first small additive
-   migration.
+1. Migrations require explicit approval and run transactionally.
+2. Every migration first creates and validates a full automatic backup.
+3. The v1-to-v2 migration was rehearsed and then applied to the populated
+   catalogue with all existing values preserved.
+4. Backups record their detected schema version and recovery is documented in
+   `MIGRATION_RECOVERY.md`.
+5. Schema v2 adds optional normalized ISBN-10/ISBN-13 fields as the first small
+   additive migration; API, Add/Edit/Batch forms, barcode acceptance, search,
+   exact matching, and CSV export now use them.
 
 Later database phases include richer bibliographic metadata, structured
 authors, reading-session history and re-reading, and optional loan history.

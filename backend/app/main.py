@@ -25,7 +25,11 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
 from .bibliography import BibliographicProvidersUnavailable, lookup_isbn
-from .catalogue_matching import add_catalogue_matches, find_catalogue_matches
+from .catalogue_matching import (
+    add_catalogue_matches,
+    find_catalogue_matches,
+    find_isbn_catalogue_matches,
+)
 from .database import connect, database_path, init_database
 from .exports import create_full_backup, write_books_csv
 from .isbn import InvalidISBN, normalize_isbn
@@ -278,15 +282,26 @@ def health() -> dict[str, str]:
 def lookup_isbn_metadata(isbn: str = Query(min_length=1, max_length=40)) -> dict[str, Any]:
     try:
         normalized = normalize_isbn(isbn)
+        catalogue_matches = find_isbn_catalogue_matches(normalized)
         candidates = add_catalogue_matches(lookup_isbn(normalized))
     except InvalidISBN as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except BibliographicProvidersUnavailable as exc:
+        if catalogue_matches:
+            return {
+                "isbn": normalized,
+                "candidates": [],
+                "catalogue_matches": catalogue_matches,
+            }
         raise HTTPException(
             status_code=503,
             detail="Bibliographic lookup services are temporarily unavailable",
         ) from exc
-    return {"isbn": normalized, "candidates": candidates}
+    return {
+        "isbn": normalized,
+        "candidates": candidates,
+        "catalogue_matches": catalogue_matches,
+    }
 
 
 @app.post("/bibliography/matches", response_model=list[CatalogueMatch])
@@ -468,9 +483,11 @@ def list_books(
         where.append("b.status = ?")
         params.append(book_status.value)
     if search and search.strip():
-        where.append("(b.title LIKE ? OR b.author LIKE ?)")
+        where.append(
+            "(b.title LIKE ? OR b.author LIKE ? OR b.isbn_10 LIKE ? OR b.isbn_13 LIKE ?)"
+        )
         term = f"%{search.strip()}%"
-        params.extend((term, term))
+        params.extend((term, term, term, term))
     if bookcase_id is not None:
         where.append("bc.id = ?")
         params.append(bookcase_id)
@@ -691,15 +708,17 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
             cursor = connection.execute(
                 """
                 INSERT INTO books (
-                    title, author, status, goodreads_url, notes,
+                    title, author, isbn_10, isbn_13, status, goodreads_url, notes,
                     acquisition_date, reading_started_date, read_date,
                     is_read_date_unknown, is_original_collection,
                     container_id, position
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     payload.title,
                     payload.author,
+                    payload.isbn_10,
+                    payload.isbn_13,
                     payload.status.value,
                     str(payload.goodreads_url) if payload.goodreads_url else None,
                     payload.notes,
