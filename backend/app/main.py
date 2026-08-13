@@ -628,6 +628,17 @@ def list_books(
         "missing_end",
         "no_location",
         "no_cover",
+        "missing_metadata",
+        "missing_isbn",
+        "missing_page_count",
+        "missing_publisher",
+        "missing_current_ed_year",
+        "missing_original_publication_year",
+        "missing_language",
+        "missing_fiction_category",
+        "missing_binding",
+        "missing_publication_type",
+        "missing_genre",
     ]
     | None = None,
     isbn: str | None = Query(default=None, max_length=40),
@@ -707,6 +718,43 @@ def list_books(
         where.append("b.container_id IS NULL")
     elif catalogue_check == "no_cover":
         where.append("(b.cover_filename IS NULL OR b.cover_filename = '')")
+    elif catalogue_check == "missing_metadata":
+        where.append(
+            """
+            (
+                (b.isbn_10 IS NULL AND b.isbn_13 IS NULL)
+                OR b.page_count IS NULL
+                OR b.publisher IS NULL OR trim(b.publisher) = ''
+                OR b.current_ed_year IS NULL
+                OR b.original_publication_year IS NULL
+                OR b.language IS NULL OR trim(b.language) = ''
+                OR b.fiction_category IS NULL
+                OR b.binding IS NULL
+                OR b.publication_type IS NULL
+                OR b.genre_text IS NULL OR trim(b.genre_text) = ''
+            )
+            """
+        )
+    elif catalogue_check == "missing_isbn":
+        where.append("(b.isbn_10 IS NULL AND b.isbn_13 IS NULL)")
+    elif catalogue_check == "missing_page_count":
+        where.append("b.page_count IS NULL")
+    elif catalogue_check == "missing_publisher":
+        where.append("(b.publisher IS NULL OR trim(b.publisher) = '')")
+    elif catalogue_check == "missing_current_ed_year":
+        where.append("b.current_ed_year IS NULL")
+    elif catalogue_check == "missing_original_publication_year":
+        where.append("b.original_publication_year IS NULL")
+    elif catalogue_check == "missing_language":
+        where.append("(b.language IS NULL OR trim(b.language) = '')")
+    elif catalogue_check == "missing_fiction_category":
+        where.append("b.fiction_category IS NULL")
+    elif catalogue_check == "missing_binding":
+        where.append("b.binding IS NULL")
+    elif catalogue_check == "missing_publication_type":
+        where.append("b.publication_type IS NULL")
+    elif catalogue_check == "missing_genre":
+        where.append("(b.genre_text IS NULL OR trim(b.genre_text) = '')")
     metadata_filter_conditions(
         where,
         params,
@@ -2053,6 +2101,23 @@ def reading_suggestion(
     mode: Literal["random", "oldest", "waiting"] = "random",
     minimum_days: int = Query(default=365, ge=0, le=36500),
     exclude_id: list[int] = Query(default=[]),
+    isbn: str | None = Query(default=None, max_length=40),
+    language: list[str] = Query(default=[]),
+    genre: list[str] = Query(default=[]),
+    publisher: list[str] = Query(default=[]),
+    fiction_category: list[FictionCategory] = Query(default=[]),
+    binding: list[Binding] = Query(default=[]),
+    publication_type: list[PublicationType] = Query(default=[]),
+    series_name: list[str] = Query(default=[]),
+    series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
+    page_min: int | None = Query(default=None, ge=1),
+    page_max: int | None = Query(default=None, ge=1),
+    publication_year_field: Literal[
+        "current_ed_year", "original_publication_year"
+    ] = "current_ed_year",
+    publication_year_min: int | None = Query(default=None, ge=1000, le=9999),
+    publication_year_max: int | None = Query(default=None, ge=1000, le=9999),
 ) -> dict[str, Any]:
     where = ["b.status = 'PENDING'"]
     params: list[Any] = []
@@ -2066,6 +2131,25 @@ def reading_suggestion(
         placeholders = ", ".join("?" for _ in exclude_id)
         where.append(f"b.id NOT IN ({placeholders})")
         params.extend(exclude_id)
+    metadata_filter_conditions(
+        where,
+        params,
+        isbn=isbn,
+        languages=language,
+        genres=genre,
+        publishers=publisher,
+        fiction_categories=fiction_category,
+        bindings=binding,
+        publication_types=publication_type,
+        series_names=series_name,
+        series_state=series_state,
+        author_structure=author_structure,
+        page_min=page_min,
+        page_max=page_max,
+        publication_year_field=publication_year_field,
+        publication_year_min=publication_year_min,
+        publication_year_max=publication_year_max,
+    )
 
     order = "b.acquisition_date ASC, b.title COLLATE NOCASE ASC"
     if mode in {"random", "waiting"}:

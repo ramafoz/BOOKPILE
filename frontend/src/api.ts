@@ -160,12 +160,14 @@ export const api = {
     mode: "random" | "oldest" | "waiting",
     minimumDays: number,
     excludeIds: number[],
+    metadata: MetadataFilters,
   ) => {
     const params = new URLSearchParams({
       mode,
       minimum_days: String(minimumDays),
     });
     excludeIds.forEach((id) => params.append("exclude_id", String(id)));
+    appendMetadataFilters(params, metadata);
     return request<ReadingSuggestion>(`/suggestions?${params}`);
   },
   library: () => request<Bookcase[]>("/library"),

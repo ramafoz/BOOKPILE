@@ -764,6 +764,19 @@ function App() {
                   <option value="missing_end">Reading End Date Unknown</option>
                   <option value="no_location">Without a physical location</option>
                   <option value="no_cover">Without a cover</option>
+                  <optgroup label="Incomplete bibliographic metadata">
+                    <option value="missing_metadata">Missing any core metadata</option>
+                    <option value="missing_isbn">Without ISBN</option>
+                    <option value="missing_page_count">Without page count</option>
+                    <option value="missing_publisher">Without publisher</option>
+                    <option value="missing_current_ed_year">Without current edition year</option>
+                    <option value="missing_original_publication_year">Without original publication year</option>
+                    <option value="missing_language">Without language</option>
+                    <option value="missing_fiction_category">Without fiction/non-fiction category</option>
+                    <option value="missing_binding">Without binding</option>
+                    <option value="missing_publication_type">Without publication type</option>
+                    <option value="missing_genre">Without genre</option>
+                  </optgroup>
                 </select>
               )}
             </div>
@@ -1703,6 +1716,17 @@ function SuggestionsDialog({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [metadataOptions, setMetadataOptions] = useState(emptyMetadataOptions);
+  const [metadataFilters, setMetadataFilters] = useState<MetadataFilters>(
+    emptyMetadataFilters,
+  );
+  const [appliedMetadataFilters, setAppliedMetadataFilters] = useState<MetadataFilters>(
+    emptyMetadataFilters,
+  );
+
+  useEffect(() => {
+    void api.metadataOptions().then(setMetadataOptions).catch(() => undefined);
+  }, []);
 
   async function loadSuggestion(exclusions: number[]) {
     setLoading(true);
@@ -1712,6 +1736,7 @@ function SuggestionsDialog({
         mode,
         appliedMinimumDays,
         exclusions,
+        appliedMetadataFilters,
       ));
     } catch (err) {
       setSuggestion(null);
@@ -1730,7 +1755,7 @@ function SuggestionsDialog({
     void loadSuggestion([]);
     // reloadKey deliberately starts a fresh suggestion round.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, appliedMinimumDays, reloadKey]);
+  }, [mode, appliedMinimumDays, appliedMetadataFilters, reloadKey]);
 
   function chooseMode(nextMode: SuggestionMode) {
     setMode(nextMode);
@@ -1780,6 +1805,36 @@ function SuggestionsDialog({
             </button>
           </div>
         )}
+        <details className="suggestion-metadata-filters">
+          <summary>Filter suggestions by book metadata</summary>
+          <div className="statistics-filter-grid">
+            <MetadataFilterFields
+              filters={metadataFilters}
+              options={metadataOptions}
+              onChange={setMetadataFilters}
+            />
+            <div className="suggestion-filter-actions">
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => {
+                  const cleared = emptyMetadataFilters();
+                  setMetadataFilters(cleared);
+                  setAppliedMetadataFilters(cleared);
+                }}
+              >
+                Clear metadata filters
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setAppliedMetadataFilters(metadataFilters)}
+              >
+                Apply filters
+              </button>
+            </div>
+          </div>
+        </details>
         {loading ? (
           <div className="empty-state">Looking through your unread books…</div>
         ) : suggestion ? (
@@ -1966,6 +2021,7 @@ function BookDialog({
   const ocrPhotoInput = useRef<HTMLInputElement>(null);
   const ocrAbortController = useRef<AbortController | null>(null);
   const titleInput = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const containers = useMemo(
     () =>
       library.flatMap((bookcase) =>
@@ -2009,6 +2065,10 @@ function BookDialog({
     },
     [],
   );
+
+  useEffect(() => {
+    dialogRef.current?.scrollTo({ top: 0 });
+  }, []);
 
   async function lookUpIsbn(value = isbnInput) {
     if (!value.trim()) {
@@ -2444,13 +2504,18 @@ function BookDialog({
 
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
-      <div className="dialog" onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="dialog book-dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="dialog-header">
           <div><p className="eyebrow dark">{book ? "Update catalogue" : batchMode ? "Rapid cataloguing" : "New arrival"}</p>
           <h2>{book ? "Edit book" : batchMode ? "Batch add" : "Add a book"}</h2></div>
           <button className="icon-button" onClick={onClose}><X /></button>
         </div>
         <form onSubmit={(event) => void submit(event)}>
+          <p className="required-fields-note"><span aria-hidden="true">*</span> Required field</p>
           {batchMode && (
             <div className="batch-banner">
               <span>
@@ -2860,13 +2925,14 @@ function BookDialog({
                 </div>
               </div>
             </fieldset>
-            <label className="wide">Title
-              <input ref={titleInput} required autoFocus value={form.title}
+            <label className="wide">Title <span className="required-marker" aria-hidden="true">*</span>
+              <input ref={titleInput} required aria-required="true" value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </label>
-            <label className="wide">Author
+            <label className="wide">Author <span className="required-marker" aria-hidden="true">*</span>
               <input
                 required
+                aria-required="true"
                 readOnly={form.has_multiple_authors}
                 value={form.author}
                 onChange={(e) => setForm({ ...form, author: e.target.value })} />
@@ -2885,7 +2951,8 @@ function BookDialog({
                 <div className="structured-author-editor">
                   <p>
                     Enter authors only, in display order. Translators, editors,
-                    and illustrators should not be included.
+                    and illustrators should not be included. At least two names
+                    are required.
                   </p>
                   {form.structured_authors.map((author, index) => (
                     <div className="structured-author-row" key={index}>

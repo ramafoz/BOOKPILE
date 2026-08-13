@@ -346,7 +346,7 @@ protects the completed catalogue.
   edition or original-publication year.
 - [x] Filter read-only statistics with the same metadata rules, allowing views
   such as Galician-language books read in a selected year.
-- [ ] Extend metadata filtering to reading suggestions.
+- [x] Extend metadata filtering to reading suggestions.
 - [ ] Add later near-match suggestions and a deliberate normalization strategy
   for free-text language and genre values, especially before a multilingual UI.
 - [x] Estimate pages read by month and year by distributing pages over each
@@ -354,7 +354,9 @@ protects the completed catalogue.
 - [x] Show estimated pages per week and month with sample and exclusion counts.
 - [x] Show average, median, and individual per-book reading rates, respecting
   the selected year and metadata filters and marking one-day estimates.
-- [ ] Find books with incomplete optional metadata.
+- [x] Add catalogue-cleanup views for books missing any core bibliographic
+  metadata or a selected ISBN, page-count, publisher, publication-year,
+  language, category, binding, publication-type, or genre value.
 
 ### Reading sessions and re-reading
 

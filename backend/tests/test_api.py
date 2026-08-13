@@ -1295,6 +1295,44 @@ def test_reading_suggestions_support_modes_thresholds_and_exclusions() -> None:
         }
 
 
+def test_reading_suggestions_apply_combined_metadata_filters() -> None:
+    with TestClient(app) as client:
+        for title, language, binding, pages in (
+            ("Short Galician paperback", "Galician", "PAPERBACK", 180),
+            ("Long Galician hardcover", "Galician", "HARDCOVER", 520),
+            ("Short English paperback", "English", "PAPERBACK", 160),
+        ):
+            response = client.post(
+                "/books",
+                json={
+                    "title": title,
+                    "author": "Suggestion Author",
+                    "language": language,
+                    "binding": binding,
+                    "page_count": pages,
+                },
+            )
+            assert response.status_code == 201
+
+        filtered = client.get(
+            "/suggestions",
+            params=[
+                ("mode", "random"),
+                ("language", "Galician"),
+                ("binding", "PAPERBACK"),
+                ("page_max", "300"),
+            ],
+        )
+        impossible = client.get(
+            "/suggestions",
+            params=[("language", "Galician"), ("page_max", "100")],
+        )
+
+    assert filtered.status_code == 200
+    assert filtered.json()["book"]["title"] == "Short Galician paperback"
+    assert impossible.status_code == 404
+
+
 def test_rejects_incomplete_location() -> None:
     with TestClient(app) as client:
         response = client.post(
@@ -2613,6 +2651,57 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
         ]
         assert "Read missing start" not in reading_start_order
         assert "Pending unknown acquisition" not in reading_start_order
+
+
+def test_catalogue_checks_find_missing_optional_bibliographic_metadata() -> None:
+    complete_metadata = {
+        "isbn_13": "9780306406157",
+        "page_count": 300,
+        "publisher": "Complete Press",
+        "current_ed_year": 2024,
+        "original_publication_year": 1999,
+        "language": "English",
+        "fiction_category": "FICTION",
+        "binding": "PAPERBACK",
+        "publication_type": "CONVENTIONAL_BOOK",
+        "genre_text": "Mystery",
+    }
+    with TestClient(app) as client:
+        complete = client.post(
+            "/books",
+            json={
+                "title": "Complete metadata",
+                "author": "Complete Author",
+                **complete_metadata,
+            },
+        )
+        missing_pages = client.post(
+            "/books",
+            json={
+                "title": "Missing pages only",
+                "author": "Partial Author",
+                **{
+                    key: value
+                    for key, value in complete_metadata.items()
+                    if key != "page_count"
+                },
+            },
+        )
+        assert complete.status_code == 201
+        assert missing_pages.status_code == 201
+
+        def titles(check: str) -> set[str]:
+            return {
+                book["title"]
+                for book in client.get(
+                    "/books", params={"catalogue_check": check}
+                ).json()
+            }
+
+        assert titles("missing_metadata") == {"Missing pages only"}
+        assert titles("missing_page_count") == {"Missing pages only"}
+        assert titles("missing_isbn") == set()
+        assert titles("missing_language") == set()
 
 
 def test_occupied_position_can_shift_contiguous_books_to_make_room() -> None:
