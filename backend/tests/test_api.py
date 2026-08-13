@@ -302,6 +302,149 @@ def test_book_isbn_fields_reject_invalid_or_wrong_length_values() -> None:
     assert "ISBN-10 field" in wrong_field.text
 
 
+def test_multiple_authors_are_ordered_searchable_and_transactional() -> None:
+    with TestClient(app) as client:
+        invalid_author = client.post(
+            "/books",
+            json={
+                "title": "Invalid canonical author",
+                "author": "Varios",
+                "has_multiple_authors": True,
+                "structured_authors": ["One Author", "Two Author"],
+            },
+        )
+        too_few = client.post(
+            "/books",
+            json={
+                "title": "Too few authors",
+                "author": "Multiple authors",
+                "has_multiple_authors": True,
+                "structured_authors": ["Only Author"],
+            },
+        )
+        duplicate = client.post(
+            "/books",
+            json={
+                "title": "Duplicate authors",
+                "author": "Multiple authors",
+                "has_multiple_authors": True,
+                "structured_authors": ["Ursula K. Le Guin", " ursula  k. le guin "],
+            },
+        )
+        assert invalid_author.status_code == 422
+        assert too_few.status_code == 422
+        assert duplicate.status_code == 422
+        assert client.get("/books").json() == []
+
+        created = client.post(
+            "/books",
+            json={
+                "title": "Shared work",
+                "author": "Multiple authors",
+                "has_multiple_authors": True,
+                "structured_authors": [
+                    "First Writer", "Second Writer", "Third Writer"
+                ],
+            },
+        )
+        assert created.status_code == 201
+        book = created.json()
+        assert book["author"] == "Multiple authors"
+        assert book["has_multiple_authors"] is True
+        assert book["structured_authors"] == [
+            "First Writer", "Second Writer", "Third Writer"
+        ]
+
+        by_name = client.get("/books", params={"search": "Second Writer"})
+        by_multiple = client.get("/books", params={"search": "Multiple"})
+        advanced = client.get(
+            "/books", params={"author_structure": "MULTIPLE"}
+        )
+        assert [item["id"] for item in by_name.json()] == [book["id"]]
+        assert [item["id"] for item in by_multiple.json()] == [book["id"]]
+        assert [item["id"] for item in advanced.json()] == [book["id"]]
+
+        csv_response = client.get("/exports/books.csv")
+        csv_rows = list(
+            csv.DictReader(
+                csv_response.content.decode("utf-8-sig").splitlines()
+            )
+        )
+        assert csv_rows[0]["author"] == "Multiple authors"
+        assert csv_rows[0]["has_multiple_authors"] == "true"
+        assert csv_rows[0]["structured_authors"] == (
+            "First Writer | Second Writer | Third Writer"
+        )
+
+        reordered = client.patch(
+            f'/books/{book["id"]}',
+            json={
+                "has_multiple_authors": True,
+                "author": "Multiple authors",
+                "structured_authors": ["Third Writer", "First Writer"],
+            },
+        )
+        assert reordered.status_code == 200
+        assert reordered.json()["structured_authors"] == [
+            "Third Writer", "First Writer"
+        ]
+
+        missing_single_name = client.patch(
+            f'/books/{book["id"]}', json={"has_multiple_authors": False}
+        )
+        assert missing_single_name.status_code == 422
+        unchanged = client.get("/books", params={"book_id": book["id"]}).json()[0]
+        assert unchanged["has_multiple_authors"] is True
+        assert unchanged["structured_authors"] == ["Third Writer", "First Writer"]
+
+        converted = client.patch(
+            f'/books/{book["id"]}',
+            json={
+                "has_multiple_authors": False,
+                "author": "Third Writer",
+                "structured_authors": [],
+            },
+        )
+        assert converted.status_code == 200
+        assert converted.json()["author"] == "Third Writer"
+        assert converted.json()["has_multiple_authors"] is False
+        assert converted.json()["structured_authors"] == []
+
+        with closing(connect_database(TEST_DATABASE)) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM book_authors WHERE book_id = ?",
+                (book["id"],),
+            ).fetchone()[0] == 0
+
+
+def test_multiple_authors_supports_large_contributor_lists_up_to_250() -> None:
+    authors_150 = [f"Contributor {index:03d}" for index in range(1, 151)]
+    authors_251 = [f"Contributor {index:03d}" for index in range(1, 252)]
+    with TestClient(app) as client:
+        accepted = client.post(
+            "/books",
+            json={
+                "title": "Large collaborative work",
+                "author": "Multiple authors",
+                "has_multiple_authors": True,
+                "structured_authors": authors_150,
+            },
+        )
+        rejected = client.post(
+            "/books",
+            json={
+                "title": "Too many contributors",
+                "author": "Multiple authors",
+                "has_multiple_authors": True,
+                "structured_authors": authors_251,
+            },
+        )
+
+    assert accepted.status_code == 201
+    assert accepted.json()["structured_authors"] == authors_150
+    assert rejected.status_code == 422
+
+
 def test_book_bibliographic_metadata_is_optional_editable_and_searchable() -> None:
     metadata = {
         "subtitle": "A complete metadata test",
@@ -1917,6 +2060,8 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
     assert len(rows) == 1
     assert rows[0]["title"] == "Cien años de soledad"
     assert rows[0]["author"] == "Gabriel García Márquez"
+    assert rows[0]["has_multiple_authors"] == "false"
+    assert rows[0]["structured_authors"] == ""
     assert rows[0]["isbn_10"] == "0306406152"
     assert rows[0]["isbn_13"] == "9780306406157"
     assert rows[0]["subtitle"] == "A metadata export"
@@ -1989,7 +2134,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-            assert schema_version(connection) == 3
+            assert schema_version(connection) == 4
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):

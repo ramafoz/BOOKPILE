@@ -131,6 +131,8 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .book-main { min-width: 0; }
 .book-main h3 { display: -webkit-box; margin: 0 0 5px; overflow: hidden; font-family: Georgia, "Times New Roman", serif; font-size: 19px; line-height: 1.2; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .book-main p { margin: 0; color: #6d7773; font-size: 14px; }
+.author-list-link { margin: 0; padding: 0; border: 0; color: #7e4936; background: transparent; font-size: 14px; text-decoration: underline; cursor: pointer; }
+.author-list-link:hover, .author-list-link:focus-visible { color: #a85835; outline: none; }
 .book-dates { margin-top: 6px; color: #8b6849; font-size: 11px; }
 .status { width: 88px; padding: 5px 7px; border-radius: 20px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .status.pending { background: #f3e5cb; color: #8a5b1f; }
@@ -190,11 +192,26 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .book-details-grid dd a { display: inline-flex; align-items: center; gap: 5px; color: #8c4b31; font-weight: 700; }
 .book-details-notes dd { white-space: pre-wrap; }
 .book-details-note { margin: 13px 0 0; padding-top: 12px; border-top: 1px solid #e2d8c9; color: #64716c; font-size: 12px; line-height: 1.5; }
+.authors-dialog { width: min(520px, 100%); }
+.authors-dialog > h3 { margin: -8px 0 18px; color: #29473f; font-family: Georgia, "Times New Roman", serif; }
+.structured-author-list { margin: 0; padding: 0 0 0 24px; color: #374842; line-height: 1.7; }
+.structured-author-list li { padding-left: 5px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
 .form-grid label, .layout-forms section { font-size: 13px; font-weight: 700; color: #45534f; }
 .form-grid .wide { grid-column: 1 / -1; }
 .metadata-fields { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
 .metadata-fields legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.structured-authors-field { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.structured-authors-field legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.structured-author-editor { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e1d8cb; }
+.structured-author-editor > p { margin: 0 0 10px; color: #6b7672; font-size: 12px; font-weight: 400; line-height: 1.45; }
+.structured-author-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 34px 34px 34px; align-items: center; gap: 6px; margin-top: 7px; }
+.structured-author-row > span { color: #8c6848; text-align: center; font-size: 12px; }
+.structured-author-row input { margin: 0; }
+.structured-author-row button { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #d2c6b5; border-radius: 6px; color: #52605c; background: #fffaf3; }
+.structured-author-row button:hover:not(:disabled) { border-color: #a85835; color: #8b402b; }
+.structured-author-row button:disabled { opacity: .35; }
+.add-structured-author { margin-top: 10px; padding: 9px 12px; }
 .metadata-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .metadata-form-grid .wide { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; border: 1px solid #d7cdbd; border-radius: 7px; padding: 11px 12px; margin-top: 7px; background: #fffdf8; color: #1d2c28; outline: none; }

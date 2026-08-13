@@ -20,7 +20,7 @@ changed until the user reviews the result and explicitly saves a book.
 
 ## Current phase versus future metadata
 
-The schema-v3 implementation applies field-by-field reviewed identifiers,
+The schema-v4 implementation applies field-by-field reviewed identifiers,
 edition metadata, and supported classifications. Direct provider values start
 selected; inferred genre, fiction category, and publication type suggestions
 start unchecked. Every applied value remains editable before saving.
@@ -28,12 +28,14 @@ start unchecked. Every applied value remains editable before saving.
 The lookup layer should use a future-ready result shape so it can later supply:
 
 - ISBN-10 and ISBN-13.
-- Title, subtitle, and the current free-text authors value.
+- Title, subtitle, and reviewed ordered authors. Several explicit provider
+  authors initialize the structured-author editor and must be checked so that
+  translators, editors, and illustrators are not misclassified as authors.
 - Page count, publisher, current-edition year, and language.
 - Edition number, binding, and series information when explicitly available.
 - Provider categories as editable genre text and cautious suggestions for
   fiction/non-fiction or publication type.
-- Future structured authors and subjects after their own migrations.
+- Future structured subjects after their own migration.
 
 Other values must not be written until their own safe incremental migrations
 and reviewed form fields exist. They may be retained in the lookup response or

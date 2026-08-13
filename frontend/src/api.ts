@@ -65,6 +65,9 @@ function appendMetadataFilters(params: URLSearchParams, filters: MetadataFilters
   filters.publicationTypes.forEach((value) => params.append("publication_type", value));
   filters.seriesNames.forEach((value) => params.append("series_name", value));
   if (filters.seriesState !== "ANY") params.set("series_state", filters.seriesState);
+  if (filters.authorStructure !== "ANY") {
+    params.set("author_structure", filters.authorStructure);
+  }
   if (filters.pageMin) params.set("page_min", filters.pageMin);
   if (filters.pageMax) params.set("page_max", filters.pageMax);
   const validYearMin = /^\d{4}$/.test(filters.publicationYearMin);

@@ -103,6 +103,7 @@ function emptyMetadataFilters(): MetadataFilters {
     publicationTypes: [],
     seriesNames: [],
     seriesState: "ANY",
+    authorStructure: "ANY",
     pageMin: "",
     pageMax: "",
     publicationYearField: "current_ed_year",
@@ -113,6 +114,8 @@ function emptyMetadataFilters(): MetadataFilters {
 const emptyBook: BookPayload = {
   title: "",
   author: "",
+  has_multiple_authors: false,
+  structured_authors: [],
   isbn_10: null,
   isbn_13: null,
   subtitle: null,
@@ -153,6 +156,7 @@ function App() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [editing, setEditing] = useState<Book | null | undefined>(undefined);
   const [detailsBook, setDetailsBook] = useState<Book | null>(null);
+  const [authorsBook, setAuthorsBook] = useState<Book | null>(null);
   const [batchAdding, setBatchAdding] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showData, setShowData] = useState(false);
@@ -831,7 +835,10 @@ function App() {
                 <div className="book-main">
                   <div>
                     <h3 title={book.title}>{book.title}</h3>
-                    <p>{book.author}</p>
+                    <BookAuthorDisplay
+                      book={book}
+                      onShowAll={() => setAuthorsBook(book)}
+                    />
                     <BookDates book={book} />
                   </div>
                 </div>
@@ -915,6 +922,9 @@ function App() {
           book={detailsBook}
           onClose={() => setDetailsBook(null)}
         />
+      )}
+      {authorsBook && (
+        <AuthorsDialog book={authorsBook} onClose={() => setAuthorsBook(null)} />
       )}
       {editing !== undefined && (
         <BookDialog
@@ -1001,6 +1011,60 @@ function statusLabel(status: "ALL" | BookStatus) {
   if (status === "PENDING") return "Pending";
   if (status === "CURRENTLY_READING") return "Reading…";
   return "Read";
+}
+
+function displayedAuthor(book: Pick<Book, "author" | "has_multiple_authors" | "structured_authors">) {
+  if (!book.has_multiple_authors) return book.author;
+  if (book.structured_authors.length === 2) {
+    return book.structured_authors.join(" & ");
+  }
+  return "Multiple authors";
+}
+
+function BookAuthorDisplay({
+  book,
+  onShowAll,
+}: {
+  book: Pick<Book, "author" | "has_multiple_authors" | "structured_authors">;
+  onShowAll: () => void;
+}) {
+  if (book.has_multiple_authors && book.structured_authors.length > 2) {
+    return (
+      <button type="button" className="author-list-link" onClick={onShowAll}>
+        Multiple authors
+      </button>
+    );
+  }
+  return <p>{displayedAuthor(book)}</p>;
+}
+
+function AuthorsDialog({ book, onClose }: { book: Book; onClose: () => void }) {
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div
+        className="dialog authors-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="authors-dialog-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Contributors</p>
+            <h2 id="authors-dialog-title">Authors</h2>
+          </div>
+          <button className="icon-button" aria-label="Close" onClick={onClose}><X /></button>
+        </div>
+        <h3>{book.title}</h3>
+        <ol className="structured-author-list">
+          {book.structured_authors.map((author) => <li key={author}>{author}</li>)}
+        </ol>
+        <div className="dialog-actions">
+          <button type="button" className="primary-button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function formatDate(value: string) {
@@ -1184,9 +1248,18 @@ function BookDetailsDialog({
               {statusLabel(book.status)}
             </span>
             <h3>{book.title}</h3>
-            <p>{book.author}</p>
+            <p>{displayedAuthor(book)}</p>
           </div>
         </div>
+
+        {book.has_multiple_authors && (
+          <section className="book-details-section">
+            <h3>Authors</h3>
+            <ol className="structured-author-list">
+              {book.structured_authors.map((author) => <li key={author}>{author}</li>)}
+            </ol>
+          </section>
+        )}
 
         <section className="book-details-section">
           <h3>Bibliographic identifiers</h3>
@@ -1835,6 +1908,8 @@ function BookDialog({
       ? {
           title: book.title,
           author: book.author,
+          has_multiple_authors: book.has_multiple_authors,
+          structured_authors: book.structured_authors,
           isbn_10: book.isbn_10,
           isbn_13: book.isbn_13,
           subtitle: book.subtitle,
@@ -2049,7 +2124,13 @@ function BookDialog({
     ) {
       return false;
     }
-    setForm((current) => ({ ...current, title, author }));
+    setForm((current) => ({
+      ...current,
+      title,
+      author,
+      has_multiple_authors: false,
+      structured_authors: [],
+    }));
     setBatchMessage("");
     window.setTimeout(() => titleInput.current?.focus(), 0);
     return true;
@@ -2059,7 +2140,13 @@ function BookDialog({
     candidate: BibliographicCandidate,
     selected: Set<CandidateMetadataKey>,
   ) {
-    const candidateAuthor = candidate.authors.join(" & ");
+    const candidateAuthors = candidate.authors
+      .map((name) => name.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    const candidateIsMultiple = candidateAuthors.length > 1;
+    const candidateAuthor = candidateIsMultiple
+      ? "Multiple authors"
+      : candidateAuthors[0] ?? "";
     const replacingTitle = selected.has("title")
       && Boolean(form.title.trim()) && form.title !== candidate.title;
     const replacingAuthor = selected.has("author")
@@ -2072,7 +2159,11 @@ function BookDialog({
     setForm((current) => ({
       ...current,
       ...(selected.has("title") ? { title: candidate.title } : {}),
-      ...(selected.has("author") ? { author: candidateAuthor } : {}),
+      ...(selected.has("author") ? {
+        author: candidateAuthor,
+        has_multiple_authors: candidateIsMultiple,
+        structured_authors: candidateIsMultiple ? candidateAuthors : [],
+      } : {}),
       ...(selected.has("isbn_10")
         ? { isbn_10: candidate.identifiers.isbn_10 }
         : {}),
@@ -2106,16 +2197,129 @@ function BookDialog({
         : {}),
     }));
     setBatchMessage("");
+    if (selected.has("author") && candidateIsMultiple) {
+      window.alert(
+        "Multiple authors were supplied by the ISBN source and have been prepared for review. Please confirm that every listed person is an author, not a translator, editor, or illustrator.",
+      );
+    }
     window.setTimeout(() => titleInput.current?.focus(), 0);
+  }
+
+  function toggleMultipleAuthors(enabled: boolean) {
+    if (enabled) {
+      setForm((current) => ({
+        ...current,
+        has_multiple_authors: true,
+        structured_authors: current.structured_authors.length >= 2
+          ? current.structured_authors
+          : [current.author === "Multiple authors" ? "" : current.author, ""],
+      }));
+      return;
+    }
+    if (
+      form.has_multiple_authors
+      && !window.confirm(
+        "Switch to a single author? The structured author list will be deleted and you must enter a new Author value.",
+      )
+    ) return;
+    setForm((current) => ({
+      ...current,
+      author: "",
+      has_multiple_authors: false,
+      structured_authors: [],
+    }));
+  }
+
+  function updateStructuredAuthor(index: number, value: string) {
+    setForm((current) => ({
+      ...current,
+      structured_authors: current.structured_authors.map((author, authorIndex) =>
+        authorIndex === index ? value : author
+      ),
+    }));
+  }
+
+  function moveStructuredAuthor(index: number, direction: -1 | 1) {
+    setForm((current) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= current.structured_authors.length) {
+        return current;
+      }
+      const authors = [...current.structured_authors];
+      [authors[index], authors[destination]] = [authors[destination], authors[index]];
+      return { ...current, structured_authors: authors };
+    });
+  }
+
+  function removeStructuredAuthor(index: number) {
+    if (form.structured_authors.length === 2) {
+      const remaining = form.structured_authors[1 - index].trim();
+      if (
+        !window.confirm(
+          `Removing this author converts the book to a single-author record${
+            remaining ? ` and copies “${remaining}” into Author` : ""
+          }. Continue?`,
+        )
+      ) return;
+      setForm((current) => ({
+        ...current,
+        author: remaining,
+        has_multiple_authors: false,
+        structured_authors: [],
+      }));
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      structured_authors: current.structured_authors.filter((_, authorIndex) =>
+        authorIndex !== index
+      ),
+    }));
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setSaving(true);
     setError("");
+    let authorFields: Pick<BookPayload, "author" | "has_multiple_authors" | "structured_authors">;
+    if (form.has_multiple_authors) {
+      const structuredAuthors = form.structured_authors.map((name) =>
+        name.replace(/\s+/g, " ").trim()
+      );
+      if (structuredAuthors.length < 2 || structuredAuthors.some((name) => !name)) {
+        setError("Multiple-author books require at least two complete author names.");
+        return;
+      }
+      const normalized = structuredAuthors.map((name) => name.toLocaleLowerCase());
+      if (new Set(normalized).size !== normalized.length) {
+        setError("The same author cannot be listed twice.");
+        return;
+      }
+      if (
+        form.author !== "Multiple authors"
+        && !window.confirm(
+          'This book is marked as having multiple authors, so the Author field must be changed to exactly “Multiple authors”. Apply that required change?',
+        )
+      ) {
+        setError('Accept the Author change to “Multiple authors”, or turn off Multiple authors.');
+        return;
+      }
+      authorFields = {
+        author: "Multiple authors",
+        has_multiple_authors: true,
+        structured_authors: structuredAuthors,
+      };
+    } else {
+      authorFields = {
+        author: form.author,
+        has_multiple_authors: false,
+        structured_authors: [],
+      };
+    }
+    setSaving(true);
     try {
       const payload = {
         ...form,
+        ...authorFields,
         goodreads_url: form.goodreads_url || null,
         notes: form.notes || null,
       };
@@ -2185,6 +2389,8 @@ function BookDialog({
           ...current,
           title: "",
           author: "",
+          has_multiple_authors: false,
+          structured_authors: [],
           isbn_10: null,
           isbn_13: null,
           subtitle: null,
@@ -2659,9 +2865,73 @@ function BookDialog({
                 onChange={(e) => setForm({ ...form, title: e.target.value })} />
             </label>
             <label className="wide">Author
-              <input required value={form.author}
+              <input
+                required
+                readOnly={form.has_multiple_authors}
+                value={form.author}
                 onChange={(e) => setForm({ ...form, author: e.target.value })} />
             </label>
+            <fieldset className="wide structured-authors-field">
+              <legend>Authorship</legend>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.has_multiple_authors}
+                  onChange={(event) => toggleMultipleAuthors(event.target.checked)}
+                />
+                Multiple authors
+              </label>
+              {form.has_multiple_authors && (
+                <div className="structured-author-editor">
+                  <p>
+                    Enter authors only, in display order. Translators, editors,
+                    and illustrators should not be included.
+                  </p>
+                  {form.structured_authors.map((author, index) => (
+                    <div className="structured-author-row" key={index}>
+                      <span>{index + 1}</span>
+                      <input
+                        aria-label={`Author ${index + 1}`}
+                        required
+                        maxLength={300}
+                        value={author}
+                        onChange={(event) => updateStructuredAuthor(index, event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Move author ${index + 1} up`}
+                        title="Move up"
+                        disabled={index === 0}
+                        onClick={() => moveStructuredAuthor(index, -1)}
+                      >↑</button>
+                      <button
+                        type="button"
+                        aria-label={`Move author ${index + 1} down`}
+                        title="Move down"
+                        disabled={index === form.structured_authors.length - 1}
+                        onClick={() => moveStructuredAuthor(index, 1)}
+                      >↓</button>
+                      <button
+                        type="button"
+                        aria-label={`Remove author ${index + 1}`}
+                        title="Remove author"
+                        onClick={() => removeStructuredAuthor(index)}
+                      ><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="outline-button add-structured-author"
+                    onClick={() => setForm((current) => ({
+                      ...current,
+                      structured_authors: [...current.structured_authors, ""],
+                    }))}
+                  >
+                    <Plus size={15} /> Add author
+                  </button>
+                </div>
+              )}
+            </fieldset>
             <fieldset className="wide metadata-fields">
               <legend>Edition and classification</legend>
               <div className="metadata-form-grid">

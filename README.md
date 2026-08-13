@@ -111,7 +111,10 @@ and bibliographic metadata in Add Book, Edit Book, and Batch Add. Direct
 provider values are selected by default; inferred genre/category/publication
 type suggestions are visibly marked and start unchecked. Stored identifiers
 are normalized and used for exact-edition matching while intentional duplicate
-copies remain allowed. OCR still supplies reviewed Title and Author text only.
+copies remain allowed. Provider results with several explicit authors prepare
+an ordered multiple-author record for review, with a reminder to exclude
+translators, editors, and illustrators. OCR still supplies reviewed Title and
+Author text only.
 The user's own cover photograph remains authoritative; external cover images
 are not imported.
 
@@ -310,8 +313,12 @@ in place:
 6. Schema v3 adds nullable edition metadata, classification, binding,
    publication type, genre text, and series fields. It was rehearsed and then
    applied to the populated catalogue with all 432 books and covers preserved.
+7. Schema v4 adds ordered structured authors while retaining the required
+   legacy Author text. It was rehearsed and applied with all 432 books and
+   covers preserved; existing author text was deliberately left untouched for
+   manual review.
 
-Later database phases include richer bibliographic metadata, structured
-authors, reading-session history and re-reading, and optional loan history.
+Later database phases include structured subjects and genres, ratings and
+tags, reading-session history and re-reading, and optional loan history.
 Multi-user accounts and publication as a hosted application are a separate,
 larger product phase rather than assumptions in the current local-first build.

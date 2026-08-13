@@ -59,6 +59,8 @@ def init_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 author TEXT NOT NULL,
+                has_multiple_authors INTEGER NOT NULL DEFAULT 0
+                    CHECK (has_multiple_authors IN (0, 1)),
                 isbn_10 TEXT,
                 isbn_13 TEXT,
                 subtitle TEXT,
@@ -122,6 +124,47 @@ def init_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_books_status ON books(status);
             CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
             CREATE INDEX IF NOT EXISTS idx_books_author ON books(author);
+
+            CREATE TABLE IF NOT EXISTS book_authors (
+                book_id INTEGER NOT NULL,
+                position INTEGER NOT NULL CHECK (position > 0),
+                name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 300),
+                PRIMARY KEY (book_id, position),
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_book_authors_normalized_name
+                ON book_authors(book_id, lower(trim(name)));
+            CREATE INDEX IF NOT EXISTS idx_book_authors_name
+                ON book_authors(name COLLATE NOCASE);
+
+            CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_insert
+            BEFORE INSERT ON books
+            WHEN NEW.has_multiple_authors = 1
+            BEGIN
+                SELECT RAISE(ABORT, 'Multiple-author books must be created transactionally');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_update
+            BEFORE UPDATE OF has_multiple_authors, author ON books
+            WHEN NEW.has_multiple_authors = 1
+            BEGIN
+                SELECT CASE
+                    WHEN NEW.author <> 'Multiple authors'
+                    THEN RAISE(ABORT, 'Multiple-author books require author = Multiple authors')
+                END;
+                SELECT CASE
+                    WHEN (SELECT COUNT(*) FROM book_authors WHERE book_id = NEW.id) < 2
+                    THEN RAISE(ABORT, 'Multiple-author books require at least two authors')
+                END;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_delete_member
+            BEFORE DELETE ON book_authors
+            WHEN (SELECT has_multiple_authors FROM books WHERE id = OLD.book_id) = 1
+                 AND (SELECT COUNT(*) FROM book_authors WHERE book_id = OLD.book_id) <= 2
+            BEGIN
+                SELECT RAISE(ABORT, 'Convert the book to a single author before removing this author');
+            END;
 
             CREATE TABLE IF NOT EXISTS visual_layout_items (
                 item_type TEXT NOT NULL
@@ -313,6 +356,8 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
                 author TEXT NOT NULL,
+                has_multiple_authors INTEGER NOT NULL DEFAULT 0
+                    CHECK (has_multiple_authors IN (0, 1)),
                 isbn_10 TEXT,
                 isbn_13 TEXT,
                 subtitle TEXT,
@@ -374,7 +419,7 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             );
 
             INSERT INTO books_new (
-                id, title, author, isbn_10, isbn_13,
+                id, title, author, has_multiple_authors, isbn_10, isbn_13,
                 subtitle, page_count, publisher, current_ed_year,
                 original_publication_year, language, edition_number,
                 fiction_category, binding, publication_type, genre_text,
@@ -384,7 +429,7 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 container_id, position, created_at, updated_at
             )
             SELECT
-                id, title, author, NULL, NULL,
+                id, title, author, 0, NULL, NULL,
                 NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                 NULL, NULL, NULL, NULL, NULL, NULL,
                 status, goodreads_url, notes,

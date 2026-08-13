@@ -120,6 +120,16 @@ export function MetadataFilterFields({
           <option value="NO">No</option>
         </select>
       </label>
+      <label>Authors
+        <select value={filters.authorStructure} onChange={(event) => set(
+          "authorStructure",
+          event.target.value as MetadataFilters["authorStructure"],
+        )}>
+          <option value="ANY">All books</option>
+          <option value="SINGLE">Single author</option>
+          <option value="MULTIPLE">Multiple authors</option>
+        </select>
+      </label>
       <fieldset className="metadata-range-filter">
         <legend>Number of pages</legend>
         <label>At least (≥)

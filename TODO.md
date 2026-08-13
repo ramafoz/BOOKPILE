@@ -278,13 +278,23 @@ protects the completed catalogue.
 
 ### Structured authors
 
-- [ ] Replace the single free-text author value with structured author records
+- [x] Implement, rehearse, and apply the additive v3-to-v4 structured-author
+  migration to the populated catalogue with all existing values and covers
+  preserved and without inferring authors from legacy text.
+- [x] Supplement the original free-text author value with structured author records
   while preserving the original text during migration.
-- [ ] Support any number of authors per book and preserve their display order.
-- [ ] Show both names directly for two-author books.
-- [ ] For larger groups, show a clickable `Varios`/`Multiple authors` label.
-- [ ] Open an integrated pop-up containing the complete author list.
-- [ ] Include a book in search results when any contributing author matches.
+- [x] Support up to 250 authors per book and preserve their display order.
+- [x] Validate the canonical `Multiple authors` marker, a minimum of two names,
+  normalized duplicate names, ordered editing, and safe conversion back to a
+  single-author record.
+- [x] Show both names directly for two-author books.
+- [x] For larger groups, show a clickable `Multiple authors` label.
+- [x] Open an integrated pop-up containing the complete author list.
+- [x] Include a book in simple search results when any structured author matches.
+- [x] Add an advanced filter for single- or multiple-author records.
+- [x] Let reviewed ISBN results initialize multiple-author records while warning
+  the user to exclude translators, editors, and illustrators.
+- [x] Preserve ordered structured authors in full backups and CSV export.
 
 ### Additional book metadata
 
@@ -407,6 +417,13 @@ decisions in addition to application code.
   location and map information.
 
 ### Publishable web/app infrastructure
+
+- [ ] Add a localization framework only after the main interface and data
+  model are mature; keep the current interface in English until then.
+  - Planned interface languages: Galician, Portuguese, Spanish, Italian,
+    Catalan, Basque, French, and Chinese, in addition to English.
+  - Design normalization and display rules for free-text metadata before
+    localized labels or translated controlled vocabularies are introduced.
 
 - [ ] Replace local-only assumptions with production configuration for the
   database, cover storage, API URLs, and secrets.

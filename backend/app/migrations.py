@@ -11,7 +11,7 @@ from typing import Callable
 
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -59,6 +59,7 @@ V3_BOOK_COLUMNS = {
     "series_name",
     "series_volume",
 }
+V4_BOOK_COLUMNS = {"has_multiple_authors"}
 PRESERVED_BOOK_COLUMNS = BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS
 
 
@@ -137,9 +138,65 @@ def _migration_3_store_bibliographic_metadata(
             )
 
 
+def _migration_4_store_multiple_authors(connection: sqlite3.Connection) -> None:
+    columns = table_columns(connection, "books")
+    if "has_multiple_authors" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE books ADD COLUMN has_multiple_authors INTEGER NOT NULL
+            DEFAULT 0 CHECK (has_multiple_authors IN (0, 1))
+            """
+        )
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS book_authors (
+            book_id INTEGER NOT NULL,
+            position INTEGER NOT NULL CHECK (position > 0),
+            name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 300),
+            PRIMARY KEY (book_id, position),
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_book_authors_normalized_name
+        ON book_authors(book_id, lower(trim(name)));
+        CREATE INDEX IF NOT EXISTS idx_book_authors_name
+        ON book_authors(name COLLATE NOCASE);
+
+        CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_insert
+        BEFORE INSERT ON books
+        WHEN NEW.has_multiple_authors = 1
+        BEGIN
+            SELECT RAISE(ABORT, 'Multiple-author books must be created transactionally');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_update
+        BEFORE UPDATE OF has_multiple_authors, author ON books
+        WHEN NEW.has_multiple_authors = 1
+        BEGIN
+            SELECT CASE
+                WHEN NEW.author <> 'Multiple authors'
+                THEN RAISE(ABORT, 'Multiple-author books require author = Multiple authors')
+            END;
+            SELECT CASE
+                WHEN (SELECT COUNT(*) FROM book_authors WHERE book_id = NEW.id) < 2
+                THEN RAISE(ABORT, 'Multiple-author books require at least two authors')
+            END;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_delete_member
+        BEFORE DELETE ON book_authors
+        WHEN (SELECT has_multiple_authors FROM books WHERE id = OLD.book_id) = 1
+             AND (SELECT COUNT(*) FROM book_authors WHERE book_id = OLD.book_id) <= 2
+        BEGIN
+            SELECT RAISE(ABORT, 'Convert the book to a single author before removing this author');
+        END;
+        """
+    )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
     Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
+    Migration(4, "store ordered multiple authors", _migration_4_store_multiple_authors),
 )
 
 
@@ -181,6 +238,8 @@ def infer_unversioned_schema(connection: sqlite3.Connection) -> int:
             "Cannot identify the unversioned BOOKPILE schema; missing book fields: "
             + ", ".join(missing_columns)
         )
+    if V4_BOOK_COLUMNS <= book_columns and table_exists(connection, "book_authors"):
+        return 4
     if V3_BOOK_COLUMNS <= book_columns:
         return 3
     if ISBN_BOOK_COLUMNS <= book_columns:
@@ -248,6 +307,43 @@ def verify_database(
     foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
     if foreign_key_errors:
         raise ValueError("SQLite foreign-key verification failed")
+    if table_exists(connection, "book_authors"):
+        invalid_authors = connection.execute(
+            """
+            SELECT b.id
+            FROM books b
+            LEFT JOIN book_authors ba ON ba.book_id = b.id
+            GROUP BY b.id
+            HAVING
+                (b.has_multiple_authors = 1 AND (
+                    b.author <> 'Multiple authors' OR COUNT(ba.book_id) < 2
+                ))
+                OR (b.has_multiple_authors = 0 AND COUNT(ba.book_id) <> 0)
+                OR COUNT(ba.book_id) <> COUNT(DISTINCT ba.position)
+            LIMIT 1
+            """
+        ).fetchone()
+        if invalid_authors:
+            raise ValueError("Structured-author verification failed")
+        author_rows = connection.execute(
+            """
+            SELECT book_id, position, name
+            FROM book_authors
+            ORDER BY book_id, position
+            """
+        ).fetchall()
+        authors_by_book: dict[int, list[sqlite3.Row]] = {}
+        for row in author_rows:
+            authors_by_book.setdefault(row["book_id"], []).append(row)
+        for rows in authors_by_book.values():
+            positions = [row["position"] for row in rows]
+            normalized_names = [
+                " ".join(row["name"].split()).casefold() for row in rows
+            ]
+            if positions != list(range(1, len(rows) + 1)):
+                raise ValueError("Structured-author positions are not continuous")
+            if len(normalized_names) != len(set(normalized_names)):
+                raise ValueError("Structured-author names contain duplicates")
 
     snapshot = schema_snapshot(connection, book_columns=book_columns)
     if expected_snapshot is not None and snapshot != expected_snapshot:
@@ -315,7 +411,7 @@ def run_migrations(
         source_version = schema_version(connection)
         preserved_book_columns = BASELINE_BOOK_COLUMNS | (
             ISBN_BOOK_COLUMNS if source_version >= 2 else set()
-        )
+        ) | (V3_BOOK_COLUMNS if source_version >= 3 else set())
         before_snapshot = schema_snapshot(
             connection,
             book_columns=preserved_book_columns,

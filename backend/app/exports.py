@@ -45,11 +45,16 @@ def database_summary(path: Path) -> dict:
         if integrity != "ok" or foreign_key_errors:
             raise ValueError("The catalogue database failed its integrity checks")
 
+        tables = ["bookcases", "shelves", "containers", "books"]
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'book_authors'"
+        ).fetchone():
+            tables.append("book_authors")
         counts = {
             table: connection.execute(
                 f"SELECT COUNT(*) FROM {table}"
             ).fetchone()[0]
-            for table in ("bookcases", "shelves", "containers", "books")
+            for table in tables
         }
         cover_filenames = [
             row["cover_filename"]
@@ -140,6 +145,8 @@ CSV_COLUMNS = (
     "id",
     "title",
     "author",
+    "has_multiple_authors",
+    "structured_authors",
     "isbn_10",
     "isbn_13",
     "subtitle",
@@ -182,6 +189,14 @@ def write_books_csv(destination: Path) -> int:
         b.id,
         b.title,
         b.author,
+        b.has_multiple_authors,
+        COALESCE((
+            SELECT group_concat(ordered.name, ' | ')
+            FROM (
+                SELECT name FROM book_authors
+                WHERE book_id = b.id ORDER BY position
+            ) ordered
+        ), '') AS structured_authors,
         b.isbn_10,
         b.isbn_13,
         b.subtitle,
@@ -247,6 +262,9 @@ def write_books_csv(destination: Path) -> int:
             )
             record["is_read_date_unknown"] = (
                 "true" if record["is_read_date_unknown"] else "false"
+            )
+            record["has_multiple_authors"] = (
+                "true" if record["has_multiple_authors"] else "false"
             )
             writer.writerow(record)
     return len(rows)

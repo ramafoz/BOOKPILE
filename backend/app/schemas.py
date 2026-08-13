@@ -2,7 +2,7 @@ from enum import Enum
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from .isbn import normalize_isbn
 
@@ -178,9 +178,21 @@ def normalize_optional_isbn(value: str | None, length: int) -> str | None:
     return normalized
 
 
+def normalize_structured_authors(values: list[str]) -> list[str]:
+    cleaned = [" ".join(value.split()) for value in values]
+    if any(not value for value in cleaned):
+        raise ValueError("Author names cannot be blank")
+    normalized = [value.casefold() for value in cleaned]
+    if len(normalized) != len(set(normalized)):
+        raise ValueError("The same author cannot be listed twice")
+    return cleaned
+
+
 class BookBase(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     author: str = Field(min_length=1, max_length=300)
+    has_multiple_authors: bool = False
+    structured_authors: list[str] = Field(default_factory=list, max_length=250)
     isbn_10: str | None = Field(default=None, max_length=40)
     isbn_13: str | None = Field(default=None, max_length=40)
     subtitle: str | None = Field(default=None, max_length=500)
@@ -235,6 +247,28 @@ class BookBase(BaseModel):
     def validate_isbn_13(cls, value: str | None) -> str | None:
         return normalize_optional_isbn(value, 13)
 
+    @field_validator("structured_authors")
+    @classmethod
+    def validate_structured_authors(cls, values: list[str]) -> list[str]:
+        if any(len(value) > 300 for value in values):
+            raise ValueError("Author names cannot exceed 300 characters")
+        return normalize_structured_authors(values)
+
+    @model_validator(mode="after")
+    def validate_author_structure(self):
+        if self.has_multiple_authors:
+            if self.author != "Multiple authors":
+                raise ValueError(
+                    "Multiple-author books require author = Multiple authors"
+                )
+            if len(self.structured_authors) < 2:
+                raise ValueError(
+                    "Multiple-author books require at least two authors"
+                )
+        elif self.structured_authors:
+            raise ValueError("Single-author books cannot have structured authors")
+        return self
+
 
 class BookCreate(BookBase):
     shift_existing: bool = False
@@ -244,6 +278,8 @@ class BookCreate(BookBase):
 class BookUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
     author: str | None = Field(default=None, min_length=1, max_length=300)
+    has_multiple_authors: bool | None = None
+    structured_authors: list[str] | None = Field(default=None, max_length=250)
     isbn_10: str | None = Field(default=None, max_length=40)
     isbn_13: str | None = Field(default=None, max_length=40)
     subtitle: str | None = Field(default=None, max_length=500)
@@ -292,6 +328,17 @@ class BookUpdate(BaseModel):
     @classmethod
     def blank_optional_text_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
+
+    @field_validator("structured_authors")
+    @classmethod
+    def validate_structured_authors(
+        cls, values: list[str] | None
+    ) -> list[str] | None:
+        if values is None:
+            return None
+        if any(len(value) > 300 for value in values):
+            raise ValueError("Author names cannot exceed 300 characters")
+        return normalize_structured_authors(values)
 
 
 class Book(BookBase):

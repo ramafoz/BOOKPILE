@@ -1,4 +1,5 @@
 import os
+import json
 import sqlite3
 import statistics as statistics_module
 import tempfile
@@ -69,6 +70,13 @@ from .schemas import (
 BOOK_SELECT = """
 SELECT
     b.*,
+    COALESCE((
+        SELECT json_group_array(ordered.name)
+        FROM (
+            SELECT name FROM book_authors
+            WHERE book_id = b.id ORDER BY position
+        ) ordered
+    ), '[]') AS structured_authors_json,
     bc.name AS bookcase_name,
     s.shelf_number,
     c.container_type,
@@ -109,6 +117,9 @@ def temporary_download(suffix: str) -> Path:
 
 def serialize_book(row: sqlite3.Row) -> dict[str, Any]:
     book = dict(row)
+    book["structured_authors"] = json.loads(
+        book.pop("structured_authors_json", "[]")
+    )
     if book["container_id"] is None:
         book["location_label"] = None
     else:
@@ -144,6 +155,7 @@ def metadata_filter_conditions(
     publication_types: list[PublicationType] | None = None,
     series_names: list[str] | None = None,
     series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
     page_min: int | None = None,
     page_max: int | None = None,
     publication_year_field: Literal[
@@ -213,6 +225,10 @@ def metadata_filter_conditions(
         where.append("(b.series_name IS NOT NULL AND trim(b.series_name) <> '')")
     elif series_state == "NO":
         where.append("(b.series_name IS NULL OR trim(b.series_name) = '')")
+    if author_structure == "MULTIPLE":
+        where.append("b.has_multiple_authors = 1")
+    elif author_structure == "SINGLE":
+        where.append("b.has_multiple_authors = 0")
     if page_min is not None:
         where.append("b.page_count >= ?")
         params.append(page_min)
@@ -623,6 +639,7 @@ def list_books(
     publication_type: list[PublicationType] = Query(default=[]),
     series_name: list[str] = Query(default=[]),
     series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
     page_min: int | None = Query(default=None, ge=1),
     page_max: int | None = Query(default=None, ge=1),
     publication_year_field: Literal[
@@ -647,10 +664,12 @@ def list_books(
     if search and search.strip():
         searchable_columns = ("b.title", "b.author", "b.series_name")
         where.append(
-            "(" + " OR ".join(f"{column} LIKE ?" for column in searchable_columns) + ")"
+            "(" + " OR ".join(f"{column} LIKE ?" for column in searchable_columns)
+            + " OR EXISTS (SELECT 1 FROM book_authors ba "
+            "WHERE ba.book_id = b.id AND ba.name LIKE ?))"
         )
         term = f"%{search.strip()}%"
-        params.extend(term for _ in searchable_columns)
+        params.extend(term for _ in range(len(searchable_columns) + 1))
     if bookcase_id is not None:
         where.append("bc.id = ?")
         params.append(bookcase_id)
@@ -700,6 +719,7 @@ def list_books(
         publication_types=publication_type,
         series_names=series_name,
         series_state=series_state,
+        author_structure=author_structure,
         page_min=page_min,
         page_max=page_max,
         publication_year_field=publication_year_field,
@@ -889,7 +909,7 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
             cursor = connection.execute(
                 """
                 INSERT INTO books (
-                    title, author, isbn_10, isbn_13,
+                    title, author, has_multiple_authors, isbn_10, isbn_13,
                     subtitle, page_count, publisher, current_ed_year,
                     original_publication_year, language, edition_number,
                     fiction_category, binding, publication_type, genre_text,
@@ -899,13 +919,14 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                     is_read_date_unknown, is_original_collection,
                     container_id, position
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
                     payload.title,
-                    payload.author,
+                    payload.author if not payload.has_multiple_authors else "Multiple authors",
+                    0,
                     payload.isbn_10,
                     payload.isbn_13,
                     payload.subtitle,
@@ -942,6 +963,27 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                 ),
             )
             book_id = cursor.lastrowid
+            if payload.has_multiple_authors:
+                connection.executemany(
+                    """
+                    INSERT INTO book_authors (book_id, position, name)
+                    VALUES (?, ?, ?)
+                    """,
+                    [
+                        (book_id, index, name)
+                        for index, name in enumerate(payload.structured_authors, 1)
+                    ],
+                )
+                connection.execute(
+                    """
+                    UPDATE books
+                    SET has_multiple_authors = 1,
+                        author = 'Multiple authors',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (book_id,),
+                )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return fetch_book(book_id)
@@ -953,6 +995,45 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
         return existing
+
+    structured_authors = changes.pop("structured_authors", None)
+    author_structure_touched = bool(
+        {"has_multiple_authors", "author", "structured_authors"}
+        & payload.model_fields_set
+    )
+    next_multiple_authors = bool(
+        changes.get("has_multiple_authors", existing["has_multiple_authors"])
+    )
+    next_author = changes.get("author", existing["author"])
+    next_structured_authors = (
+        structured_authors
+        if "structured_authors" in payload.model_fields_set
+        else existing["structured_authors"]
+    )
+    if next_multiple_authors:
+        if next_author != "Multiple authors":
+            raise HTTPException(
+                status_code=422,
+                detail="Multiple-author books require author = Multiple authors",
+            )
+        if len(next_structured_authors) < 2:
+            raise HTTPException(
+                status_code=422,
+                detail="Multiple-author books require at least two authors",
+            )
+    else:
+        if existing["has_multiple_authors"] and not next_multiple_authors:
+            if "author" not in payload.model_fields_set or next_author == "Multiple authors":
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Converting to a single author requires a new author value"
+                    ),
+                )
+        next_structured_authors = []
+    if author_structure_touched:
+        changes["has_multiple_authors"] = int(next_multiple_authors)
+        changes["author"] = next_author
 
     if "title" in changes and changes["title"] is not None:
         changes["title"] = changes["title"].strip()
@@ -1070,6 +1151,26 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
     values = list(changes.values())
     try:
         with connect() as connection:
+            if author_structure_touched:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "UPDATE books SET has_multiple_authors = 0 WHERE id = ?",
+                    (book_id,),
+                )
+                connection.execute(
+                    "DELETE FROM book_authors WHERE book_id = ?", (book_id,)
+                )
+                if next_multiple_authors:
+                    connection.executemany(
+                        """
+                        INSERT INTO book_authors (book_id, position, name)
+                        VALUES (?, ?, ?)
+                        """,
+                        [
+                            (book_id, index, name)
+                            for index, name in enumerate(next_structured_authors, 1)
+                        ],
+                    )
             next_container_id = changes.get("container_id", existing["container_id"])
             next_position = changes.get("position", existing["position"])
             location_changed = (
@@ -1077,7 +1178,8 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
                 or next_position != existing["position"]
             )
             if location_changed:
-                connection.execute("BEGIN IMMEDIATE")
+                if not connection.in_transaction:
+                    connection.execute("BEGIN IMMEDIATE")
                 if next_container_id is not None and next_position is not None:
                     ensure_container_exists(connection, next_container_id)
                 connection.execute(
@@ -1421,11 +1523,20 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
 @app.get("/library-map")
 def library_map() -> dict[str, Any]:
     map_book_fields = """
-        id, title, author, isbn_10, isbn_13, subtitle, page_count,
+        id, title, author, has_multiple_authors, isbn_10, isbn_13, subtitle, page_count,
         publisher, current_ed_year, original_publication_year, language,
         edition_number, fiction_category, binding, publication_type,
         genre_text, series_name, series_volume, status, container_id,
         position, acquisition_date, reading_started_date, read_date
+    """
+    map_authors_field = """
+        COALESCE((
+            SELECT json_group_array(ordered.name)
+            FROM (
+                SELECT name FROM book_authors
+                WHERE book_id = books.id ORDER BY position
+            ) ordered
+        ), '[]') AS structured_authors_json
     """
     with connect() as connection:
         bookcases = [
@@ -1458,27 +1569,38 @@ def library_map() -> dict[str, Any]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT {map_book_fields}
+                SELECT {map_book_fields}, {map_authors_field}
                 FROM books
                 WHERE container_id IS NOT NULL
                   AND status != 'CURRENTLY_READING'
                 ORDER BY container_id, position
-                """.format(map_book_fields=map_book_fields)
+                """.format(
+                    map_book_fields=map_book_fields,
+                    map_authors_field=map_authors_field,
+                )
             )
         ]
         outside_books = [
             dict(row)
             for row in connection.execute(
                 """
-                SELECT {map_book_fields}
+                SELECT {map_book_fields}, {map_authors_field}
                 FROM books
                 WHERE status = 'CURRENTLY_READING'
                 ORDER BY title COLLATE NOCASE
-                """.format(map_book_fields=map_book_fields)
+                """.format(
+                    map_book_fields=map_book_fields,
+                    map_authors_field=map_authors_field,
+                )
             )
         ]
         ensure_visual_layout(connection, bookcases, shelves, containers)
         layout = fetch_visual_layout(connection)
+
+    for book in [*books, *outside_books]:
+        book["structured_authors"] = json.loads(
+            book.pop("structured_authors_json", "[]")
+        )
 
     books_by_container: dict[int, list[dict[str, Any]]] = {}
     for book in books:
@@ -1693,6 +1815,7 @@ def catalogue_statistics(
     publication_type: list[PublicationType] = Query(default=[]),
     series_name: list[str] = Query(default=[]),
     series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
     page_min: int | None = Query(default=None, ge=1),
     page_max: int | None = Query(default=None, ge=1),
     publication_year_field: Literal[
@@ -1715,6 +1838,7 @@ def catalogue_statistics(
         publication_types=publication_type,
         series_names=series_name,
         series_state=series_state,
+        author_structure=author_structure,
         page_min=page_min,
         page_max=page_max,
         publication_year_field=publication_year_field,

@@ -32,6 +32,8 @@ export interface MapBook {
   id: number;
   title: string;
   author: string;
+  has_multiple_authors: boolean;
+  structured_authors: string[];
   isbn_10: string | null;
   isbn_13: string | null;
   subtitle: string | null;
@@ -104,6 +106,8 @@ export interface Book {
   id: number;
   title: string;
   author: string;
+  has_multiple_authors: boolean;
+  structured_authors: string[];
   isbn_10: string | null;
   isbn_13: string | null;
   subtitle: string | null;
@@ -181,6 +185,7 @@ export interface MetadataFilters {
   publicationTypes: PublicationType[];
   seriesNames: string[];
   seriesState: "ANY" | "YES" | "NO";
+  authorStructure: "ANY" | "SINGLE" | "MULTIPLE";
   pageMin: string;
   pageMax: string;
   publicationYearField: "current_ed_year" | "original_publication_year";
@@ -314,6 +319,8 @@ export interface RearrangementResult {
 export interface BookPayload {
   title: string;
   author: string;
+  has_multiple_authors: boolean;
+  structured_authors: string[];
   isbn_10: string | null;
   isbn_13: string | null;
   subtitle: string | null;
