@@ -357,6 +357,12 @@ protects the completed catalogue.
 - [x] Add catalogue-cleanup views for books missing any core bibliographic
   metadata or a selected ISBN, page-count, publisher, publication-year,
   language, category, binding, publication-type, or genre value.
+- [x] Suggest existing catalogue values while editing Publisher, Language,
+  Series, and each comma-separated Genre, while continuing to allow new
+  free-text values without automatic replacement.
+- [x] Normalize edited Genre text without a schema change: accept commas,
+  semicolons, or line breaks; trim whitespace; remove case-insensitive
+  duplicates; and store genres in alphabetical order.
 
 ### Reading sessions and re-reading
 

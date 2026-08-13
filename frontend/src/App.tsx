@@ -943,6 +943,7 @@ function App() {
         <BookDialog
           book={editing}
           library={library}
+          metadataOptions={metadataOptions}
           onClose={() => setEditing(undefined)}
           onSaved={async () => {
             setEditing(undefined);
@@ -958,6 +959,7 @@ function App() {
         <BookDialog
           book={null}
           library={library}
+          metadataOptions={metadataOptions}
           batchMode
           onClose={() => setBatchAdding(false)}
           onSaved={refresh}
@@ -1123,6 +1125,17 @@ function metadataLabel(value: string) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function normalizeGenreText(value: string) {
+  const uniqueGenres = new Map<string, string>();
+  value.split(/[,;\n\r]+/).forEach((item) => {
+    const genre = item.replace(/\s+/g, " ").trim();
+    if (genre) uniqueGenres.set(genre.toLocaleLowerCase(), genre);
+  });
+  return Array.from(uniqueGenres.values())
+    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+    .join(", ");
 }
 
 function CandidateMetadataReview({
@@ -1943,9 +1956,133 @@ function StatusActionDialog({
   );
 }
 
+function ExistingValueInput({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const suggestions = options
+    .filter((option) => !value.trim()
+      || option.toLocaleLowerCase().includes(value.trim().toLocaleLowerCase()))
+    .slice(0, 10);
+  return (
+    <label className="existing-value-combobox">{label}
+      <input
+        role="combobox"
+        aria-expanded={focused && suggestions.length > 0}
+        aria-autocomplete="list"
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          onChange(value.trim());
+        }}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {focused && suggestions.length > 0 && (
+        <div className="existing-value-suggestions" role="listbox">
+          {suggestions.map((option) => (
+            <button
+              type="button"
+              role="option"
+              key={option}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option);
+                setFocused(false);
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      {options.length > 0 && <small>Choose an existing value or enter a new one.</small>}
+    </label>
+  );
+}
+
+function GenreSuggestionInput({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const parts = value.split(/[,;\n\r]/);
+  const activeValue = (parts.at(-1) ?? "").trim();
+  const completed = new Set(
+    parts.slice(0, -1).map((part) => part.trim().toLocaleLowerCase()).filter(Boolean),
+  );
+  const suggestions = options
+    .filter((option) => !completed.has(option.toLocaleLowerCase()))
+    .filter((option) => !activeValue
+      || option.toLocaleLowerCase().includes(activeValue.toLocaleLowerCase()))
+    .slice(0, 10);
+
+  function chooseGenre(genre: string) {
+    const previous = parts.slice(0, -1).map((part) => part.trim()).filter(Boolean);
+    onChange([...previous, genre].join(", ") + ", ");
+  }
+
+  function tidyGenres() {
+    setFocused(false);
+    onChange(normalizeGenreText(value));
+  }
+
+  return (
+    <label className="wide genre-combobox">Genre
+      <input
+        role="combobox"
+        aria-expanded={focused && suggestions.length > 0}
+        aria-autocomplete="list"
+        value={value}
+        placeholder="e.g. Historical, Horror"
+        autoComplete="off"
+        onFocus={() => setFocused(true)}
+        onBlur={tidyGenres}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {focused && suggestions.length > 0 && (
+        <div className="genre-suggestions" role="listbox">
+          {suggestions.map((genre) => (
+            <button
+              type="button"
+              role="option"
+              key={genre}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => chooseGenre(genre)}
+            >
+              {genre}
+            </button>
+          ))}
+        </div>
+      )}
+      {options.length > 0 && (
+        <small>Use commas or semicolons; genres are deduplicated and sorted when saved.</small>
+      )}
+    </label>
+  );
+}
+
 function BookDialog({
   book,
   library,
+  metadataOptions,
   batchMode = false,
   onClose,
   onSaved,
@@ -1953,6 +2090,7 @@ function BookDialog({
 }: {
   book: Book | null;
   library: Bookcase[];
+  metadataOptions: MetadataOptions;
   batchMode?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -2380,6 +2518,7 @@ function BookDialog({
       const payload = {
         ...form,
         ...authorFields,
+        genre_text: normalizeGenreText(form.genre_text ?? "") || null,
         goodreads_url: form.goodreads_url || null,
         notes: form.notes || null,
       };
@@ -3010,10 +3149,12 @@ function BookDialog({
                   <input type="number" min="1" value={form.page_count ?? ""}
                     onChange={(e) => setForm({ ...form, page_count: e.target.value ? Number(e.target.value) : null })} />
                 </label>
-                <label>Publisher
-                  <input value={form.publisher ?? ""}
-                    onChange={(e) => setForm({ ...form, publisher: e.target.value || null })} />
-                </label>
+                <ExistingValueInput
+                  label="Publisher"
+                  value={form.publisher ?? ""}
+                  options={metadataOptions.publishers}
+                  onChange={(value) => setForm({ ...form, publisher: value || null })}
+                />
                 <label>Current edition year
                   <input type="number" min="1000" max="9999" placeholder="YYYY"
                     value={form.current_ed_year ?? ""}
@@ -3024,10 +3165,12 @@ function BookDialog({
                     value={form.original_publication_year ?? ""}
                     onChange={(e) => setForm({ ...form, original_publication_year: e.target.value ? Number(e.target.value) : null })} />
                 </label>
-                <label>Language
-                  <input value={form.language ?? ""}
-                    onChange={(e) => setForm({ ...form, language: e.target.value || null })} />
-                </label>
+                <ExistingValueInput
+                  label="Language"
+                  value={form.language ?? ""}
+                  options={metadataOptions.languages}
+                  onChange={(value) => setForm({ ...form, language: value || null })}
+                />
                 <label>Edition number
                   <input type="number" min="1" value={form.edition_number ?? ""}
                     onChange={(e) => setForm({ ...form, edition_number: e.target.value ? Number(e.target.value) : null })} />
@@ -3065,18 +3208,21 @@ function BookDialog({
                     <option value="OTHER">Other</option>
                   </select>
                 </label>
-                <label>Series
-                  <input value={form.series_name ?? ""}
-                    onChange={(e) => setForm({ ...form, series_name: e.target.value || null })} />
-                </label>
+                <ExistingValueInput
+                  label="Series"
+                  value={form.series_name ?? ""}
+                  options={metadataOptions.series_names}
+                  onChange={(value) => setForm({ ...form, series_name: value || null })}
+                />
                 <label>Series volume
                   <input value={form.series_volume ?? ""} placeholder="e.g. 0.5, III, Omnibus 1"
                     onChange={(e) => setForm({ ...form, series_volume: e.target.value || null })} />
                 </label>
-                <label className="wide">Genre
-                  <input value={form.genre_text ?? ""} placeholder="e.g. Historical, Horror"
-                    onChange={(e) => setForm({ ...form, genre_text: e.target.value || null })} />
-                </label>
+                <GenreSuggestionInput
+                  value={form.genre_text ?? ""}
+                  options={metadataOptions.genres}
+                  onChange={(value) => setForm({ ...form, genre_text: value || null })}
+                />
               </div>
             </fieldset>
             <label>Status

@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import date
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
@@ -188,6 +189,19 @@ def normalize_structured_authors(values: list[str]) -> list[str]:
     return cleaned
 
 
+def normalize_genre_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    genres: dict[str, str] = {}
+    for item in re.split(r"[,;\r\n]+", value):
+        cleaned = " ".join(item.split())
+        if cleaned:
+            genres.setdefault(cleaned.casefold(), cleaned)
+    if not genres:
+        return None
+    return ", ".join(sorted(genres.values(), key=str.casefold))
+
+
 class BookBase(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     author: str = Field(min_length=1, max_length=300)
@@ -229,13 +243,17 @@ class BookBase(BaseModel):
         "subtitle",
         "publisher",
         "language",
-        "genre_text",
         "series_name",
         "series_volume",
     )
     @classmethod
     def blank_notes_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
+
+    @field_validator("genre_text")
+    @classmethod
+    def normalize_genres(cls, value: str | None) -> str | None:
+        return normalize_genre_text(value)
 
     @field_validator("isbn_10")
     @classmethod
@@ -321,13 +339,17 @@ class BookUpdate(BaseModel):
         "subtitle",
         "publisher",
         "language",
-        "genre_text",
         "series_name",
         "series_volume",
     )
     @classmethod
     def blank_optional_text_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
+
+    @field_validator("genre_text")
+    @classmethod
+    def normalize_genres(cls, value: str | None) -> str | None:
+        return normalize_genre_text(value)
 
     @field_validator("structured_authors")
     @classmethod

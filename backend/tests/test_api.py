@@ -493,6 +493,35 @@ def test_book_bibliographic_metadata_is_optional_editable_and_searchable() -> No
         assert cleared.json()["publication_type"] is None
 
 
+def test_genres_are_normalized_deduplicated_and_sorted() -> None:
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "Normalized genres",
+                "author": "Genre Author",
+                "genre_text": " Horror ; Fantasy\nscience fiction; fantasy ",
+            },
+        )
+        assert created.status_code == 201
+        assert created.json()["genre_text"] == "Fantasy, Horror, science fiction"
+
+        updated = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={"genre_text": "Young Adult; U.S. History. Overview"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["genre_text"] == (
+            "U.S. History. Overview, Young Adult"
+        )
+
+        cleared = client.patch(
+            f'/books/{created.json()["id"]}', json={"genre_text": " ; \n "}
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["genre_text"] is None
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
