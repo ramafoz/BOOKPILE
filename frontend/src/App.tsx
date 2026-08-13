@@ -35,6 +35,7 @@ import {
 import { ApiError, api, type RestoreInspection } from "./api";
 import { decodeIsbnBarcodePhoto } from "./barcode";
 import { readCoverText, type CoverOcrProgress } from "./ocr";
+import { MetadataFilterFields } from "./MetadataFilterFields";
 import type {
   Book,
   BookPayload,
@@ -52,6 +53,8 @@ import type {
   MapBookcase,
   MapContainer,
   MapShelf,
+  MetadataFilters,
+  MetadataOptions,
   ReadingSuggestion,
   NewPositionMode,
   OldPositionMode,
@@ -80,6 +83,33 @@ const emptyStats: Stats = {
   currently_reading: 0,
   read: 0,
 };
+const emptyMetadataOptions: MetadataOptions = {
+  languages: [],
+  genres: [],
+  publishers: [],
+  series_names: [],
+  fiction_categories: [],
+  bindings: [],
+  publication_types: [],
+};
+function emptyMetadataFilters(): MetadataFilters {
+  return {
+    isbn: "",
+    languages: [],
+    genres: [],
+    publishers: [],
+    fictionCategories: [],
+    bindings: [],
+    publicationTypes: [],
+    seriesNames: [],
+    seriesState: "ANY",
+    pageMin: "",
+    pageMax: "",
+    publicationYearField: "current_ed_year",
+    publicationYearMin: "",
+    publicationYearMax: "",
+  };
+}
 const emptyBook: BookPayload = {
   title: "",
   author: "",
@@ -114,6 +144,10 @@ function App() {
   const [books, setBooks] = useState<Book[]>([]);
   const [stats, setStats] = useState(emptyStats);
   const [library, setLibrary] = useState<Bookcase[]>([]);
+  const [metadataOptions, setMetadataOptions] = useState(emptyMetadataOptions);
+  const [metadataFilters, setMetadataFilters] = useState<MetadataFilters>(
+    emptyMetadataFilters,
+  );
   const [filter, setFilter] = useState<"ALL" | BookStatus>("ALL");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -151,7 +185,7 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      const [nextBooks, nextStats, nextLibrary] = await Promise.all([
+      const [nextBooks, nextStats, nextLibrary, nextMetadataOptions] = await Promise.all([
         api.books({
           bookId: exactBookFilter === null ? "" : String(exactBookFilter),
           status: filter,
@@ -168,13 +202,16 @@ function App() {
           catalogueCheck,
           includeUnknownSelectedDates,
           includeUnknownSortDates,
+          metadata: metadataFilters,
         }),
         api.stats(),
         api.library(),
+        api.metadataOptions(),
       ]);
       setBooks(nextBooks);
       setStats(nextStats);
       setLibrary(nextLibrary);
+      setMetadataOptions(nextMetadataOptions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load BOOKPILE");
     } finally {
@@ -196,6 +233,7 @@ function App() {
     catalogueCheck,
     includeUnknownSelectedDates,
     includeUnknownSortDates,
+    metadataFilters,
   ]);
 
   const filterShelves = useMemo(
@@ -276,6 +314,7 @@ function App() {
     setBookcaseFilter(String(bookcaseId));
     setShelfFilter(shelfId ? String(shelfId) : "");
     setContainerFilter(containerId ? String(containerId) : "");
+    setMetadataFilters(emptyMetadataFilters());
     setSortBy("physical");
     setSortOrder("asc");
     setShowAdvanced(true);
@@ -299,6 +338,7 @@ function App() {
     setBookcaseFilter("");
     setShelfFilter("");
     setContainerFilter("");
+    setMetadataFilters(emptyMetadataFilters());
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(true);
@@ -328,6 +368,7 @@ function App() {
     setShowCatalogueChecks(false);
     setIncludeUnknownSelectedDates(false);
     setIncludeUnknownSortDates(false);
+    setMetadataFilters(emptyMetadataFilters());
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(false);
@@ -498,7 +539,7 @@ function App() {
             <Search size={18} />
             <input
               aria-label="Search books"
-              placeholder="Search by title, author or ISBN…"
+              placeholder="Search by title, author or series…"
               value={search}
               onChange={(event) => {
                 setExactBookFilter(null);
@@ -524,7 +565,7 @@ function App() {
             className={`advanced-toggle ${showAdvanced ? "active" : ""}`}
             onClick={() => setShowAdvanced(!showAdvanced)}
           >
-            <SlidersHorizontal size={17} /> Sort & filter
+            <SlidersHorizontal size={17} /> Sort & Advanced Search
           </button>
         </div>
         {showAdvanced && (
@@ -670,6 +711,14 @@ function App() {
             <label>To
               <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
             </label>
+            <MetadataFilterFields
+              filters={metadataFilters}
+              options={metadataOptions}
+              onChange={(next) => {
+                setExactBookFilter(null);
+                setMetadataFilters(next);
+              }}
+            />
             <div className="catalogue-check-control">
               <button
                 type="button"
@@ -730,6 +779,7 @@ function App() {
                 setShowCatalogueChecks(false);
                 setIncludeUnknownSelectedDates(false);
                 setIncludeUnknownSortDates(false);
+                setMetadataFilters(emptyMetadataFilters());
                 setFilter("ALL");
               }}
             >
@@ -1251,38 +1301,61 @@ const monthNames = Array.from({ length: 12 }, (_, index) =>
 function StatisticsDialog({ onClose }: { onClose: () => void }) {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [statistics, setStatistics] = useState<CatalogueStatistics | null>(null);
+  const [metadataOptions, setMetadataOptions] = useState(emptyMetadataOptions);
+  const [metadataFilters, setMetadataFilters] = useState<MetadataFilters>(
+    emptyMetadataFilters,
+  );
+  const [debouncedMetadataFilters, setDebouncedMetadataFilters] =
+    useState<MetadataFilters>(emptyMetadataFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedMetadataFilters(metadataFilters),
+      450,
+    );
+    return () => window.clearTimeout(timer);
+  }, [metadataFilters]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError("");
-    void api.statistics(selectedYear).then((result) => {
-      if (active) setStatistics(result);
+    void Promise.all([
+      api.statistics(selectedYear, debouncedMetadataFilters),
+      api.metadataOptions(),
+    ]).then(([result, options]) => {
+      if (active) {
+        setStatistics(result);
+        setMetadataOptions(options);
+      }
     }).catch((err) => {
       if (active) setError(err instanceof Error ? err.message : "Unable to load statistics");
     }).finally(() => {
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [selectedYear]);
+  }, [selectedYear, debouncedMetadataFilters]);
 
   const rows = selectedYear === null
     ? statistics?.yearly.map((item) => ({
         label: String(item.year),
         acquired: item.acquired,
         read: item.read,
+        pages: item.pages_read,
       })) ?? []
     : statistics?.monthly.map((item) => ({
         label: monthNames[item.month - 1],
         acquired: item.acquired,
         read: item.read,
+        pages: item.pages_read,
       })) ?? [];
   const maximum = Math.max(
     1,
     ...rows.flatMap((item) => [item.acquired, item.read]),
   );
+  const perBookRates = statistics?.reading_rate.per_book ?? [];
 
   return (
     <div className="dialog-backdrop" onMouseDown={onClose}>
@@ -1311,10 +1384,15 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         {error && <div className="form-error">{error}</div>}
-        {loading || !statistics ? (
+        {!statistics ? (
           <div className="empty-state">Calculating your library…</div>
         ) : (
           <>
+            {loading && (
+              <div className="statistics-updating" role="status">
+                Updating statistics…
+              </div>
+            )}
             <div className="duration-stat-grid">
               <DurationCard
                 title="Time spent pending"
@@ -1327,6 +1405,73 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
                 note="Reading start through finish"
               />
             </div>
+
+            <details className="statistics-metadata-filters">
+              <summary>Filter statistics by book metadata</summary>
+              <div className="statistics-filter-grid">
+                <MetadataFilterFields
+                  filters={metadataFilters}
+                  options={metadataOptions}
+                  onChange={setMetadataFilters}
+                />
+                <button type="button" className="clear-filters" onClick={() => (
+                  setMetadataFilters(emptyMetadataFilters())
+                )}>Clear metadata filters</button>
+              </div>
+              <p>{statistics.filtered_book_count} books match this metadata selection.</p>
+            </details>
+
+            <section className="statistics-section reading-rate-section">
+              <div className="statistics-section-heading">
+                <div>
+                  <h3>Estimated reading rate</h3>
+                  <p>
+                    Pages are spread across each known reading interval. A missing
+                    start date assigns the book to its finish day.
+                  </p>
+                </div>
+              </div>
+              <div className="reading-rate-grid">
+                <ReadingRateCard label="Pages in period" value={statistics.reading_rate.total_pages} />
+                <ReadingRateCard label="Pages per week" value={statistics.reading_rate.pages_per_week} />
+                <ReadingRateCard label="Pages per month" value={statistics.reading_rate.pages_per_month} />
+                <ReadingRateCard label="Average per-book pages/day" value={statistics.reading_rate.average_per_book ?? null} />
+                <ReadingRateCard label="Median per-book pages/day" value={statistics.reading_rate.median_per_book ?? null} />
+              </div>
+              <p className="statistics-method-note">
+                Timeline estimate: {statistics.reading_rate.sample_size} read books with pages and a finish date · {" "}
+                {statistics.reading_rate.excluded} excluded · {" "}
+                {statistics.reading_rate.single_day_estimates} assigned to their finish day.
+              </p>
+              <p className="statistics-method-note">
+                Per-book rate for this selection and period: {statistics.reading_rate.per_book_sample_size ?? 0} used · {" "}
+                {statistics.reading_rate.per_book_excluded ?? 0} excluded · {" "}
+                {statistics.reading_rate.per_book_estimates ?? 0} estimated from an unknown start date.
+              </p>
+              <details className="per-book-rates">
+                <summary>Reading rate by book</summary>
+                {perBookRates.length === 0 ? (
+                  <p className="muted">No books have enough data for this calculation.</p>
+                ) : (
+                  <div className="per-book-rate-list">
+                    {perBookRates.map((book) => (
+                      <article key={book.id}>
+                        <div>
+                          <strong>{book.title}</strong>
+                          <span>{book.author}</span>
+                        </div>
+                        <span>{book.page_count} pages</span>
+                        <span>
+                          {book.reading_days} day{book.reading_days === 1 ? "" : "s"}
+                          {book.estimated_start ? " · estimated" : ""}
+                        </span>
+                        <strong>{book.pages_per_day} pages/day</strong>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </details>
+            </section>
 
             <section className="statistics-section">
               <div className="statistics-section-heading">
@@ -1365,6 +1510,32 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
             <section className="statistics-section">
               <div className="statistics-section-heading">
                 <div>
+                  <h3>{selectedYear === null ? "Estimated pages read by year" : `Estimated pages read in ${selectedYear}`}</h3>
+                  <p>Uses the same daily distribution as the reading-rate calculation.</p>
+                </div>
+              </div>
+              {rows.every((item) => item.pages === 0) ? (
+                <p className="muted">No read books with page counts are available for this period.</p>
+              ) : (
+                <div className="comparison-chart page-chart">
+                  {rows.map((item) => (
+                    <div className="comparison-chart-row" key={item.label}>
+                      <strong>{item.label}</strong>
+                      <div className="comparison-bars">
+                        <span
+                          className="pages-bar"
+                          style={{ width: `${item.pages / Math.max(1, ...rows.map((row) => row.pages)) * 100}%` }}
+                        >{item.pages ? Math.round(item.pages) : ""}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="statistics-section">
+              <div className="statistics-section-heading">
+                <div>
                   <h3>Collection comparison</h3>
                   <p>Current reading-status breakdown.</p>
                 </div>
@@ -1384,6 +1555,15 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ReadingRateCard({ label, value }: { label: string; value: number | null }) {
+  return (
+    <article className="reading-rate-card">
+      <strong>{value === null ? "—" : Math.round(value).toLocaleString()}</strong>
+      <span>{label}</span>
+    </article>
   );
 }
 
@@ -3091,7 +3271,15 @@ type MapColourMode =
   | "acquisition"
   | "finished"
   | "pending_duration"
-  | "reading_duration";
+  | "reading_duration"
+  | "reading_rate"
+  | "language"
+  | "current_ed_year"
+  | "original_publication_year"
+  | "genre"
+  | "fiction_category"
+  | "binding"
+  | "publication_type";
 
 interface MapColourScale {
   mode: MapColourMode;
@@ -3101,6 +3289,7 @@ interface MapColourScale {
   lowLabel?: string;
   highLabel?: string;
   legendItems: Array<{ label: string; colour: string }>;
+  continuous: boolean;
 }
 
 const MAP_COLOUR_OPTIONS: Array<{ value: MapColourMode; label: string }> = [
@@ -3109,6 +3298,14 @@ const MAP_COLOUR_OPTIONS: Array<{ value: MapColourMode; label: string }> = [
   { value: "finished", label: "Reading recency" },
   { value: "pending_duration", label: "Time spent pending" },
   { value: "reading_duration", label: "Reading duration" },
+  { value: "reading_rate", label: "Reading rate (pages/day)" },
+  { value: "language", label: "Language" },
+  { value: "current_ed_year", label: "Current edition year" },
+  { value: "original_publication_year", label: "Original publication year" },
+  { value: "genre", label: "Genre focus" },
+  { value: "fiction_category", label: "Fiction / non-fiction" },
+  { value: "binding", label: "Binding" },
+  { value: "publication_type", label: "Publication type" },
 ];
 
 const MISSING_MAP_COLOUR = "#e5dfd5";
@@ -3116,6 +3313,11 @@ const PENDING_MAP_COLOUR = "#d7ae6c";
 const READING_MAP_COLOUR = "#7699a7";
 const LIGHT_MAP_COLOUR = "#d7e8ec";
 const DARK_MAP_COLOUR = "#8b4035";
+const FOCUSED_GENRE_COLOUR = "#397f73";
+const CATEGORY_MAP_COLOURS = [
+  "#397f73", "#b46f4f", "#537c9a", "#b08a3f", "#7d668f",
+  "#698453", "#a55c6b", "#4f8688", "#8c704c", "#6f7796",
+];
 
 function statusBookColour(status: BookStatus) {
   if (status === "READ") return "#4f887b";
@@ -3144,7 +3346,28 @@ function metricForBook(book: MapBook, mode: MapColourMode) {
   if (mode === "reading_duration") {
     return durationInDays(book.reading_started_date, book.read_date);
   }
+  if (mode === "reading_rate") {
+    if (!book.page_count || !book.read_date) return null;
+    const duration = book.reading_started_date
+      ? durationInDays(book.reading_started_date, book.read_date)
+      : 1;
+    return duration ? book.page_count / duration : null;
+  }
+  if (mode === "current_ed_year") return book.current_ed_year;
+  if (mode === "original_publication_year") return book.original_publication_year;
   return null;
+}
+
+function categoricalMapValue(book: MapBook, mode: MapColourMode) {
+  if (mode === "language") return book.language;
+  if (mode === "fiction_category") return book.fiction_category;
+  if (mode === "binding") return book.binding;
+  if (mode === "publication_type") return book.publication_type;
+  return null;
+}
+
+function bookGenres(book: MapBook) {
+  return (book.genre_text ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 }
 
 function interpolateHex(start: string, end: string, amount: number) {
@@ -3198,6 +3421,26 @@ function specialMapCategory(book: MapBook, mode: MapColourMode) {
       return { label: "Read · no dates", colour: MISSING_MAP_COLOUR };
     }
   }
+  if (mode === "reading_rate") {
+    if (book.status === "PENDING") {
+      return { label: "Pending", colour: PENDING_MAP_COLOUR };
+    }
+    if (book.status === "CURRENTLY_READING") {
+      return { label: "Still reading", colour: READING_MAP_COLOUR };
+    }
+    if (!book.read_date) {
+      return { label: "Read · date unknown", colour: MISSING_MAP_COLOUR };
+    }
+    if (!book.page_count) {
+      return { label: "Read · pages unknown", colour: MISSING_MAP_COLOUR };
+    }
+  }
+  if (
+    (mode === "current_ed_year" || mode === "original_publication_year")
+    && metricForBook(book, mode) === null
+  ) {
+    return { label: "No year recorded", colour: MISSING_MAP_COLOUR };
+  }
   return null;
 }
 
@@ -3214,6 +3457,7 @@ function percentile(sortedValues: number[], fraction: number) {
 function buildMapColourScale(
   mode: MapColourMode,
   books: MapBook[],
+  selectedGenre = "",
 ): MapColourScale {
   const option = MAP_COLOUR_OPTIONS.find((item) => item.value === mode);
   if (mode === "status") {
@@ -3223,6 +3467,57 @@ function buildMapColourScale(
       colour: (book) => statusBookColour(book.status),
       detail: () => null,
       legendItems: [],
+      continuous: false,
+    };
+  }
+
+  if (mode === "genre") {
+    return {
+      mode,
+      label: option?.label ?? "Genre focus",
+      colour: (book) => selectedGenre && bookGenres(book).includes(selectedGenre)
+        ? FOCUSED_GENRE_COLOUR
+        : MISSING_MAP_COLOUR,
+      detail: (book) => selectedGenre && bookGenres(book).includes(selectedGenre)
+        ? selectedGenre
+        : "Not selected",
+      legendItems: selectedGenre
+        ? [
+            { label: selectedGenre, colour: FOCUSED_GENRE_COLOUR },
+            { label: "Other books", colour: MISSING_MAP_COLOUR },
+          ]
+        : [{ label: "Choose a genre", colour: MISSING_MAP_COLOUR }],
+      continuous: false,
+    };
+  }
+
+  if (["language", "fiction_category", "binding", "publication_type"].includes(mode)) {
+    const values = Array.from(new Set(
+      books.map((book) => categoricalMapValue(book, mode)).filter(
+        (value): value is string => Boolean(value),
+      ),
+    )).sort((first, second) => first.localeCompare(second));
+    const colours = new Map(values.map((value, index) => [
+      value,
+      CATEGORY_MAP_COLOURS[index % CATEGORY_MAP_COLOURS.length],
+    ]));
+    return {
+      mode,
+      label: option?.label ?? mode,
+      colour: (book) => colours.get(categoricalMapValue(book, mode) ?? "")
+        ?? MISSING_MAP_COLOUR,
+      detail: (book) => {
+        const value = categoricalMapValue(book, mode);
+        return value ? metadataLabel(value) : "Not recorded";
+      },
+      legendItems: [
+        ...values.map((value) => ({
+          label: metadataLabel(value),
+          colour: colours.get(value) ?? MISSING_MAP_COLOUR,
+        })),
+        { label: "Not recorded", colour: MISSING_MAP_COLOUR },
+      ],
+      continuous: false,
     };
   }
 
@@ -3245,17 +3540,26 @@ function buildMapColourScale(
   const actualMinimum = values[0] ?? 0;
   const actualMaximum = values.at(-1) ?? 0;
   const isDuration = mode === "pending_duration" || mode === "reading_duration";
+  const isReadingRate = mode === "reading_rate";
+  const isPublicationYear = mode === "current_ed_year"
+    || mode === "original_publication_year";
   const describe = (value: number) =>
     isDuration
       ? `${value} day${value === 1 ? "" : "s"}`
-      : formatDate(dayAsDate(value));
+      : isReadingRate
+        ? `${Math.round(value * 10) / 10} pages/day`
+      : isPublicationYear
+        ? String(value)
+        : formatDate(dayAsDate(value));
   const endpointLabel = (isMinimum: boolean) => {
     if (scoredBooks.length === 0) return "No dated books";
     const value = isMinimum ? actualMinimum : actualMaximum;
     const winners = scoredBooks.filter((item) => item.value === value);
     const qualifier = isDuration
       ? isMinimum ? "Shortest" : "Longest"
-      : isMinimum ? "Oldest" : "Newest";
+      : isReadingRate
+        ? isMinimum ? "Slowest" : "Fastest"
+        : isMinimum ? "Oldest" : "Newest";
     if (winners.length !== 1) {
       return `${qualifier}: tie (${winners.length}) · ${describe(value)}`;
     }
@@ -3292,6 +3596,7 @@ function buildMapColourScale(
     lowLabel: endpointLabel(true),
     highLabel: endpointLabel(false),
     legendItems,
+    continuous: true,
   };
 }
 
@@ -4012,6 +4317,7 @@ function LibraryMapDialog({
   const [selectedContainer, setSelectedContainer] = useState("");
   const [saving, setSaving] = useState(false);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
+  const [selectedMapGenre, setSelectedMapGenre] = useState("");
   const [rearranging, setRearranging] = useState(false);
   const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
   const [oldPositionMode, setOldPositionMode] =
@@ -4166,6 +4472,12 @@ function LibraryMapDialog({
       } : book;
     });
   }, [allMapBooks, rearrangementPreview]);
+  const mapGenres = useMemo(
+    () => Array.from(new Set(projectedBooks.flatMap(bookGenres))).sort(
+      (first, second) => first.localeCompare(second),
+    ),
+    [projectedBooks],
+  );
   const displayMap = useMemo<LibraryMapData>(() => ({
     ...map,
     bookcases: map.bookcases.map((bookcase) => ({
@@ -4229,8 +4541,8 @@ function LibraryMapDialog({
     ? `${selectedOriginalContainer.label} · Position ${selectedOriginalMoveBook.position}`
     : "No retained physical position";
   const colourScale = useMemo(
-    () => buildMapColourScale(colourMode, projectedBooks),
-    [projectedBooks, colourMode],
+    () => buildMapColourScale(colourMode, projectedBooks, selectedMapGenre),
+    [projectedBooks, colourMode, selectedMapGenre],
   );
 
   function updateBookcaseRect(field: keyof VisualRect, value: number) {
@@ -4707,17 +5019,39 @@ function LibraryMapDialog({
               ))}
             </select>
           </label>
+          {colourMode === "genre" && (
+            <label className="map-colour-picker map-genre-picker">
+              Genre
+              <select
+                value={selectedMapGenre}
+                onChange={(event) => setSelectedMapGenre(event.target.value)}
+              >
+                <option value="">Choose a genre…</option>
+                {mapGenres.map((genre) => (
+                  <option key={genre} value={genre}>{genre}</option>
+                ))}
+              </select>
+            </label>
+          )}
           {colourMode === "status" ? (
             <div className="map-status-legend">
               <span><i className="pending" /> Pending</span>
               <span><i className="reading" /> Reading…</span>
               <span><i className="read" /> Read</span>
             </div>
-          ) : (
+          ) : colourScale.continuous ? (
             <div className="map-scale-legend" aria-label={`${colourScale.label} scale`}>
               <span>{colourScale.lowLabel}</span>
               <i className="map-colour-gradient" />
               <span>{colourScale.highLabel}</span>
+              {colourScale.legendItems.map((item) => (
+                <span key={item.label}>
+                  <i style={{ background: item.colour }} /> {item.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="map-status-legend" aria-label={`${colourScale.label} legend`}>
               {colourScale.legendItems.map((item) => (
                 <span key={item.label}>
                   <i style={{ background: item.colour }} /> {item.label}

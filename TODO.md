@@ -320,16 +320,30 @@ protects the completed catalogue.
 
 ### Features enabled by additional metadata
 
-- [ ] Add visual-map colouring modes for:
+- [x] Add visual-map colouring modes for:
   - Language.
   - Fiction/non-fiction.
-  - Publication year.
-  - Personal rating.
-  - Other catalogue fields where a visual comparison is useful.
-- [ ] Give every colouring mode a clear legend.
-- [ ] Filter searches and reading suggestions by genre, page count, language,
-  fiction/non-fiction, tags, or rating.
-- [ ] Show pages read by month and year.
+  - Current-edition and original-publication years.
+  - Binding and publication type.
+  - A selected-genre focus that fades books outside that genre.
+  - Per-book reading rate in pages per inclusive reading day.
+- [ ] Add personal-rating colouring after ratings exist.
+- [x] Give every implemented colouring mode a clear legend.
+- [x] Keep the simple catalogue search limited to title, author, and series.
+- [x] Add combinable advanced catalogue filters for exact ISBN and existing
+  metadata values, with OR inside one category and AND across categories.
+- [x] Add inclusive minimum/maximum filters for page count and either current-
+  edition or original-publication year.
+- [x] Filter read-only statistics with the same metadata rules, allowing views
+  such as Galician-language books read in a selected year.
+- [ ] Extend metadata filtering to reading suggestions.
+- [ ] Add later near-match suggestions and a deliberate normalization strategy
+  for free-text language and genre values, especially before a multilingual UI.
+- [x] Estimate pages read by month and year by distributing pages over each
+  reading interval; use the finish day when the start date is unknown.
+- [x] Show estimated pages per week and month with sample and exclusion counts.
+- [x] Show average, median, and individual per-book reading rates, respecting
+  the selected year and metadata filters and marking one-day estimates.
 - [ ] Find books with incomplete optional metadata.
 
 ### Reading sessions and re-reading

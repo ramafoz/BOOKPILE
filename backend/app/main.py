@@ -41,6 +41,7 @@ from .rearrangement import (
 )
 from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
 from .schemas import (
+    Binding,
     Book,
     BookCreate,
     BookMove,
@@ -52,7 +53,9 @@ from .schemas import (
     CatalogueMatchRequest,
     ContainerCreate,
     ContainerUpdate,
+    FictionCategory,
     ISBNLookupResult,
+    PublicationType,
     RearrangementApplyRequest,
     RearrangementRequest,
     RearrangementResult,
@@ -126,6 +129,102 @@ def fetch_book(book_id: int) -> dict[str, Any]:
     if row is None:
         raise HTTPException(status_code=404, detail="Book not found")
     return serialize_book(row)
+
+
+def metadata_filter_conditions(
+    where: list[str],
+    params: list[Any],
+    *,
+    isbn: str | None = None,
+    languages: list[str] | None = None,
+    genres: list[str] | None = None,
+    publishers: list[str] | None = None,
+    fiction_categories: list[FictionCategory] | None = None,
+    bindings: list[Binding] | None = None,
+    publication_types: list[PublicationType] | None = None,
+    series_names: list[str] | None = None,
+    series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    page_min: int | None = None,
+    page_max: int | None = None,
+    publication_year_field: Literal[
+        "current_ed_year", "original_publication_year"
+    ] = "current_ed_year",
+    publication_year_min: int | None = None,
+    publication_year_max: int | None = None,
+) -> None:
+    if page_min is not None and page_max is not None and page_min > page_max:
+        raise HTTPException(
+            status_code=422,
+            detail="Minimum pages must be less than or equal to maximum pages",
+        )
+    if (
+        publication_year_min is not None
+        and publication_year_max is not None
+        and publication_year_min > publication_year_max
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Minimum year must be less than or equal to maximum year",
+        )
+
+    if isbn and isbn.strip():
+        try:
+            normalized_isbn = normalize_isbn(isbn)
+        except InvalidISBN as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        where.append("(b.isbn_10 = ? OR b.isbn_13 = ?)")
+        params.extend((normalized_isbn, normalized_isbn))
+
+    def add_exact_values(column: str, values: list[Any] | None) -> None:
+        cleaned = [
+            value.value if hasattr(value, "value") else str(value).strip()
+            for value in (values or [])
+            if str(value.value if hasattr(value, "value") else value).strip()
+        ]
+        if not cleaned:
+            return
+        placeholders = ", ".join("?" for _ in cleaned)
+        where.append(f"{column} IN ({placeholders})")
+        params.extend(cleaned)
+
+    add_exact_values("b.language", languages)
+    add_exact_values("b.publisher", publishers)
+    add_exact_values("b.fiction_category", fiction_categories)
+    add_exact_values("b.binding", bindings)
+    add_exact_values("b.publication_type", publication_types)
+    add_exact_values("b.series_name", series_names)
+
+    cleaned_genres = [value.strip() for value in (genres or []) if value.strip()]
+    if cleaned_genres:
+        normalized_genres = (
+            "',' || lower(replace(replace(replace("
+            "b.genre_text, ' ', ''), char(9), ''), char(10), '')) || ','"
+        )
+        where.append(
+            "(" + " OR ".join(
+                f"instr({normalized_genres}, ?) > 0" for _ in cleaned_genres
+            ) + ")"
+        )
+        params.extend(
+            f",{''.join(value.split()).lower()}," for value in cleaned_genres
+        )
+
+    if series_state == "YES":
+        where.append("(b.series_name IS NOT NULL AND trim(b.series_name) <> '')")
+    elif series_state == "NO":
+        where.append("(b.series_name IS NULL OR trim(b.series_name) = '')")
+    if page_min is not None:
+        where.append("b.page_count >= ?")
+        params.append(page_min)
+    if page_max is not None:
+        where.append("b.page_count <= ?")
+        params.append(page_max)
+    if publication_year_min is not None:
+        where.append(f"b.{publication_year_field} >= ?")
+        params.append(publication_year_min)
+    if publication_year_max is not None:
+        where.append(f"b.{publication_year_field} <= ?")
+        params.append(publication_year_max)
 
 
 def location_values(payload: BookCreate | BookUpdate) -> tuple[int | None, int | None]:
@@ -429,6 +528,53 @@ def stats() -> dict[str, int]:
     }
 
 
+@app.get("/metadata-options")
+def metadata_options() -> dict[str, list[str]]:
+    fields = {
+        "languages": "language",
+        "publishers": "publisher",
+        "series_names": "series_name",
+        "fiction_categories": "fiction_category",
+        "bindings": "binding",
+        "publication_types": "publication_type",
+    }
+    with connect() as connection:
+        options = {
+            key: [
+                row[0]
+                for row in connection.execute(
+                    f"""
+                    SELECT DISTINCT {column}
+                    FROM books
+                    WHERE {column} IS NOT NULL AND trim({column}) <> ''
+                    ORDER BY {column} COLLATE NOCASE
+                    """
+                ).fetchall()
+            ]
+            for key, column in fields.items()
+        }
+        genre_values = [
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT genre_text
+                FROM books
+                WHERE genre_text IS NOT NULL AND trim(genre_text) <> ''
+                """
+            ).fetchall()
+        ]
+    genres = sorted(
+        {
+            genre.strip()
+            for value in genre_values
+            for genre in value.split(",")
+            if genre.strip()
+        },
+        key=str.casefold,
+    )
+    return {**options, "genres": genres}
+
+
 @app.get("/books", response_model=list[Book])
 def list_books(
     book_id: int | None = None,
@@ -468,6 +614,22 @@ def list_books(
         "no_cover",
     ]
     | None = None,
+    isbn: str | None = Query(default=None, max_length=40),
+    language: list[str] = Query(default=[]),
+    genre: list[str] = Query(default=[]),
+    publisher: list[str] = Query(default=[]),
+    fiction_category: list[FictionCategory] = Query(default=[]),
+    binding: list[Binding] = Query(default=[]),
+    publication_type: list[PublicationType] = Query(default=[]),
+    series_name: list[str] = Query(default=[]),
+    series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    page_min: int | None = Query(default=None, ge=1),
+    page_max: int | None = Query(default=None, ge=1),
+    publication_year_field: Literal[
+        "current_ed_year", "original_publication_year"
+    ] = "current_ed_year",
+    publication_year_min: int | None = Query(default=None, ge=1000, le=9999),
+    publication_year_max: int | None = Query(default=None, ge=1000, le=9999),
 ) -> list[dict[str, Any]]:
     where: list[str] = []
     params: list[Any] = []
@@ -483,11 +645,7 @@ def list_books(
         where.append("b.status = ?")
         params.append(book_status.value)
     if search and search.strip():
-        searchable_columns = (
-            "b.title", "b.author", "b.subtitle", "b.publisher", "b.language",
-            "b.genre_text", "b.series_name", "b.series_volume",
-            "b.isbn_10", "b.isbn_13",
-        )
+        searchable_columns = ("b.title", "b.author", "b.series_name")
         where.append(
             "(" + " OR ".join(f"{column} LIKE ?" for column in searchable_columns) + ")"
         )
@@ -530,6 +688,24 @@ def list_books(
         where.append("b.container_id IS NULL")
     elif catalogue_check == "no_cover":
         where.append("(b.cover_filename IS NULL OR b.cover_filename = '')")
+    metadata_filter_conditions(
+        where,
+        params,
+        isbn=isbn,
+        languages=language,
+        genres=genre,
+        publishers=publisher,
+        fiction_categories=fiction_category,
+        bindings=binding,
+        publication_types=publication_type,
+        series_names=series_name,
+        series_state=series_state,
+        page_min=page_min,
+        page_max=page_max,
+        publication_year_field=publication_year_field,
+        publication_year_min=publication_year_min,
+        publication_year_max=publication_year_max,
+    )
     date_conditions: list[str] = []
     if date_from is not None:
         date_conditions.append(f"b.{date_field} >= ?")
@@ -1244,6 +1420,13 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
 
 @app.get("/library-map")
 def library_map() -> dict[str, Any]:
+    map_book_fields = """
+        id, title, author, isbn_10, isbn_13, subtitle, page_count,
+        publisher, current_ed_year, original_publication_year, language,
+        edition_number, fiction_category, binding, publication_type,
+        genre_text, series_name, series_volume, status, container_id,
+        position, acquisition_date, reading_started_date, read_date
+    """
     with connect() as connection:
         bookcases = [
             dict(row)
@@ -1275,27 +1458,23 @@ def library_map() -> dict[str, Any]:
             dict(row)
             for row in connection.execute(
                 """
-                SELECT
-                    id, title, author, status, container_id, position,
-                    acquisition_date, reading_started_date, read_date
+                SELECT {map_book_fields}
                 FROM books
                 WHERE container_id IS NOT NULL
                   AND status != 'CURRENTLY_READING'
                 ORDER BY container_id, position
-                """
+                """.format(map_book_fields=map_book_fields)
             )
         ]
         outside_books = [
             dict(row)
             for row in connection.execute(
                 """
-                SELECT
-                    id, title, author, status, container_id, position,
-                    acquisition_date, reading_started_date, read_date
+                SELECT {map_book_fields}
                 FROM books
                 WHERE status = 'CURRENTLY_READING'
                 ORDER BY title COLLATE NOCASE
-                """
+                """.format(map_book_fields=map_book_fields)
             )
         ]
         ensure_visual_layout(connection, bookcases, shelves, containers)
@@ -1505,17 +1684,53 @@ def interval_summary(
 @app.get("/statistics")
 def catalogue_statistics(
     year: int | None = Query(default=None, ge=1000, le=9999),
+    isbn: str | None = Query(default=None, max_length=40),
+    language: list[str] = Query(default=[]),
+    genre: list[str] = Query(default=[]),
+    publisher: list[str] = Query(default=[]),
+    fiction_category: list[FictionCategory] = Query(default=[]),
+    binding: list[Binding] = Query(default=[]),
+    publication_type: list[PublicationType] = Query(default=[]),
+    series_name: list[str] = Query(default=[]),
+    series_state: Literal["ANY", "YES", "NO"] = "ANY",
+    page_min: int | None = Query(default=None, ge=1),
+    page_max: int | None = Query(default=None, ge=1),
+    publication_year_field: Literal[
+        "current_ed_year", "original_publication_year"
+    ] = "current_ed_year",
+    publication_year_min: int | None = Query(default=None, ge=1000, le=9999),
+    publication_year_max: int | None = Query(default=None, ge=1000, le=9999),
 ) -> dict[str, Any]:
+    where: list[str] = []
+    params: list[Any] = []
+    metadata_filter_conditions(
+        where,
+        params,
+        isbn=isbn,
+        languages=language,
+        genres=genre,
+        publishers=publisher,
+        fiction_categories=fiction_category,
+        bindings=binding,
+        publication_types=publication_type,
+        series_names=series_name,
+        series_state=series_state,
+        page_min=page_min,
+        page_max=page_max,
+        publication_year_field=publication_year_field,
+        publication_year_min=publication_year_min,
+        publication_year_max=publication_year_max,
+    )
+    query = """
+        SELECT b.id, b.title, b.author, b.status, b.acquisition_date,
+               b.reading_started_date, b.read_date, b.is_original_collection,
+               b.page_count
+        FROM books b
+    """
+    if where:
+        query += " WHERE " + " AND ".join(where)
     with connect() as connection:
-        rows = list(
-            connection.execute(
-                """
-                SELECT status, acquisition_date, reading_started_date,
-                       read_date, is_original_collection
-                FROM books
-                """
-            ).fetchall()
-        )
+        rows = list(connection.execute(query, params).fetchall())
 
     acquired_by_year: dict[int, int] = {}
     read_by_year: dict[int, int] = {}
@@ -1533,12 +1748,60 @@ def catalogue_statistics(
             if year == finished.year:
                 read_by_month[finished.month - 1] += 1
 
-    years = sorted({*acquired_by_year, *read_by_year})
+    read_rows = [row for row in rows if row["status"] == BookStatus.read.value]
+    pages_by_day: dict[date, float] = {}
+    page_sample_size = 0
+    single_day_estimates = 0
+    per_book_reading_rates: list[dict[str, Any]] = []
+    for row in read_rows:
+        finished = parsed_date(row["read_date"])
+        page_count = row["page_count"]
+        if finished is None or page_count is None:
+            continue
+        started = parsed_date(row["reading_started_date"])
+        if started is None:
+            started = finished
+            single_day_estimates += 1
+            estimated_start = True
+        else:
+            estimated_start = False
+        if started > finished:
+            started = finished
+        duration = (finished - started).days + 1
+        pages_per_day = page_count / duration
+        current = started
+        while current <= finished:
+            pages_by_day[current] = pages_by_day.get(current, 0) + pages_per_day
+            current += timedelta(days=1)
+        page_sample_size += 1
+        if year is None or finished.year == year:
+            per_book_reading_rates.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "author": row["author"],
+                    "page_count": page_count,
+                    "reading_days": duration,
+                    "pages_per_day": round(page_count / duration, 1),
+                    "read_date": finished.isoformat(),
+                    "estimated_start": estimated_start,
+                }
+            )
+
+    pages_by_year: dict[int, float] = {}
+    pages_by_month = [0.0] * 12
+    for reading_day, pages in pages_by_day.items():
+        pages_by_year[reading_day.year] = pages_by_year.get(reading_day.year, 0) + pages
+        if year == reading_day.year:
+            pages_by_month[reading_day.month - 1] += pages
+
+    years = sorted({*acquired_by_year, *read_by_year, *pages_by_year})
     yearly = [
         {
             "year": item,
             "acquired": acquired_by_year.get(item, 0),
             "read": read_by_year.get(item, 0),
+            "pages_read": round(pages_by_year.get(item, 0), 1),
         }
         for item in years
     ]
@@ -1547,6 +1810,7 @@ def catalogue_statistics(
             "month": month,
             "acquired": acquired_by_month[month - 1],
             "read": read_by_month[month - 1],
+            "pages_read": round(pages_by_month[month - 1], 1),
         }
         for month in range(1, 13)
     ]
@@ -1559,7 +1823,48 @@ def catalogue_statistics(
             BookStatus.read.value,
         }
     ]
-    read_rows = [row for row in rows if row["status"] == BookStatus.read.value]
+    if year is not None:
+        period_start = date(year, 1, 1)
+        period_end = date(year, 12, 31)
+        if year == date.today().year:
+            period_end = min(period_end, date.today())
+    elif pages_by_day:
+        period_start = min(pages_by_day)
+        period_end = max(pages_by_day)
+    else:
+        period_start = None
+        period_end = None
+    period_pages = (
+        sum(
+            pages
+            for reading_day, pages in pages_by_day.items()
+            if period_start is not None
+            and period_end is not None
+            and period_start <= reading_day <= period_end
+        )
+        if period_start is not None and period_end is not None
+        else 0
+    )
+    period_days = (
+        (period_end - period_start).days + 1
+        if period_start is not None and period_end is not None
+        else 0
+    )
+    per_book_reading_rates.sort(
+        key=lambda item: (-item["pages_per_day"], item["title"].casefold())
+    )
+    individual_rates = [
+        item["pages_per_day"] for item in per_book_reading_rates
+    ]
+    rate_period_rows = [
+        row
+        for row in read_rows
+        if year is None
+        or (
+            parsed_date(row["read_date"]) is not None
+            and parsed_date(row["read_date"]).year == year
+        )
+    ]
 
     def group_summary(original: bool) -> dict[str, int]:
         group = [row for row in rows if bool(row["is_original_collection"]) is original]
@@ -1577,6 +1882,37 @@ def catalogue_statistics(
         "available_years": years,
         "yearly": yearly,
         "monthly": monthly,
+        "reading_rate": {
+            "total_pages": round(period_pages, 1),
+            "pages_per_week": (
+                round(period_pages / period_days * 7, 1) if period_days else None
+            ),
+            "pages_per_month": (
+                round(period_pages / period_days * (365.2425 / 12), 1)
+                if period_days
+                else None
+            ),
+            "sample_size": page_sample_size,
+            "excluded": len(read_rows) - page_sample_size,
+            "single_day_estimates": single_day_estimates,
+            "average_per_book": (
+                round(statistics_module.mean(individual_rates), 1)
+                if individual_rates
+                else None
+            ),
+            "median_per_book": (
+                round(float(statistics_module.median(individual_rates)), 1)
+                if individual_rates
+                else None
+            ),
+            "per_book": per_book_reading_rates,
+            "per_book_sample_size": len(per_book_reading_rates),
+            "per_book_excluded": len(rate_period_rows) - len(per_book_reading_rates),
+            "per_book_estimates": sum(
+                item["estimated_start"] for item in per_book_reading_rates
+            ),
+        },
+        "filtered_book_count": len(rows),
         "pending_duration": interval_summary(
             started_rows, "acquisition_date", "reading_started_date"
         ),

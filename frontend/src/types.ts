@@ -161,11 +161,62 @@ export interface CollectionStatistic {
   read: number;
 }
 
+export interface MetadataOptions {
+  languages: string[];
+  genres: string[];
+  publishers: string[];
+  series_names: string[];
+  fiction_categories: FictionCategory[];
+  bindings: Binding[];
+  publication_types: PublicationType[];
+}
+
+export interface MetadataFilters {
+  isbn: string;
+  languages: string[];
+  genres: string[];
+  publishers: string[];
+  fictionCategories: FictionCategory[];
+  bindings: Binding[];
+  publicationTypes: PublicationType[];
+  seriesNames: string[];
+  seriesState: "ANY" | "YES" | "NO";
+  pageMin: string;
+  pageMax: string;
+  publicationYearField: "current_ed_year" | "original_publication_year";
+  publicationYearMin: string;
+  publicationYearMax: string;
+}
+
 export interface CatalogueStatistics {
   selected_year: number | null;
   available_years: number[];
-  yearly: Array<{ year: number; acquired: number; read: number }>;
-  monthly: Array<{ month: number; acquired: number; read: number }>;
+  filtered_book_count: number;
+  yearly: Array<{ year: number; acquired: number; read: number; pages_read: number }>;
+  monthly: Array<{ month: number; acquired: number; read: number; pages_read: number }>;
+  reading_rate: {
+    total_pages: number;
+    pages_per_week: number | null;
+    pages_per_month: number | null;
+    sample_size: number;
+    excluded: number;
+    single_day_estimates: number;
+    average_per_book: number | null;
+    median_per_book: number | null;
+    per_book_sample_size: number;
+    per_book_excluded: number;
+    per_book_estimates: number;
+    per_book: Array<{
+      id: number;
+      title: string;
+      author: string;
+      page_count: number;
+      reading_days: number;
+      pages_per_day: number;
+      read_date: string;
+      estimated_start: boolean;
+    }>;
+  };
   pending_duration: DurationStatistic;
   reading_duration: DurationStatistic;
   original_collection: CollectionStatistic;

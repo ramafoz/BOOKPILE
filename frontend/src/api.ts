@@ -14,6 +14,8 @@ import type {
   ISBNLookupResult,
   CatalogueMatch,
   VisualLayout,
+  MetadataFilters,
+  MetadataOptions,
 } from "./types";
 
 export interface RestoreInspection {
@@ -47,9 +49,36 @@ export interface BookQuery {
   includeUnknownSortDates: boolean;
   quickView: string;
   catalogueCheck: string;
+  metadata: MetadataFilters;
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? "/api";
+
+function appendMetadataFilters(params: URLSearchParams, filters: MetadataFilters) {
+  const isbn = filters.isbn.replace(/[^0-9Xx]/g, "");
+  if (isbn.length === 10 || isbn.length === 13) params.set("isbn", isbn);
+  filters.languages.forEach((value) => params.append("language", value));
+  filters.genres.forEach((value) => params.append("genre", value));
+  filters.publishers.forEach((value) => params.append("publisher", value));
+  filters.fictionCategories.forEach((value) => params.append("fiction_category", value));
+  filters.bindings.forEach((value) => params.append("binding", value));
+  filters.publicationTypes.forEach((value) => params.append("publication_type", value));
+  filters.seriesNames.forEach((value) => params.append("series_name", value));
+  if (filters.seriesState !== "ANY") params.set("series_state", filters.seriesState);
+  if (filters.pageMin) params.set("page_min", filters.pageMin);
+  if (filters.pageMax) params.set("page_max", filters.pageMax);
+  const validYearMin = /^\d{4}$/.test(filters.publicationYearMin);
+  const validYearMax = /^\d{4}$/.test(filters.publicationYearMax);
+  if (validYearMin || validYearMax) {
+    params.set("publication_year_field", filters.publicationYearField);
+    if (validYearMin) {
+      params.set("publication_year_min", filters.publicationYearMin);
+    }
+    if (validYearMax) {
+      params.set("publication_year_max", filters.publicationYearMax);
+    }
+  }
+}
 
 export class ApiError extends Error {
   code?: string;
@@ -113,13 +142,17 @@ export const api = {
     }
     if (query.quickView) params.set("quick_view", query.quickView);
     if (query.catalogueCheck) params.set("catalogue_check", query.catalogueCheck);
+    appendMetadataFilters(params, query.metadata);
     return request<Book[]>(`/books?${params}`);
   },
   stats: () => request<Stats>("/stats"),
-  statistics: (year: number | null) =>
-    request<CatalogueStatistics>(
-      `/statistics${year === null ? "" : `?year=${year}`}`,
-    ),
+  metadataOptions: () => request<MetadataOptions>("/metadata-options"),
+  statistics: (year: number | null, metadata: MetadataFilters) => {
+    const params = new URLSearchParams();
+    if (year !== null) params.set("year", String(year));
+    appendMetadataFilters(params, metadata);
+    return request<CatalogueStatistics>(`/statistics?${params}`);
+  },
   readingSuggestion: (
     mode: "random" | "oldest" | "waiting",
     minimumDays: number,

@@ -169,7 +169,11 @@ def test_book_isbns_are_normalized_editable_searchable_and_not_unique() -> None:
         )
         assert duplicate.status_code == 201
 
-        found = client.get("/books", params={"search": "9780306406157"})
+        simple_search = client.get("/books", params={"search": "9780306406157"})
+        assert simple_search.status_code == 200
+        assert simple_search.json() == []
+
+        found = client.get("/books", params={"isbn": "9780306406157"})
         assert found.status_code == 200
         assert {book["id"] for book in found.json()} == {
             first.json()["id"],
@@ -183,6 +187,94 @@ def test_book_isbns_are_normalized_editable_searchable_and_not_unique() -> None:
         assert cleared.status_code == 200
         assert cleared.json()["isbn_10"] is None
         assert cleared.json()["isbn_13"] is None
+
+
+def test_advanced_metadata_filters_combine_and_offer_existing_values() -> None:
+    with TestClient(app) as client:
+        books = [
+            {
+                "title": "Galician mystery",
+                "author": "First Author",
+                "isbn_13": "9780306406157",
+                "language": "Galician",
+                "publisher": "North Press",
+                "page_count": 250,
+                "current_ed_year": 2020,
+                "original_publication_year": 2001,
+                "fiction_category": "FICTION",
+                "binding": "PAPERBACK",
+                "publication_type": "CONVENTIONAL_BOOK",
+                "genre_text": "Crime, Mystery, Noir",
+                "series_name": "Coastal cases",
+            },
+            {
+                "title": "Galician reference",
+                "author": "Second Author",
+                "language": "Galician",
+                "publisher": "North Press",
+                "page_count": 420,
+                "current_ed_year": 2024,
+                "original_publication_year": 1980,
+                "fiction_category": "NON_FICTION",
+                "binding": "HARDCOVER",
+                "publication_type": "REFERENCE",
+                "genre_text": "History, Reference",
+            },
+            {
+                "title": "Spanish mystery",
+                "author": "Third Author",
+                "language": "Spanish",
+                "publisher": "South Press",
+                "page_count": 190,
+                "current_ed_year": 2019,
+                "fiction_category": "FICTION",
+                "binding": "PAPERBACK",
+                "publication_type": "CONVENTIONAL_BOOK",
+                "genre_text": "Mystery",
+            },
+        ]
+        for book in books:
+            assert client.post("/books", json=book).status_code == 201
+
+        def titles(params: list[tuple[str, str]]) -> set[str]:
+            response = client.get("/books", params=params)
+            assert response.status_code == 200
+            return {book["title"] for book in response.json()}
+
+        assert titles([
+            ("language", "Galician"),
+            ("binding", "PAPERBACK"),
+            ("page_max", "300"),
+        ]) == {"Galician mystery"}
+        assert titles([
+            ("language", "Galician"),
+            ("language", "Spanish"),
+            ("genre", "Mystery"),
+        ]) == {"Galician mystery", "Spanish mystery"}
+        assert titles([
+            ("series_state", "YES"),
+            ("series_name", "Coastal cases"),
+        ]) == {"Galician mystery"}
+        assert titles([
+            ("publication_year_field", "original_publication_year"),
+            ("publication_year_min", "1990"),
+            ("publication_year_max", "2010"),
+        ]) == {"Galician mystery"}
+        assert titles([("isbn", "978-0-306-40615-7")]) == {"Galician mystery"}
+        assert titles([("search", "Coastal cases")]) == {"Galician mystery"}
+        assert titles([("search", "North Press")]) == set()
+
+        options = client.get("/metadata-options")
+        assert options.status_code == 200
+        assert options.json()["languages"] == ["Galician", "Spanish"]
+        assert options.json()["genres"] == [
+            "Crime", "History", "Mystery", "Noir", "Reference"
+        ]
+
+        invalid_range = client.get(
+            "/books", params={"page_min": 400, "page_max": 200}
+        )
+        assert invalid_range.status_code == 422
 
 
 def test_book_isbn_fields_reject_invalid_or_wrong_length_values() -> None:
@@ -880,11 +972,13 @@ def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
             "month": 1,
             "acquired": 0,
             "read": 2,
+            "pages_read": 0.0,
         }
         assert result["monthly"][1] == {
             "month": 2,
             "acquired": 1,
             "read": 0,
+            "pages_read": 0.0,
         }
         assert result["pending_duration"] == {
             "average_days": 22.0,
@@ -917,6 +1011,95 @@ def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
             item["acquired"] == 0 and item["read"] == 0
             for item in empty_period["monthly"]
         )
+
+
+def test_statistics_filter_metadata_and_distribute_pages_over_reading_days() -> None:
+    with TestClient(app) as client:
+        books = [
+            {
+                "title": "Five day Galician book",
+                "author": "Author",
+                "status": "READ",
+                "language": "Galician",
+                "binding": "PAPERBACK",
+                "page_count": 500,
+                "reading_started_date": "2024-01-10",
+                "read_date": "2024-01-14",
+            },
+            {
+                "title": "One day Galician book",
+                "author": "Author",
+                "status": "READ",
+                "language": "Galician",
+                "binding": "HARDCOVER",
+                "page_count": 120,
+                "read_date": "2024-02-02",
+            },
+            {
+                "title": "Spanish book",
+                "author": "Author",
+                "status": "READ",
+                "language": "Spanish",
+                "binding": "PAPERBACK",
+                "page_count": 300,
+                "reading_started_date": "2024-03-01",
+                "read_date": "2024-03-03",
+            },
+            {
+                "title": "Missing pages",
+                "author": "Author",
+                "status": "READ",
+                "language": "Galician",
+                "binding": "PAPERBACK",
+                "read_date": "2024-04-01",
+            },
+        ]
+        for book in books:
+            assert client.post("/books", json=book).status_code == 201
+
+        response = client.get(
+            "/statistics",
+            params=[
+                ("year", "2024"),
+                ("language", "Galician"),
+                ("binding", "PAPERBACK"),
+            ],
+        )
+        assert response.status_code == 200
+        result = response.json()
+        assert result["filtered_book_count"] == 2
+        assert sum(item["read"] for item in result["monthly"]) == 2
+        assert result["monthly"][0]["pages_read"] == 500.0
+        assert result["reading_rate"]["total_pages"] == 500.0
+        assert result["reading_rate"]["sample_size"] == 1
+        assert result["reading_rate"]["excluded"] == 1
+        assert result["reading_rate"]["single_day_estimates"] == 0
+        assert result["reading_rate"]["average_per_book"] == 100.0
+        assert result["reading_rate"]["median_per_book"] == 100.0
+        assert result["reading_rate"]["per_book_sample_size"] == 1
+        assert result["reading_rate"]["per_book_excluded"] == 1
+        assert result["reading_rate"]["per_book"] == [
+            {
+                "id": result["reading_rate"]["per_book"][0]["id"],
+                "title": "Five day Galician book",
+                "author": "Author",
+                "page_count": 500,
+                "reading_days": 5,
+                "pages_per_day": 100.0,
+                "read_date": "2024-01-14",
+                "estimated_start": False,
+            }
+        ]
+
+        galician = client.get(
+            "/statistics", params=[("year", "2024"), ("language", "Galician")]
+        ).json()
+        assert galician["filtered_book_count"] == 3
+        assert galician["reading_rate"]["total_pages"] == 620.0
+        assert galician["reading_rate"]["single_day_estimates"] == 1
+        assert galician["reading_rate"]["average_per_book"] == 110.0
+        assert galician["reading_rate"]["median_per_book"] == 110.0
+        assert galician["reading_rate"]["per_book_estimates"] == 1
 
 
 def test_reading_suggestions_support_modes_thresholds_and_exclusions() -> None:
@@ -2607,6 +2790,14 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
                 "author": "Author",
                 "status": "PENDING",
                 "acquisition_date": "2024-01-10",
+                "page_count": 240,
+                "language": "Galician",
+                "current_ed_year": 2024,
+                "original_publication_year": 1998,
+                "fiction_category": "FICTION",
+                "binding": "PAPERBACK",
+                "publication_type": "CONVENTIONAL_BOOK",
+                "genre_text": "Crime, Mystery",
                 "container_id": background["id"],
                 "position": 2,
             },
@@ -2656,25 +2847,30 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             mapped_shelf["containers"][0]["books"][0]["acquisition_date"]
             == "2024-01-10"
         )
+        mapped_book = mapped_shelf["containers"][0]["books"][0]
+        assert mapped_book["page_count"] == 240
+        assert mapped_book["language"] == "Galician"
+        assert mapped_book["current_ed_year"] == 2024
+        assert mapped_book["original_publication_year"] == 1998
+        assert mapped_book["fiction_category"] == "FICTION"
+        assert mapped_book["binding"] == "PAPERBACK"
+        assert mapped_book["publication_type"] == "CONVENTIONAL_BOOK"
+        assert mapped_book["genre_text"] == "Crime, Mystery"
         assert mapped_shelf["containers"][0]["status_counts"] == {
             "pending": 1,
             "reading": 0,
             "read": 0,
         }
         assert mapped_shelf["containers"][1]["status_counts"]["read"] == 1
-        assert payload["outside_books"] == [
-            {
-                "id": reading["id"],
-                "title": "Reading away from shelf",
-                "author": "Author",
-                "status": "CURRENTLY_READING",
-                "container_id": background["id"],
-                "position": 3,
-                "acquisition_date": "2025-05-01",
-                "reading_started_date": "2025-05-04",
-                "read_date": None,
-            }
-        ]
+        assert len(payload["outside_books"]) == 1
+        outside = payload["outside_books"][0]
+        assert outside["id"] == reading["id"]
+        assert outside["title"] == "Reading away from shelf"
+        assert outside["status"] == "CURRENTLY_READING"
+        assert outside["container_id"] == background["id"]
+        assert outside["position"] == 3
+        assert outside["language"] is None
+        assert outside["genre_text"] is None
         assert len(payload["layout"]["bookcases"]) == 1
         assert payload["layout"]["bookcases"][0]["id"] == mapped["id"]
         assert payload["layout"]["shelves"] == [

@@ -12,6 +12,8 @@ The catalogue, covers, and physical layout remain under the user's control.
 ### Catalogue and reading history
 
 - Create, edit, delete, search, sort, and filter books.
+- Keep the immediate search focused on title, author, and series, with ISBN and
+  optional metadata available through **Sort & Advanced Search**.
 - Track `Pending`, `Reading...`, and `Read` status.
 - Record acquisition, reading-started, and finished-reading dates.
 - Represent original-collection books whose acquisition date is unknown.
@@ -21,6 +23,9 @@ The catalogue, covers, and physical layout remain under the user's control.
   direction.
 - Filter by status, physical hierarchy, date ranges, known or unknown dates,
   and catalogue-quality checks.
+- Combine exact existing metadata values across language, genre, publisher,
+  fiction category, binding, publication type, and series; combine several
+  values within a category and apply inclusive page/year ranges.
 - Use quick views for missing covers, missing locations, and incomplete dates.
 - See how many books pass the current filters.
 - Open a read-only complete-information card for any catalogue book without
@@ -78,6 +83,11 @@ Visual rearrangement supports:
   - Finished-reading recency.
   - Time spent pending.
   - Reading duration.
+  - Language.
+  - Current-edition or original-publication year.
+  - Fiction/non-fiction, binding, or publication type.
+  - A selected genre, fading books outside the chosen genre.
+  - Reading rate in pages per inclusive reading day.
 - Use percentile-clipped colour scales and separate missing/not-applicable
   states so outliers do not flatten the useful range.
 
@@ -113,6 +123,13 @@ are not imported.
 - Show read-only yearly and monthly acquisition/reading totals.
 - Show known reading and pending-duration statistics with excluded-data
   counts.
+- Filter statistics by the same optional metadata used by advanced catalogue
+  search.
+- Estimate pages read by year or month and pages per week/month by spreading a
+  book's pages across its inclusive reading interval. When the start date is
+  unknown, assign the pages to the known finish day and report that estimate.
+- Compare individual, average, and median per-book pages/day for the selected
+  year and metadata filters, with estimated one-day readings clearly marked.
 - Compare original-collection and later-acquisition status totals.
 - Start or finish reading through confirmation prompts without losing the
   physical position.
