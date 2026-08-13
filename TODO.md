@@ -288,7 +288,9 @@ protects the completed catalogue.
 
 ### Additional book metadata
 
-- [ ] Add optional number of pages.
+- [x] Implement, rehearse, and apply the additive v2-to-v3 metadata migration
+  to the populated catalogue with all existing values and covers preserved.
+- [x] Add optional subtitle and number of pages.
 - [x] Complete optional normalized ISBN-10 and ISBN-13 identifiers end to end.
   - [x] Add nullable indexed storage through the live v1-to-v2 migration.
   - [x] Expose ISBN fields through book APIs, editing, addition, and reviewed
@@ -296,20 +298,25 @@ protects the completed catalogue.
   - [x] Index ISBNs for exact matching but allow intentional duplicate copies.
   - [x] Distinguish an exact-edition ISBN match from a probable same-work
     Title/Author match.
-- [ ] Add optional publisher.
-- [ ] Add optional publication date with support for year-only or otherwise
-  incomplete known dates.
-- [ ] Add optional language.
-- [ ] Add optional edition.
+- [x] Add optional publisher.
+- [x] Add the four-digit year of the current edition and the original
+  publication year as separate optional values.
+- [x] Add optional free-text language.
+- [x] Add an optional positive edition number.
+- [x] Add optional series name and free-text series volume.
+- [x] Add a controlled binding classification independently from publication
+  type.
+- [x] Add a controlled publication type including conventional book, comic or
+  graphic novel, atlas, reference work, illustrated/art book, and periodical.
 - [ ] Add structured subjects.
-- [ ] Add structured genres.
-- [ ] Add a fiction/non-fiction classification.
-- [ ] Add an optional format such as hardback, paperback, or comic book.
+- [ ] Add structured genres; v3 preserves an optional free-text genre value as
+  an interim source for a later lossless conversion.
+- [x] Add a fiction/non-fiction classification.
 - [ ] Add free-form tags.
 - [ ] Add an optional personal rating.
-- [ ] After these fields exist, allow reviewed scanning results to populate the
-  selected supported metadata instead of permanently limiting lookup to Title
-  and Author.
+- [x] Allow reviewed ISBN results to populate selected supported metadata,
+  leaving inferred classifications unchecked and every applied value editable
+  before saving.
 
 ### Features enabled by additional metadata
 

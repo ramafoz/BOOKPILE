@@ -11,7 +11,7 @@ from typing import Callable
 
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -42,6 +42,24 @@ BASELINE_BOOK_COLUMNS = {
     "created_at",
     "updated_at",
 }
+
+ISBN_BOOK_COLUMNS = {"isbn_10", "isbn_13"}
+V3_BOOK_COLUMNS = {
+    "subtitle",
+    "page_count",
+    "publisher",
+    "current_ed_year",
+    "original_publication_year",
+    "language",
+    "edition_number",
+    "fiction_category",
+    "binding",
+    "publication_type",
+    "genre_text",
+    "series_name",
+    "series_volume",
+}
+PRESERVED_BOOK_COLUMNS = BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS
 
 
 @dataclass(frozen=True)
@@ -75,8 +93,53 @@ def _migration_2_store_isbn(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_3_store_bibliographic_metadata(
+    connection: sqlite3.Connection,
+) -> None:
+    columns = table_columns(connection, "books")
+    additions = (
+        ("subtitle", "TEXT"),
+        ("page_count", "INTEGER CHECK (page_count IS NULL OR page_count > 0)"),
+        ("publisher", "TEXT"),
+        (
+            "current_ed_year",
+            "INTEGER CHECK (current_ed_year IS NULL OR current_ed_year BETWEEN 1000 AND 9999)",
+        ),
+        (
+            "original_publication_year",
+            "INTEGER CHECK (original_publication_year IS NULL OR original_publication_year BETWEEN 1000 AND 9999)",
+        ),
+        ("language", "TEXT"),
+        (
+            "edition_number",
+            "INTEGER CHECK (edition_number IS NULL OR edition_number > 0)",
+        ),
+        (
+            "fiction_category",
+            "TEXT CHECK (fiction_category IS NULL OR fiction_category IN ('FICTION', 'NON_FICTION'))",
+        ),
+        (
+            "binding",
+            "TEXT CHECK (binding IS NULL OR binding IN ('HARDCOVER', 'PAPERBACK', 'FLEXIBOUND', 'SPIRAL', 'STAPLED', 'OTHER'))",
+        ),
+        (
+            "publication_type",
+            "TEXT CHECK (publication_type IS NULL OR publication_type IN ('CONVENTIONAL_BOOK', 'COMIC_GRAPHIC_NOVEL', 'ATLAS', 'REFERENCE', 'ART_PHOTOGRAPHY_ILLUSTRATED', 'MAGAZINE_PERIODICAL', 'OTHER'))",
+        ),
+        ("genre_text", "TEXT"),
+        ("series_name", "TEXT"),
+        ("series_volume", "TEXT"),
+    )
+    for column, declaration in additions:
+        if column not in columns:
+            connection.execute(
+                f'ALTER TABLE books ADD COLUMN "{column}" {declaration}'
+            )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
+    Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
 )
 
 
@@ -118,7 +181,9 @@ def infer_unversioned_schema(connection: sqlite3.Connection) -> int:
             "Cannot identify the unversioned BOOKPILE schema; missing book fields: "
             + ", ".join(missing_columns)
         )
-    if {"isbn_10", "isbn_13"} <= book_columns:
+    if V3_BOOK_COLUMNS <= book_columns:
+        return 3
+    if ISBN_BOOK_COLUMNS <= book_columns:
         return 2
     return BASELINE_SCHEMA_VERSION
 
@@ -139,13 +204,18 @@ def schema_version(connection: sqlite3.Connection) -> int:
     return versions[-1]
 
 
-def schema_snapshot(connection: sqlite3.Connection) -> dict[str, list[dict]]:
+def schema_snapshot(
+    connection: sqlite3.Connection,
+    *,
+    book_columns: set[str] | None = None,
+) -> dict[str, list[dict]]:
     snapshot: dict[str, list[dict]] = {}
+    selected_book_columns = book_columns or PRESERVED_BOOK_COLUMNS
     for table in BASELINE_TABLES:
         columns = [
             row["name"]
             for row in connection.execute(f'PRAGMA table_info("{table}")')
-            if table != "books" or row["name"] in BASELINE_BOOK_COLUMNS
+            if table != "books" or row["name"] in selected_book_columns
         ]
         column_sql = ", ".join(f'"{column}"' for column in columns)
         order_sql = ", ".join(f'"{column}"' for column in columns)
@@ -169,6 +239,8 @@ def snapshot_fingerprint(snapshot: dict[str, list[dict]]) -> str:
 def verify_database(
     connection: sqlite3.Connection,
     expected_snapshot: dict[str, list[dict]] | None = None,
+    *,
+    book_columns: set[str] | None = None,
 ) -> str:
     integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
     if integrity != "ok":
@@ -177,7 +249,7 @@ def verify_database(
     if foreign_key_errors:
         raise ValueError("SQLite foreign-key verification failed")
 
-    snapshot = schema_snapshot(connection)
+    snapshot = schema_snapshot(connection, book_columns=book_columns)
     if expected_snapshot is not None and snapshot != expected_snapshot:
         raise ValueError("Existing catalogue values changed during migration")
     return snapshot_fingerprint(snapshot)
@@ -241,8 +313,18 @@ def run_migrations(
 
     with closing(connect_database(database)) as connection:
         source_version = schema_version(connection)
-        before_snapshot = schema_snapshot(connection)
-        before_fingerprint = verify_database(connection, before_snapshot)
+        preserved_book_columns = BASELINE_BOOK_COLUMNS | (
+            ISBN_BOOK_COLUMNS if source_version >= 2 else set()
+        )
+        before_snapshot = schema_snapshot(
+            connection,
+            book_columns=preserved_book_columns,
+        )
+        before_fingerprint = verify_database(
+            connection,
+            before_snapshot,
+            book_columns=preserved_book_columns,
+        )
     migrations = pending_migrations(source_version, target_version)
     if not migrations:
         return MigrationReport(
@@ -295,7 +377,11 @@ def run_migrations(
                 (migration.version, migration.name),
             )
 
-        after_fingerprint = verify_database(connection, before_snapshot)
+        after_fingerprint = verify_database(
+            connection,
+            before_snapshot,
+            book_columns=preserved_book_columns,
+        )
         actual_version = schema_version(connection)
         if actual_version != target_version:
             raise ValueError(

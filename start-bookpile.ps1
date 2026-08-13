@@ -40,6 +40,43 @@ if (-not $LanAddress) {
     throw "No active LAN address was detected. Connect this computer to the home network and try again."
 }
 
+function Test-TcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Address,
+        [Parameter(Mandatory = $true)]
+        [int]$Port
+    )
+
+    $Client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        $Connection = $Client.BeginConnect($Address, $Port, $null, $null)
+        if (-not $Connection.AsyncWaitHandle.WaitOne(300)) {
+            return $false
+        }
+        $Client.EndConnect($Connection)
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $Client.Dispose()
+    }
+}
+
+$OccupiedServices = @()
+if (Test-TcpPort -Address "127.0.0.1" -Port 8000) {
+    $OccupiedServices += "backend (port 8000)"
+}
+if (Test-TcpPort -Address $LanAddress -Port 5173) {
+    $OccupiedServices += "frontend (port 5173)"
+}
+if ($OccupiedServices.Count -gt 0) {
+    $ServiceList = $OccupiedServices -join " and "
+    throw "BOOKPILE is already running or its ports are occupied by $ServiceList. Close the existing BOOKPILE server windows before starting it again."
+}
+
 $DistIndex = Join-Path $Frontend "dist\index.html"
 $SourceFiles = Get-ChildItem -Path @(
     (Join-Path $Frontend "src"),

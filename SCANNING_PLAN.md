@@ -20,19 +20,20 @@ changed until the user reviews the result and explicitly saves a book.
 
 ## Current phase versus future metadata
 
-The current schema-v2 implementation applies reviewed `Title`, `Author`,
-`ISBN-10`, and `ISBN-13` values. This remains a temporary field-application
-limit, not the long-term scope of scanning.
+The schema-v3 implementation applies field-by-field reviewed identifiers,
+edition metadata, and supported classifications. Direct provider values start
+selected; inferred genre, fiction category, and publication type suggestions
+start unchecked. Every applied value remains editable before saving.
 
 The lookup layer should use a future-ready result shape so it can later supply:
 
 - ISBN-10 and ISBN-13.
-- Title, subtitle, and structured authors.
-- Page count and subjects.
-- Publisher and publication date.
-- Edition and language.
-- Genre and fiction/non-fiction category.
-- Format, such as hardback, paperback, or comic book.
+- Title, subtitle, and the current free-text authors value.
+- Page count, publisher, current-edition year, and language.
+- Edition number, binding, and series information when explicitly available.
+- Provider categories as editable genre text and cautious suggestions for
+  fiction/non-fiction or publication type.
+- Future structured authors and subjects after their own migrations.
 
 Other values must not be written until their own safe incremental migrations
 and reviewed form fields exist. They may be retained in the lookup response or
@@ -87,8 +88,8 @@ Every input method should feed the same pipeline:
      it.
    - `Not found in catalogue`: offer **Add to BOOKPILE**.
 6. **Apply only after review**
-   - Accepting an ISBN candidate copies reviewed Title, Author, ISBN-10, and
-     ISBN-13 values into Add Book, Edit Book, or Batch Add.
+   - Accepting an ISBN candidate copies only checked values into Add Book, Edit
+     Book, or Batch Add; inferred classifications start unchecked.
    - Saving remains the existing, explicit final action.
 
 ### Common lookup result

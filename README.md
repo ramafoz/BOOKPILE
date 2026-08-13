@@ -96,11 +96,12 @@ Visual rearrangement supports:
 - Keep manual entry fully available when recognition or an external provider
   is unavailable.
 
-ISBN lookup and barcode evidence can fill reviewed Title, Author, ISBN-10, and
-ISBN-13 values in Add Book, Edit Book, and Batch Add. Stored identifiers are
-normalized, searchable, and used for exact-edition catalogue matching while
-intentional duplicate copies remain allowed. OCR still supplies reviewed Title
-and Author text only. Richer metadata remains a future incremental expansion.
+ISBN lookup and barcode evidence can fill field-by-field reviewed identifiers
+and bibliographic metadata in Add Book, Edit Book, and Batch Add. Direct
+provider values are selected by default; inferred genre/category/publication
+type suggestions are visibly marked and start unchecked. Stored identifiers
+are normalized and used for exact-edition matching while intentional duplicate
+copies remain allowed. OCR still supplies reviewed Title and Author text only.
 The user's own cover photograph remains authoritative; external cover images
 are not imported.
 
@@ -277,8 +278,8 @@ third-party services.
 
 ## Near-term roadmap
 
-The safe database-expansion foundation and its first live migration are now in
-place:
+The safe database-expansion foundation and incremental schema history are now
+in place:
 
 1. Migrations require explicit approval and run transactionally.
 2. Every migration first creates and validates a full automatic backup.
@@ -289,6 +290,9 @@ place:
 5. Schema v2 adds optional normalized ISBN-10/ISBN-13 fields as the first small
    additive migration; API, Add/Edit/Batch forms, barcode acceptance, search,
    exact matching, and CSV export now use them.
+6. Schema v3 adds nullable edition metadata, classification, binding,
+   publication type, genre text, and series fields. It was rehearsed and then
+   applied to the populated catalogue with all 432 books and covers preserved.
 
 Later database phases include richer bibliographic metadata, structured
 authors, reading-session history and re-reading, and optional loan history.

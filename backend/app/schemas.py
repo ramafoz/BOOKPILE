@@ -13,6 +13,30 @@ class BookStatus(str, Enum):
     read = "READ"
 
 
+class FictionCategory(str, Enum):
+    fiction = "FICTION"
+    non_fiction = "NON_FICTION"
+
+
+class Binding(str, Enum):
+    hardcover = "HARDCOVER"
+    paperback = "PAPERBACK"
+    flexibound = "FLEXIBOUND"
+    spiral = "SPIRAL"
+    stapled = "STAPLED"
+    other = "OTHER"
+
+
+class PublicationType(str, Enum):
+    conventional_book = "CONVENTIONAL_BOOK"
+    comic_graphic_novel = "COMIC_GRAPHIC_NOVEL"
+    atlas = "ATLAS"
+    reference = "REFERENCE"
+    art_photography_illustrated = "ART_PHOTOGRAPHY_ILLUSTRATED"
+    magazine_periodical = "MAGAZINE_PERIODICAL"
+    other = "OTHER"
+
+
 class ContainerType(str, Enum):
     row = "ROW"
     pile = "PILE"
@@ -159,6 +183,19 @@ class BookBase(BaseModel):
     author: str = Field(min_length=1, max_length=300)
     isbn_10: str | None = Field(default=None, max_length=40)
     isbn_13: str | None = Field(default=None, max_length=40)
+    subtitle: str | None = Field(default=None, max_length=500)
+    page_count: int | None = Field(default=None, gt=0)
+    publisher: str | None = Field(default=None, max_length=300)
+    current_ed_year: int | None = Field(default=None, ge=1000, le=9999)
+    original_publication_year: int | None = Field(default=None, ge=1000, le=9999)
+    language: str | None = Field(default=None, max_length=200)
+    edition_number: int | None = Field(default=None, gt=0)
+    fiction_category: FictionCategory | None = None
+    binding: Binding | None = None
+    publication_type: PublicationType | None = None
+    genre_text: str | None = Field(default=None, max_length=1000)
+    series_name: str | None = Field(default=None, max_length=300)
+    series_volume: str | None = Field(default=None, max_length=100)
     status: BookStatus = BookStatus.pending
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
@@ -175,7 +212,15 @@ class BookBase(BaseModel):
     def strip_required_text(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("notes")
+    @field_validator(
+        "notes",
+        "subtitle",
+        "publisher",
+        "language",
+        "genre_text",
+        "series_name",
+        "series_volume",
+    )
     @classmethod
     def blank_notes_to_none(cls, value: str | None) -> str | None:
         return value.strip() or None if value else None
@@ -201,6 +246,19 @@ class BookUpdate(BaseModel):
     author: str | None = Field(default=None, min_length=1, max_length=300)
     isbn_10: str | None = Field(default=None, max_length=40)
     isbn_13: str | None = Field(default=None, max_length=40)
+    subtitle: str | None = Field(default=None, max_length=500)
+    page_count: int | None = Field(default=None, gt=0)
+    publisher: str | None = Field(default=None, max_length=300)
+    current_ed_year: int | None = Field(default=None, ge=1000, le=9999)
+    original_publication_year: int | None = Field(default=None, ge=1000, le=9999)
+    language: str | None = Field(default=None, max_length=200)
+    edition_number: int | None = Field(default=None, gt=0)
+    fiction_category: FictionCategory | None = None
+    binding: Binding | None = None
+    publication_type: PublicationType | None = None
+    genre_text: str | None = Field(default=None, max_length=1000)
+    series_name: str | None = Field(default=None, max_length=300)
+    series_volume: str | None = Field(default=None, max_length=100)
     status: BookStatus | None = None
     goodreads_url: HttpUrl | None = None
     notes: str | None = Field(default=None, max_length=4000)
@@ -221,6 +279,19 @@ class BookUpdate(BaseModel):
     @classmethod
     def validate_isbn_13(cls, value: str | None) -> str | None:
         return normalize_optional_isbn(value, 13)
+
+    @field_validator(
+        "notes",
+        "subtitle",
+        "publisher",
+        "language",
+        "genre_text",
+        "series_name",
+        "series_volume",
+    )
+    @classmethod
+    def blank_optional_text_to_none(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else None
 
 
 class Book(BookBase):
@@ -269,14 +340,18 @@ class BibliographicCandidate(BaseModel):
     subtitle: str | None = None
     authors: list[str]
     publisher: str | None = None
-    published_date: str | None = None
+    current_ed_year: int | None = None
+    original_publication_year: int | None = None
     page_count: int | None = None
     subjects: list[str]
     language: str | None = None
-    edition: str | None = None
-    genres: list[str]
-    category: str | None = None
-    format: str | None = None
+    edition_number: int | None = None
+    fiction_category: FictionCategory | None = None
+    binding: Binding | None = None
+    publication_type: PublicationType | None = None
+    genre_text: str | None = None
+    series_name: str | None = None
+    series_volume: str | None = None
     confidence_or_match_notes: str | None = None
     catalogue_matches: list[CatalogueMatch] = Field(default_factory=list)
 

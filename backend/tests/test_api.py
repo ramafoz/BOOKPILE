@@ -11,6 +11,7 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -139,6 +140,19 @@ def test_book_isbns_are_normalized_editable_searchable_and_not_unique() -> None:
                 "author": "Identifier Author",
                 "isbn_10": "0-306-40615-2",
                 "isbn_13": "978-0-306-40615-7",
+                "subtitle": "A metadata export",
+                "page_count": 320,
+                "publisher": "Example Press",
+                "current_ed_year": 2024,
+                "original_publication_year": 1967,
+                "language": "Spanish",
+                "edition_number": 2,
+                "fiction_category": "FICTION",
+                "binding": "PAPERBACK",
+                "publication_type": "CONVENTIONAL_BOOK",
+                "genre_text": "Magical realism",
+                "series_name": "Example series",
+                "series_volume": "1",
             },
         )
         assert first.status_code == 201
@@ -194,6 +208,83 @@ def test_book_isbn_fields_reject_invalid_or_wrong_length_values() -> None:
     assert "checksum is invalid" in invalid.text
     assert wrong_field.status_code == 422
     assert "ISBN-10 field" in wrong_field.text
+
+
+def test_book_bibliographic_metadata_is_optional_editable_and_searchable() -> None:
+    metadata = {
+        "subtitle": "A complete metadata test",
+        "page_count": 432,
+        "publisher": "Example Press",
+        "current_ed_year": 2024,
+        "original_publication_year": 1987,
+        "language": "English",
+        "edition_number": 2,
+        "fiction_category": "FICTION",
+        "binding": "HARDCOVER",
+        "publication_type": "COMIC_GRAPHIC_NOVEL",
+        "genre_text": "Historical, Science fiction",
+        "series_name": "Example Cycle",
+        "series_volume": "0.5",
+    }
+    with TestClient(app) as client:
+        created = client.post(
+            "/books",
+            json={
+                "title": "Metadata book",
+                "author": "Metadata Author",
+                **metadata,
+            },
+        )
+        assert created.status_code == 201
+        for field, value in metadata.items():
+            assert created.json()[field] == value
+
+        found = client.get("/books", params={"search": "Example Cycle"})
+        assert [book["id"] for book in found.json()] == [created.json()["id"]]
+
+        cleared = client.patch(
+            f'/books/{created.json()["id"]}',
+            json={
+                "subtitle": "",
+                "fiction_category": None,
+                "binding": None,
+                "publication_type": None,
+            },
+        )
+        assert cleared.status_code == 200
+        assert cleared.json()["subtitle"] is None
+        assert cleared.json()["fiction_category"] is None
+        assert cleared.json()["binding"] is None
+        assert cleared.json()["publication_type"] is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("page_count", 0),
+        ("current_ed_year", 999),
+        ("current_ed_year", 10000),
+        ("original_publication_year", 20),
+        ("edition_number", 0),
+        ("fiction_category", "POETRY"),
+        ("binding", "LEATHER"),
+        ("publication_type", "MAP"),
+    ],
+)
+def test_book_bibliographic_metadata_rejects_invalid_values(
+    field: str,
+    value: object,
+) -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/books",
+            json={
+                "title": "Invalid metadata",
+                "author": "Metadata Author",
+                field: value,
+            },
+        )
+    assert response.status_code == 422
 
 
 def test_isbn_lookup_endpoint_rejects_an_invalid_checksum() -> None:
@@ -1613,6 +1704,19 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
                 "author": "Gabriel García Márquez",
                 "isbn_10": "0-306-40615-2",
                 "isbn_13": "978-0-306-40615-7",
+                "subtitle": "A metadata export",
+                "page_count": 320,
+                "publisher": "Example Press",
+                "current_ed_year": 2024,
+                "original_publication_year": 1967,
+                "language": "Spanish",
+                "edition_number": 2,
+                "fiction_category": "FICTION",
+                "binding": "PAPERBACK",
+                "publication_type": "CONVENTIONAL_BOOK",
+                "genre_text": "Magical realism",
+                "series_name": "Example series",
+                "series_volume": "1",
                 "status": "READ",
                 "read_date": "2026-06-20",
                 "container_id": container["id"],
@@ -1632,6 +1736,19 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
     assert rows[0]["author"] == "Gabriel García Márquez"
     assert rows[0]["isbn_10"] == "0306406152"
     assert rows[0]["isbn_13"] == "9780306406157"
+    assert rows[0]["subtitle"] == "A metadata export"
+    assert rows[0]["page_count"] == "320"
+    assert rows[0]["publisher"] == "Example Press"
+    assert rows[0]["current_ed_year"] == "2024"
+    assert rows[0]["original_publication_year"] == "1967"
+    assert rows[0]["language"] == "Spanish"
+    assert rows[0]["edition_number"] == "2"
+    assert rows[0]["fiction_category"] == "FICTION"
+    assert rows[0]["binding"] == "PAPERBACK"
+    assert rows[0]["publication_type"] == "CONVENTIONAL_BOOK"
+    assert rows[0]["genre_text"] == "Magical realism"
+    assert rows[0]["series_name"] == "Example series"
+    assert rows[0]["series_volume"] == "1"
     assert rows[0]["read_date"] == "2026-06-20"
     assert rows[0]["is_read_date_unknown"] == "false"
     assert rows[0]["bookcase"] == "Salón"
@@ -1689,7 +1806,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-            assert schema_version(connection) == 2
+            assert schema_version(connection) == 3
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):

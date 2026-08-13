@@ -40,10 +40,12 @@ import type {
   BookPayload,
   Bookcase,
   BookStatus,
+  Binding,
   CatalogueStatistics,
   BibliographicCandidate,
   CatalogueMatch,
   ContainerType,
+  FictionCategory,
   Layer,
   LibraryMapData,
   MapBook,
@@ -53,6 +55,7 @@ import type {
   ReadingSuggestion,
   NewPositionMode,
   OldPositionMode,
+  PublicationType,
   RearrangementOperation,
   RearrangementResult,
   RearrangementStep,
@@ -64,6 +67,12 @@ import type {
 
 type SuggestionMode = "random" | "oldest" | "waiting";
 type AppMenu = "settings" | "add" | "suggestions";
+type CandidateMetadataKey =
+  | "title" | "author" | "isbn_10" | "isbn_13" | "subtitle"
+  | "page_count" | "publisher" | "current_ed_year"
+  | "original_publication_year" | "language" | "edition_number"
+  | "fiction_category" | "binding" | "publication_type" | "genre_text"
+  | "series_name" | "series_volume";
 
 const emptyStats: Stats = {
   total: 0,
@@ -76,6 +85,19 @@ const emptyBook: BookPayload = {
   author: "",
   isbn_10: null,
   isbn_13: null,
+  subtitle: null,
+  page_count: null,
+  publisher: null,
+  current_ed_year: null,
+  original_publication_year: null,
+  language: null,
+  edition_number: null,
+  fiction_category: null,
+  binding: null,
+  publication_type: null,
+  genre_text: null,
+  series_name: null,
+  series_volume: null,
   status: "PENDING",
   goodreads_url: null,
   notes: null,
@@ -968,6 +990,89 @@ function BookDates({ book }: { book: Book }) {
   return dates.length ? <small className="book-dates">{dates.join(" · ")}</small> : null;
 }
 
+function metadataLabel(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function CandidateMetadataReview({
+  candidate,
+  onApply,
+}: {
+  candidate: BibliographicCandidate;
+  onApply: (selected: Set<CandidateMetadataKey>) => void;
+}) {
+  const entries = useMemo(() => {
+    const values: Array<{
+      key: CandidateMetadataKey;
+      label: string;
+      value: string | number | null;
+      inferred?: boolean;
+    }> = [
+      { key: "title", label: "Title", value: candidate.title },
+      { key: "author", label: "Author", value: candidate.authors.join(" & ") },
+      { key: "isbn_10", label: "ISBN-10", value: candidate.identifiers.isbn_10 },
+      { key: "isbn_13", label: "ISBN-13", value: candidate.identifiers.isbn_13 },
+      { key: "subtitle", label: "Subtitle", value: candidate.subtitle },
+      { key: "page_count", label: "Pages", value: candidate.page_count },
+      { key: "publisher", label: "Publisher", value: candidate.publisher },
+      { key: "current_ed_year", label: "Current edition year", value: candidate.current_ed_year },
+      { key: "original_publication_year", label: "Original publication year", value: candidate.original_publication_year },
+      { key: "language", label: "Language", value: candidate.language },
+      { key: "edition_number", label: "Edition number", value: candidate.edition_number },
+      { key: "binding", label: "Binding", value: candidate.binding ? metadataLabel(candidate.binding) : null },
+      { key: "series_name", label: "Series", value: candidate.series_name },
+      { key: "series_volume", label: "Series volume", value: candidate.series_volume },
+      { key: "fiction_category", label: "Category", value: candidate.fiction_category ? metadataLabel(candidate.fiction_category) : null, inferred: true },
+      { key: "publication_type", label: "Publication type", value: candidate.publication_type ? metadataLabel(candidate.publication_type) : null, inferred: true },
+      { key: "genre_text", label: "Genres / provider categories", value: candidate.genre_text, inferred: true },
+    ];
+    return values.filter((entry) => entry.value !== null && entry.value !== "");
+  }, [candidate]);
+  const [selected, setSelected] = useState<Set<CandidateMetadataKey>>(
+    () => new Set(entries.filter((entry) => !entry.inferred).map((entry) => entry.key)),
+  );
+
+  return (
+    <div className="candidate-metadata-review">
+      <div className="candidate-review-heading">
+        <strong>Choose metadata to apply</strong>
+        <small>Inferred classifications start unchecked. All values remain editable before saving.</small>
+      </div>
+      <div className="candidate-review-grid">
+        {entries.map((entry) => (
+          <label key={entry.key} className={entry.inferred ? "inferred" : ""}>
+            <input
+              type="checkbox"
+              checked={selected.has(entry.key)}
+              onChange={(event) => {
+                setSelected((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(entry.key);
+                  else next.delete(entry.key);
+                  return next;
+                });
+              }}
+            />
+            <span><b>{entry.label}</b>{entry.value}{entry.inferred && <em>Suggested</em>}</span>
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="secondary-button"
+        disabled={selected.size === 0}
+        onClick={() => onApply(selected)}
+      >
+        Apply selected metadata
+      </button>
+    </div>
+  );
+}
+
 function formatTimestamp(value: string) {
   const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
   const parsed = new Date(normalized);
@@ -1048,6 +1153,25 @@ function BookDetailsDialog({
                 ) : "Not recorded"}
               </dd>
             </div>
+          </dl>
+        </section>
+
+        <section className="book-details-section">
+          <h3>Edition and classification</h3>
+          <dl className="book-details-grid three-columns">
+            <div className="wide"><dt>Subtitle</dt><dd>{book.subtitle ?? "Not recorded"}</dd></div>
+            <div><dt>Pages</dt><dd>{book.page_count ?? "Not recorded"}</dd></div>
+            <div><dt>Publisher</dt><dd>{book.publisher ?? "Not recorded"}</dd></div>
+            <div><dt>Current edition year</dt><dd>{book.current_ed_year ?? "Not recorded"}</dd></div>
+            <div><dt>Original publication year</dt><dd>{book.original_publication_year ?? "Not recorded"}</dd></div>
+            <div><dt>Language</dt><dd>{book.language ?? "Not recorded"}</dd></div>
+            <div><dt>Edition number</dt><dd>{book.edition_number ?? "Not recorded"}</dd></div>
+            <div><dt>Category</dt><dd>{book.fiction_category ? metadataLabel(book.fiction_category) : "Not recorded"}</dd></div>
+            <div><dt>Binding</dt><dd>{book.binding ? metadataLabel(book.binding) : "Not recorded"}</dd></div>
+            <div><dt>Publication type</dt><dd>{book.publication_type ? metadataLabel(book.publication_type) : "Not recorded"}</dd></div>
+            <div><dt>Series</dt><dd>{book.series_name ?? "Not recorded"}</dd></div>
+            <div><dt>Series volume</dt><dd>{book.series_volume ?? "Not recorded"}</dd></div>
+            <div className="wide"><dt>Genre</dt><dd>{book.genre_text ?? "Not recorded"}</dd></div>
           </dl>
         </section>
 
@@ -1533,6 +1657,19 @@ function BookDialog({
           author: book.author,
           isbn_10: book.isbn_10,
           isbn_13: book.isbn_13,
+          subtitle: book.subtitle,
+          page_count: book.page_count,
+          publisher: book.publisher,
+          current_ed_year: book.current_ed_year,
+          original_publication_year: book.original_publication_year,
+          language: book.language,
+          edition_number: book.edition_number,
+          fiction_category: book.fiction_category,
+          binding: book.binding,
+          publication_type: book.publication_type,
+          genre_text: book.genre_text,
+          series_name: book.series_name,
+          series_volume: book.series_volume,
           status: book.status,
           goodreads_url: book.goodreads_url,
           notes: book.notes,
@@ -1738,23 +1875,58 @@ function BookDialog({
     return true;
   }
 
-  function applyIsbnCandidate(candidate: BibliographicCandidate) {
-    if (!applyRecognizedText(candidate.title, candidate.authors.join(" & "))) return;
-    const lookedUpIdentifiers = isbnLookup
-      ? isbnLookup.isbn.length === 10
-        ? { isbn_10: isbnLookup.isbn }
-        : { isbn_13: isbnLookup.isbn }
-      : {};
+  function applyIsbnCandidate(
+    candidate: BibliographicCandidate,
+    selected: Set<CandidateMetadataKey>,
+  ) {
+    const candidateAuthor = candidate.authors.join(" & ");
+    const replacingTitle = selected.has("title")
+      && Boolean(form.title.trim()) && form.title !== candidate.title;
+    const replacingAuthor = selected.has("author")
+      && Boolean(form.author.trim()) && form.author !== candidateAuthor;
+    if (
+      (replacingTitle || replacingAuthor)
+      && !window.confirm("Replace the selected existing values with this result?")
+    ) return;
+
     setForm((current) => ({
       ...current,
-      ...lookedUpIdentifiers,
-      ...(candidate.identifiers.isbn_10
+      ...(selected.has("title") ? { title: candidate.title } : {}),
+      ...(selected.has("author") ? { author: candidateAuthor } : {}),
+      ...(selected.has("isbn_10")
         ? { isbn_10: candidate.identifiers.isbn_10 }
         : {}),
-      ...(candidate.identifiers.isbn_13
+      ...(selected.has("isbn_13")
         ? { isbn_13: candidate.identifiers.isbn_13 }
         : {}),
+      ...(selected.has("subtitle") ? { subtitle: candidate.subtitle } : {}),
+      ...(selected.has("page_count") ? { page_count: candidate.page_count } : {}),
+      ...(selected.has("publisher") ? { publisher: candidate.publisher } : {}),
+      ...(selected.has("current_ed_year")
+        ? { current_ed_year: candidate.current_ed_year }
+        : {}),
+      ...(selected.has("original_publication_year")
+        ? { original_publication_year: candidate.original_publication_year }
+        : {}),
+      ...(selected.has("language") ? { language: candidate.language } : {}),
+      ...(selected.has("edition_number")
+        ? { edition_number: candidate.edition_number }
+        : {}),
+      ...(selected.has("fiction_category")
+        ? { fiction_category: candidate.fiction_category }
+        : {}),
+      ...(selected.has("binding") ? { binding: candidate.binding } : {}),
+      ...(selected.has("publication_type")
+        ? { publication_type: candidate.publication_type }
+        : {}),
+      ...(selected.has("genre_text") ? { genre_text: candidate.genre_text } : {}),
+      ...(selected.has("series_name") ? { series_name: candidate.series_name } : {}),
+      ...(selected.has("series_volume")
+        ? { series_volume: candidate.series_volume }
+        : {}),
     }));
+    setBatchMessage("");
+    window.setTimeout(() => titleInput.current?.focus(), 0);
   }
 
   async function submit(event: FormEvent) {
@@ -1835,6 +2007,19 @@ function BookDialog({
           author: "",
           isbn_10: null,
           isbn_13: null,
+          subtitle: null,
+          page_count: null,
+          publisher: null,
+          current_ed_year: null,
+          original_publication_year: null,
+          language: null,
+          edition_number: null,
+          fiction_category: null,
+          binding: null,
+          publication_type: null,
+          genre_text: null,
+          series_name: null,
+          series_volume: null,
           goodreads_url: null,
           notes: null,
           reading_started_date: null,
@@ -2206,21 +2391,18 @@ function BookDialog({
                       <span>{candidate.source.replaceAll("_", " ")}</span>
                       <strong>{candidate.title}</strong>
                       <p>{candidate.authors.join(" · ")}</p>
-                      {(candidate.publisher || candidate.published_date) && (
+                      {(candidate.publisher || candidate.current_ed_year) && (
                         <small>
-                          {[candidate.publisher, candidate.published_date]
+                          {[candidate.publisher, candidate.current_ed_year]
                             .filter(Boolean)
                             .join(" · ")}
                         </small>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => applyIsbnCandidate(candidate)}
-                    >
-                      Use Title, Author & ISBN
-                    </button>
+                    <CandidateMetadataReview
+                      candidate={candidate}
+                      onApply={(selected) => applyIsbnCandidate(candidate, selected)}
+                    />
                     {candidate.catalogue_matches.length > 0
                       && isbnLookup.catalogue_matches.length === 0 && (
                       <div className="isbn-matches">
@@ -2300,6 +2482,86 @@ function BookDialog({
               <input required value={form.author}
                 onChange={(e) => setForm({ ...form, author: e.target.value })} />
             </label>
+            <fieldset className="wide metadata-fields">
+              <legend>Edition and classification</legend>
+              <div className="metadata-form-grid">
+                <label className="wide">Subtitle
+                  <input value={form.subtitle ?? ""}
+                    onChange={(e) => setForm({ ...form, subtitle: e.target.value || null })} />
+                </label>
+                <label>Number of pages
+                  <input type="number" min="1" value={form.page_count ?? ""}
+                    onChange={(e) => setForm({ ...form, page_count: e.target.value ? Number(e.target.value) : null })} />
+                </label>
+                <label>Publisher
+                  <input value={form.publisher ?? ""}
+                    onChange={(e) => setForm({ ...form, publisher: e.target.value || null })} />
+                </label>
+                <label>Current edition year
+                  <input type="number" min="1000" max="9999" placeholder="YYYY"
+                    value={form.current_ed_year ?? ""}
+                    onChange={(e) => setForm({ ...form, current_ed_year: e.target.value ? Number(e.target.value) : null })} />
+                </label>
+                <label>Original publication year
+                  <input type="number" min="1000" max="9999" placeholder="YYYY"
+                    value={form.original_publication_year ?? ""}
+                    onChange={(e) => setForm({ ...form, original_publication_year: e.target.value ? Number(e.target.value) : null })} />
+                </label>
+                <label>Language
+                  <input value={form.language ?? ""}
+                    onChange={(e) => setForm({ ...form, language: e.target.value || null })} />
+                </label>
+                <label>Edition number
+                  <input type="number" min="1" value={form.edition_number ?? ""}
+                    onChange={(e) => setForm({ ...form, edition_number: e.target.value ? Number(e.target.value) : null })} />
+                </label>
+                <label>Category
+                  <select value={form.fiction_category ?? ""}
+                    onChange={(e) => setForm({ ...form, fiction_category: (e.target.value || null) as FictionCategory | null })}>
+                    <option value="">Not classified</option>
+                    <option value="FICTION">Fiction</option>
+                    <option value="NON_FICTION">Non-fiction</option>
+                  </select>
+                </label>
+                <label>Binding
+                  <select value={form.binding ?? ""}
+                    onChange={(e) => setForm({ ...form, binding: (e.target.value || null) as Binding | null })}>
+                    <option value="">Not recorded</option>
+                    <option value="HARDCOVER">Hardcover</option>
+                    <option value="PAPERBACK">Paperback</option>
+                    <option value="FLEXIBOUND">Flexibound</option>
+                    <option value="SPIRAL">Spiral-bound</option>
+                    <option value="STAPLED">Stapled</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </label>
+                <label>Publication type
+                  <select value={form.publication_type ?? ""}
+                    onChange={(e) => setForm({ ...form, publication_type: (e.target.value || null) as PublicationType | null })}>
+                    <option value="">Not classified</option>
+                    <option value="CONVENTIONAL_BOOK">Conventional book</option>
+                    <option value="COMIC_GRAPHIC_NOVEL">Comic / Graphic novel</option>
+                    <option value="ATLAS">Atlas</option>
+                    <option value="REFERENCE">Reference work</option>
+                    <option value="ART_PHOTOGRAPHY_ILLUSTRATED">Art / Photography / Illustrated</option>
+                    <option value="MAGAZINE_PERIODICAL">Magazine / Periodical</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </label>
+                <label>Series
+                  <input value={form.series_name ?? ""}
+                    onChange={(e) => setForm({ ...form, series_name: e.target.value || null })} />
+                </label>
+                <label>Series volume
+                  <input value={form.series_volume ?? ""} placeholder="e.g. 0.5, III, Omnibus 1"
+                    onChange={(e) => setForm({ ...form, series_volume: e.target.value || null })} />
+                </label>
+                <label className="wide">Genre
+                  <input value={form.genre_text ?? ""} placeholder="e.g. Historical, Horror"
+                    onChange={(e) => setForm({ ...form, genre_text: e.target.value || null })} />
+                </label>
+              </div>
+            </fieldset>
             <label>Status
               <select value={form.status}
                 onChange={(e) => {

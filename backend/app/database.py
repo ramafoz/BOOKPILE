@@ -61,6 +61,40 @@ def init_database() -> None:
                 author TEXT NOT NULL,
                 isbn_10 TEXT,
                 isbn_13 TEXT,
+                subtitle TEXT,
+                page_count INTEGER CHECK (page_count IS NULL OR page_count > 0),
+                publisher TEXT,
+                current_ed_year INTEGER CHECK (
+                    current_ed_year IS NULL OR current_ed_year BETWEEN 1000 AND 9999
+                ),
+                original_publication_year INTEGER CHECK (
+                    original_publication_year IS NULL
+                    OR original_publication_year BETWEEN 1000 AND 9999
+                ),
+                language TEXT,
+                edition_number INTEGER CHECK (
+                    edition_number IS NULL OR edition_number > 0
+                ),
+                fiction_category TEXT CHECK (
+                    fiction_category IS NULL
+                    OR fiction_category IN ('FICTION', 'NON_FICTION')
+                ),
+                binding TEXT CHECK (
+                    binding IS NULL OR binding IN (
+                        'HARDCOVER', 'PAPERBACK', 'FLEXIBOUND',
+                        'SPIRAL', 'STAPLED', 'OTHER'
+                    )
+                ),
+                publication_type TEXT CHECK (
+                    publication_type IS NULL OR publication_type IN (
+                        'CONVENTIONAL_BOOK', 'COMIC_GRAPHIC_NOVEL', 'ATLAS',
+                        'REFERENCE', 'ART_PHOTOGRAPHY_ILLUSTRATED',
+                        'MAGAZINE_PERIODICAL', 'OTHER'
+                    )
+                ),
+                genre_text TEXT,
+                series_name TEXT,
+                series_volume TEXT,
                 status TEXT NOT NULL DEFAULT 'PENDING'
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
@@ -281,6 +315,40 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
                 author TEXT NOT NULL,
                 isbn_10 TEXT,
                 isbn_13 TEXT,
+                subtitle TEXT,
+                page_count INTEGER CHECK (page_count IS NULL OR page_count > 0),
+                publisher TEXT,
+                current_ed_year INTEGER CHECK (
+                    current_ed_year IS NULL OR current_ed_year BETWEEN 1000 AND 9999
+                ),
+                original_publication_year INTEGER CHECK (
+                    original_publication_year IS NULL
+                    OR original_publication_year BETWEEN 1000 AND 9999
+                ),
+                language TEXT,
+                edition_number INTEGER CHECK (
+                    edition_number IS NULL OR edition_number > 0
+                ),
+                fiction_category TEXT CHECK (
+                    fiction_category IS NULL
+                    OR fiction_category IN ('FICTION', 'NON_FICTION')
+                ),
+                binding TEXT CHECK (
+                    binding IS NULL OR binding IN (
+                        'HARDCOVER', 'PAPERBACK', 'FLEXIBOUND',
+                        'SPIRAL', 'STAPLED', 'OTHER'
+                    )
+                ),
+                publication_type TEXT CHECK (
+                    publication_type IS NULL OR publication_type IN (
+                        'CONVENTIONAL_BOOK', 'COMIC_GRAPHIC_NOVEL', 'ATLAS',
+                        'REFERENCE', 'ART_PHOTOGRAPHY_ILLUSTRATED',
+                        'MAGAZINE_PERIODICAL', 'OTHER'
+                    )
+                ),
+                genre_text TEXT,
+                series_name TEXT,
+                series_volume TEXT,
                 status TEXT NOT NULL DEFAULT 'PENDING'
                     CHECK (status IN ('PENDING', 'CURRENTLY_READING', 'READ')),
                 goodreads_url TEXT,
@@ -306,13 +374,20 @@ def _migrate_book_statuses(connection: sqlite3.Connection) -> None:
             );
 
             INSERT INTO books_new (
-                id, title, author, isbn_10, isbn_13, status, goodreads_url, notes,
+                id, title, author, isbn_10, isbn_13,
+                subtitle, page_count, publisher, current_ed_year,
+                original_publication_year, language, edition_number,
+                fiction_category, binding, publication_type, genre_text,
+                series_name, series_volume, status, goodreads_url, notes,
                 acquisition_date, reading_started_date, read_date,
                 is_read_date_unknown, is_original_collection, cover_filename,
                 container_id, position, created_at, updated_at
             )
             SELECT
-                id, title, author, NULL, NULL, status, goodreads_url, notes,
+                id, title, author, NULL, NULL,
+                NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                NULL, NULL, NULL, NULL, NULL, NULL,
+                status, goodreads_url, notes,
                 NULL, NULL, NULL, 0, 1, NULL,
                 container_id, position, created_at, updated_at
             FROM books;

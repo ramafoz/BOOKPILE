@@ -178,6 +178,10 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
 .form-grid label, .layout-forms section { font-size: 13px; font-weight: 700; color: #45534f; }
 .form-grid .wide { grid-column: 1 / -1; }
+.metadata-fields { grid-column: 1 / -1; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.metadata-fields legend { padding: 0 6px; color: #45534f; font-size: 13px; font-weight: 700; }
+.metadata-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.metadata-form-grid .wide { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; border: 1px solid #d7cdbd; border-radius: 7px; padding: 11px 12px; margin-top: 7px; background: #fffdf8; color: #1d2c28; outline: none; }
 input:focus, select:focus, textarea:focus { border-color: #a85835; box-shadow: 0 0 0 3px #a8583517; }
 input:disabled, select:disabled { color: #8b918e; background: #e9e3d9; cursor: not-allowed; }
@@ -240,6 +244,17 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .isbn-candidate-copy > span { display: block; margin-bottom: 4px; color: #a85835; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .isbn-candidate-copy > strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 18px; }
 .isbn-candidate-copy > p { margin: 3px 0 0; color: #5f6d68; font-size: 13px; }
+.candidate-metadata-review { grid-column: 1 / -1; padding-top: 12px; border-top: 1px solid #e1d7c9; }
+.candidate-review-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.candidate-review-heading small { margin: 0; text-align: right; }
+.candidate-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+.candidate-review-grid label { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 6px; color: #40514b; background: #f1ebe1; font-size: 12px; cursor: pointer; }
+.candidate-review-grid label.inferred { background: #f5ead7; }
+.candidate-review-grid input { flex: 0 0 auto; width: auto; margin: 2px 0 0; accent-color: #28574d; }
+.candidate-review-grid span { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.candidate-review-grid b { color: #7c543c; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.candidate-review-grid em { width: fit-content; margin-top: 3px; padding: 1px 5px; border-radius: 8px; color: #825927; background: #ead4ad; font-size: 9px; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.candidate-metadata-review > button { justify-content: center; margin-left: auto; }
 .isbn-matches { grid-column: 1 / -1; padding: 11px; border-radius: 7px; color: #68432f; background: #f6e8d4; font-size: 12px; }
 .isbn-direct-matches { margin-top: 12px; }
 .isbn-matches > strong { display: block; margin-bottom: 7px; color: #8b4b2c; }
@@ -547,6 +562,9 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .catalogue-heading h2 { font-size: 32px; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .wide { grid-column: auto; }
+  .metadata-fields { grid-column: auto; }
+  .metadata-form-grid { grid-template-columns: 1fr; }
+  .metadata-form-grid .wide { grid-column: auto; }
   .date-fields { grid-column: auto; grid-template-columns: 1fr; }
   .cover-field { grid-column: auto; }
   .isbn-field { grid-column: auto; }
@@ -560,6 +578,10 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .ocr-draft { grid-template-columns: 1fr; }
   .isbn-candidate { grid-template-columns: 1fr; }
   .isbn-candidate > button { justify-content: center; }
+  .candidate-review-heading { align-items: flex-start; flex-direction: column; }
+  .candidate-review-heading small { text-align: left; }
+  .candidate-review-grid { grid-template-columns: 1fr; }
+  .candidate-metadata-review > button { width: 100%; margin-left: 0; }
   .isbn-matches { grid-column: auto; }
   .isbn-match { align-items: flex-start; flex-direction: column; }
   .cover-editor { align-items: flex-start; }

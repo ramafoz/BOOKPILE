@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 import os
+import re
 from typing import Any
 
 import httpx
@@ -96,6 +97,9 @@ def _lookup_open_library_isbn(
             page_count=_positive_int(payload.get("number_of_pages")),
             subjects=_clean_text_list(payload.get("subjects")),
             language=_open_library_language(payload.get("languages")),
+            edition_number=_edition_number(payload.get("edition_name")),
+            binding=_binding(payload.get("physical_format")),
+            series_name=_first_text(payload.get("series")),
         )
     ]
 
@@ -129,9 +133,9 @@ def _open_library_language(value: Any) -> str | None:
         return None
     for language in value:
         if isinstance(language, dict) and (key := _clean_text(language.get("key"))):
-            return key.rsplit("/", 1)[-1]
+            return _language_name(key.rsplit("/", 1)[-1])
         if cleaned := _clean_text(language):
-            return cleaned
+            return _language_name(cleaned)
     return None
 
 
@@ -181,6 +185,9 @@ def _lookup_google_books(
                 page_count=_positive_int(volume.get("pageCount")),
                 subjects=_clean_text_list(volume.get("categories")),
                 language=_clean_text(volume.get("language")),
+                edition_number=None,
+                binding=None,
+                series_name=None,
             )
         )
     return _deduplicate(candidates)
@@ -199,7 +206,13 @@ def _candidate(
     page_count: int | None,
     subjects: list[str],
     language: str | None,
+    edition_number: int | None,
+    binding: str | None,
+    series_name: str | None,
 ) -> dict[str, Any]:
+    current_ed_year = _publication_year(published_date)
+    fiction_category = _fiction_category(subjects)
+    publication_type = _publication_type(subjects)
     return {
         "source": source,
         "source_record_id": source_record_id,
@@ -208,16 +221,109 @@ def _candidate(
         "subtitle": subtitle,
         "authors": authors,
         "publisher": publisher,
-        "published_date": published_date,
+        "current_ed_year": current_ed_year,
+        "original_publication_year": None,
         "page_count": page_count,
         "subjects": subjects,
-        "language": language,
-        "edition": None,
-        "genres": [],
-        "category": None,
-        "format": None,
+        "language": _language_name(language),
+        "edition_number": edition_number,
+        "fiction_category": fiction_category,
+        "binding": binding,
+        "publication_type": publication_type,
+        "genre_text": ", ".join(subjects) or None,
+        "series_name": series_name,
+        "series_volume": None,
         "confidence_or_match_notes": None,
     }
+
+
+LANGUAGE_NAMES = {
+    "en": "English",
+    "eng": "English",
+    "es": "Spanish",
+    "spa": "Spanish",
+    "gl": "Galician",
+    "glg": "Galician",
+    "ca": "Catalan",
+    "cat": "Catalan",
+    "fr": "French",
+    "fre": "French",
+    "fra": "French",
+    "de": "German",
+    "ger": "German",
+    "deu": "German",
+    "it": "Italian",
+    "ita": "Italian",
+    "pt": "Portuguese",
+    "por": "Portuguese",
+}
+
+
+def _language_name(value: str | None) -> str | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    return LANGUAGE_NAMES.get(cleaned.casefold(), cleaned)
+
+
+def _publication_year(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = re.search(r"(?<!\d)(\d{4})(?!\d)", value)
+    if not match:
+        return None
+    year = int(match.group(1))
+    return year if 1000 <= year <= 9999 else None
+
+
+def _edition_number(value: Any) -> int | None:
+    cleaned = _clean_text(value)
+    if not cleaned:
+        return None
+    match = re.search(r"(?<!\d)(\d+)(?:st|nd|rd|th|ª|a)?", cleaned, re.IGNORECASE)
+    if not match:
+        return None
+    number = int(match.group(1))
+    return number if number > 0 else None
+
+
+def _binding(value: Any) -> str | None:
+    cleaned = (_clean_text(value) or "").casefold()
+    if not cleaned:
+        return None
+    if any(term in cleaned for term in ("hardcover", "hardback", "tapa dura")):
+        return "HARDCOVER"
+    if any(term in cleaned for term in ("paperback", "softcover", "tapa blanda")):
+        return "PAPERBACK"
+    if "flexibound" in cleaned or "flexible" in cleaned:
+        return "FLEXIBOUND"
+    if "spiral" in cleaned:
+        return "SPIRAL"
+    if "stapled" in cleaned or "grapado" in cleaned:
+        return "STAPLED"
+    return "OTHER"
+
+
+def _fiction_category(subjects: list[str]) -> str | None:
+    text = " ".join(subjects).casefold()
+    if "nonfiction" in text or "non-fiction" in text:
+        return "NON_FICTION"
+    if re.search(r"\bfiction\b", text):
+        return "FICTION"
+    return None
+
+
+def _publication_type(subjects: list[str]) -> str | None:
+    text = " ".join(subjects).casefold()
+    if any(term in text for term in ("graphic novel", "comic book", "comics")):
+        return "COMIC_GRAPHIC_NOVEL"
+    if "atlas" in text:
+        return "ATLAS"
+    if any(term in text for term in ("dictionary", "encyclopedia", "reference")):
+        return "REFERENCE"
+    if any(term in text for term in ("photography", "art book", "illustrated")):
+        return "ART_PHOTOGRAPHY_ILLUSTRATED"
+    return None
 
 
 def _isbn_identifiers(values: Iterable[Any]) -> dict[str, str | None]:

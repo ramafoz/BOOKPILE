@@ -3,7 +3,8 @@
 BOOKPILE uses versioned, transactional SQLite migrations for database changes
 that cannot be represented by the original catalogue schema. The first such
 change is schema v2, which adds nullable, non-unique, indexed ISBN-10 and
-ISBN-13 fields. Existing book values are not rewritten.
+ISBN-13 fields. Schema v3 adds only nullable bibliographic metadata fields and
+controlled classifications. Existing book values are not rewritten.
 
 ## Safety guarantees
 
@@ -11,7 +12,7 @@ Before a pending migration is allowed to write, BOOKPILE:
 
 1. Checks SQLite integrity and foreign-key consistency.
 2. Takes a deterministic snapshot of all fields and records that existed in
-   schema v1.
+   the source schema, including ISBN values when migrating from v2.
 3. Creates a complete ZIP containing the database and every referenced cover.
 4. Validates that ZIP using the same checksum, image, count, and schema checks
    as the restore feature.

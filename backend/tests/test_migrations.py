@@ -9,6 +9,9 @@ from app.database import init_database
 from app.exports import create_full_backup
 from app.migrations import (
     Migration,
+    BASELINE_BOOK_COLUMNS,
+    ISBN_BOOK_COLUMNS,
+    V3_BOOK_COLUMNS,
     connect_database,
     run_migrations,
     schema_snapshot,
@@ -30,6 +33,8 @@ def create_v1_catalogue(
     with sqlite3.connect(database) as connection:
         connection.execute("DROP INDEX idx_books_isbn_10")
         connection.execute("DROP INDEX idx_books_isbn_13")
+        for column in sorted(V3_BOOK_COLUMNS):
+            connection.execute(f'ALTER TABLE books DROP COLUMN "{column}"')
         connection.execute("ALTER TABLE books DROP COLUMN isbn_10")
         connection.execute("ALTER TABLE books DROP COLUMN isbn_13")
 
@@ -118,6 +123,7 @@ def test_v1_to_v2_is_additive_backed_up_and_idempotent(
         covers=covers,
         backup_directory=backups,
         approved=True,
+        target_version=2,
     )
 
     assert report.source_version == 1
@@ -143,7 +149,10 @@ def test_v1_to_v2_is_additive_backed_up_and_idempotent(
         }
         assert indexes["idx_books_isbn_10"] == 0
         assert indexes["idx_books_isbn_13"] == 0
-        assert schema_snapshot(connection) == before_snapshot
+        assert schema_snapshot(
+            connection,
+            book_columns=BASELINE_BOOK_COLUMNS,
+        ) == before_snapshot
 
     backup_count = len(list(backups.glob("*.zip")))
     second = run_migrations(
@@ -151,6 +160,7 @@ def test_v1_to_v2_is_additive_backed_up_and_idempotent(
         covers=covers,
         backup_directory=backups,
         approved=True,
+        target_version=2,
     )
     assert second.applied_versions == ()
     assert second.backup_path is None
@@ -178,6 +188,7 @@ def test_failed_migration_rolls_back_but_keeps_safety_backup(
             covers=covers,
             backup_directory=backups,
             approved=True,
+            target_version=2,
         )
 
     with closing(connect_database(database)) as connection:
@@ -207,7 +218,7 @@ def test_newer_database_is_rejected_without_backup(
             )
             """
         )
-        for version in range(1, 4):
+        for version in range(1, 5):
             connection.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, f"schema {version}"),
@@ -249,15 +260,64 @@ def test_backups_record_and_validate_the_schema_they_contain(
         backup_directory=backups,
         approved=True,
     )
-    v2_backup = backups / "catalogue-v2.zip"
-    v2_manifest = create_full_backup(
-        v2_backup,
+    v3_backup = backups / "catalogue-v3.zip"
+    v3_manifest = create_full_backup(
+        v3_backup,
         source_database=database,
         source_covers=covers,
     )
-    v2_validation = extract_and_validate_archive(
-        v2_backup,
-        tmp_path / "validated-v2",
+    v3_validation = extract_and_validate_archive(
+        v3_backup,
+        tmp_path / "validated-v3",
     )
-    assert v2_manifest["schema_version"] == 2
-    assert v2_validation["schema_version"] == 2
+    assert v3_manifest["schema_version"] == 3
+    assert v3_validation["schema_version"] == 3
+
+
+def test_v2_to_v3_preserves_existing_isbns_and_adds_nullable_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, covers, backups = create_v1_catalogue(tmp_path, monkeypatch)
+    run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=2,
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "UPDATE books SET isbn_10 = ?, isbn_13 = ? WHERE id = 1",
+            ("0306406152", "9780306406157"),
+        )
+
+    with closing(connect_database(database)) as connection:
+        before = schema_snapshot(
+            connection,
+            book_columns=BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS,
+        )
+    report = run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+    )
+
+    assert report.source_version == 2
+    assert report.target_version == 3
+    assert report.applied_versions == (3,)
+    assert report.before_fingerprint == report.after_fingerprint
+    with closing(connect_database(database)) as connection:
+        assert schema_version(connection) == 3
+        assert V3_BOOK_COLUMNS <= {
+            row["name"] for row in connection.execute("PRAGMA table_info(books)")
+        }
+        book = connection.execute("SELECT * FROM books WHERE id = 1").fetchone()
+        assert book["isbn_10"] == "0306406152"
+        assert book["isbn_13"] == "9780306406157"
+        assert all(book[column] is None for column in V3_BOOK_COLUMNS)
+        assert schema_snapshot(
+            connection,
+            book_columns=BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS,
+        ) == before

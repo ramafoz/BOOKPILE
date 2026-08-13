@@ -483,11 +483,16 @@ def list_books(
         where.append("b.status = ?")
         params.append(book_status.value)
     if search and search.strip():
+        searchable_columns = (
+            "b.title", "b.author", "b.subtitle", "b.publisher", "b.language",
+            "b.genre_text", "b.series_name", "b.series_volume",
+            "b.isbn_10", "b.isbn_13",
+        )
         where.append(
-            "(b.title LIKE ? OR b.author LIKE ? OR b.isbn_10 LIKE ? OR b.isbn_13 LIKE ?)"
+            "(" + " OR ".join(f"{column} LIKE ?" for column in searchable_columns) + ")"
         )
         term = f"%{search.strip()}%"
-        params.extend((term, term, term, term))
+        params.extend(term for _ in searchable_columns)
     if bookcase_id is not None:
         where.append("bc.id = ?")
         params.append(bookcase_id)
@@ -708,17 +713,38 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
             cursor = connection.execute(
                 """
                 INSERT INTO books (
-                    title, author, isbn_10, isbn_13, status, goodreads_url, notes,
+                    title, author, isbn_10, isbn_13,
+                    subtitle, page_count, publisher, current_ed_year,
+                    original_publication_year, language, edition_number,
+                    fiction_category, binding, publication_type, genre_text,
+                    series_name, series_volume,
+                    status, goodreads_url, notes,
                     acquisition_date, reading_started_date, read_date,
                     is_read_date_unknown, is_original_collection,
                     container_id, position
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
                 """,
                 (
                     payload.title,
                     payload.author,
                     payload.isbn_10,
                     payload.isbn_13,
+                    payload.subtitle,
+                    payload.page_count,
+                    payload.publisher,
+                    payload.current_ed_year,
+                    payload.original_publication_year,
+                    payload.language,
+                    payload.edition_number,
+                    payload.fiction_category.value if payload.fiction_category else None,
+                    payload.binding.value if payload.binding else None,
+                    payload.publication_type.value if payload.publication_type else None,
+                    payload.genre_text,
+                    payload.series_name,
+                    payload.series_volume,
                     payload.status.value,
                     str(payload.goodreads_url) if payload.goodreads_url else None,
                     payload.notes,
@@ -758,6 +784,9 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
         changes["author"] = changes["author"].strip()
     if "status" in changes and changes["status"] is not None:
         changes["status"] = changes["status"].value
+    for enum_field in ("fiction_category", "binding", "publication_type"):
+        if enum_field in changes and changes[enum_field] is not None:
+            changes[enum_field] = changes[enum_field].value
     if "goodreads_url" in changes and changes["goodreads_url"] is not None:
         changes["goodreads_url"] = str(changes["goodreads_url"])
     for date_field in (

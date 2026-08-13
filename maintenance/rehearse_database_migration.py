@@ -73,7 +73,7 @@ def main() -> int:
                 connection.execute("PRAGMA foreign_key_check").fetchall()
             )
 
-        post_migration_backup = root / "post-migration-v2.zip"
+        post_migration_backup = root / f"post-migration-v{report.target_version}.zip"
         post_manifest = create_full_backup(
             post_migration_backup,
             source_database=database,
