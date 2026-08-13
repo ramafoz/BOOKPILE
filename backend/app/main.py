@@ -32,13 +32,25 @@ from .catalogue_matching import (
     find_isbn_catalogue_matches,
 )
 from .database import connect, database_path, init_database
-from .exports import create_full_backup, write_books_csv
+from .exports import create_full_backup, write_books_csv, write_reading_sessions_csv
 from .isbn import InvalidISBN, normalize_isbn
 from .rearrangement import (
     apply_planned_books,
     load_rearrangement_state,
     plan_rearrangement_draft,
     rearrangement_revision,
+)
+from .reading_sessions import (
+    ReadingSessionError,
+    add_historical_reading,
+    apply_projected_reading_values,
+    cancel_active_reading,
+    delete_all_sessions,
+    delete_session,
+    finish_reading,
+    start_reading,
+    sync_book_projection,
+    update_session,
 )
 from .restore import MAX_BACKUP_BYTES, perform_restore, stage_restore
 from .schemas import (
@@ -57,6 +69,10 @@ from .schemas import (
     FictionCategory,
     ISBNLookupResult,
     PublicationType,
+    ReadingFinishRequest,
+    ReadingHistoryCreate,
+    ReadingHistoryUpdate,
+    ReadingStartRequest,
     RearrangementApplyRequest,
     RearrangementRequest,
     RearrangementResult,
@@ -77,6 +93,25 @@ SELECT
             WHERE book_id = b.id ORDER BY position
         ) ordered
     ), '[]') AS structured_authors_json,
+    COALESCE((
+        SELECT json_group_array(json(ordered_session.session_json))
+        FROM (
+            SELECT json_object(
+                'id', rs.id,
+                'book_id', rs.book_id,
+                'session_number', rs.session_number,
+                'state', rs.state,
+                'started_date', rs.started_date,
+                'finished_date', rs.finished_date,
+                'dates_unknown', json(CASE WHEN rs.dates_unknown = 1 THEN 'true' ELSE 'false' END),
+                'created_at', rs.created_at,
+                'updated_at', rs.updated_at
+            ) AS session_json
+            FROM reading_sessions rs
+            WHERE rs.book_id = b.id
+            ORDER BY rs.session_number
+        ) ordered_session
+    ), '[]') AS reading_sessions_json,
     bc.name AS bookcase_name,
     s.shelf_number,
     c.container_type,
@@ -119,6 +154,15 @@ def serialize_book(row: sqlite3.Row) -> dict[str, Any]:
     book = dict(row)
     book["structured_authors"] = json.loads(
         book.pop("structured_authors_json", "[]")
+    )
+    book["reading_sessions"] = json.loads(
+        book.pop("reading_sessions_json", "[]")
+    )
+    book["reading_session_count"] = len(book["reading_sessions"])
+    book["is_rereading"] = any(
+        session["state"] == "ACTIVE" for session in book["reading_sessions"]
+    ) and any(
+        session["state"] == "COMPLETED" for session in book["reading_sessions"]
     )
     if book["container_id"] is None:
         book["location_label"] = None
@@ -449,6 +493,8 @@ def apply_rearrangement(payload: RearrangementApplyRequest) -> dict[str, Any]:
                     detail="Complete the chain and resolve every gap before applying",
                 )
             apply_planned_books(connection, books, result["_planned_books"])
+    except ReadingSessionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return result
@@ -491,6 +537,23 @@ def download_books_csv() -> FileResponse:
     )
 
 
+@app.get("/exports/reading-sessions.csv")
+def download_reading_sessions_csv() -> FileResponse:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = temporary_download(".csv")
+    try:
+        write_reading_sessions_csv(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        filename=f"BOOKPILE-reading-sessions-{timestamp}.csv",
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
 @app.post("/restore/inspect")
 async def inspect_restore(
     backup: UploadFile = File(...),
@@ -529,18 +592,32 @@ def stats() -> dict[str, int]:
         row = connection.execute(
             """
             SELECT
-                COUNT(*) AS total,
-                SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) AS pending,
-                SUM(
-                    CASE WHEN status = 'CURRENTLY_READING' THEN 1 ELSE 0 END
-                ) AS currently_reading,
-                SUM(CASE WHEN status = 'READ' THEN 1 ELSE 0 END) AS read
-            FROM books
+                COUNT(DISTINCT b.id) AS total,
+                SUM(CASE WHEN b.status = 'PENDING' THEN 1 ELSE 0 END) AS pending,
+                SUM(CASE WHEN b.status = 'CURRENTLY_READING' AND NOT EXISTS (
+                    SELECT 1 FROM reading_sessions rs
+                    WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+                ) THEN 1 ELSE 0 END) AS currently_reading,
+                SUM(CASE WHEN b.status = 'CURRENTLY_READING' AND EXISTS (
+                    SELECT 1 FROM reading_sessions rs
+                    WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+                ) THEN 1 ELSE 0 END) AS currently_rereading,
+                SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM reading_sessions rs
+                    WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+                ) THEN 1 ELSE 0 END) AS read
+            FROM books b
             """
         ).fetchone()
     return {
         key: row[key] or 0
-        for key in ("total", "pending", "currently_reading", "read")
+        for key in (
+            "total",
+            "pending",
+            "currently_reading",
+            "currently_rereading",
+            "read",
+        )
     }
 
 
@@ -651,6 +728,7 @@ def list_books(
     series_name: list[str] = Query(default=[]),
     series_state: Literal["ANY", "YES", "NO"] = "ANY",
     author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
+    reading_activity: Literal["ANY", "INITIAL", "REREADING"] = "ANY",
     page_min: int | None = Query(default=None, ge=1),
     page_max: int | None = Query(default=None, ge=1),
     publication_year_field: Literal[
@@ -672,6 +750,20 @@ def list_books(
     if book_status:
         where.append("b.status = ?")
         params.append(book_status.value)
+    if reading_activity == "INITIAL":
+        where.append(
+            """b.status = 'CURRENTLY_READING' AND NOT EXISTS (
+                SELECT 1 FROM reading_sessions rs
+                WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+            )"""
+        )
+    elif reading_activity == "REREADING":
+        where.append(
+            """b.status = 'CURRENTLY_READING' AND EXISTS (
+                SELECT 1 FROM reading_sessions rs
+                WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+            )"""
+        )
     if search and search.strip():
         searchable_columns = ("b.title", "b.author", "b.series_name")
         where.append(
@@ -691,7 +783,9 @@ def list_books(
         where.append("c.id = ?")
         params.append(container_id)
     if quick_view == "missing_finished":
-        where.append("(b.status = 'READ' AND b.read_date IS NULL)")
+        where.append(
+            "EXISTS (SELECT 1 FROM reading_sessions rs WHERE rs.book_id = b.id AND rs.dates_unknown = 1)"
+        )
     elif quick_view == "original_collection":
         where.append("b.is_original_collection = 1")
     if catalogue_check == "missing_started":
@@ -775,18 +869,34 @@ def list_books(
         publication_year_max=publication_year_max,
     )
     date_conditions: list[str] = []
-    if date_from is not None:
-        date_conditions.append(f"b.{date_field} >= ?")
-        params.append(date_from.isoformat())
-    if date_to is not None:
-        date_conditions.append(f"b.{date_field} <= ?")
-        params.append(date_to.isoformat())
-    if date_conditions:
-        date_clause = " AND ".join(date_conditions)
+    if date_field == "acquisition_date":
+        if date_from is not None:
+            date_conditions.append("b.acquisition_date >= ?")
+            params.append(date_from.isoformat())
+        if date_to is not None:
+            date_conditions.append("b.acquisition_date <= ?")
+            params.append(date_to.isoformat())
+        if date_conditions:
+            date_clause = " AND ".join(date_conditions)
+            where.append(
+                f"(({date_clause}) OR b.acquisition_date IS NULL)"
+                if include_unknown_dates else f"({date_clause})"
+            )
+    elif date_from is not None or date_to is not None:
+        session_field = (
+            "started_date" if date_field == "reading_started_date" else "finished_date"
+        )
+        session_conditions = ["rs.book_id = b.id"]
+        if date_from is not None:
+            session_conditions.append(f"rs.{session_field} >= ?")
+            params.append(date_from.isoformat())
+        if date_to is not None:
+            session_conditions.append(f"rs.{session_field} <= ?")
+            params.append(date_to.isoformat())
+        session_match = "EXISTS (SELECT 1 FROM reading_sessions rs WHERE " + " AND ".join(session_conditions) + ")"
         if include_unknown_dates:
-            where.append(f"(({date_clause}) OR b.{date_field} IS NULL)")
-        else:
-            where.append(f"({date_clause})")
+            session_match += " OR EXISTS (SELECT 1 FROM reading_sessions ru WHERE ru.book_id = b.id AND ru.dates_unknown = 1)"
+        where.append(f"({session_match})")
     if (
         sort_by
         in {"acquisition_date", "reading_started_date", "read_date"}
@@ -858,18 +968,18 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
         )
         is_read_date_unknown = False
     elif payload.status == BookStatus.read:
-        if is_read_date_unknown:
+        if is_read_date_unknown or (
+            reading_started_date is None and read_date is None
+        ):
+            reading_started_date = None
             read_date = None
+            is_read_date_unknown = True
         else:
-            read_date = read_date or max(
-                value
-                for value in (
-                    date.today(),
-                    acquisition_date,
-                    reading_started_date,
+            if reading_started_date is None or read_date is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Completed readings require both dates or neither date",
                 )
-                if value is not None
-            )
     else:
         is_read_date_unknown = False
     validate_book_dates(acquisition_date, reading_started_date, read_date)
@@ -1032,6 +1142,18 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                     """,
                     (book_id,),
                 )
+            if payload.status == BookStatus.currently_reading:
+                start_reading(connection, book_id, reading_started_date)
+            elif payload.status == BookStatus.read:
+                add_historical_reading(
+                    connection,
+                    book_id,
+                    started=reading_started_date,
+                    finished=read_date,
+                    dates_unknown=is_read_date_unknown,
+                )
+    except ReadingSessionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return fetch_book(book_id)
@@ -1133,12 +1255,17 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
             existing["is_read_date_unknown"],
         )
     )
+    if (
+        {"reading_started_date", "read_date"} & payload.model_fields_set
+        and "is_read_date_unknown" not in payload.model_fields_set
+    ):
+        next_read_date_unknown = False
+        changes["is_read_date_unknown"] = 0
     if next_status == BookStatus.currently_reading.value:
         changes["is_read_date_unknown"] = 0
-        if (
-            "reading_started_date" not in payload.model_fields_set
-            and existing["reading_started_date"] is None
-        ):
+        if changes.get(
+            "reading_started_date", existing["reading_started_date"]
+        ) is None:
             next_acquisition = parsed_date(
                 changes.get("acquisition_date", existing["acquisition_date"])
             )
@@ -1148,36 +1275,22 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
                 if value is not None
             ).isoformat()
     elif next_status == BookStatus.read.value:
+        next_started_value = changes.get(
+            "reading_started_date", existing["reading_started_date"]
+        )
+        next_finished_value = changes.get("read_date", existing["read_date"])
+        if next_started_value is None and next_finished_value is None:
+            next_read_date_unknown = True
         if next_read_date_unknown:
+            changes["reading_started_date"] = None
             changes["read_date"] = None
             changes["is_read_date_unknown"] = 1
-        elif (
-            changes.get("read_date", existing["read_date"]) is None
-            and (
-                (
-                    "status" in payload.model_fields_set
-                    and existing["status"] != BookStatus.read.value
+        else:
+            if next_started_value is None or next_finished_value is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Completed readings require both dates or neither date",
                 )
-                or (
-                    "is_read_date_unknown" in payload.model_fields_set
-                    and existing["is_read_date_unknown"]
-                )
-            )
-        ):
-            next_acquisition = parsed_date(
-                changes.get("acquisition_date", existing["acquisition_date"])
-            )
-            next_started = parsed_date(
-                changes.get(
-                    "reading_started_date",
-                    existing["reading_started_date"],
-                )
-            )
-            changes["read_date"] = max(
-                value
-                for value in (date.today(), next_acquisition, next_started)
-                if value is not None
-            ).isoformat()
     else:
         changes["is_read_date_unknown"] = 0
 
@@ -1197,6 +1310,20 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
 
     assignments = ", ".join(f"{column} = ?" for column in changes)
     values = list(changes.values())
+    projected_status = changes.get("status", existing["status"])
+    projected_started = changes.get(
+        "reading_started_date", existing["reading_started_date"]
+    )
+    projected_finished = changes.get("read_date", existing["read_date"])
+    projected_unknown = bool(
+        changes.get("is_read_date_unknown", existing["is_read_date_unknown"])
+    )
+    lifecycle_changed = (
+        projected_status != existing["status"]
+        or projected_started != existing["reading_started_date"]
+        or projected_finished != existing["read_date"]
+        or projected_unknown != bool(existing["is_read_date_unknown"])
+    )
     try:
         with connect() as connection:
             if author_structure_touched:
@@ -1258,9 +1385,107 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
                     f"UPDATE books SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (*values, book_id),
                 )
+            if lifecycle_changed:
+                apply_projected_reading_values(
+                    connection,
+                    book_id,
+                    status=projected_status,
+                    started=parsed_date(projected_started),
+                    finished=parsed_date(projected_finished),
+                    dates_unknown=projected_unknown,
+                )
+            else:
+                sync_book_projection(connection, book_id)
+    except ReadingSessionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return fetch_book(book_id)
+
+
+def _reading_session_change(book_id: int, operation) -> dict[str, Any]:
+    try:
+        with connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            operation(connection)
+    except ReadingSessionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return fetch_book(book_id)
+
+
+@app.post("/books/{book_id}/reading-sessions/start", response_model=Book)
+def start_book_reading(book_id: int, payload: ReadingStartRequest) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: start_reading(connection, book_id, payload.started_date),
+    )
+
+
+@app.post("/books/{book_id}/reading-sessions/finish", response_model=Book)
+def finish_book_reading(book_id: int, payload: ReadingFinishRequest) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: finish_reading(connection, book_id, payload.finished_date),
+    )
+
+
+@app.delete("/books/{book_id}/reading-sessions/active", response_model=Book)
+def cancel_book_reading(book_id: int) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: cancel_active_reading(connection, book_id),
+    )
+
+
+@app.post("/books/{book_id}/reading-sessions", response_model=Book)
+def create_book_reading_history(
+    book_id: int, payload: ReadingHistoryCreate
+) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: add_historical_reading(
+            connection,
+            book_id,
+            started=payload.started_date,
+            finished=payload.finished_date,
+            dates_unknown=payload.dates_unknown,
+        ),
+    )
+
+
+@app.patch("/books/{book_id}/reading-sessions/{session_id}", response_model=Book)
+def update_book_reading_history(
+    book_id: int, session_id: int, payload: ReadingHistoryUpdate
+) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: update_session(
+            connection,
+            book_id,
+            session_id,
+            started=payload.started_date,
+            finished=payload.finished_date,
+            dates_unknown=payload.dates_unknown,
+        ),
+    )
+
+
+@app.delete("/books/{book_id}/reading-sessions/{session_id}", response_model=Book)
+def delete_book_reading_history(book_id: int, session_id: int) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: delete_session(connection, book_id, session_id),
+    )
+
+
+@app.delete("/books/{book_id}/reading-sessions", response_model=Book)
+def clear_book_reading_history(book_id: int) -> dict[str, Any]:
+    return _reading_session_change(
+        book_id,
+        lambda connection: delete_all_sessions(connection, book_id),
+    )
 
 
 @app.post("/books/{book_id}/move", response_model=Book)
@@ -1575,7 +1800,11 @@ def library_map() -> dict[str, Any]:
         publisher, current_ed_year, original_publication_year, language,
         edition_number, fiction_category, binding, publication_type,
         genre_text, series_name, series_volume, status, container_id,
-        position, acquisition_date, reading_started_date, read_date
+        position, acquisition_date, reading_started_date, read_date,
+        (status = 'CURRENTLY_READING' AND EXISTS (
+            SELECT 1 FROM reading_sessions rs
+            WHERE rs.book_id = books.id AND rs.state = 'COMPLETED'
+        )) AS is_rereading
     """
     map_authors_field = """
         COALESCE((
@@ -1896,13 +2125,34 @@ def catalogue_statistics(
     query = """
         SELECT b.id, b.title, b.author, b.status, b.acquisition_date,
                b.reading_started_date, b.read_date, b.is_original_collection,
-               b.page_count
+               b.page_count,
+               EXISTS(SELECT 1 FROM reading_sessions rc
+                      WHERE rc.book_id = b.id AND rc.state = 'COMPLETED')
+                   AS has_completed_reading
         FROM books b
     """
     if where:
         query += " WHERE " + " AND ".join(where)
     with connect() as connection:
         rows = list(connection.execute(query, params).fetchall())
+        book_ids = [row["id"] for row in rows]
+        if book_ids:
+            placeholders = ", ".join("?" for _ in book_ids)
+            read_rows = list(connection.execute(
+                f"""
+                SELECT rs.id AS session_id, rs.book_id AS id, b.title, b.author,
+                       b.page_count, rs.started_date AS reading_started_date,
+                       rs.finished_date AS read_date, rs.dates_unknown,
+                       rs.session_number
+                FROM reading_sessions rs
+                JOIN books b ON b.id = rs.book_id
+                WHERE rs.state = 'COMPLETED' AND rs.book_id IN ({placeholders})
+                ORDER BY rs.finished_date, rs.book_id, rs.session_number
+                """,
+                book_ids,
+            ).fetchall())
+        else:
+            read_rows = []
 
     acquired_by_year: dict[int, int] = {}
     read_by_year: dict[int, int] = {}
@@ -1910,17 +2160,16 @@ def catalogue_statistics(
     read_by_month = [0] * 12
     for row in rows:
         acquired = parsed_date(row["acquisition_date"])
-        finished = parsed_date(row["read_date"])
         if acquired is not None:
             acquired_by_year[acquired.year] = acquired_by_year.get(acquired.year, 0) + 1
             if year == acquired.year:
                 acquired_by_month[acquired.month - 1] += 1
+    for row in read_rows:
+        finished = parsed_date(row["read_date"])
         if finished is not None:
             read_by_year[finished.year] = read_by_year.get(finished.year, 0) + 1
             if year == finished.year:
                 read_by_month[finished.month - 1] += 1
-
-    read_rows = [row for row in rows if row["status"] == BookStatus.read.value]
     pages_by_day: dict[date, float] = {}
     page_sample_size = 0
     single_day_estimates = 0
@@ -1932,11 +2181,8 @@ def catalogue_statistics(
             continue
         started = parsed_date(row["reading_started_date"])
         if started is None:
-            started = finished
-            single_day_estimates += 1
-            estimated_start = True
-        else:
-            estimated_start = False
+            continue
+        estimated_start = False
         if started > finished:
             started = finished
         duration = (finished - started).days + 1
@@ -1950,6 +2196,7 @@ def catalogue_statistics(
             per_book_reading_rates.append(
                 {
                     "id": row["id"],
+                    "session_number": row["session_number"],
                     "title": row["title"],
                     "author": row["author"],
                     "page_count": page_count,
@@ -2046,7 +2293,7 @@ def catalogue_statistics(
             "reading": sum(
                 row["status"] == BookStatus.currently_reading.value for row in group
             ),
-            "read": sum(row["status"] == BookStatus.read.value for row in group),
+            "read": sum(bool(row["has_completed_reading"]) for row in group),
         }
 
     return {
@@ -2083,6 +2330,11 @@ def catalogue_statistics(
             "per_book_estimates": sum(
                 item["estimated_start"] for item in per_book_reading_rates
             ),
+        },
+        "reading_sessions": {
+            "completed": len(read_rows),
+            "unique_books": len({row["id"] for row in read_rows}),
+            "rereads": sum(row["session_number"] > 1 for row in read_rows),
         },
         "filtered_book_count": len(rows),
         "pending_duration": interval_summary(

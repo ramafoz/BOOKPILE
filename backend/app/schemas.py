@@ -14,6 +14,11 @@ class BookStatus(str, Enum):
     read = "READ"
 
 
+class ReadingSessionState(str, Enum):
+    active = "ACTIVE"
+    completed = "COMPLETED"
+
+
 class FictionCategory(str, Enum):
     fiction = "FICTION"
     non_fiction = "NON_FICTION"
@@ -376,13 +381,58 @@ class Book(BookBase):
     container_type: ContainerType | None = None
     layer: Layer | None = None
     container_number: int | None = None
+    reading_sessions: list["ReadingSession"] = Field(default_factory=list)
+    reading_session_count: int = 0
+    is_rereading: bool = False
 
 
 class Stats(BaseModel):
     total: int
     pending: int
     currently_reading: int
+    currently_rereading: int = 0
     read: int
+
+
+class ReadingSession(BaseModel):
+    id: int
+    book_id: int
+    session_number: int
+    state: ReadingSessionState
+    started_date: date | None = None
+    finished_date: date | None = None
+    dates_unknown: bool = False
+    created_at: str
+    updated_at: str
+
+
+class ReadingStartRequest(BaseModel):
+    started_date: date
+
+
+class ReadingFinishRequest(BaseModel):
+    finished_date: date
+
+
+class ReadingHistoryCreate(BaseModel):
+    started_date: date | None = None
+    finished_date: date | None = None
+    dates_unknown: bool = False
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.dates_unknown:
+            if self.started_date is not None or self.finished_date is not None:
+                raise ValueError("Unknown reading dates must both be empty")
+        elif self.started_date is None or self.finished_date is None:
+            raise ValueError("Historical readings require both dates")
+        return self
+
+
+class ReadingHistoryUpdate(BaseModel):
+    started_date: date | None = None
+    finished_date: date | None = None
+    dates_unknown: bool = False
 
 
 class BibliographicIdentifiers(BaseModel):

@@ -11,7 +11,7 @@ from typing import Callable
 
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 4
+LATEST_SCHEMA_VERSION = 5
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -60,7 +60,9 @@ V3_BOOK_COLUMNS = {
     "series_volume",
 }
 V4_BOOK_COLUMNS = {"has_multiple_authors"}
-PRESERVED_BOOK_COLUMNS = BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS
+PRESERVED_BOOK_COLUMNS = (
+    BASELINE_BOOK_COLUMNS | ISBN_BOOK_COLUMNS | V3_BOOK_COLUMNS | V4_BOOK_COLUMNS
+)
 
 
 @dataclass(frozen=True)
@@ -193,10 +195,91 @@ def _migration_4_store_multiple_authors(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_5_store_reading_sessions(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS reading_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER NOT NULL,
+            session_number INTEGER NOT NULL CHECK (session_number > 0),
+            state TEXT NOT NULL CHECK (state IN ('ACTIVE', 'COMPLETED')),
+            started_date TEXT,
+            finished_date TEXT,
+            dates_unknown INTEGER NOT NULL DEFAULT 0
+                CHECK (dates_unknown IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+            UNIQUE (book_id, session_number),
+            CHECK (
+                (state = 'ACTIVE' AND started_date IS NOT NULL
+                    AND finished_date IS NULL AND dates_unknown = 0)
+                OR
+                (state = 'COMPLETED' AND (
+                    (started_date IS NOT NULL AND finished_date IS NOT NULL
+                        AND dates_unknown = 0 AND started_date <= finished_date)
+                    OR
+                    (started_date IS NULL AND finished_date IS NULL
+                        AND dates_unknown = 1)
+                ))
+            )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_one_active
+        ON reading_sessions(book_id) WHERE state = 'ACTIVE';
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_one_unknown
+        ON reading_sessions(book_id) WHERE dates_unknown = 1;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_distinct_known_period
+        ON reading_sessions(book_id, started_date, finished_date)
+        WHERE state = 'COMPLETED' AND dates_unknown = 0;
+        CREATE INDEX IF NOT EXISTS idx_reading_sessions_book
+        ON reading_sessions(book_id, session_number);
+        CREATE INDEX IF NOT EXISTS idx_reading_sessions_finished
+        ON reading_sessions(finished_date);
+        """
+    )
+
+    # v4 has exactly one projected reading record per book. Preserve it as the
+    # first immutable history row; the legacy columns remain untouched.
+    connection.execute(
+        """
+        INSERT INTO reading_sessions (
+            book_id, session_number, state, started_date, finished_date,
+            dates_unknown
+        )
+        SELECT id, 1, 'ACTIVE', reading_started_date, NULL, 0
+        FROM books
+        WHERE status = 'CURRENTLY_READING'
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO reading_sessions (
+            book_id, session_number, state, started_date, finished_date,
+            dates_unknown
+        )
+        SELECT id, 1, 'COMPLETED', reading_started_date, read_date, 0
+        FROM books
+        WHERE status = 'READ' AND is_read_date_unknown = 0
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO reading_sessions (
+            book_id, session_number, state, started_date, finished_date,
+            dates_unknown
+        )
+        SELECT id, 1, 'COMPLETED', NULL, NULL, 1
+        FROM books
+        WHERE status = 'READ' AND is_read_date_unknown = 1
+        """
+    )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
     Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
     Migration(4, "store ordered multiple authors", _migration_4_store_multiple_authors),
+    Migration(5, "store complete reading history", _migration_5_store_reading_sessions),
 )
 
 
@@ -239,6 +322,8 @@ def infer_unversioned_schema(connection: sqlite3.Connection) -> int:
             + ", ".join(missing_columns)
         )
     if V4_BOOK_COLUMNS <= book_columns and table_exists(connection, "book_authors"):
+        if table_exists(connection, "reading_sessions"):
+            return 5
         return 4
     if V3_BOOK_COLUMNS <= book_columns:
         return 3
@@ -270,7 +355,10 @@ def schema_snapshot(
 ) -> dict[str, list[dict]]:
     snapshot: dict[str, list[dict]] = {}
     selected_book_columns = book_columns or PRESERVED_BOOK_COLUMNS
-    for table in BASELINE_TABLES:
+    tables = list(BASELINE_TABLES)
+    if table_exists(connection, "book_authors"):
+        tables.append("book_authors")
+    for table in tables:
         columns = [
             row["name"]
             for row in connection.execute(f'PRAGMA table_info("{table}")')
@@ -344,8 +432,91 @@ def verify_database(
                 raise ValueError("Structured-author positions are not continuous")
             if len(normalized_names) != len(set(normalized_names)):
                 raise ValueError("Structured-author names contain duplicates")
+    session_schema_active = (
+        table_exists(connection, "reading_sessions")
+        and table_exists(connection, MIGRATION_TABLE)
+        and connection.execute(
+            f"SELECT COALESCE(MAX(version), 0) FROM {MIGRATION_TABLE}"
+        ).fetchone()[0] >= 5
+    )
+    if session_schema_active:
+        invalid_session = connection.execute(
+            """
+            SELECT id FROM reading_sessions
+            WHERE
+                (state = 'ACTIVE' AND (
+                    started_date IS NULL OR finished_date IS NOT NULL
+                    OR dates_unknown != 0
+                ))
+                OR
+                (state = 'COMPLETED' AND NOT (
+                    (started_date IS NOT NULL AND finished_date IS NOT NULL
+                        AND dates_unknown = 0 AND started_date <= finished_date)
+                    OR
+                    (started_date IS NULL AND finished_date IS NULL
+                        AND dates_unknown = 1)
+                ))
+            LIMIT 1
+            """
+        ).fetchone()
+        if invalid_session:
+            raise ValueError("Reading-session date verification failed")
+        invalid_sequence = connection.execute(
+            """
+            SELECT book_id FROM reading_sessions
+            GROUP BY book_id
+            HAVING MIN(session_number) != 1
+                OR MAX(session_number) != COUNT(*)
+                OR SUM(state = 'ACTIVE') > 1
+                OR SUM(dates_unknown = 1) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if invalid_sequence:
+            raise ValueError("Reading-session sequence verification failed")
+        projection_error = connection.execute(
+            """
+            SELECT b.id
+            FROM books b
+            LEFT JOIN reading_sessions active
+              ON active.book_id = b.id AND active.state = 'ACTIVE'
+            LEFT JOIN reading_sessions latest
+              ON latest.book_id = b.id
+             AND latest.session_number = (
+                SELECT MAX(rs.session_number)
+                FROM reading_sessions rs WHERE rs.book_id = b.id
+             )
+            WHERE
+                (active.id IS NOT NULL AND (
+                    b.status != 'CURRENTLY_READING'
+                    OR b.reading_started_date IS NOT active.started_date
+                    OR b.read_date IS NOT NULL
+                    OR b.is_read_date_unknown != 0
+                ))
+                OR
+                (active.id IS NULL AND latest.id IS NOT NULL AND (
+                    b.status != 'READ'
+                    OR b.reading_started_date IS NOT latest.started_date
+                    OR b.read_date IS NOT latest.finished_date
+                    OR b.is_read_date_unknown != latest.dates_unknown
+                ))
+                OR
+                (latest.id IS NULL AND (
+                    b.status != 'PENDING' OR b.reading_started_date IS NOT NULL
+                    OR b.read_date IS NOT NULL OR b.is_read_date_unknown != 0
+                ))
+            LIMIT 1
+            """
+        ).fetchone()
+        if projection_error:
+            raise ValueError("Reading-session projection verification failed")
 
     snapshot = schema_snapshot(connection, book_columns=book_columns)
+    if expected_snapshot is not None:
+        snapshot = {
+            table: snapshot[table]
+            for table in expected_snapshot
+        }
     if expected_snapshot is not None and snapshot != expected_snapshot:
         raise ValueError("Existing catalogue values changed during migration")
     return snapshot_fingerprint(snapshot)
@@ -409,9 +580,15 @@ def run_migrations(
 
     with closing(connect_database(database)) as connection:
         source_version = schema_version(connection)
+        if source_version > target_version:
+            raise ValueError(
+                f"Database schema v{source_version} is newer than supported v{target_version}"
+            )
         preserved_book_columns = BASELINE_BOOK_COLUMNS | (
             ISBN_BOOK_COLUMNS if source_version >= 2 else set()
-        ) | (V3_BOOK_COLUMNS if source_version >= 3 else set())
+        ) | (V3_BOOK_COLUMNS if source_version >= 3 else set()) | (
+            V4_BOOK_COLUMNS if source_version >= 4 else set()
+        )
         before_snapshot = schema_snapshot(
             connection,
             book_columns=preserved_book_columns,

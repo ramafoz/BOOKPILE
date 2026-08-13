@@ -130,6 +130,16 @@ export function MetadataFilterFields({
           <option value="MULTIPLE">Multiple authors</option>
         </select>
       </label>
+      <label>Active reading type
+        <select value={filters.readingActivity} onChange={(event) => set(
+          "readingActivity",
+          event.target.value as MetadataFilters["readingActivity"],
+        )}>
+          <option value="ANY">Any reading status</option>
+          <option value="INITIAL">Currently reading for the first time</option>
+          <option value="REREADING">Currently re-reading</option>
+        </select>
+      </label>
       <fieldset className="metadata-range-filter">
         <legend>Number of pages</legend>
         <label>At least (≥)

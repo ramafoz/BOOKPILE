@@ -296,8 +296,20 @@ def perform_restore(token: str) -> dict:
                     **final_summary["counts"],
                     "covers": len(final_summary["cover_filenames"]),
                 }
-                if final_counts != validation["counts"]:
-                    raise ValueError("Restored catalogue counts failed verification")
+                # A valid older backup can gain new tables while it is upgraded
+                # in isolation. Every count present in the source backup must
+                # remain identical; migration-specific verification is handled
+                # by the versioned migration runner itself.
+                changed_source_counts = {
+                    name: (count, final_counts.get(name))
+                    for name, count in validation["counts"].items()
+                    if final_counts.get(name) != count
+                }
+                if changed_source_counts:
+                    raise ValueError(
+                        "Restored catalogue counts failed verification: "
+                        f"{changed_source_counts}"
+                    )
                 shutil.rmtree(old_covers, ignore_errors=True)
             except Exception:
                 shutil.copy2(rollback_database, live_database)

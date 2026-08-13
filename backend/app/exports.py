@@ -50,6 +50,10 @@ def database_summary(path: Path) -> dict:
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'book_authors'"
         ).fetchone():
             tables.append("book_authors")
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'reading_sessions'"
+        ).fetchone():
+            tables.append("reading_sessions")
         counts = {
             table: connection.execute(
                 f"SELECT COUNT(*) FROM {table}"
@@ -163,6 +167,7 @@ CSV_COLUMNS = (
     "series_name",
     "series_volume",
     "status",
+    "reading_session_count",
     "goodreads_url",
     "notes",
     "acquisition_date",
@@ -213,6 +218,8 @@ def write_books_csv(destination: Path) -> int:
         b.series_name,
         b.series_volume,
         b.status,
+        (SELECT COUNT(*) FROM reading_sessions rs WHERE rs.book_id = b.id)
+            AS reading_session_count,
         b.goodreads_url,
         b.notes,
         b.acquisition_date,
@@ -265,6 +272,53 @@ def write_books_csv(destination: Path) -> int:
             )
             record["has_multiple_authors"] = (
                 "true" if record["has_multiple_authors"] else "false"
+            )
+            writer.writerow(record)
+    return len(rows)
+
+
+READING_SESSION_CSV_COLUMNS = (
+    "book_id",
+    "title",
+    "session_number",
+    "state",
+    "started_date",
+    "finished_date",
+    "dates_unknown",
+    "duration_days",
+    "pages_per_day",
+)
+
+
+def write_reading_sessions_csv(destination: Path) -> int:
+    query = """
+    SELECT rs.book_id, b.title, rs.session_number, rs.state,
+           rs.started_date, rs.finished_date, rs.dates_unknown,
+           CASE WHEN rs.started_date IS NOT NULL AND rs.finished_date IS NOT NULL
+                THEN CAST(julianday(rs.finished_date) - julianday(rs.started_date) + 1 AS INTEGER)
+                ELSE NULL END AS duration_days,
+           CASE WHEN b.page_count IS NOT NULL AND rs.started_date IS NOT NULL
+                     AND rs.finished_date IS NOT NULL
+                THEN ROUND(
+                    CAST(b.page_count AS REAL) /
+                    (julianday(rs.finished_date) - julianday(rs.started_date) + 1),
+                    2
+                )
+                ELSE NULL END AS pages_per_day
+    FROM reading_sessions rs
+    JOIN books b ON b.id = rs.book_id
+    ORDER BY b.title COLLATE NOCASE, rs.session_number
+    """
+    with closing(sqlite3.connect(database_path())) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(query).fetchall()
+    with destination.open("w", encoding="utf-8-sig", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=READING_SESSION_CSV_COLUMNS)
+        writer.writeheader()
+        for row in rows:
+            record = dict(row)
+            record["dates_unknown"] = (
+                "true" if record["dates_unknown"] else "false"
             )
             writer.writerow(record)
     return len(rows)

@@ -223,7 +223,7 @@ def test_newer_database_is_rejected_without_backup(
             )
             """
         )
-        for version in range(1, 6):
+        for version in range(1, 7):
             connection.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, f"schema {version}"),
@@ -265,18 +265,18 @@ def test_backups_record_and_validate_the_schema_they_contain(
         backup_directory=backups,
         approved=True,
     )
-    v4_backup = backups / "catalogue-v4.zip"
-    v4_manifest = create_full_backup(
-        v4_backup,
+    v5_backup = backups / "catalogue-v5.zip"
+    v5_manifest = create_full_backup(
+        v5_backup,
         source_database=database,
         source_covers=covers,
     )
-    v4_validation = extract_and_validate_archive(
-        v4_backup,
-        tmp_path / "validated-v4",
+    v5_validation = extract_and_validate_archive(
+        v5_backup,
+        tmp_path / "validated-v5",
     )
-    assert v4_manifest["schema_version"] == 4
-    assert v4_validation["schema_version"] == 4
+    assert v5_manifest["schema_version"] == 5
+    assert v5_validation["schema_version"] == 5
 
 
 def test_v2_to_v3_preserves_existing_isbns_and_adds_nullable_metadata(
@@ -354,6 +354,7 @@ def test_v3_to_v4_preserves_author_text_without_inference(
         covers=covers,
         backup_directory=backups,
         approved=True,
+        target_version=4,
     )
 
     assert report.source_version == 3

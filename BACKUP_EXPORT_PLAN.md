@@ -28,7 +28,7 @@ The manifest will contain:
 - Backup format version.
 - BOOKPILE application/schema version.
 - Creation timestamp.
-- Number of books, bookcases, shelves, containers, and covers.
+- Number of books, bookcases, shelves, containers, reading sessions, and covers.
 - SQLite integrity-check result.
 - List of included cover filenames.
 - Checksums for the database and cover files.
@@ -122,6 +122,12 @@ One row per book will include:
 - Cover filename.
 - Created and updated timestamps.
 
+A separate reading-history CSV contains one row per session, including the
+book ID and title, chronological session number, active/completed state,
+known or explicitly unknown dates, duration, and pages-per-day when page data
+is available. CSV files remain analytical exports; only the full ZIP can be
+restored.
+
 CSV will use UTF-8 with a BOM for reliable opening in Microsoft Excel.
 
 ## Optional later export
@@ -138,6 +144,7 @@ Add a **Data & backups** dialog accessible from the main navigation:
 
 - **Download full backup**
 - **Export books as CSV**
+- **Export reading history as CSV**
 - **Restore from backup**
 - Last local safety-backup information
 - Brief explanation that full backups include covers, while CSV does not

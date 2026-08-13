@@ -4,7 +4,10 @@ BOOKPILE uses versioned, transactional SQLite migrations for database changes
 that cannot be represented by the original catalogue schema. The first such
 change is schema v2, which adds nullable, non-unique, indexed ISBN-10 and
 ISBN-13 fields. Schema v3 adds only nullable bibliographic metadata fields and
-controlled classifications. Existing book values are not rewritten.
+controlled classifications. Schema v4 adds ordered structured authors while
+retaining the original Author text. Schema v5 adds ordered reading sessions
+and keeps the legacy reading status/date columns as a synchronized projection.
+Existing catalogue values are fingerprinted and preserved across every step.
 
 ## Safety guarantees
 

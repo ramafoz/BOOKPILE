@@ -140,6 +140,17 @@ h1 { font-size: clamp(54px, 7vw, 84px); line-height: .96; margin: 0; letter-spac
 .status.read { background: #dcebe6; color: #285c51; }
 .status-action { border: 0; cursor: pointer; }
 .status-action:hover, .status-action:focus-visible { outline: 2px solid #a85835; outline-offset: 2px; }
+.reading-history-summary { margin: 14px 0; padding-left: 22px; display: grid; gap: 10px; }
+.reading-history-summary li { padding-left: 5px; }
+.reading-history-summary span, .reading-history-summary small { display: block; margin-top: 2px; color: #65716d; }
+.history-manager-backdrop { z-index: 45; }
+.reading-history-dialog { width: min(720px, 100%); }
+.history-session-actions { display: grid; gap: 7px; margin-bottom: 16px; }
+.history-session-actions > div { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #ddd2c3; }
+.history-session-actions span { flex: 1; font-weight: 700; }
+.history-date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.reading-history-dialog .checkbox-row { display: inline-flex; align-items: center; gap: 8px; width: fit-content; cursor: pointer; }
+.reading-history-dialog .checkbox-row input { flex: 0 0 auto; width: auto; margin: 0; accent-color: #28574d; }
 .location { display: flex; align-items: center; gap: 8px; color: #68726e; font-size: 13px; line-height: 1.4; }
 .location svg { color: #a85835; flex: 0 0 auto; }
 .location-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -227,6 +238,11 @@ input:disabled, select:disabled { color: #8b918e; background: #e9e3d9; cursor: n
 textarea { resize: vertical; }
 small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .date-fields { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; border: 1px solid #d7cdbd; border-radius: 8px; padding: 14px; }
+.edit-reading-history { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border: 1px solid #d9cfbf; border-radius: 8px; background: #fffaf3; }
+.edit-reading-history > div { display: grid; gap: 3px; }
+.edit-reading-history strong { color: #29473f; }
+.edit-reading-history span { color: #68746f; font-size: 12px; font-weight: 400; }
+.edit-reading-history button { flex: 0 0 auto; }
 .date-input-row { display: flex; align-items: stretch; gap: 6px; }
 .date-input-row input { min-width: 0; }
 .date-input-row button { flex: 0 0 auto; margin-top: 7px; padding: 0 9px; border: 1px solid #d7cdbd; border-radius: 7px; color: #6c5143; background: #f5ede2; font-size: 12px; font-weight: 700; }
@@ -639,6 +655,11 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .metadata-form-grid { grid-template-columns: 1fr; }
   .metadata-form-grid .wide { grid-column: auto; }
   .date-fields { grid-column: auto; grid-template-columns: 1fr; }
+  .history-date-grid { grid-template-columns: minmax(0, 1fr); }
+  .reading-history-dialog fieldset, .history-date-grid label { min-width: 0; }
+  .history-date-grid input[type="date"] { display: block; min-width: 0; max-width: 100%; }
+  .edit-reading-history { align-items: stretch; flex-direction: column; }
+  .edit-reading-history button { width: 100%; justify-content: center; }
   .cover-field { grid-column: auto; }
   .isbn-field { grid-column: auto; }
   .isbn-lookup-row { align-items: stretch; flex-direction: column; }

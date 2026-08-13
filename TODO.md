@@ -17,7 +17,8 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Add a controlled restore flow.
 - [x] Validate backup integrity before restoring.
 - [x] Create an automatic safety backup before every restore.
-- [x] Export the catalogue to CSV.
+- [x] Export the catalogue and its reading-session history as separate CSV
+  files; keep the complete ZIP as the only restorable format.
 
 ### Visual library
 
@@ -92,8 +93,8 @@ This roadmap separates future work by its effect on the current data model.
     physical position.
   - Present explicit Pending and Read choices when returning a Reading book to
     the physical library, then resume the pending destination preview.
-  - Keep Read-to-Reading moves unavailable until reading sessions and
-    re-reading are supported.
+  - Move Read books into the Reading area as a new re-reading session while
+    preserving every earlier session.
 
 ### Catalogue entry, dates, sorting, and filtering
 
@@ -206,8 +207,8 @@ This roadmap separates future work by its effect on the current data model.
   confirmation dialog.
 - [x] Reuse the existing lifecycle-date validation and automatic date behavior
   when either action is confirmed.
-- [x] Keep Read status labels non-interactive until reading-session history and
-  safe re-reading support have been added.
+- [x] Make Read status labels interactive after adding safe reading-session
+  history, opening a `Re-read?` confirmation dialog.
 
 ## A. Features possible with the current database
 
@@ -366,18 +367,31 @@ protects the completed catalogue.
 
 ### Reading sessions and re-reading
 
-- [ ] Add a related reading-session history instead of overwriting the single
+- [x] Rehearse and apply the additive v4-to-v5 reading-session migration to a
+  validated copy before replacing the populated catalogue; preserve all 432
+  books, 432 covers, 441 structured-author rows, and every legacy value.
+- [x] Add a related reading-session history instead of overwriting the single
   reading-started and finished-reading dates currently stored on each book.
-- [ ] Migrate each existing known or explicitly unknown reading interval into
+- [x] Migrate each existing known or explicitly unknown reading interval into
   an initial session without losing its original values.
-- [ ] Allow multiple completed sessions and at most one active reading session
+- [x] Allow multiple completed sessions and at most one active reading session
   per book.
-- [ ] Preserve explicit unknown start/end information for historical sessions.
-- [ ] Define how the book's displayed status and summary dates are derived from
+- [x] Preserve explicit unknown start/end information for historical sessions.
+- [x] Define how the book's displayed status and summary dates are derived from
   its latest session while retaining all earlier readings.
-- [ ] After that migration, make a Read status label clickable and open a
+- [x] Distinguish active first readings from `Re-Reading…` in the catalogue and
+  hero counter without counting a reread as another owned or uniquely read book.
+- [x] Make a Read status label clickable and open a
   `Re-read?` confirmation dialog that creates a new session.
-- [ ] Extend backups, restore validation, CSV export decisions, statistics,
+- [x] Show chronological reading history in the read-only complete-information
+  record, but keep every history-writing action inside `Edit book`.
+- [x] Manage sessions from `Edit book`, including safe add, edit, deletion,
+  cancellation, responsive mobile date controls, and destructive warnings.
+- [x] Reject overlapping sessions, partial unknown intervals, future dates,
+  duplicate same-day readings, and more than one unknown or active session.
+- [x] Extend date filters and read-only statistics across every session,
+  counting rereads and their pages while retaining unique-book totals.
+- [x] Extend backups, restore validation, separate CSV export, statistics,
   and tests to cover repeated readings.
 
 ### Loans and history

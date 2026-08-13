@@ -14,8 +14,12 @@ The catalogue, covers, and physical layout remain under the user's control.
 - Create, edit, delete, search, sort, and filter books.
 - Keep the immediate search focused on title, author, and series, with ISBN and
   optional metadata available through **Sort & Advanced Search**.
-- Track `Pending`, `Reading...`, and `Read` status.
+- Track `Pending`, `Reading...`, `Re-Reading…`, and `Read` display states.
 - Record acquisition, reading-started, and finished-reading dates.
+- Preserve a chronological history of first readings and re-reads while the
+  legacy summary dates remain synchronized with the active or latest session.
+- Add, edit, cancel, and delete reading sessions with overlap, unknown-date,
+  and destructive-change safeguards.
 - Represent original-collection books whose acquisition date is unknown.
 - Represent read books whose exact finished-reading date is unknown.
 - Validate chronological consistency between lifecycle dates.
@@ -29,7 +33,10 @@ The catalogue, covers, and physical layout remain under the user's control.
 - Use quick views for missing covers, missing locations, and incomplete dates.
 - See how many books pass the current filters.
 - Open a read-only complete-information card for any catalogue book without
-  crowding the main list with additional metadata.
+  crowding the main list with additional metadata. This card displays reading
+  history but contains no catalogue-editing actions.
+- Manage chronological reading sessions only from **Edit book**, with a
+  responsive editor for known or explicitly unknown historical dates.
 - Add books individually or through Batch Add, retaining the selected
   container and advancing positions upward or downward.
 
@@ -149,6 +156,9 @@ are not imported.
 - Restore the database and covers atomically with rollback protection.
 - Export catalogue data, dates, links, and physical locations as an
   Excel-friendly CSV.
+- Export reading history as a separate Excel-friendly CSV with one row per
+  session, including re-reads, dates, duration, state, and pages/day where
+  page-count metadata exists.
 
 ## Technology
 
@@ -317,8 +327,13 @@ in place:
    legacy Author text. It was rehearsed and applied with all 432 books and
    covers preserved; existing author text was deliberately left untouched for
    manual review.
+8. Schema v5 adds ordered reading sessions. The migration was rehearsed and
+   applied from a validated v4 backup with all 432 books, 432 covers, and 441
+   structured-author rows preserved. It reconstructed 262 initial sessions,
+   keeps the legacy status/date columns synchronized, and adds re-reading,
+   history management, session-aware statistics, and CSV export.
 
 Later database phases include structured subjects and genres, ratings and
-tags, reading-session history and re-reading, and optional loan history.
+tags, and optional loan history.
 Multi-user accounts and publication as a hosted application are a separate,
 larger product phase rather than assumptions in the current local-first build.

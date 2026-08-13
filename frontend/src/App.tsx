@@ -81,6 +81,7 @@ const emptyStats: Stats = {
   total: 0,
   pending: 0,
   currently_reading: 0,
+  currently_rereading: 0,
   read: 0,
 };
 const emptyMetadataOptions: MetadataOptions = {
@@ -104,6 +105,7 @@ function emptyMetadataFilters(): MetadataFilters {
     seriesNames: [],
     seriesState: "ANY",
     authorStructure: "ANY",
+    readingActivity: "ANY",
     pageMin: "",
     pageMax: "",
     publicationYearField: "current_ed_year",
@@ -520,7 +522,12 @@ function App() {
         <div className="stats-grid">
           <StatCard icon={<LibraryBig />} label="Total books" value={stats.total} tone="green" />
           <StatCard icon={<BookOpen />} label="Waiting to be read" value={stats.pending} tone="ochre" />
-          <StatCard icon={<BookOpen />} label="Currently reading" value={stats.currently_reading} tone="blue" />
+          <StatCard
+            icon={<BookOpen />}
+            label="Currently reading"
+            value={`${stats.currently_reading || ""}${stats.currently_rereading ? `+${stats.currently_rereading}` : stats.currently_reading ? "" : "0"}`}
+            tone="blue"
+          />
           <StatCard icon={<Check />} label="Books read" value={stats.read} tone="clay" />
         </div>
 
@@ -819,21 +826,17 @@ function App() {
           ) : (
             books.map((book) => (
               <article className="book-row" key={book.id}>
-                {book.status === "READ" ? (
-                  <span className="status read">{statusLabel(book.status)}</span>
-                ) : (
-                  <button
-                    className={`status status-action ${book.status.toLowerCase()}`}
-                    title={
-                      book.status === "PENDING"
-                        ? "Start reading this book"
-                        : "Mark this book as finished"
-                    }
-                    onClick={() => setStatusActionBook(book)}
-                  >
-                    {statusLabel(book.status)}
-                  </button>
-                )}
+                <button
+                  className={`status status-action ${book.status.toLowerCase()}`}
+                  title={book.status === "PENDING"
+                    ? "Start reading this book"
+                    : book.status === "READ"
+                      ? "Re-read this book"
+                      : "Finish or cancel this reading"}
+                  onClick={() => setStatusActionBook(book)}
+                >
+                  {bookStatusLabel(book)}
+                </button>
                 {book.cover_filename ? (
                   <img
                     className="book-cover-thumb"
@@ -870,7 +873,7 @@ function App() {
                     <MapPin size={16} />
                     {book.status === "CURRENTLY_READING" ? (
                       <div className="location-copy">
-                        <strong>Currently reading</strong>
+                        <strong>{book.is_rereading ? "Currently re-reading" : "Currently reading"}</strong>
                         <span>
                           {book.container_id
                             ? `Saved at ${book.bookcase_name} · Shelf ${book.shelf_number} · ${
@@ -949,6 +952,7 @@ function App() {
             setEditing(undefined);
             await refresh();
           }}
+          onHistoryChanged={refresh}
           onOpenExisting={(bookId, title) => {
             setEditing(undefined);
             openExactBookCatalogue({ id: bookId, title });
@@ -1026,6 +1030,12 @@ function statusLabel(status: "ALL" | BookStatus) {
   if (status === "PENDING") return "Pending";
   if (status === "CURRENTLY_READING") return "Reading…";
   return "Read";
+}
+
+function bookStatusLabel(book: Pick<Book, "status" | "is_rereading">) {
+  return book.status === "CURRENTLY_READING" && book.is_rereading
+    ? "Re-Reading…"
+    : statusLabel(book.status);
 }
 
 function displayedAuthor(book: Pick<Book, "author" | "has_multiple_authors" | "structured_authors">) {
@@ -1219,6 +1229,132 @@ function formatTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
+function readingDuration(started: string, finished: string) {
+  return Math.round((Date.parse(`${finished}T00:00:00Z`) - Date.parse(`${started}T00:00:00Z`)) / 86400000) + 1;
+}
+
+function ReadingHistorySummary({ book }: { book: Book }) {
+  if (book.reading_sessions.length === 0) return <p className="book-details-note">No reading history.</p>;
+  return (
+    <ol className="reading-history-summary">
+      {book.reading_sessions.map((session) => {
+        const duration = session.started_date && session.finished_date
+          ? readingDuration(session.started_date, session.finished_date)
+          : null;
+        const rate = duration && book.page_count ? book.page_count / duration : null;
+        return (
+          <li key={session.id}>
+            <strong>Reading {session.session_number}</strong>
+            <span>{session.dates_unknown
+              ? "Reading dates unknown"
+              : session.state === "ACTIVE"
+                ? `${session.session_number > 1 ? "Re-reading" : "Reading"} since ${formatDate(session.started_date!)}`
+                : `${formatDate(session.started_date!)} – ${formatDate(session.finished_date!)}`}
+            </span>
+            {duration !== null && (
+              <small>{duration} {duration === 1 ? "day" : "days"}{rate !== null ? ` · ${rate.toFixed(1)} pages/day` : ""}</small>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ReadingHistoryDialog({
+  book,
+  onClose,
+  onChanged,
+  onCatalogueChanged,
+}: {
+  book: Book;
+  onClose: () => void;
+  onChanged: (book: Book) => void;
+  onCatalogueChanged?: () => Promise<void>;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [started, setStarted] = useState("");
+  const [finished, setFinished] = useState("");
+  const [unknown, setUnknown] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function resetForm() {
+    setEditingId(null); setStarted(""); setFinished(""); setUnknown(false); setError("");
+  }
+  function edit(session: Book["reading_sessions"][number]) {
+    setEditingId(session.id);
+    setStarted(session.started_date ?? "");
+    setFinished(session.finished_date ?? "");
+    setUnknown(session.dates_unknown);
+    setError("");
+  }
+  async function save() {
+    setSaving(true); setError("");
+    const payload = {
+      started_date: unknown ? null : started || null,
+      finished_date: unknown ? null : finished || null,
+      dates_unknown: unknown,
+    };
+    try {
+      const updated = editingId
+        ? await api.updateReadingHistory(book.id, editingId, payload)
+        : await api.addReadingHistory(book.id, payload);
+      onChanged(updated); resetForm(); await onCatalogueChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save reading history");
+    } finally { setSaving(false); }
+  }
+  async function remove(session: Book["reading_sessions"][number]) {
+    const dates = session.dates_unknown
+      ? "unknown dates"
+      : `${session.started_date} – ${session.finished_date ?? "active"}`;
+    const consequence = book.reading_sessions.length === 1
+      ? " This is the only reading: the book will become Pending."
+      : " Later readings will be renumbered.";
+    if (!window.confirm(`Delete Reading ${session.session_number} (${dates})? It will be removed from statistics.${consequence}`)) return;
+    try { onChanged(await api.deleteReadingHistory(book.id, session.id)); resetForm(); await onCatalogueChanged?.(); }
+    catch (err) { setError(err instanceof Error ? err.message : "Unable to delete reading"); }
+  }
+
+  return (
+    <div className="dialog-backdrop history-manager-backdrop" onMouseDown={onClose}>
+      <div className="dialog reading-history-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div><p className="eyebrow dark">Reading record</p><h2>Manage reading history</h2></div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <h3>{book.title}</h3>
+        <ReadingHistorySummary book={book} />
+        <div className="history-session-actions">
+          {book.reading_sessions.map((session) => (
+            <div key={session.id}>
+              <span>Reading {session.session_number}</span>
+              <button className="outline-button" onClick={() => edit(session)}>Edit</button>
+              <button className="text-button danger" onClick={() => void remove(session)}>Delete</button>
+            </div>
+          ))}
+        </div>
+        <fieldset>
+          <legend>{editingId ? "Edit reading" : "Add historical reading"}</legend>
+          <label className="checkbox-row"><input type="checkbox" checked={unknown} disabled={book.reading_sessions.some((item) => item.dates_unknown && item.id !== editingId)} onChange={(event) => setUnknown(event.target.checked)} /> Reading dates unknown</label>
+          {!unknown && <div className="history-date-grid">
+            <label>Started<input type="date" max={today} value={started} onChange={(event) => setStarted(event.target.value)} /></label>
+            <label>Finished<input type="date" max={today} value={finished} disabled={editingId !== null && book.reading_sessions.find((item) => item.id === editingId)?.state === "ACTIVE"} onChange={(event) => setFinished(event.target.value)} /></label>
+          </div>}
+        </fieldset>
+        {error && <div className="form-error">{error}</div>}
+        <div className="dialog-actions">
+          {editingId && <button className="text-button" onClick={resetForm}>Cancel edit</button>}
+          <button className="outline-button" onClick={onClose}>Close</button>
+          <button className="secondary-button" disabled={saving || (!unknown && (!started || (!finished && editingId === null)))} onClick={() => void save()}>{saving ? "Saving…" : editingId ? "Save reading" : "Add reading"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookDetailsDialog({
   book,
   onClose,
@@ -1271,7 +1407,7 @@ function BookDetailsDialog({
           )}
           <div>
             <span className={`status ${book.status.toLowerCase()}`}>
-              {statusLabel(book.status)}
+              {bookStatusLabel(book)}
             </span>
             <h3>{book.title}</h3>
             <p>{displayedAuthor(book)}</p>
@@ -1334,6 +1470,7 @@ function BookDetailsDialog({
             </div>
             <div><dt>Finished reading</dt><dd>{finishedReading}</dd></div>
           </dl>
+          <ReadingHistorySummary book={book} />
         </section>
 
         <section className="book-details-section">
@@ -1381,7 +1518,7 @@ function StatCard({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number;
+  value: number | string;
   tone: string;
 }) {
   return (
@@ -1503,6 +1640,10 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
                 statistic={statistics.reading_duration}
                 note="Reading start through finish"
               />
+            </div>
+            <div className="duration-stat-grid reading-session-stat-grid">
+              <article className="duration-stat-card"><p>Reading sessions completed</p><strong>{statistics.reading_sessions.completed}</strong><span>Every completed read, including re-reads</span></article>
+              <article className="duration-stat-card"><p>Unique books read</p><strong>{statistics.reading_sessions.unique_books}</strong><span>{statistics.reading_sessions.rereads} completed re-reads</span></article>
             </div>
 
             <details className="statistics-metadata-filters">
@@ -1913,14 +2054,18 @@ function StatusActionDialog({
   onConfirmed: () => Promise<void>;
 }) {
   const finishing = book.status === "CURRENTLY_READING";
+  const rereading = book.status === "READ";
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function confirm() {
+  async function confirm(action: "start" | "finish" | "cancel") {
     setSaving(true);
     setError("");
     try {
-      await api.updateBookStatus(book.id, finishing ? "READ" : "CURRENTLY_READING");
+      if (action === "cancel") await api.cancelReading(book.id);
+      else if (action === "finish") await api.finishReading(book.id, selectedDate);
+      else await api.startReading(book.id, selectedDate);
       await onConfirmed();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update this book");
@@ -1935,20 +2080,36 @@ function StatusActionDialog({
         <div className="dialog-header">
           <div>
             <p className="eyebrow dark">Reading status</p>
-            <h2>{finishing ? "Did you finish?" : "Start reading?"}</h2>
+            <h2>{finishing ? "Finish or cancel reading?" : rereading ? "Re-read?" : "Start reading?"}</h2>
           </div>
           <button className="icon-button" onClick={onClose}><X /></button>
         </div>
         <h3>{book.title}</h3>
         <p>{finishing
-          ? "BOOKPILE will mark it as Read and use today as the finished-reading date."
-          : "BOOKPILE will mark it as Reading and use today as the reading-started date. Its saved library position will be preserved."}
+          ? `Finish this ${book.is_rereading ? "re-reading" : "reading"}, or cancel it without keeping an abandoned session.`
+          : `Confirm the ${rereading ? "re-reading" : "reading"} start date. Its saved library position will be preserved.`}
         </p>
+        <label>{finishing ? "Finished reading" : "Reading started"}
+          <input
+            type="date"
+            max={new Date().toISOString().slice(0, 10)}
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+          />
+        </label>
         {error && <div className="form-error">{error}</div>}
         <div className="dialog-actions">
-          <button className="text-button" onClick={onClose}>Cancel</button>
-          <button className="secondary-button" disabled={saving} onClick={() => void confirm()}>
-            {saving ? "Saving…" : finishing ? "Yes, mark as Read" : "Yes, start reading"}
+          <button className="text-button" onClick={onClose}>Close</button>
+          {finishing && (
+            <button className="outline-button" disabled={saving} onClick={() => {
+              const outcome = book.is_rereading ? "return to Read" : "return to Pending";
+              if (window.confirm(`Cancel this active reading and ${outcome}? The active session will be deleted.`)) {
+                void confirm("cancel");
+              }
+            }}>Cancel current reading</button>
+          )}
+          <button className="secondary-button" disabled={saving || !selectedDate} onClick={() => void confirm(finishing ? "finish" : "start")}>
+            {saving ? "Saving…" : finishing ? "Finish reading" : rereading ? "Start re-reading" : "Start reading"}
           </button>
         </div>
       </div>
@@ -2086,6 +2247,7 @@ function BookDialog({
   batchMode = false,
   onClose,
   onSaved,
+  onHistoryChanged,
   onOpenExisting,
 }: {
   book: Book | null;
@@ -2094,6 +2256,7 @@ function BookDialog({
   batchMode?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  onHistoryChanged?: () => Promise<void>;
   onOpenExisting: (bookId: number, title: string) => void;
 }) {
   const [form, setForm] = useState<BookPayload>(
@@ -2132,6 +2295,8 @@ function BookDialog({
       : emptyBook,
   );
   const [saving, setSaving] = useState(false);
+  const [historyBook, setHistoryBook] = useState<Book | null>(book);
+  const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [removeCover, setRemoveCover] = useState(false);
@@ -2176,6 +2341,17 @@ function BookDialog({
       ),
     [library],
   );
+
+  function acceptReadingHistoryChange(updated: Book) {
+    setHistoryBook(updated);
+    setForm((current) => ({
+      ...current,
+      status: updated.status,
+      reading_started_date: updated.reading_started_date,
+      read_date: updated.read_date,
+      is_read_date_unknown: updated.is_read_date_unknown,
+    }));
+  }
 
   useEffect(() => {
     if (!coverFile) return;
@@ -2522,6 +2698,23 @@ function BookDialog({
         goodreads_url: form.goodreads_url || null,
         notes: form.notes || null,
       };
+      if (
+        book &&
+        book.reading_sessions.length > 0 &&
+        book.status !== "PENDING" &&
+        payload.status === "PENDING"
+      ) {
+        const sessions = book.reading_sessions.map((session) => {
+          const dates = session.dates_unknown
+            ? "dates unknown"
+            : `${session.started_date ?? "unknown"} – ${session.finished_date ?? "active"}`;
+          return `Reading ${session.session_number}: ${dates}`;
+        }).join("\n");
+        if (!window.confirm(
+          `Changing this book to Pending will permanently delete ${book.reading_sessions.length} ` +
+          `reading ${book.reading_sessions.length === 1 ? "session" : "sessions"}:\n\n${sessions}\n\nContinue?`,
+        )) return;
+      }
       let savedBook: Book;
       if (book) {
         savedBook = await api.updateBook(book.id, payload);
@@ -3282,6 +3475,25 @@ function BookDialog({
             </label>
             <fieldset className="wide date-fields">
               <legend>Book history</legend>
+              {book && historyBook && (
+                <div className="wide edit-reading-history">
+                  <div>
+                    <strong>Reading sessions</strong>
+                    <span>
+                      {historyBook.reading_session_count === 0
+                        ? "No reading history"
+                        : `${historyBook.reading_session_count} ${historyBook.reading_session_count === 1 ? "session" : "sessions"} recorded`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="outline-button"
+                    onClick={() => setShowHistory(true)}
+                  >
+                    Manage reading history
+                  </button>
+                </div>
+              )}
               <label>Acquired
                 <span className="date-input-row">
                   <input
@@ -3422,6 +3634,14 @@ function BookDialog({
             </button>
           </div>
         </form>
+        {showHistory && historyBook && (
+          <ReadingHistoryDialog
+            book={historyBook}
+            onClose={() => setShowHistory(false)}
+            onChanged={acceptReadingHistoryChange}
+            onCatalogueChanged={onHistoryChanged}
+          />
+        )}
       </div>
     </div>
   );
@@ -5256,10 +5476,6 @@ function LibraryMapDialog({
     const steps = context?.steps ?? rearrangementSteps;
     const sourceBook = context?.sourceBook ?? selectedMoveBook;
     if (bookId === null || !sourceBook || steps.length > 0) return;
-    if (sourceBook.status === "READ") {
-      setError("Read books cannot be moved back to Reading until reading sessions are supported.");
-      return;
-    }
     if (sourceBook.status === "CURRENTLY_READING") return;
     await previewSteps(bookId, [{ destination_kind: "READING" }]);
   }
@@ -5834,7 +6050,9 @@ function LibraryMapDialog({
                     {selectedOriginalMoveBook?.status === "CURRENTLY_READING" && (
                       <div className="map-reading-return-choice">
                         <div>
-                          <strong>Return this Reading book to the library as:</strong>
+                          <strong>{selectedOriginalMoveBook.is_rereading
+                            ? "Finish this re-reading and return the book as Read:"
+                            : "Return this Reading book to the library as:"}</strong>
                           <span>
                             {pendingReadingDestination
                               ? "The destination is selected. Confirm the new status to preview the move."
@@ -5842,14 +6060,16 @@ function LibraryMapDialog({
                           </span>
                         </div>
                         <div>
-                          <button
-                            type="button"
-                            className={readingExitStatus === "PENDING" ? "active" : ""}
-                            disabled={rearrangementSteps.length > 0}
-                            onClick={() => chooseReadingReturnStatus("PENDING")}
-                          >
-                            Pending
-                          </button>
+                          {!selectedOriginalMoveBook.is_rereading && (
+                            <button
+                              type="button"
+                              className={readingExitStatus === "PENDING" ? "active" : ""}
+                              disabled={rearrangementSteps.length > 0}
+                              onClick={() => chooseReadingReturnStatus("PENDING")}
+                            >
+                              Pending
+                            </button>
+                          )}
                           <button
                             type="button"
                             className={readingExitStatus === "READ" ? "active" : ""}
@@ -6286,6 +6506,23 @@ function DataDialog({ onClose }: { onClose: () => void }) {
                 download
               >
                 <Download size={17} /> Export CSV
+              </a>
+            </div>
+          </article>
+          <article>
+            <div className="data-option-icon csv"><FileSpreadsheet /></div>
+            <div>
+              <h3>Reading history as CSV</h3>
+              <p>
+                One row per reading session, including re-reads, dates, state,
+                duration, and the book identifiers needed for analysis.
+              </p>
+              <a
+                className="outline-button"
+                href={api.downloadUrl("/exports/reading-sessions.csv")}
+                download
+              >
+                <Download size={17} /> Export reading history
               </a>
             </div>
           </article>

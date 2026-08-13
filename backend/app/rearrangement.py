@@ -15,6 +15,7 @@ from .schemas import (
     RearrangementRequest,
     RearrangementStep,
 )
+from .reading_sessions import apply_projected_reading_values, sync_book_projection
 
 
 REARRANGEMENT_BOOKS = """
@@ -29,6 +30,10 @@ SELECT
     b.reading_started_date,
     b.read_date,
     b.is_read_date_unknown,
+    EXISTS(
+        SELECT 1 FROM reading_sessions rs
+        WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
+    ) AS has_completed_reading,
     b.updated_at
 FROM books b
 ORDER BY b.id
@@ -61,6 +66,7 @@ class PlannedBook:
     reading_started_date: str | None
     read_date: str | None
     is_read_date_unknown: bool
+    has_completed_reading: bool
     updated_at: str
 
 
@@ -79,6 +85,7 @@ def load_rearrangement_state(
             reading_started_date=row["reading_started_date"],
             read_date=row["read_date"],
             is_read_date_unknown=bool(row["is_read_date_unknown"]),
+            has_completed_reading=bool(row["has_completed_reading"]),
             updated_at=row["updated_at"],
         )
         for row in connection.execute(REARRANGEMENT_BOOKS)
@@ -145,15 +152,13 @@ def plan_rearrangement(
                 status_code=422,
                 detail="Moving to Reading must be the only rearrangement step",
             )
-        if initial.status == BookStatus.read.value:
-            raise HTTPException(
-                status_code=422,
-                detail="Read books require reading-session support before re-reading",
-            )
         if initial.status == BookStatus.currently_reading.value:
             raise HTTPException(status_code=422, detail="Book is already Reading")
         books[initial.id] = transition_to_reading(initial)
-        movement_log.append(f'“{initial.title}”: status Pending → Reading')
+        movement_log.append(
+            f'“{initial.title}”: status '
+            f'{"Read → Re-Reading" if initial.status == BookStatus.read.value else "Pending → Reading"}'
+        )
         return result_payload(
             original,
             books,
@@ -177,6 +182,14 @@ def plan_rearrangement(
             raise HTTPException(
                 status_code=422,
                 detail="Choose the status to use when returning the Reading book",
+            )
+        if (
+            initial.has_completed_reading
+            and first_step.reading_exit_status == BookStatus.pending.value
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="A re-reading book can only return to the library as Read",
             )
         books[initial.id] = transition_from_reading(
             initial,
@@ -637,7 +650,7 @@ def result_payload(
 
 
 def transition_to_reading(book: PlannedBook) -> PlannedBook:
-    started = book.reading_started_date
+    started = None if book.status == BookStatus.read.value else book.reading_started_date
     if started is None:
         candidates = [date.today()]
         if book.acquisition_date:
@@ -647,6 +660,7 @@ def transition_to_reading(book: PlannedBook) -> PlannedBook:
         book,
         status=BookStatus.currently_reading.value,
         reading_started_date=started,
+        read_date=None,
         is_read_date_unknown=False,
     )
 
@@ -732,3 +746,19 @@ def apply_planned_books(
                 book.id,
             ),
         )
+        if book.status != original[book.id].status:
+            apply_projected_reading_values(
+                connection,
+                book.id,
+                status=book.status,
+                started=(
+                    date.fromisoformat(book.reading_started_date)
+                    if book.reading_started_date else None
+                ),
+                finished=(
+                    date.fromisoformat(book.read_date) if book.read_date else None
+                ),
+                dates_unknown=book.is_read_date_unknown,
+            )
+        else:
+            sync_book_projection(connection, book.id)

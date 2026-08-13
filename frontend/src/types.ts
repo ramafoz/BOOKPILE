@@ -50,6 +50,7 @@ export interface MapBook {
   series_name: string | null;
   series_volume: string | null;
   status: BookStatus;
+  is_rereading: boolean;
   container_id: number | null;
   position: number | null;
   acquisition_date: string | null;
@@ -142,12 +143,28 @@ export interface Book {
   container_type: ContainerType | null;
   layer: Layer | null;
   container_number: number | null;
+  reading_sessions: ReadingSession[];
+  reading_session_count: number;
+  is_rereading: boolean;
+}
+
+export interface ReadingSession {
+  id: number;
+  book_id: number;
+  session_number: number;
+  state: "ACTIVE" | "COMPLETED";
+  started_date: string | null;
+  finished_date: string | null;
+  dates_unknown: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Stats {
   total: number;
   pending: number;
   currently_reading: number;
+  currently_rereading: number;
   read: number;
 }
 
@@ -186,6 +203,7 @@ export interface MetadataFilters {
   seriesNames: string[];
   seriesState: "ANY" | "YES" | "NO";
   authorStructure: "ANY" | "SINGLE" | "MULTIPLE";
+  readingActivity: "ANY" | "INITIAL" | "REREADING";
   pageMin: string;
   pageMax: string;
   publicationYearField: "current_ed_year" | "original_publication_year";
@@ -220,7 +238,13 @@ export interface CatalogueStatistics {
       pages_per_day: number;
       read_date: string;
       estimated_start: boolean;
+      session_number: number;
     }>;
+  };
+  reading_sessions: {
+    completed: number;
+    unique_books: number;
+    rereads: number;
   };
   pending_duration: DurationStatistic;
   reading_duration: DurationStatistic;

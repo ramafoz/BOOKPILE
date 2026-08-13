@@ -80,6 +80,7 @@ def test_catalogue_flow() -> None:
             "total": 1,
             "pending": 1,
             "currently_reading": 0,
+            "currently_rereading": 0,
             "read": 0,
         }
 
@@ -963,7 +964,7 @@ def test_rearrangement_apply_rejects_a_stale_preview() -> None:
             "steps": [{"container_id": second["id"], "position": 1}],
         }
         preview = client.post("/rearrangements/preview", json=payload).json()
-        changed = {**books[2], "status": "READ", "read_date": "2026-08-06"}
+        changed = {**books[2], "status": "READ", "reading_started_date": "2026-08-06", "read_date": "2026-08-06"}
         assert client.patch(f'/books/{books[2]["id"]}', json=changed).status_code == 200
         applied = client.post(
             "/rearrangements/apply",
@@ -1005,21 +1006,40 @@ def test_reading_book_can_return_to_its_retained_position_as_status_only() -> No
     assert returned["position"] == 2
 
 
-def test_read_book_cannot_move_to_reading_without_reading_sessions() -> None:
+def test_read_book_can_move_to_rereading_with_history_preserved() -> None:
     with TestClient(app) as client:
         _, _, books = create_rearrangement_fixture(client)
-        read = {**books[0], "status": "READ", "read_date": "2026-08-06"}
+        read = {**books[0], "status": "READ", "reading_started_date": "2026-08-06", "read_date": "2026-08-06"}
         assert client.patch(f'/books/{books[0]["id"]}', json=read).status_code == 200
-        response = client.post(
+        preview = client.post(
             "/rearrangements/preview",
             json={
                 "book_id": books[0]["id"],
                 "steps": [{"destination_kind": "READING"}],
             },
         )
+        assert preview.status_code == 200
+        result = client.post(
+            "/rearrangements/apply",
+            json={
+                "book_id": books[0]["id"],
+                "steps": [{"destination_kind": "READING"}],
+                "revision": preview.json()["revision"],
+            },
+        )
+        updated = client.get(
+            "/books", params={"book_id": books[0]["id"]}
+        ).json()[0]
+        stats = client.get("/stats").json()
 
-    assert response.status_code == 422
-    assert "reading-session support" in response.json()["detail"]
+    assert result.status_code == 200
+    assert updated["status"] == "CURRENTLY_READING"
+    assert updated["is_rereading"] is True
+    assert updated["reading_session_count"] == 2
+    assert updated["reading_sessions"][0]["finished_date"] == "2026-08-06"
+    assert stats["currently_reading"] == 0
+    assert stats["currently_rereading"] == 1
+    assert stats["read"] == 1
 
 
 def test_rearrangement_summarizes_automatic_shifts() -> None:
@@ -1205,6 +1225,7 @@ def test_statistics_filter_metadata_and_distribute_pages_over_reading_days() -> 
                 "language": "Galician",
                 "binding": "HARDCOVER",
                 "page_count": 120,
+                "reading_started_date": "2024-02-02",
                 "read_date": "2024-02-02",
             },
             {
@@ -1223,6 +1244,7 @@ def test_statistics_filter_metadata_and_distribute_pages_over_reading_days() -> 
                 "status": "READ",
                 "language": "Galician",
                 "binding": "PAPERBACK",
+                "reading_started_date": "2024-04-01",
                 "read_date": "2024-04-01",
             },
         ]
@@ -1252,7 +1274,8 @@ def test_statistics_filter_metadata_and_distribute_pages_over_reading_days() -> 
         assert result["reading_rate"]["per_book_excluded"] == 1
         assert result["reading_rate"]["per_book"] == [
             {
-                "id": result["reading_rate"]["per_book"][0]["id"],
+                    "id": result["reading_rate"]["per_book"][0]["id"],
+                    "session_number": 1,
                 "title": "Five day Galician book",
                 "author": "Author",
                 "page_count": 500,
@@ -1268,10 +1291,10 @@ def test_statistics_filter_metadata_and_distribute_pages_over_reading_days() -> 
         ).json()
         assert galician["filtered_book_count"] == 3
         assert galician["reading_rate"]["total_pages"] == 620.0
-        assert galician["reading_rate"]["single_day_estimates"] == 1
+        assert galician["reading_rate"]["single_day_estimates"] == 0
         assert galician["reading_rate"]["average_per_book"] == 110.0
         assert galician["reading_rate"]["median_per_book"] == 110.0
-        assert galician["reading_rate"]["per_book_estimates"] == 1
+        assert galician["reading_rate"]["per_book_estimates"] == 0
 
 
 def test_reading_suggestions_support_modes_thresholds_and_exclusions() -> None:
@@ -1577,7 +1600,8 @@ def test_assigning_reading_book_to_occupied_position_shifts_container() -> None:
                 "status": "READ",
                 "container_id": container.json()["id"],
                 "position": 1,
-                "is_read_date_unknown": True,
+                    "read_date": reading["reading_started_date"],
+                    "is_read_date_unknown": False,
             },
         )
 
@@ -1758,7 +1782,8 @@ def test_dates_can_be_entered_and_read_date_is_added_on_transition() -> None:
             json={"status": "READ"},
         )
         assert read.status_code == 200
-        assert read.json()["read_date"] == date.today().isoformat()
+        assert read.json()["read_date"] is None
+        assert read.json()["is_read_date_unknown"] is True
 
         corrected = client.patch(
             f'/books/{created.json()["id"]}',
@@ -1767,6 +1792,7 @@ def test_dates_can_be_entered_and_read_date_is_added_on_transition() -> None:
                 "read_date": "2026-06-20",
             },
         )
+        assert corrected.status_code == 200, corrected.text
         assert corrected.json()["reading_started_date"] == "2026-06-10"
         assert corrected.json()["read_date"] == "2026-06-20"
 
@@ -1790,6 +1816,7 @@ def test_read_book_can_have_an_explicitly_unknown_reading_date() -> None:
         dated = client.patch(
             f'/books/{created.json()["id"]}',
             json={
+                "reading_started_date": "2001-05-12",
                 "read_date": "2001-05-12",
                 "is_read_date_unknown": False,
             },
@@ -1901,7 +1928,7 @@ def test_book_dates_must_follow_chronological_order() -> None:
         assert "earlier than acquisition" in invalid_update.json()["detail"]
 
 
-def test_automatic_read_dates_respect_existing_history() -> None:
+def test_future_reading_dates_are_rejected() -> None:
     with TestClient(app) as client:
         future_acquisition = "2099-01-02"
         created = client.post(
@@ -1911,10 +1938,11 @@ def test_automatic_read_dates_respect_existing_history() -> None:
                 "author": "Chronology",
                 "status": "READ",
                 "acquisition_date": future_acquisition,
+                "reading_started_date": future_acquisition,
+                "read_date": future_acquisition,
             },
         )
-        assert created.status_code == 201
-        assert created.json()["read_date"] == future_acquisition
+        assert created.status_code == 422
 
         started = client.post(
             "/books",
@@ -1925,8 +1953,7 @@ def test_automatic_read_dates_respect_existing_history() -> None:
                 "acquisition_date": future_acquisition,
             },
         )
-        assert started.status_code == 201
-        assert started.json()["reading_started_date"] == future_acquisition
+        assert started.status_code == 422
 
 
 def test_existing_catalogue_migrates_without_losing_books(
@@ -2111,6 +2138,7 @@ def test_csv_export_is_excel_friendly_and_contains_location() -> None:
                 "series_name": "Example series",
                 "series_volume": "1",
                 "status": "READ",
+                "reading_started_date": "2026-06-20",
                 "read_date": "2026-06-20",
                 "container_id": container["id"],
                 "position": 3,
@@ -2201,7 +2229,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-            assert schema_version(connection) == 4
+            assert schema_version(connection) == 5
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):
@@ -2560,13 +2588,12 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
                 "author": "Author",
                 "status": "READ",
                 "acquisition_date": "2023-01-10",
-                "reading_started_date": "2023-02-01",
                 "is_read_date_unknown": True,
                 "container_id": container["id"],
                 "position": 3,
             },
         ).json()
-        client.post(
+        invalid_partial = client.post(
             "/books",
             json={
                 "title": "Read missing start",
@@ -2578,6 +2605,7 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
                 "position": 4,
             },
         )
+        assert invalid_partial.status_code == 422
         covered = client.post(
             f'/books/{pending_complete["id"]}/cover',
             files={
@@ -2602,12 +2630,8 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
         assert titles_for(quick_view="original_collection") == {
             pending_unknown_acquisition["title"]
         }
-        assert titles_for(catalogue_check="missing_started") == {
-            "Read missing start",
-        }
-        assert titles_for(catalogue_check="missing_end") == {
-            "Read unknown finish",
-        }
+        assert titles_for(catalogue_check="missing_started") == set()
+        assert titles_for(catalogue_check="missing_end") == set()
         assert titles_for(catalogue_check="no_location") == {
             pending_unknown_acquisition["title"]
         }
@@ -2615,7 +2639,6 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
             "Pending unknown acquisition",
             "Read complete",
             "Read unknown finish",
-            "Read missing start",
         }
         date_range = {
             "date_field": "acquisition_date",
@@ -2645,7 +2668,6 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
             ).json()
         ]
         assert acquisition_order_without_unknown == [
-            "Read missing start",
             "Read unknown finish",
             "Read complete",
             "Pending complete",
@@ -2663,7 +2685,6 @@ def test_books_can_be_filtered_by_missing_data_and_unknown_dates() -> None:
         ]
         assert acquisition_order_with_unknown == [
             "Pending unknown acquisition",
-            "Read missing start",
             "Read unknown finish",
             "Read complete",
             "Pending complete",

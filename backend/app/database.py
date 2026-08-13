@@ -137,6 +137,44 @@ def init_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_book_authors_name
                 ON book_authors(name COLLATE NOCASE);
 
+            CREATE TABLE IF NOT EXISTS reading_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                session_number INTEGER NOT NULL CHECK (session_number > 0),
+                state TEXT NOT NULL CHECK (state IN ('ACTIVE', 'COMPLETED')),
+                started_date TEXT,
+                finished_date TEXT,
+                dates_unknown INTEGER NOT NULL DEFAULT 0
+                    CHECK (dates_unknown IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                UNIQUE (book_id, session_number),
+                CHECK (
+                    (state = 'ACTIVE' AND started_date IS NOT NULL
+                        AND finished_date IS NULL AND dates_unknown = 0)
+                    OR
+                    (state = 'COMPLETED' AND (
+                        (started_date IS NOT NULL AND finished_date IS NOT NULL
+                            AND dates_unknown = 0 AND started_date <= finished_date)
+                        OR
+                        (started_date IS NULL AND finished_date IS NULL
+                            AND dates_unknown = 1)
+                    ))
+                )
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_one_active
+                ON reading_sessions(book_id) WHERE state = 'ACTIVE';
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_one_unknown
+                ON reading_sessions(book_id) WHERE dates_unknown = 1;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_sessions_distinct_known_period
+                ON reading_sessions(book_id, started_date, finished_date)
+                WHERE state = 'COMPLETED' AND dates_unknown = 0;
+            CREATE INDEX IF NOT EXISTS idx_reading_sessions_book
+                ON reading_sessions(book_id, session_number);
+            CREATE INDEX IF NOT EXISTS idx_reading_sessions_finished
+                ON reading_sessions(finished_date);
+
             CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_insert
             BEFORE INSERT ON books
             WHEN NEW.has_multiple_authors = 1

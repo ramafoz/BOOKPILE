@@ -68,6 +68,9 @@ function appendMetadataFilters(params: URLSearchParams, filters: MetadataFilters
   if (filters.authorStructure !== "ANY") {
     params.set("author_structure", filters.authorStructure);
   }
+  if (filters.readingActivity !== "ANY") {
+    params.set("reading_activity", filters.readingActivity);
+  }
   if (filters.pageMin) params.set("page_min", filters.pageMin);
   if (filters.pageMax) params.set("page_max", filters.pageMax);
   const validYearMin = /^\d{4}$/.test(filters.publicationYearMin);
@@ -222,6 +225,37 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+  startReading: (id: number, startedDate: string) =>
+    request<Book>(`/books/${id}/reading-sessions/start`, {
+      method: "POST",
+      body: JSON.stringify({ started_date: startedDate }),
+    }),
+  finishReading: (id: number, finishedDate: string) =>
+    request<Book>(`/books/${id}/reading-sessions/finish`, {
+      method: "POST",
+      body: JSON.stringify({ finished_date: finishedDate }),
+    }),
+  cancelReading: (id: number) =>
+    request<Book>(`/books/${id}/reading-sessions/active`, { method: "DELETE" }),
+  addReadingHistory: (
+    id: number,
+    payload: { started_date: string | null; finished_date: string | null; dates_unknown: boolean },
+  ) => request<Book>(`/books/${id}/reading-sessions`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }),
+  updateReadingHistory: (
+    bookId: number,
+    sessionId: number,
+    payload: { started_date: string | null; finished_date: string | null; dates_unknown: boolean },
+  ) => request<Book>(`/books/${bookId}/reading-sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }),
+  deleteReadingHistory: (bookId: number, sessionId: number) =>
+    request<Book>(`/books/${bookId}/reading-sessions/${sessionId}`, { method: "DELETE" }),
+  clearReadingHistory: (bookId: number) =>
+    request<Book>(`/books/${bookId}/reading-sessions`, { method: "DELETE" }),
   deleteBook: (id: number) =>
     request<void>(`/books/${id}`, { method: "DELETE" }),
   uploadCover: (id: number, cover: File) => {
