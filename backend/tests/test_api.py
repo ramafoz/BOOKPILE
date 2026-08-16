@@ -98,6 +98,102 @@ def test_catalogue_flow() -> None:
         assert client.get("/stats").json()["total"] == 0
 
 
+def test_loan_lifecycle_filters_map_statistics_and_exports() -> None:
+    with TestClient(app) as client:
+        bookcase = client.post("/bookcases", json={"name": "Loan room"}).json()
+        shelf = client.post(
+            "/shelves", json={"bookcase_id": bookcase["id"], "shelf_number": 1}
+        ).json()
+        container = client.post(
+            "/containers",
+            json={
+                "shelf_id": shelf["id"],
+                "container_type": "ROW",
+                "layer": "BACKGROUND",
+                "container_number": 1,
+            },
+        ).json()
+        book = client.post(
+            "/books",
+            json={
+                "title": "A loaned book",
+                "author": "Careful Lender",
+                "container_id": container["id"],
+                "position": 1,
+                "current_loan": {
+                    "loaned_to": "María",
+                    "loaned_date": "2020-01-02",
+                    "expected_return_date": "2020-01-20",
+                    "notes": "Handle carefully",
+                },
+            },
+        )
+        assert book.status_code == 201
+        payload = book.json()
+        assert payload["status"] == "PENDING"
+        assert payload["is_on_loan"] is True
+        assert payload["location_label"] == "On loan: María"
+        assert "Loan room" in payload["return_location_label"]
+
+        blocked_reading = client.post(
+            f'/books/{payload["id"]}/reading-sessions/start',
+            json={"started_date": date.today().isoformat()},
+        )
+        assert blocked_reading.status_code == 422
+        assert "currently on loan" in blocked_reading.json()["detail"]
+
+        found = client.get(
+            "/books",
+            params={"loan_status": "ON_LOAN", "loaned_to": "mar"},
+        ).json()
+        assert [item["id"] for item in found] == [payload["id"]]
+        assert client.get(
+            "/books", params={"quick_view": "overdue_loans"}
+        ).json()[0]["id"] == payload["id"]
+
+        map_payload = client.get("/library-map").json()
+        assert map_payload["loaned_books"][0]["id"] == payload["id"]
+        assert map_payload["loaned_books"][0]["loaned_to"] == "María"
+        assert map_payload["bookcases"][0]["book_count"] == 0
+        assert "loaned" in map_payload["layout"]
+
+        statistics = client.get("/statistics").json()["loans"]
+        assert statistics["active"] == 1
+        assert statistics["overdue"] == 1
+        assert statistics["completed"] == 0
+
+        books_csv = client.get("/exports/books.csv")
+        assert books_csv.status_code == 200
+        assert "active_loaned_to" in books_csv.text
+        assert "María" in books_csv.text
+        loans_csv = client.get("/exports/loans.csv")
+        assert loans_csv.status_code == 200
+        assert "Handle carefully" in loans_csv.text
+
+        returned = client.post(
+            f'/books/{payload["id"]}/loans/return',
+            json={"returned_date": "2020-01-15"},
+        )
+        assert returned.status_code == 200
+        assert returned.json()["is_on_loan"] is False
+        assert returned.json()["loan_count"] == 1
+        assert returned.json()["loans"][0]["state"] == "RETURNED"
+
+        history = client.post(
+            f'/books/{payload["id"]}/loans',
+            json={
+                "loaned_to": "Old friend",
+                "loaned_date": None,
+                "expected_return_date": None,
+                "returned_date": None,
+                "notes": None,
+            },
+        )
+        assert history.status_code == 200
+        assert history.json()["loan_count"] == 2
+        assert history.json()["loans"][0]["loaned_to"] == "Old friend"
+
+
 def test_isbn_lookup_endpoint_is_read_only_and_normalized() -> None:
     candidate = {
         "source": "OPEN_LIBRARY",
@@ -2229,7 +2325,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-            assert schema_version(connection) == 5
+            assert schema_version(connection) == 6
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):

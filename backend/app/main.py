@@ -32,8 +32,22 @@ from .catalogue_matching import (
     find_isbn_catalogue_matches,
 )
 from .database import connect, database_path, init_database
-from .exports import create_full_backup, write_books_csv, write_reading_sessions_csv
+from .exports import (
+    create_full_backup,
+    write_books_csv,
+    write_loans_csv,
+    write_reading_sessions_csv,
+)
 from .isbn import InvalidISBN, normalize_isbn
+from .loans import (
+    LoanError,
+    add_historical_loan,
+    cancel_active_loan,
+    delete_loan,
+    return_loan,
+    start_loan,
+    update_loan,
+)
 from .rearrangement import (
     apply_planned_books,
     load_rearrangement_state,
@@ -68,6 +82,10 @@ from .schemas import (
     ContainerUpdate,
     FictionCategory,
     ISBNLookupResult,
+    LoanHistoryCreate,
+    LoanReturnRequest,
+    LoanStartRequest,
+    LoanUpdate,
     PublicationType,
     ReadingFinishRequest,
     ReadingHistoryCreate,
@@ -112,6 +130,34 @@ SELECT
             ORDER BY rs.session_number
         ) ordered_session
     ), '[]') AS reading_sessions_json,
+    COALESCE((
+        SELECT json_group_array(json(ordered_loan.loan_json))
+        FROM (
+            SELECT json_object(
+                'id', loan.id,
+                'book_id', loan.book_id,
+                'loaned_to', loan.loaned_to,
+                'notes', loan.notes,
+                'state', loan.state,
+                'loaned_date', loan.loaned_date,
+                'expected_return_date', loan.expected_return_date,
+                'returned_date', loan.returned_date,
+                'created_at', loan.created_at,
+                'updated_at', loan.updated_at
+            ) AS loan_json
+            FROM loans loan
+            WHERE loan.book_id = b.id
+            ORDER BY
+                CASE
+                    WHEN loan.state = 'ACTIVE' THEN 2
+                    WHEN loan.loaned_date IS NULL THEN 0
+                    ELSE 1
+                END,
+                loan.loaned_date,
+                loan.created_at,
+                loan.id
+        ) ordered_loan
+    ), '[]') AS loans_json,
     bc.name AS bookcase_name,
     s.shelf_number,
     c.container_type,
@@ -164,15 +210,27 @@ def serialize_book(row: sqlite3.Row) -> dict[str, Any]:
     ) and any(
         session["state"] == "COMPLETED" for session in book["reading_sessions"]
     )
+    book["loans"] = json.loads(book.pop("loans_json", "[]"))
+    book["loan_count"] = len(book["loans"])
+    book["active_loan"] = next(
+        (loan for loan in book["loans"] if loan["state"] == "ACTIVE"),
+        None,
+    )
+    book["is_on_loan"] = book["active_loan"] is not None
     if book["container_id"] is None:
-        book["location_label"] = None
+        physical_location = None
     else:
         layer = book["layer"].title()
         kind = book["container_type"].title()
-        book["location_label"] = (
+        physical_location = (
             f'{book["bookcase_name"]} · Shelf {book["shelf_number"]} · '
             f'{layer} {kind} {book["container_number"]} · Position {book["position"]}'
         )
+    book["return_location_label"] = physical_location
+    book["location_label"] = (
+        f'On loan: {book["active_loan"]["loaned_to"]}'
+        if book["active_loan"] else physical_location
+    )
     return book
 
 
@@ -554,6 +612,23 @@ def download_reading_sessions_csv() -> FileResponse:
     )
 
 
+@app.get("/exports/loans.csv")
+def download_loans_csv() -> FileResponse:
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    path = temporary_download(".csv")
+    try:
+        write_loans_csv(path)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        filename=f"BOOKPILE-loans-{timestamp}.csv",
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
 @app.post("/restore/inspect")
 async def inspect_restore(
     backup: UploadFile = File(...),
@@ -681,6 +756,9 @@ def list_books(
         "reading_started_date",
         "read_date",
         "created_at",
+        "loaned_date",
+        "expected_return_date",
+        "returned_date",
     ] = "title",
     sort_order: Literal["asc", "desc"] = "asc",
     bookcase_id: int | None = None,
@@ -698,6 +776,8 @@ def list_books(
     quick_view: Literal[
         "missing_finished",
         "original_collection",
+        "currently_on_loan",
+        "overdue_loans",
     ]
     | None = None,
     catalogue_check: Literal[
@@ -729,6 +809,17 @@ def list_books(
     series_state: Literal["ANY", "YES", "NO"] = "ANY",
     author_structure: Literal["ANY", "SINGLE", "MULTIPLE"] = "ANY",
     reading_activity: Literal["ANY", "INITIAL", "REREADING"] = "ANY",
+    loan_status: Literal[
+        "ANY", "AVAILABLE", "ON_LOAN", "OVERDUE", "EVER", "NEVER"
+    ] = "ANY",
+    loaned_to: str | None = Query(default=None, max_length=300),
+    loan_record_scope: Literal["ACTIVE", "ANY"] = "ACTIVE",
+    loan_date_field: Literal[
+        "loaned_date", "expected_return_date", "returned_date"
+    ] = "loaned_date",
+    loan_date_from: date | None = None,
+    loan_date_to: date | None = None,
+    include_unknown_loan_dates: bool = False,
     page_min: int | None = Query(default=None, ge=1),
     page_max: int | None = Query(default=None, ge=1),
     publication_year_field: Literal[
@@ -743,6 +834,11 @@ def list_books(
         raise HTTPException(
             status_code=422,
             detail="Date from must be earlier than or equal to date to",
+        )
+    if loan_date_from and loan_date_to and loan_date_from > loan_date_to:
+        raise HTTPException(
+            status_code=422,
+            detail="Loan date from must be earlier than or equal to loan date to",
         )
     if book_id is not None:
         where.append("b.id = ?")
@@ -764,6 +860,31 @@ def list_books(
                 WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
             )"""
         )
+    active_loan_exists = (
+        "EXISTS (SELECT 1 FROM loans active_loan "
+        "WHERE active_loan.book_id = b.id AND active_loan.state = 'ACTIVE')"
+    )
+    if loan_status == "AVAILABLE":
+        where.append(f"NOT {active_loan_exists}")
+    elif loan_status == "ON_LOAN":
+        where.append(active_loan_exists)
+    elif loan_status == "OVERDUE":
+        where.append(
+            "EXISTS (SELECT 1 FROM loans overdue WHERE overdue.book_id = b.id "
+            "AND overdue.state = 'ACTIVE' AND overdue.expected_return_date < ?)"
+        )
+        params.append(date.today().isoformat())
+    elif loan_status == "EVER":
+        where.append("EXISTS (SELECT 1 FROM loans loan WHERE loan.book_id = b.id)")
+    elif loan_status == "NEVER":
+        where.append("NOT EXISTS (SELECT 1 FROM loans loan WHERE loan.book_id = b.id)")
+    if loaned_to and loaned_to.strip():
+        scope_clause = " AND borrower.state = 'ACTIVE'" if loan_record_scope == "ACTIVE" else ""
+        where.append(
+            "EXISTS (SELECT 1 FROM loans borrower WHERE borrower.book_id = b.id"
+            f"{scope_clause} AND borrower.loaned_to LIKE ? COLLATE NOCASE)"
+        )
+        params.append(f"%{loaned_to.strip()}%")
     if search and search.strip():
         searchable_columns = ("b.title", "b.author", "b.series_name")
         where.append(
@@ -788,6 +909,14 @@ def list_books(
         )
     elif quick_view == "original_collection":
         where.append("b.is_original_collection = 1")
+    elif quick_view == "currently_on_loan":
+        where.append(active_loan_exists)
+    elif quick_view == "overdue_loans":
+        where.append(
+            "EXISTS (SELECT 1 FROM loans overdue WHERE overdue.book_id = b.id "
+            "AND overdue.state = 'ACTIVE' AND overdue.expected_return_date < ?)"
+        )
+        params.append(date.today().isoformat())
     if catalogue_check == "missing_started":
         where.append(
             """
@@ -897,12 +1026,51 @@ def list_books(
         if include_unknown_dates:
             session_match += " OR EXISTS (SELECT 1 FROM reading_sessions ru WHERE ru.book_id = b.id AND ru.dates_unknown = 1)"
         where.append(f"({session_match})")
+    if loan_date_from is not None or loan_date_to is not None:
+        loan_conditions = ["filtered_loan.book_id = b.id"]
+        if loan_record_scope == "ACTIVE":
+            loan_conditions.append("filtered_loan.state = 'ACTIVE'")
+        if loan_date_from is not None:
+            loan_conditions.append(f"filtered_loan.{loan_date_field} >= ?")
+            params.append(loan_date_from.isoformat())
+        if loan_date_to is not None:
+            loan_conditions.append(f"filtered_loan.{loan_date_field} <= ?")
+            params.append(loan_date_to.isoformat())
+        loan_match = (
+            "EXISTS (SELECT 1 FROM loans filtered_loan WHERE "
+            + " AND ".join(loan_conditions)
+            + ")"
+        )
+        if include_unknown_loan_dates:
+            unknown_conditions = [
+                "unknown_loan.book_id = b.id",
+                f"unknown_loan.{loan_date_field} IS NULL",
+            ]
+            if loan_record_scope == "ACTIVE":
+                unknown_conditions.append("unknown_loan.state = 'ACTIVE'")
+            loan_match += (
+                " OR EXISTS (SELECT 1 FROM loans unknown_loan WHERE "
+                + " AND ".join(unknown_conditions)
+                + ")"
+            )
+        where.append(f"({loan_match})")
     if (
         sort_by
         in {"acquisition_date", "reading_started_date", "read_date"}
         and not include_unknown_sort_dates
     ):
         where.append(f"b.{sort_by} IS NOT NULL")
+
+    loan_sort_fields = {
+        "loaned_date",
+        "expected_return_date",
+        "returned_date",
+    }
+    if sort_by in loan_sort_fields and not include_unknown_sort_dates:
+        where.append(
+            f"EXISTS (SELECT 1 FROM loans sort_loan WHERE sort_loan.book_id = b.id "
+            f"AND sort_loan.{sort_by} IS NOT NULL)"
+        )
 
     query = BOOK_SELECT
     if where:
@@ -931,6 +1099,17 @@ def list_books(
             f" ORDER BY CASE WHEN b.{sort_by} IS NULL THEN 0 ELSE 1 END"
             f" {unknown_direction},"
             f" b.{sort_by} {direction}, b.title COLLATE NOCASE ASC"
+        )
+    elif sort_by in loan_sort_fields:
+        loan_sort_expression = (
+            f"(SELECT MAX(sort_loan.{sort_by}) FROM loans sort_loan "
+            "WHERE sort_loan.book_id = b.id)"
+        )
+        unknown_direction = "ASC" if sort_order == "asc" else "DESC"
+        query += (
+            f" ORDER BY CASE WHEN {loan_sort_expression} IS NULL THEN 0 ELSE 1 END"
+            f" {unknown_direction}, {loan_sort_expression} {direction},"
+            " b.title COLLATE NOCASE ASC"
         )
     elif sort_by == "author":
         query += (
@@ -1152,7 +1331,16 @@ def create_book(payload: BookCreate) -> dict[str, Any]:
                     finished=read_date,
                     dates_unknown=is_read_date_unknown,
                 )
-    except ReadingSessionError as exc:
+            if payload.current_loan:
+                start_loan(
+                    connection,
+                    book_id,
+                    loaned_to=payload.current_loan.loaned_to,
+                    loaned_date=payload.current_loan.loaned_date,
+                    expected_return_date=payload.current_loan.expected_return_date,
+                    notes=payload.current_loan.notes,
+                )
+    except (ReadingSessionError, LoanError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -1326,6 +1514,19 @@ def update_book(book_id: int, payload: BookUpdate) -> dict[str, Any]:
     )
     try:
         with connect() as connection:
+            if (
+                lifecycle_changed
+                and projected_status == BookStatus.currently_reading.value
+                and existing["status"] != BookStatus.currently_reading.value
+                and connection.execute(
+                    "SELECT 1 FROM loans WHERE book_id = ? AND state = 'ACTIVE'",
+                    (book_id,),
+                ).fetchone()
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Return this book before starting a reading session",
+                )
             if author_structure_touched:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
@@ -1485,6 +1686,97 @@ def clear_book_reading_history(book_id: int) -> dict[str, Any]:
     return _reading_session_change(
         book_id,
         lambda connection: delete_all_sessions(connection, book_id),
+    )
+
+
+def _loan_change(book_id: int, operation) -> dict[str, Any]:
+    try:
+        with connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            operation(connection)
+    except LoanError as exc:
+        status_code = 404 if str(exc) == "Book not found" else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return fetch_book(book_id)
+
+
+@app.post("/books/{book_id}/loans/start", response_model=Book)
+def start_book_loan(book_id: int, payload: LoanStartRequest) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: start_loan(
+            connection,
+            book_id,
+            loaned_to=payload.loaned_to,
+            loaned_date=payload.loaned_date,
+            expected_return_date=payload.expected_return_date,
+            notes=payload.notes,
+        ),
+    )
+
+
+@app.post("/books/{book_id}/loans/return", response_model=Book)
+def return_book_loan(book_id: int, payload: LoanReturnRequest) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: return_loan(
+            connection, book_id, returned_date=payload.returned_date
+        ),
+    )
+
+
+@app.delete("/books/{book_id}/loans/active", response_model=Book)
+def cancel_book_active_loan(book_id: int) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: cancel_active_loan(connection, book_id),
+    )
+
+
+@app.post("/books/{book_id}/loans", response_model=Book)
+def create_book_loan_history(
+    book_id: int, payload: LoanHistoryCreate
+) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: add_historical_loan(
+            connection,
+            book_id,
+            loaned_to=payload.loaned_to,
+            loaned_date=payload.loaned_date,
+            expected_return_date=payload.expected_return_date,
+            returned_date=payload.returned_date,
+            notes=payload.notes,
+        ),
+    )
+
+
+@app.patch("/books/{book_id}/loans/{loan_id}", response_model=Book)
+def update_book_loan_history(
+    book_id: int, loan_id: int, payload: LoanUpdate
+) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: update_loan(
+            connection,
+            book_id,
+            loan_id,
+            loaned_to=payload.loaned_to,
+            loaned_date=payload.loaned_date,
+            expected_return_date=payload.expected_return_date,
+            returned_date=payload.returned_date,
+            notes=payload.notes,
+        ),
+    )
+
+
+@app.delete("/books/{book_id}/loans/{loan_id}", response_model=Book)
+def delete_book_loan_history(book_id: int, loan_id: int) -> dict[str, Any]:
+    return _loan_change(
+        book_id,
+        lambda connection: delete_loan(connection, book_id, loan_id),
     )
 
 
@@ -1709,6 +2001,13 @@ def ensure_visual_layout(
         VALUES ('OUTSIDE', 0, 54, 70, 28, 18)
         """
     )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO visual_layout_items
+            (item_type, item_id, x, y, width, height)
+        VALUES ('OUTSIDE', 1, 84, 70, 14, 18)
+        """
+    )
     for shelf in shelves:
         connection.execute(
             """
@@ -1760,13 +2059,17 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
     ).fetchall()
     bookcases = []
     outside = {"x": 54, "y": 70, "width": 28, "height": 18}
+    loaned = {"x": 84, "y": 70, "width": 14, "height": 18}
     for row in items:
         rect = {
             key: row[key]
             for key in ("x", "y", "width", "height")
         }
         if row["item_type"] == "OUTSIDE":
-            outside = rect
+            if row["item_id"] == 1:
+                loaned = rect
+            else:
+                outside = rect
         else:
             bookcases.append({"id": row["item_id"], **rect})
     return {
@@ -1790,6 +2093,7 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
             )
         ],
         "outside": outside,
+        "loaned": loaned,
     }
 
 
@@ -1801,6 +2105,14 @@ def library_map() -> dict[str, Any]:
         edition_number, fiction_category, binding, publication_type,
         genre_text, series_name, series_volume, status, container_id,
         position, acquisition_date, reading_started_date, read_date,
+        EXISTS (
+            SELECT 1 FROM loans active_loan
+            WHERE active_loan.book_id = books.id
+              AND active_loan.state = 'ACTIVE'
+        ) AS is_on_loan,
+        (SELECT active_loan.loaned_to FROM loans active_loan
+         WHERE active_loan.book_id = books.id
+           AND active_loan.state = 'ACTIVE') AS loaned_to,
         (status = 'CURRENTLY_READING' AND EXISTS (
             SELECT 1 FROM reading_sessions rs
             WHERE rs.book_id = books.id AND rs.state = 'COMPLETED'
@@ -1850,6 +2162,11 @@ def library_map() -> dict[str, Any]:
                 FROM books
                 WHERE container_id IS NOT NULL
                   AND status != 'CURRENTLY_READING'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM loans active_loan
+                      WHERE active_loan.book_id = books.id
+                        AND active_loan.state = 'ACTIVE'
+                  )
                 ORDER BY container_id, position
                 """.format(
                     map_book_fields=map_book_fields,
@@ -1864,6 +2181,29 @@ def library_map() -> dict[str, Any]:
                 SELECT {map_book_fields}, {map_authors_field}
                 FROM books
                 WHERE status = 'CURRENTLY_READING'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM loans active_loan
+                      WHERE active_loan.book_id = books.id
+                        AND active_loan.state = 'ACTIVE'
+                  )
+                ORDER BY title COLLATE NOCASE
+                """.format(
+                    map_book_fields=map_book_fields,
+                    map_authors_field=map_authors_field,
+                )
+            )
+        ]
+        loaned_books = [
+            dict(row)
+            for row in connection.execute(
+                """
+                SELECT {map_book_fields}, {map_authors_field}
+                FROM books
+                WHERE EXISTS (
+                    SELECT 1 FROM loans active_loan
+                    WHERE active_loan.book_id = books.id
+                      AND active_loan.state = 'ACTIVE'
+                )
                 ORDER BY title COLLATE NOCASE
                 """.format(
                     map_book_fields=map_book_fields,
@@ -1874,7 +2214,7 @@ def library_map() -> dict[str, Any]:
         ensure_visual_layout(connection, bookcases, shelves, containers)
         layout = fetch_visual_layout(connection)
 
-    for book in [*books, *outside_books]:
+    for book in [*books, *outside_books, *loaned_books]:
         book["structured_authors"] = json.loads(
             book.pop("structured_authors_json", "[]")
         )
@@ -1919,13 +2259,14 @@ def library_map() -> dict[str, Any]:
     return {
         "bookcases": bookcases,
         "outside_books": outside_books,
+        "loaned_books": loaned_books,
         "layout": layout,
     }
 
 
 @app.put("/visual-layout")
 def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
-    for rect in [*payload.bookcases, payload.outside]:
+    for rect in [*payload.bookcases, payload.outside, payload.loaned]:
         if rect.x + rect.width > 100 or rect.y + rect.height > 100:
             raise HTTPException(
                 status_code=422,
@@ -2015,6 +2356,19 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
                 payload.outside.y,
                 payload.outside.width,
                 payload.outside.height,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO visual_layout_items
+                (item_type, item_id, x, y, width, height)
+            VALUES ('OUTSIDE', 1, ?, ?, ?, ?)
+            """,
+            (
+                payload.loaned.x,
+                payload.loaned.y,
+                payload.loaned.width,
+                payload.loaned.height,
             ),
         )
         connection.execute("DELETE FROM visual_shelf_layout")
@@ -2151,8 +2505,21 @@ def catalogue_statistics(
                 """,
                 book_ids,
             ).fetchall())
+            loan_rows = list(connection.execute(
+                f"""
+                SELECT loan.id, loan.book_id, b.title, b.author, loan.state,
+                       loan.loaned_date, loan.expected_return_date,
+                       loan.returned_date
+                FROM loans loan
+                JOIN books b ON b.id = loan.book_id
+                WHERE loan.book_id IN ({placeholders})
+                ORDER BY loan.loaned_date, loan.created_at, loan.id
+                """,
+                book_ids,
+            ).fetchall())
         else:
             read_rows = []
+            loan_rows = []
 
     acquired_by_year: dict[int, int] = {}
     read_by_year: dict[int, int] = {}
@@ -2296,6 +2663,28 @@ def catalogue_statistics(
             "read": sum(bool(row["has_completed_reading"]) for row in group),
         }
 
+    today = date.today()
+    loaned_by_year: dict[int, int] = {}
+    loan_counts_by_book: dict[int, dict[str, Any]] = {}
+    for loan in loan_rows:
+        loaned = parsed_date(loan["loaned_date"])
+        if loaned is not None:
+            loaned_by_year[loaned.year] = loaned_by_year.get(loaned.year, 0) + 1
+        summary = loan_counts_by_book.setdefault(
+            loan["book_id"],
+            {
+                "book_id": loan["book_id"],
+                "title": loan["title"],
+                "author": loan["author"],
+                "loan_count": 0,
+            },
+        )
+        summary["loan_count"] += 1
+    most_loaned = sorted(
+        loan_counts_by_book.values(),
+        key=lambda item: (-item["loan_count"], item["title"].casefold()),
+    )[:10]
+
     return {
         "selected_year": year,
         "available_years": years,
@@ -2336,6 +2725,24 @@ def catalogue_statistics(
             "unique_books": len({row["id"] for row in read_rows}),
             "rereads": sum(row["session_number"] > 1 for row in read_rows),
         },
+        "loans": {
+            "active": sum(loan["state"] == "ACTIVE" for loan in loan_rows),
+            "overdue": sum(
+                loan["state"] == "ACTIVE"
+                and parsed_date(loan["expected_return_date"]) is not None
+                and parsed_date(loan["expected_return_date"]) < today
+                for loan in loan_rows
+            ),
+            "completed": sum(loan["state"] == "RETURNED" for loan in loan_rows),
+            "by_year": [
+                {"year": loan_year, "count": loaned_by_year[loan_year]}
+                for loan_year in sorted(loaned_by_year)
+            ],
+            "most_loaned": most_loaned,
+            "unknown_loan_dates": sum(
+                loan["loaned_date"] is None for loan in loan_rows
+            ),
+        },
         "filtered_book_count": len(rows),
         "pending_duration": interval_summary(
             started_rows, "acquisition_date", "reading_started_date"
@@ -2371,7 +2778,11 @@ def reading_suggestion(
     publication_year_min: int | None = Query(default=None, ge=1000, le=9999),
     publication_year_max: int | None = Query(default=None, ge=1000, le=9999),
 ) -> dict[str, Any]:
-    where = ["b.status = 'PENDING'"]
+    where = [
+        "b.status = 'PENDING'",
+        "NOT EXISTS (SELECT 1 FROM loans active_loan "
+        "WHERE active_loan.book_id = b.id AND active_loan.state = 'ACTIVE')",
+    ]
     params: list[Any] = []
     if mode in {"oldest", "waiting"}:
         where.append("b.acquisition_date IS NOT NULL")

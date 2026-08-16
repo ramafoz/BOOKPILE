@@ -159,6 +159,13 @@ def _finalize_change(connection: sqlite3.Connection, book_id: int) -> None:
 
 def start_reading(connection: sqlite3.Connection, book_id: int, started: date) -> int:
     _validate_known_dates(connection, book_id, started, None)
+    if connection.execute(
+        "SELECT 1 FROM loans WHERE book_id = ? AND state = 'ACTIVE'",
+        (book_id,),
+    ).fetchone():
+        raise ReadingSessionError(
+            "This book is currently on loan and cannot start a reading"
+        )
     if any(item["state"] == "ACTIVE" for item in list_sessions(connection, book_id)):
         raise ReadingSessionError("This book already has an active reading")
     cursor = connection.execute(

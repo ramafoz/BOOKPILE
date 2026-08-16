@@ -34,6 +34,10 @@ SELECT
         SELECT 1 FROM reading_sessions rs
         WHERE rs.book_id = b.id AND rs.state = 'COMPLETED'
     ) AS has_completed_reading,
+    EXISTS(
+        SELECT 1 FROM loans loan
+        WHERE loan.book_id = b.id AND loan.state = 'ACTIVE'
+    ) AS is_on_loan,
     b.updated_at
 FROM books b
 ORDER BY b.id
@@ -67,6 +71,7 @@ class PlannedBook:
     read_date: str | None
     is_read_date_unknown: bool
     has_completed_reading: bool
+    is_on_loan: bool
     updated_at: str
 
 
@@ -86,6 +91,7 @@ def load_rearrangement_state(
             read_date=row["read_date"],
             is_read_date_unknown=bool(row["is_read_date_unknown"]),
             has_completed_reading=bool(row["has_completed_reading"]),
+            is_on_loan=bool(row["is_on_loan"]),
             updated_at=row["updated_at"],
         )
         for row in connection.execute(REARRANGEMENT_BOOKS)
@@ -107,7 +113,7 @@ def rearrangement_revision(books: dict[int, PlannedBook]) -> str:
         digest.update(
             (
                 f"{book.id}|{book.container_id}|{book.position}|"
-                f"{book.status}|{book.updated_at}\n"
+                f"{book.status}|{int(book.is_on_loan)}|{book.updated_at}\n"
             ).encode("utf-8")
         )
     return digest.hexdigest()
@@ -127,7 +133,12 @@ def plan_rearrangement(
     movement_log: list[str] = []
     warnings: list[str] = []
     initial = books[request.book_id]
-    was_reading = initial.status == BookStatus.currently_reading.value
+    # A loaned book is displayed in the loan area. Moving its reserved shelf
+    # position must not finish or cancel a reading that remains active.
+    was_reading = (
+        initial.status == BookStatus.currently_reading.value
+        and not initial.is_on_loan
+    )
     active_id: int | None = initial.id
     initial_source = (initial.container_id, initial.position)
     effective_old_mode = request.old_position_mode
@@ -154,6 +165,11 @@ def plan_rearrangement(
             )
         if initial.status == BookStatus.currently_reading.value:
             raise HTTPException(status_code=422, detail="Book is already Reading")
+        if initial.is_on_loan:
+            raise HTTPException(
+                status_code=422,
+                detail="Return this book before starting a reading session",
+            )
         books[initial.id] = transition_to_reading(initial)
         movement_log.append(
             f'“{initial.title}”: status '

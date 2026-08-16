@@ -54,6 +54,10 @@ def database_summary(path: Path) -> dict:
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'reading_sessions'"
         ).fetchone():
             tables.append("reading_sessions")
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'loans'"
+        ).fetchone():
+            tables.append("loans")
         counts = {
             table: connection.execute(
                 f"SELECT COUNT(*) FROM {table}"
@@ -168,6 +172,10 @@ CSV_COLUMNS = (
     "series_volume",
     "status",
     "reading_session_count",
+    "loan_count",
+    "active_loaned_to",
+    "active_loaned_date",
+    "active_expected_return_date",
     "goodreads_url",
     "notes",
     "acquisition_date",
@@ -220,6 +228,17 @@ def write_books_csv(destination: Path) -> int:
         b.status,
         (SELECT COUNT(*) FROM reading_sessions rs WHERE rs.book_id = b.id)
             AS reading_session_count,
+        (SELECT COUNT(*) FROM loans loan WHERE loan.book_id = b.id)
+            AS loan_count,
+        (SELECT loan.loaned_to FROM loans loan
+         WHERE loan.book_id = b.id AND loan.state = 'ACTIVE')
+            AS active_loaned_to,
+        (SELECT loan.loaned_date FROM loans loan
+         WHERE loan.book_id = b.id AND loan.state = 'ACTIVE')
+            AS active_loaned_date,
+        (SELECT loan.expected_return_date FROM loans loan
+         WHERE loan.book_id = b.id AND loan.state = 'ACTIVE')
+            AS active_expected_return_date,
         b.goodreads_url,
         b.notes,
         b.acquisition_date,
@@ -321,4 +340,40 @@ def write_reading_sessions_csv(destination: Path) -> int:
                 "true" if record["dates_unknown"] else "false"
             )
             writer.writerow(record)
+    return len(rows)
+
+
+LOAN_CSV_COLUMNS = (
+    "book_id",
+    "title",
+    "loaned_to",
+    "state",
+    "loaned_date",
+    "expected_return_date",
+    "returned_date",
+    "notes",
+    "created_at",
+    "updated_at",
+)
+
+
+def write_loans_csv(destination: Path) -> int:
+    query = """
+    SELECT loan.book_id, b.title, loan.loaned_to, loan.state,
+           loan.loaned_date, loan.expected_return_date, loan.returned_date,
+           loan.notes, loan.created_at, loan.updated_at
+    FROM loans loan
+    JOIN books b ON b.id = loan.book_id
+    ORDER BY b.title COLLATE NOCASE,
+             CASE WHEN loan.state = 'ACTIVE' THEN 2
+                  WHEN loan.loaned_date IS NULL THEN 0 ELSE 1 END,
+             loan.loaned_date, loan.created_at, loan.id
+    """
+    with closing(sqlite3.connect(database_path())) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(query).fetchall()
+    with destination.open("w", encoding="utf-8-sig", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=LOAN_CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(dict(row) for row in rows)
     return len(rows)

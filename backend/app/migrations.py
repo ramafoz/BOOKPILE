@@ -11,7 +11,7 @@ from typing import Callable
 
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 5
+LATEST_SCHEMA_VERSION = 6
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -275,11 +275,52 @@ def _migration_5_store_reading_sessions(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_6_store_loan_history(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS loans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id INTEGER NOT NULL,
+            loaned_to TEXT NOT NULL
+                CHECK (length(trim(loaned_to)) BETWEEN 1 AND 300),
+            notes TEXT CHECK (notes IS NULL OR length(notes) <= 4000),
+            state TEXT NOT NULL CHECK (state IN ('ACTIVE', 'RETURNED')),
+            loaned_date TEXT,
+            expected_return_date TEXT,
+            returned_date TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+            CHECK (state = 'RETURNED' OR returned_date IS NULL),
+            CHECK (
+                loaned_date IS NULL OR returned_date IS NULL
+                OR loaned_date <= returned_date
+            ),
+            CHECK (
+                loaned_date IS NULL OR expected_return_date IS NULL
+                OR loaned_date <= expected_return_date
+            )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_loans_one_active
+        ON loans(book_id) WHERE state = 'ACTIVE';
+        CREATE INDEX IF NOT EXISTS idx_loans_book
+        ON loans(book_id, state, loaned_date, created_at);
+        CREATE INDEX IF NOT EXISTS idx_loans_borrower
+        ON loans(loaned_to COLLATE NOCASE);
+        CREATE INDEX IF NOT EXISTS idx_loans_expected_return
+        ON loans(expected_return_date) WHERE state = 'ACTIVE';
+        CREATE INDEX IF NOT EXISTS idx_loans_returned
+        ON loans(returned_date) WHERE state = 'RETURNED';
+        """
+    )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
     Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
     Migration(4, "store ordered multiple authors", _migration_4_store_multiple_authors),
     Migration(5, "store complete reading history", _migration_5_store_reading_sessions),
+    Migration(6, "store loan history", _migration_6_store_loan_history),
 )
 
 
@@ -323,6 +364,8 @@ def infer_unversioned_schema(connection: sqlite3.Connection) -> int:
         )
     if V4_BOOK_COLUMNS <= book_columns and table_exists(connection, "book_authors"):
         if table_exists(connection, "reading_sessions"):
+            if table_exists(connection, "loans"):
+                return 6
             return 5
         return 4
     if V3_BOOK_COLUMNS <= book_columns:
@@ -356,8 +399,13 @@ def schema_snapshot(
     snapshot: dict[str, list[dict]] = {}
     selected_book_columns = book_columns or PRESERVED_BOOK_COLUMNS
     tables = list(BASELINE_TABLES)
-    if table_exists(connection, "book_authors"):
+    current_version = schema_version(connection)
+    if current_version >= 4 and table_exists(connection, "book_authors"):
         tables.append("book_authors")
+    if current_version >= 5 and table_exists(connection, "reading_sessions"):
+        tables.append("reading_sessions")
+    if current_version >= 6 and table_exists(connection, "loans"):
+        tables.append("loans")
     for table in tables:
         columns = [
             row["name"]
@@ -510,6 +558,41 @@ def verify_database(
         ).fetchone()
         if projection_error:
             raise ValueError("Reading-session projection verification failed")
+
+    loan_schema_active = (
+        table_exists(connection, "loans")
+        and table_exists(connection, MIGRATION_TABLE)
+        and connection.execute(
+            f"SELECT COALESCE(MAX(version), 0) FROM {MIGRATION_TABLE}"
+        ).fetchone()[0] >= 6
+    )
+    if loan_schema_active:
+        invalid_loan = connection.execute(
+            """
+            SELECT id FROM loans
+            WHERE length(trim(loaned_to)) NOT BETWEEN 1 AND 300
+               OR length(COALESCE(notes, '')) > 4000
+               OR state NOT IN ('ACTIVE', 'RETURNED')
+               OR (state = 'ACTIVE' AND returned_date IS NOT NULL)
+               OR (loaned_date IS NOT NULL AND returned_date IS NOT NULL
+                   AND loaned_date > returned_date)
+               OR (loaned_date IS NOT NULL AND expected_return_date IS NOT NULL
+                   AND loaned_date > expected_return_date)
+            LIMIT 1
+            """
+        ).fetchone()
+        if invalid_loan:
+            raise ValueError("Loan-history verification failed")
+        multiple_active = connection.execute(
+            """
+            SELECT book_id FROM loans
+            WHERE state = 'ACTIVE'
+            GROUP BY book_id HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if multiple_active:
+            raise ValueError("A book has more than one active loan")
 
     snapshot = schema_snapshot(connection, book_columns=book_columns)
     if expected_snapshot is not None:

@@ -3,6 +3,8 @@ import {
   ArrowRightLeft,
   BarChart3,
   BookOpen,
+  BookDown,
+  BookUp,
   BookPlus,
   Camera,
   Check,
@@ -48,6 +50,7 @@ import type {
   ContainerType,
   FictionCategory,
   Layer,
+  Loan,
   LibraryMapData,
   MapBook,
   MapBookcase,
@@ -143,6 +146,7 @@ const emptyBook: BookPayload = {
   is_original_collection: false,
   container_id: null,
   position: null,
+  current_loan: null,
 };
 
 function App() {
@@ -167,6 +171,7 @@ function App() {
   const [activeMenu, setActiveMenu] = useState<AppMenu | null>(null);
   const [suggestionMode, setSuggestionMode] = useState<SuggestionMode | null>(null);
   const [statusActionBook, setStatusActionBook] = useState<Book | null>(null);
+  const [loanActionBook, setLoanActionBook] = useState<Book | null>(null);
   const [focusedMapBook, setFocusedMapBook] = useState<Book | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -186,6 +191,13 @@ function App() {
   const [includeUnknownSelectedDates, setIncludeUnknownSelectedDates] =
     useState(false);
   const [includeUnknownSortDates, setIncludeUnknownSortDates] = useState(false);
+  const [loanStatus, setLoanStatus] = useState("ANY");
+  const [loanedTo, setLoanedTo] = useState("");
+  const [loanRecordScope, setLoanRecordScope] = useState<"ACTIVE" | "ANY">("ACTIVE");
+  const [loanDateField, setLoanDateField] = useState("loaned_date");
+  const [loanDateFrom, setLoanDateFrom] = useState("");
+  const [loanDateTo, setLoanDateTo] = useState("");
+  const [includeUnknownLoanDates, setIncludeUnknownLoanDates] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -206,6 +218,13 @@ function App() {
           dateTo,
           quickView,
           catalogueCheck,
+          loanStatus,
+          loanedTo,
+          loanRecordScope,
+          loanDateField,
+          loanDateFrom,
+          loanDateTo,
+          includeUnknownLoanDates,
           includeUnknownSelectedDates,
           includeUnknownSortDates,
           metadata: metadataFilters,
@@ -240,6 +259,13 @@ function App() {
     includeUnknownSelectedDates,
     includeUnknownSortDates,
     metadataFilters,
+    loanStatus,
+    loanedTo,
+    loanRecordScope,
+    loanDateField,
+    loanDateFrom,
+    loanDateTo,
+    includeUnknownLoanDates,
   ]);
 
   const filterShelves = useMemo(
@@ -299,7 +325,19 @@ function App() {
   }, [refresh]);
 
   async function removeBook(book: Book) {
-    if (!window.confirm(`Remove “${book.title}” from your library?`)) return;
+    const related = [
+      book.reading_session_count
+        ? `${book.reading_session_count} reading ${book.reading_session_count === 1 ? "session" : "sessions"}`
+        : "",
+      book.loan_count
+        ? `${book.loan_count} loan ${book.loan_count === 1 ? "record" : "records"}`
+        : "",
+    ].filter(Boolean).join(" and ");
+    if (!window.confirm(
+      `Permanently remove “${book.title}” from BOOKPILE?` +
+      (related ? ` This also deletes ${related}.` : "") +
+      " This cannot be undone except by restoring a backup.",
+    )) return;
     try {
       await api.deleteBook(book.id);
       await refresh();
@@ -359,6 +397,22 @@ function App() {
     );
   }
 
+  function openLoanCatalogue() {
+    setExactBookFilter(null);
+    setFilter("ALL");
+    setQuickView("currently_on_loan");
+    setCatalogueCheck("");
+    setBookcaseFilter("");
+    setShelfFilter("");
+    setContainerFilter("");
+    setLoanStatus("ON_LOAN");
+    setSortBy("loaned_date");
+    setSortOrder("asc");
+    setShowAdvanced(true);
+    setShowMap(false);
+    setFocusedMapBook(null);
+  }
+
   function openExactBookCatalogue(book: { id: number; title: string }) {
     setExactBookFilter(book.id);
     setFilter("ALL");
@@ -390,7 +444,7 @@ function App() {
   }
 
   function openBookOnMap(book: Book) {
-    if (!book.container_id && book.status !== "CURRENTLY_READING") return;
+    if (!book.container_id && book.status !== "CURRENTLY_READING" && !book.is_on_loan) return;
     setFocusedMapBook(book);
     setShowMap(true);
   }
@@ -614,6 +668,9 @@ function App() {
                 <option value="acquisition_date">Acquisition date</option>
                 <option value="reading_started_date">Reading started</option>
                 <option value="read_date">Finished reading</option>
+                <option value="loaned_date">Loan date</option>
+                <option value="expected_return_date">Expected return date</option>
+                <option value="returned_date">Returned date</option>
                 <option value="created_at">Added to BOOKPILE</option>
               </select>
             </label>
@@ -633,6 +690,10 @@ function App() {
                   setCatalogueCheck("");
                   setShowCatalogueChecks(false);
                   setFilter(value === "missing_finished" ? "READ" : "ALL");
+                  setLoanStatus(
+                    value === "currently_on_loan" ? "ON_LOAN"
+                      : value === "overdue_loans" ? "OVERDUE" : "ANY",
+                  );
                   if (
                     (
                       value === "original_collection"
@@ -650,6 +711,8 @@ function App() {
                 <option value="">All catalogue data</option>
                 <option value="missing_finished">Read · finished date unknown</option>
                 <option value="original_collection">Original Collection</option>
+                <option value="currently_on_loan">Currently on loan</option>
+                <option value="overdue_loans">Overdue loans</option>
               </select>
             </label>
             <label>Bookcase
@@ -730,6 +793,43 @@ function App() {
                 setMetadataFilters(next);
               }}
             />
+            <fieldset className="wide loan-filter-fields">
+              <legend>Loans</legend>
+              <div className="loan-filter-grid">
+                <label>Loan status
+                  <select value={loanStatus} onChange={(event) => setLoanStatus(event.target.value)}>
+                    <option value="ANY">Any</option>
+                    <option value="AVAILABLE">Available</option>
+                    <option value="ON_LOAN">On loan</option>
+                    <option value="OVERDUE">Overdue</option>
+                    <option value="EVER">Ever loaned</option>
+                    <option value="NEVER">Never loaned</option>
+                  </select>
+                </label>
+                <label>Loaned to
+                  <input value={loanedTo} maxLength={300} onChange={(event) => setLoanedTo(event.target.value)} />
+                </label>
+                <label>Search loan records
+                  <select value={loanRecordScope} onChange={(event) => setLoanRecordScope(event.target.value as "ACTIVE" | "ANY")}>
+                    <option value="ACTIVE">Active loan only</option>
+                    <option value="ANY">Entire loan history</option>
+                  </select>
+                </label>
+                <label>Loan date type
+                  <select value={loanDateField} onChange={(event) => setLoanDateField(event.target.value)}>
+                    <option value="loaned_date">Loaned</option>
+                    <option value="expected_return_date">Expected return</option>
+                    <option value="returned_date">Returned</option>
+                  </select>
+                </label>
+                <label>From<input type="date" value={loanDateFrom} onChange={(event) => setLoanDateFrom(event.target.value)} /></label>
+                <label>To<input type="date" value={loanDateTo} onChange={(event) => setLoanDateTo(event.target.value)} /></label>
+                <label className="advanced-check wide">
+                  <input type="checkbox" checked={includeUnknownLoanDates} onChange={(event) => setIncludeUnknownLoanDates(event.target.checked)} />
+                  Include loan records whose selected date is unknown
+                </label>
+              </div>
+            </fieldset>
             <div className="catalogue-check-control">
               <button
                 type="button"
@@ -805,6 +905,13 @@ function App() {
                 setIncludeUnknownSortDates(false);
                 setMetadataFilters(emptyMetadataFilters());
                 setFilter("ALL");
+                setLoanStatus("ANY");
+                setLoanedTo("");
+                setLoanRecordScope("ACTIVE");
+                setLoanDateField("loaned_date");
+                setLoanDateFrom("");
+                setLoanDateTo("");
+                setIncludeUnknownLoanDates(false);
               }}
             >
               Clear advanced filters
@@ -862,16 +969,23 @@ function App() {
                   <button
                     className="location location-link"
                     type="button"
-                    disabled={!book.container_id && book.status !== "CURRENTLY_READING"}
+                    disabled={!book.container_id && book.status !== "CURRENTLY_READING" && !book.is_on_loan}
                     aria-label={
-                      book.container_id || book.status === "CURRENTLY_READING"
+                      book.container_id || book.status === "CURRENTLY_READING" || book.is_on_loan
                         ? `Find ${book.title} on the library map`
                         : "This book has no location to show on the library map"
                     }
                     onClick={() => openBookOnMap(book)}
                   >
-                    <MapPin size={16} />
-                    {book.status === "CURRENTLY_READING" ? (
+                    {book.is_on_loan ? <BookUp size={16} /> : <MapPin size={16} />}
+                    {book.is_on_loan && book.active_loan ? (
+                      <div className="location-copy">
+                        <strong>On loan: {book.active_loan.loaned_to}</strong>
+                        <span title={book.return_location_label ?? undefined}>
+                          {book.return_location_label ? "Saved position" : "No saved position"}
+                        </span>
+                      </div>
+                    ) : book.status === "CURRENTLY_READING" ? (
                       <div className="location-copy">
                         <strong>{book.is_rereading ? "Currently re-reading" : "Currently reading"}</strong>
                         <span>
@@ -919,6 +1033,13 @@ function App() {
                         <ExternalLink size={17} />
                       </a>
                     )}
+                    <button
+                      aria-label={book.is_on_loan ? "Return book" : "Loan book"}
+                      title={book.is_on_loan ? "Return book" : "Loan book"}
+                      onClick={() => setLoanActionBook(book)}
+                    >
+                      {book.is_on_loan ? <BookDown size={17} /> : <BookUp size={17} />}
+                    </button>
                     <button aria-label="Edit book" onClick={() => setEditing(book)}>
                       <Pencil size={17} />
                     </button>
@@ -1008,6 +1129,16 @@ function App() {
           }}
         />
       )}
+      {loanActionBook && (
+        <LoanActionDialog
+          book={loanActionBook}
+          onClose={() => setLoanActionBook(null)}
+          onConfirmed={async () => {
+            setLoanActionBook(null);
+            await refresh();
+          }}
+        />
+      )}
       {showMap && (
         <LibraryMapDialog
           focusedBook={focusedMapBook}
@@ -1017,6 +1148,7 @@ function App() {
           }}
           onFilter={openCatalogueAt}
           onReadingFilter={openReadingCatalogue}
+          onLoanFilter={openLoanCatalogue}
           onBookFilter={openExactBookCatalogue}
           onChanged={refresh}
         />
@@ -1355,6 +1487,241 @@ function ReadingHistoryDialog({
   );
 }
 
+function LoanActionDialog({
+  book,
+  onClose,
+  onConfirmed,
+}: {
+  book: Book;
+  onClose: () => void;
+  onConfirmed: () => Promise<void>;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [loanedTo, setLoanedTo] = useState("");
+  const [loanDateUnknown, setLoanDateUnknown] = useState(false);
+  const [loanedDate, setLoanedDate] = useState(today);
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [returnDateUnknown, setReturnDateUnknown] = useState(false);
+  const [returnedDate, setReturnedDate] = useState(today);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      if (book.active_loan) {
+        await api.returnLoan(book.id, returnDateUnknown ? null : returnedDate);
+      } else {
+        await api.startLoan(book.id, {
+          loaned_to: loanedTo,
+          loaned_date: loanDateUnknown ? null : loanedDate,
+          expected_return_date: expectedReturnDate || null,
+          notes: notes || null,
+        });
+      }
+      await onConfirmed();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to update loan");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function cancelActiveLoan() {
+    if (!window.confirm("Delete this active loan record? The book will become available immediately.")) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api.cancelLoan(book.id);
+      await onConfirmed();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to cancel loan");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog loan-action-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow dark">Physical availability</p>
+            <h2>{book.active_loan ? "Return book" : "Loan book"}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose}><X /></button>
+        </div>
+        <h3 className="dialog-book-title">{book.title}</h3>
+        {book.active_loan ? (
+          <div className="loan-form">
+            <p>Currently loaned to <strong>{book.active_loan.loaned_to}</strong>.</p>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={returnDateUnknown} onChange={(event) => setReturnDateUnknown(event.target.checked)} />
+              Returned date unknown
+            </label>
+            {!returnDateUnknown && (
+              <label>Returned date
+                <input type="date" required max={today} min={book.active_loan.loaned_date ?? undefined} value={returnedDate} onChange={(event) => setReturnedDate(event.target.value)} />
+              </label>
+            )}
+          </div>
+        ) : (
+          <div className="loan-form">
+            <label>Loaned to <span className="required-marker">*</span>
+              <input required maxLength={300} value={loanedTo} onChange={(event) => setLoanedTo(event.target.value)} />
+            </label>
+            <label className="checkbox-label">
+              <input type="checkbox" checked={loanDateUnknown} onChange={(event) => setLoanDateUnknown(event.target.checked)} />
+              Loan date unknown
+            </label>
+            {!loanDateUnknown && (
+              <label>Loaned date<input type="date" required max={today} value={loanedDate} onChange={(event) => setLoanedDate(event.target.value)} /></label>
+            )}
+            <label>Expected return date
+              <input type="date" min={loanDateUnknown ? undefined : loanedDate} value={expectedReturnDate} onChange={(event) => setExpectedReturnDate(event.target.value)} />
+            </label>
+            <label>Loan notes
+              <textarea rows={3} maxLength={4000} value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+          </div>
+        )}
+        {error && <div className="form-error">{error}</div>}
+        <div className="dialog-actions">
+          {book.active_loan && <button className="text-button destructive-text" disabled={saving} onClick={() => void cancelActiveLoan()}>Cancel loan record</button>}
+          <button className="outline-button" onClick={onClose}>Close</button>
+          <button className="secondary-button" disabled={saving || (!book.active_loan && !loanedTo.trim())} onClick={() => void save()}>
+            {saving ? "Saving…" : book.active_loan ? "Return book" : "Confirm loan"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoanHistorySummary({ book }: { book: Book }) {
+  if (book.loans.length === 0) return <p className="book-details-note">No loans recorded.</p>;
+  return (
+    <ol className="record-summary-list loan-summary-list">
+      {book.loans.map((loan, index) => (
+        <li key={loan.id}>
+          <strong>{loan.state === "ACTIVE" ? "Active loan" : `Loan ${index + 1}`}</strong>
+          <span>Loaned to {loan.loaned_to}</span>
+          <span>
+            {loan.loaned_date ? formatDate(loan.loaned_date) : "Unknown loan date"}
+            {loan.state === "ACTIVE"
+              ? loan.expected_return_date ? ` · expected ${formatDate(loan.expected_return_date)}` : " · no expected return date"
+              : ` – ${loan.returned_date ? formatDate(loan.returned_date) : "unknown returned date"}`}
+          </span>
+          {loan.notes && <span>{loan.notes}</span>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function LoanHistoryDialog({
+  book,
+  onClose,
+  onChanged,
+  onCatalogueChanged,
+}: {
+  book: Book;
+  onClose: () => void;
+  onChanged: (book: Book) => void;
+  onCatalogueChanged?: () => Promise<void>;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [editing, setEditing] = useState<Loan | null>(null);
+  const [loanedTo, setLoanedTo] = useState("");
+  const [loanDateUnknown, setLoanDateUnknown] = useState(false);
+  const [loanedDate, setLoanedDate] = useState("");
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [returnDateUnknown, setReturnDateUnknown] = useState(false);
+  const [returnedDate, setReturnedDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() {
+    setEditing(null); setLoanedTo(""); setLoanDateUnknown(false); setLoanedDate("");
+    setExpectedReturnDate(""); setReturnDateUnknown(false); setReturnedDate(""); setNotes(""); setError("");
+  }
+  function beginEdit(loan: Loan) {
+    setEditing(loan); setLoanedTo(loan.loaned_to); setLoanDateUnknown(!loan.loaned_date);
+    setLoanedDate(loan.loaned_date ?? ""); setExpectedReturnDate(loan.expected_return_date ?? "");
+    setReturnDateUnknown(loan.state === "RETURNED" && !loan.returned_date);
+    setReturnedDate(loan.returned_date ?? ""); setNotes(loan.notes ?? ""); setError("");
+  }
+  async function accept(updated: Book) {
+    onChanged(updated);
+    await onCatalogueChanged?.();
+    reset();
+  }
+  async function save() {
+    if (!loanedTo.trim()) return;
+    setSaving(true); setError("");
+    try {
+      const payload = {
+        loaned_to: loanedTo,
+        loaned_date: loanDateUnknown ? null : loanedDate || null,
+        expected_return_date: expectedReturnDate || null,
+        returned_date: returnDateUnknown ? null : returnedDate || null,
+        notes: notes || null,
+      };
+      const updated = editing
+        ? await api.updateLoanHistory(book.id, editing.id, payload)
+        : await api.addLoanHistory(book.id, payload);
+      await accept(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save loan record");
+    } finally { setSaving(false); }
+  }
+  async function remove(loan: Loan) {
+    if (!window.confirm(`Permanently delete this loan to “${loan.loaned_to}”?`)) return;
+    setSaving(true); setError("");
+    try { await accept(await api.deleteLoanHistory(book.id, loan.id)); }
+    catch (err) { setError(err instanceof Error ? err.message : "Unable to delete loan record"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="dialog-backdrop nested-dialog-backdrop" onMouseDown={onClose}>
+      <div className="dialog history-dialog loan-history-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="dialog-header"><div><p className="eyebrow dark">Loan record</p><h2>Manage loan history</h2></div><button className="icon-button" onClick={onClose}><X /></button></div>
+        <h3 className="dialog-book-title">{book.title}</h3>
+        <div className="history-record-list">
+          {book.loans.length === 0 && <p className="muted">No loans recorded.</p>}
+          {book.loans.map((loan) => (
+            <div className="history-record-row" key={loan.id}>
+              <div><strong>{loan.state === "ACTIVE" ? "Active loan" : "Returned loan"}</strong><span>{loan.loaned_to} · {loan.loaned_date ? formatDate(loan.loaned_date) : "unknown loan date"}</span></div>
+              <div><button className="outline-button" onClick={() => beginEdit(loan)}>Edit</button><button className="text-button" onClick={() => void remove(loan)}>Delete</button></div>
+            </div>
+          ))}
+        </div>
+        <fieldset className="history-add-fieldset">
+          <legend>{editing ? "Edit loan" : "Add historical loan"}</legend>
+          <div className="loan-form loan-history-form">
+            <label>Loaned to <span className="required-marker">*</span><input maxLength={300} value={loanedTo} onChange={(event) => setLoanedTo(event.target.value)} /></label>
+            <label className="checkbox-label"><input type="checkbox" checked={loanDateUnknown} onChange={(event) => setLoanDateUnknown(event.target.checked)} /> Loan date unknown</label>
+            {!loanDateUnknown && <label>Loaned date<input type="date" max={today} value={loanedDate} onChange={(event) => setLoanedDate(event.target.value)} /></label>}
+            <label>Expected return<input type="date" min={loanDateUnknown ? undefined : loanedDate || undefined} value={expectedReturnDate} onChange={(event) => setExpectedReturnDate(event.target.value)} /></label>
+            {editing?.state === "ACTIVE" ? (
+              <p className="muted">Use the Return book action in the catalogue to complete this active loan.</p>
+            ) : <>
+              <label className="checkbox-label"><input type="checkbox" checked={returnDateUnknown} onChange={(event) => setReturnDateUnknown(event.target.checked)} /> Returned date unknown</label>
+              {!returnDateUnknown && <label>Returned date<input type="date" max={today} min={loanDateUnknown ? undefined : loanedDate || undefined} value={returnedDate} onChange={(event) => setReturnedDate(event.target.value)} /></label>}
+            </>}
+            <label className="wide">Notes<textarea rows={2} maxLength={4000} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+          </div>
+        </fieldset>
+        {error && <div className="form-error">{error}</div>}
+        <div className="dialog-actions">{editing && <button className="text-button" onClick={reset}>Cancel edit</button>}<button className="outline-button" onClick={onClose}>Close</button><button className="secondary-button" disabled={saving || !loanedTo.trim() || (!editing && !returnDateUnknown && !returnedDate)} onClick={() => void save()}>{saving ? "Saving…" : editing ? "Save loan" : "Add loan"}</button></div>
+      </div>
+    </div>
+  );
+}
+
 function BookDetailsDialog({
   book,
   onClose,
@@ -1489,6 +1856,22 @@ function BookDetailsDialog({
               physical position remains available for its return.
             </p>
           )}
+        </section>
+
+        <section className="book-details-section">
+          <h3>Loan history</h3>
+          {book.active_loan && (
+            <p className="book-details-note">
+              Currently on loan to <strong>{book.active_loan.loaned_to}</strong>.
+              {book.active_loan.loaned_date
+                ? ` Loaned ${formatDate(book.active_loan.loaned_date)}.`
+                : " Unknown loan date."}
+              {book.active_loan.expected_return_date
+                ? ` Expected back ${formatDate(book.active_loan.expected_return_date)}.`
+                : " No expected return date."}
+            </p>
+          )}
+          <LoanHistorySummary book={book} />
         </section>
 
         <section className="book-details-section">
@@ -1645,6 +2028,31 @@ function StatisticsDialog({ onClose }: { onClose: () => void }) {
               <article className="duration-stat-card"><p>Reading sessions completed</p><strong>{statistics.reading_sessions.completed}</strong><span>Every completed read, including re-reads</span></article>
               <article className="duration-stat-card"><p>Unique books read</p><strong>{statistics.reading_sessions.unique_books}</strong><span>{statistics.reading_sessions.rereads} completed re-reads</span></article>
             </div>
+            <section className="statistics-section loan-statistics-section">
+              <div className="statistics-section-heading">
+                <div><h3>Loans</h3><p>Availability and complete loan history for the selected books.</p></div>
+              </div>
+              <div className="reading-rate-grid">
+                <ReadingRateCard label="Currently on loan" value={statistics.loans.active} />
+                <ReadingRateCard label="Overdue" value={statistics.loans.overdue} />
+                <ReadingRateCard label="Returned loans" value={statistics.loans.completed} />
+                <ReadingRateCard label="Unknown loan dates" value={statistics.loans.unknown_loan_dates} />
+              </div>
+              <div className="loan-statistics-details">
+                <details>
+                  <summary>Loans by year</summary>
+                  {statistics.loans.by_year.length ? (
+                    <ul>{statistics.loans.by_year.map((item) => <li key={item.year}><span>{item.year}</span><strong>{item.count}</strong></li>)}</ul>
+                  ) : <p className="muted">No loans with a known loan date.</p>}
+                </details>
+                <details>
+                  <summary>Most-loaned books</summary>
+                  {statistics.loans.most_loaned.length ? (
+                    <ol>{statistics.loans.most_loaned.map((item) => <li key={item.book_id}><span><strong>{item.title}</strong><small>{item.author}</small></span><b>{item.loan_count}</b></li>)}</ol>
+                  ) : <p className="muted">No loan history recorded.</p>}
+                </details>
+              </div>
+            </section>
 
             <details className="statistics-metadata-filters">
               <summary>Filter statistics by book metadata</summary>
@@ -2291,12 +2699,14 @@ function BookDialog({
           is_original_collection: book.is_original_collection,
           container_id: book.container_id,
           position: book.position,
+          current_loan: null,
         }
       : emptyBook,
   );
   const [saving, setSaving] = useState(false);
   const [historyBook, setHistoryBook] = useState<Book | null>(book);
   const [showHistory, setShowHistory] = useState(false);
+  const [showLoanHistory, setShowLoanHistory] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [removeCover, setRemoveCover] = useState(false);
@@ -2351,6 +2761,10 @@ function BookDialog({
       read_date: updated.read_date,
       is_read_date_unknown: updated.is_read_date_unknown,
     }));
+  }
+
+  function acceptLoanHistoryChange(updated: Book) {
+    setHistoryBook(updated);
   }
 
   useEffect(() => {
@@ -2804,6 +3218,7 @@ function BookDialog({
           read_date: null,
           is_read_date_unknown: false,
           position: nextPosition && nextPosition > 0 ? nextPosition : null,
+          current_loan: null,
         }));
         setCoverFile(null);
         setCoverPreview(null);
@@ -3473,6 +3888,55 @@ function BookDialog({
               )}
               {containers.length === 0 && <small>Create your library layout first to assign a location.</small>}
             </label>
+            {!book && (
+              <fieldset className="wide loan-on-add-fields">
+                <legend>Availability</legend>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.current_loan)}
+                    onChange={(event) => setForm({
+                      ...form,
+                      current_loan: event.target.checked ? {
+                        loaned_to: "",
+                        loaned_date: new Date().toISOString().slice(0, 10),
+                        expected_return_date: null,
+                        notes: null,
+                      } : null,
+                    })}
+                  />
+                  This book is already on loan
+                </label>
+                {form.current_loan && (
+                  <div className="loan-form inline-loan-form">
+                    <label>Loaned to <span className="required-marker">*</span>
+                      <input required maxLength={300} value={form.current_loan.loaned_to} onChange={(event) => setForm({ ...form, current_loan: { ...form.current_loan!, loaned_to: event.target.value } })} />
+                    </label>
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={form.current_loan.loaned_date === null} onChange={(event) => setForm({ ...form, current_loan: { ...form.current_loan!, loaned_date: event.target.checked ? null : new Date().toISOString().slice(0, 10) } })} />
+                      Loan date unknown
+                    </label>
+                    {form.current_loan.loaned_date !== null && (
+                      <label>Loaned date<input type="date" max={new Date().toISOString().slice(0, 10)} value={form.current_loan.loaned_date} onChange={(event) => setForm({ ...form, current_loan: { ...form.current_loan!, loaned_date: event.target.value || null } })} /></label>
+                    )}
+                    <label>Expected return<input type="date" min={form.current_loan.loaned_date ?? undefined} value={form.current_loan.expected_return_date ?? ""} onChange={(event) => setForm({ ...form, current_loan: { ...form.current_loan!, expected_return_date: event.target.value || null } })} /></label>
+                    <label className="wide">Loan notes<textarea rows={2} maxLength={4000} value={form.current_loan.notes ?? ""} onChange={(event) => setForm({ ...form, current_loan: { ...form.current_loan!, notes: event.target.value || null } })} /></label>
+                  </div>
+                )}
+              </fieldset>
+            )}
+            {book && historyBook && (
+              <fieldset className="wide edit-loan-history">
+                <legend>Loan history</legend>
+                <div className="wide edit-reading-history">
+                  <div>
+                    <strong>{historyBook.is_on_loan ? `On loan to ${historyBook.active_loan?.loaned_to}` : "Available"}</strong>
+                    <span>{historyBook.loan_count} {historyBook.loan_count === 1 ? "loan" : "loans"} recorded</span>
+                  </div>
+                  <button type="button" className="outline-button" onClick={() => setShowLoanHistory(true)}>Manage loan history</button>
+                </div>
+              </fieldset>
+            )}
             <fieldset className="wide date-fields">
               <legend>Book history</legend>
               {book && historyBook && (
@@ -3639,6 +4103,14 @@ function BookDialog({
             book={historyBook}
             onClose={() => setShowHistory(false)}
             onChanged={acceptReadingHistoryChange}
+            onCatalogueChanged={onHistoryChanged}
+          />
+        )}
+        {showLoanHistory && historyBook && (
+          <LoanHistoryDialog
+            book={historyBook}
+            onClose={() => setShowLoanHistory(false)}
+            onChanged={acceptLoanHistoryChange}
             onCatalogueChanged={onHistoryChanged}
           />
         )}
@@ -4985,12 +5457,14 @@ const emptyVisualLayout: VisualLayout = {
   shelves: [],
   containers: [],
   outside: { x: 54, y: 70, width: 28, height: 18 },
+  loaned: { x: 84, y: 70, width: 14, height: 18 },
 };
 
 function LibraryMapDialog({
   onClose,
   onFilter,
   onReadingFilter,
+  onLoanFilter,
   onBookFilter,
   onChanged,
   focusedBook,
@@ -5002,6 +5476,7 @@ function LibraryMapDialog({
     containerId?: number | "",
   ) => void;
   onReadingFilter: () => void;
+  onLoanFilter: () => void;
   onBookFilter: (book: MapBook) => void;
   onChanged: () => Promise<void>;
   focusedBook: Book | null;
@@ -5009,6 +5484,7 @@ function LibraryMapDialog({
   const [map, setMap] = useState<LibraryMapData>({
     bookcases: [],
     outside_books: [],
+    loaned_books: [],
     layout: emptyVisualLayout,
   });
   const [loading, setLoading] = useState(true);
@@ -5142,6 +5618,7 @@ function LibraryMapDialog({
         ),
       ),
       ...map.outside_books,
+      ...map.loaned_books,
     ],
     [map],
   );
@@ -5191,6 +5668,7 @@ function LibraryMapDialog({
           ...container,
           books: projectedBooks.filter((book) =>
             book.status !== "CURRENTLY_READING" &&
+            !book.is_on_loan &&
             book.container_id === container.id &&
             book.position !== null,
           ),
@@ -5198,15 +5676,16 @@ function LibraryMapDialog({
       })),
     })),
     outside_books: projectedBooks.filter(
-      (book) => book.status === "CURRENTLY_READING",
+      (book) => book.status === "CURRENTLY_READING" && !book.is_on_loan,
     ),
+    loaned_books: projectedBooks.filter((book) => book.is_on_loan),
   }), [map, projectedBooks]);
   const reservedBooksByContainer = useMemo(() => {
     const result = new Map<number, MapBook[]>();
     if (!rearranging) return result;
     for (const book of projectedBooks) {
       if (
-        book.status === "CURRENTLY_READING" &&
+        (book.status === "CURRENTLY_READING" || book.is_on_loan) &&
         book.container_id !== null &&
         book.position !== null
       ) {
@@ -5856,6 +6335,21 @@ function LibraryMapDialog({
                   )}
                 </div>
                 <div className="map-editor-section">
+                  <strong className="map-editor-title">On-loan area</strong>
+                  <div className="map-range-grid">
+                    {(["x", "y", "width", "height"] as const).map((field) => (
+                      <RangeField
+                        key={field}
+                        label={field === "x" ? "Horizontal" : field === "y" ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
+                        value={draft.loaned[field]}
+                        min={field === "width" || field === "height" ? 5 : 0}
+                        max={field === "x" || field === "width" ? 100 - (field === "x" ? draft.loaned.width : draft.loaned.x) : 100 - (field === "y" ? draft.loaned.height : draft.loaned.y)}
+                        onChange={(value) => setDraft((current) => ({ ...current, loaned: { ...current.loaned, [field]: value } }))}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="map-editor-section">
                   <strong className="map-editor-title">Reading / outside area</strong>
                   <div className="map-range-grid">
                     {(["x", "y", "width", "height"] as const).map((field) => (
@@ -6047,7 +6541,7 @@ function LibraryMapDialog({
                       <MapPin size={16} />
                       <span><strong>Original position</strong>{selectedOriginalLocation}</span>
                     </div>
-                    {selectedOriginalMoveBook?.status === "CURRENTLY_READING" && (
+                    {selectedOriginalMoveBook?.status === "CURRENTLY_READING" && !selectedOriginalMoveBook.is_on_loan && (
                       <div className="map-reading-return-choice">
                         <div>
                           <strong>{selectedOriginalMoveBook.is_rereading
@@ -6347,6 +6841,48 @@ function LibraryMapDialog({
                   )}
                 </section>
               )}
+              {(editingLayout || rearranging || displayMap.loaned_books.length > 0) && (
+                <section
+                  className="map-outside map-loaned"
+                  role="button"
+                  tabIndex={0}
+                  title="Show books currently on loan"
+                  onClick={editingLayout || rearranging ? undefined : onLoanFilter}
+                  onKeyDown={(event) => {
+                    if (!editingLayout && !rearranging && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault(); onLoanFilter();
+                    }
+                  }}
+                  style={{
+                    left: `${activeLayout.loaned.x}%`,
+                    top: `${activeLayout.loaned.y}%`,
+                    width: `${activeLayout.loaned.width}%`,
+                    height: `${activeLayout.loaned.height}%`,
+                  }}
+                >
+                  <div className="map-outside-books">
+                    {displayMap.loaned_books.map((book) => (
+                      <span
+                        key={book.id}
+                        role={editingLayout ? undefined : "button"}
+                        tabIndex={editingLayout ? -1 : 0}
+                        className={focusedBook ? book.id === focusedBook.id ? "focused" : "muted" : ""}
+                        title={`${book.title} · On loan to ${book.loaned_to ?? "unknown"}`}
+                        onClick={(event) => {
+                          if (editingLayout) return;
+                          event.stopPropagation();
+                          if (rearranging) selectMoveBook(book); else onBookFilter(book);
+                        }}
+                        onPointerDown={(event) => { if (rearranging) beginBookDrag(book, event); }}
+                      ><i style={{ background: focusedBook?.id === book.id ? "#287fbd" : colourScale.colour(book) }} /></span>
+                    ))}
+                  </div>
+                  {editingLayout && <>
+                    <button type="button" className="map-direct-handle move" title="Drag on-loan area" onPointerDown={(event) => beginRoomRectInteraction(event, activeLayout.loaned, "move", (rect) => setDraft((current) => ({ ...current, loaned: rect })))}>↕</button>
+                    <button type="button" className="map-direct-handle resize" title="Resize on-loan area" onPointerDown={(event) => beginRoomRectInteraction(event, activeLayout.loaned, "resize", (rect) => setDraft((current) => ({ ...current, loaned: rect })))}>↘</button>
+                  </>}
+                </section>
+              )}
               {displayMap.bookcases.map((bookcase) => (
                 <MapBookcaseGraphic
                   key={bookcase.id}
@@ -6489,6 +7025,16 @@ function DataDialog({ onClose }: { onClose: () => void }) {
                 download
               >
                 <Download size={17} /> Download full backup
+              </a>
+            </div>
+          </article>
+          <article>
+            <div className="data-option-icon csv"><FileSpreadsheet /></div>
+            <div>
+              <h3>Loan history as CSV</h3>
+              <p>One row per active or returned loan, including borrower text, dates, and notes.</p>
+              <a className="outline-button" href={api.downloadUrl("/exports/loans.csv")} download>
+                <Download size={17} /> Export loan history
               </a>
             </div>
           </article>

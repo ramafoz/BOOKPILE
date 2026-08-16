@@ -39,6 +39,16 @@ The catalogue, covers, and physical layout remain under the user's control.
   responsive editor for known or explicitly unknown historical dates.
 - Add books individually or through Batch Add, retaining the selected
   container and advancing positions upward or downward.
+- Loan and return books without changing their reading status or losing their
+  saved shelf position. Keep one active loan plus optional returned history,
+  free-text borrower information, optional expected-return dates, and known or
+  explicitly unknown actual dates.
+- Show `On loan: <borrower>` directly in the catalogue while keeping the
+  retained shelf location available without crowding the row. Loan history is
+  read-only in complete information and editable only through **Edit book**.
+- Filter and sort by loan availability, overdue state, borrower, loan-history
+  scope, and loan/expected-return/returned dates. Quick views expose current
+  and overdue loans.
 
 ### Physical library
 
@@ -74,7 +84,7 @@ Visual rearrangement supports:
 
 - Display furniture, shelves, foreground/background containers, and books as
   a room-scale visual index.
-- Position and resize furniture and the separate Reading area.
+- Position and resize furniture and the separate Reading and On-loan areas.
 - Customize relative shelf heights and each container's position, width, and
   height.
 - Allow controlled foreground/background overlap while preventing accidental
@@ -84,6 +94,8 @@ Visual rearrangement supports:
 - Click an individual visual book to open its exact catalogue record.
 - Open the map from a catalogue location and highlight one book while fading
   the rest.
+- Give an active loan visual priority over Reading while keeping both the
+  reading session and the book's reserved physical position intact.
 - Colour visual books by:
   - Reading status.
   - Acquisition recency.
@@ -141,8 +153,12 @@ are not imported.
 - Compare individual, average, and median per-book pages/day for the selected
   year and metadata filters, with estimated one-day readings clearly marked.
 - Compare original-collection and later-acquisition status totals.
+- Show active, overdue, and completed loan totals, known loans by year, and
+  the most frequently loaned books under the same metadata selection.
 - Start or finish reading through confirmation prompts without losing the
   physical position.
+- Exclude books currently on loan from reading suggestions and reject a new
+  reading or re-reading until the book is returned.
 
 ### Backup, restore, and export
 
@@ -159,6 +175,9 @@ are not imported.
 - Export reading history as a separate Excel-friendly CSV with one row per
   session, including re-reads, dates, duration, state, and pages/day where
   page-count metadata exists.
+- Export active-loan fields with the books CSV and the complete loan history
+  as a separate Excel-friendly CSV. The full ZIP remains the only restorable
+  format.
 
 ## Technology
 
@@ -332,8 +351,14 @@ in place:
    structured-author rows preserved. It reconstructed 262 initial sessions,
    keeps the legacy status/date columns synchronized, and adds re-reading,
    history management, session-aware statistics, and CSV export.
+9. Schema v6 adds related loan history with at most one active loan per book.
+   The migration was rehearsed from a validated v5 backup with all catalogue
+   and reading-session values preserved. Loans remain independent from reading
+   status and retained physical position, and are included in map, search,
+   statistics, backup validation, and CSV exports. The complete desktop and
+   mobile loan/return/history workflow has been manually validated.
 
 Later database phases include structured subjects and genres, ratings and
-tags, and optional loan history.
+tags.
 Multi-user accounts and publication as a hosted application are a separate,
 larger product phase rather than assumptions in the current local-first build.

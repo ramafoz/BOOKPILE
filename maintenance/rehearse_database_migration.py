@@ -55,11 +55,19 @@ def main() -> int:
         )
 
         with closing(connect_database(database)) as connection:
+            tables = [
+                "bookcases", "shelves", "containers", "books",
+                "book_authors", "reading_sessions", "loans",
+            ]
             counts = {
                 table: connection.execute(
                     f'SELECT COUNT(*) FROM "{table}"'
                 ).fetchone()[0]
-                for table in ("bookcases", "shelves", "containers", "books")
+                for table in tables
+                if connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                    (table,),
+                ).fetchone()
             }
             resulting_version = schema_version(connection)
             null_isbn_count = connection.execute(

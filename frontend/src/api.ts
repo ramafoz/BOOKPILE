@@ -16,6 +16,7 @@ import type {
   VisualLayout,
   MetadataFilters,
   MetadataOptions,
+  LoanPayload,
 } from "./types";
 
 export interface RestoreInspection {
@@ -49,6 +50,13 @@ export interface BookQuery {
   includeUnknownSortDates: boolean;
   quickView: string;
   catalogueCheck: string;
+  loanStatus: string;
+  loanedTo: string;
+  loanRecordScope: "ACTIVE" | "ANY";
+  loanDateField: string;
+  loanDateFrom: string;
+  loanDateTo: string;
+  includeUnknownLoanDates: boolean;
   metadata: MetadataFilters;
 }
 
@@ -148,6 +156,17 @@ export const api = {
     }
     if (query.quickView) params.set("quick_view", query.quickView);
     if (query.catalogueCheck) params.set("catalogue_check", query.catalogueCheck);
+    if (query.loanStatus !== "ANY") params.set("loan_status", query.loanStatus);
+    if (query.loanedTo.trim()) params.set("loaned_to", query.loanedTo.trim());
+    params.set("loan_record_scope", query.loanRecordScope);
+    if (query.loanDateFrom || query.loanDateTo) {
+      params.set("loan_date_field", query.loanDateField);
+      if (query.loanDateFrom) params.set("loan_date_from", query.loanDateFrom);
+      if (query.loanDateTo) params.set("loan_date_to", query.loanDateTo);
+      if (query.includeUnknownLoanDates) {
+        params.set("include_unknown_loan_dates", "true");
+      }
+    }
     appendMetadataFilters(params, query.metadata);
     return request<Book[]>(`/books?${params}`);
   },
@@ -218,7 +237,9 @@ export const api = {
   updateBook: (id: number, book: BookPayload) =>
     request<Book>(`/books/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(book),
+      body: JSON.stringify(Object.fromEntries(
+        Object.entries(book).filter(([key]) => key !== "current_loan"),
+      )),
     }),
   updateBookStatus: (id: number, status: BookStatus) =>
     request<Book>(`/books/${id}`, {
@@ -256,6 +277,33 @@ export const api = {
     request<Book>(`/books/${bookId}/reading-sessions/${sessionId}`, { method: "DELETE" }),
   clearReadingHistory: (bookId: number) =>
     request<Book>(`/books/${bookId}/reading-sessions`, { method: "DELETE" }),
+  startLoan: (bookId: number, payload: LoanPayload) =>
+    request<Book>(`/books/${bookId}/loans/start`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  returnLoan: (bookId: number, returnedDate: string | null) =>
+    request<Book>(`/books/${bookId}/loans/return`, {
+      method: "POST",
+      body: JSON.stringify({ returned_date: returnedDate }),
+    }),
+  cancelLoan: (bookId: number) =>
+    request<Book>(`/books/${bookId}/loans/active`, { method: "DELETE" }),
+  addLoanHistory: (bookId: number, payload: LoanPayload & { returned_date: string | null }) =>
+    request<Book>(`/books/${bookId}/loans`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateLoanHistory: (
+    bookId: number,
+    loanId: number,
+    payload: LoanPayload & { returned_date: string | null },
+  ) => request<Book>(`/books/${bookId}/loans/${loanId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }),
+  deleteLoanHistory: (bookId: number, loanId: number) =>
+    request<Book>(`/books/${bookId}/loans/${loanId}`, { method: "DELETE" }),
   deleteBook: (id: number) =>
     request<void>(`/books/${id}`, { method: "DELETE" }),
   uploadCover: (id: number, cover: File) => {

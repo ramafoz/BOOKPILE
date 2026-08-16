@@ -396,16 +396,37 @@ protects the completed catalogue.
 
 ### Loans and history
 
-- [ ] Add an `On loan` state independent of the book's reading status, so
+- [x] Rehearse and apply the additive v5-to-v6 loan-history migration only
+  after validating a full backup and proving that all books, covers, authors,
+  reading sessions, and existing values are preserved.
+- [x] Add an `On loan` state independent of the book's reading status, so
   lending a book does not replace `Pending`, `Reading...`, or `Read`.
-- [ ] Record the borrower and loan date.
-- [ ] Record an optional expected return date and the eventual actual return
+- [x] Record required free-text borrower information and an optional known or
+  unknown loan date, with at most one active loan per book.
+- [x] Record an optional expected return date and the eventual actual return
   date.
-- [ ] Display outstanding loans and overdue expected return dates.
-- [ ] Add a separate visual-map area for books currently on loan.
+- [x] Display outstanding loans and overdue expected return dates; expose
+  current, overdue, ever-loaned, never-loaned, borrower, history-scope, and
+  loan-date filters and loan-date sorting in advanced search.
+- [x] Add direct Loan / Return actions to catalogue rows, allow new single or
+  batch-added books to begin on loan, and keep destructive cancellation and
+  deletion explicitly confirmed.
+- [x] Keep loan history read-only in complete book information and manage it
+  only from Edit Book, including adding, editing, and deleting historical
+  records with unknown-date support.
+- [x] Add a separate visual-map area for books currently on loan.
   - Preserve each loaned book's saved physical location.
   - Return it to its normal map position when the active loan ends.
-- [ ] Retain completed loans as optional history.
+- [x] Give loans visual priority over the Reading area while preserving any
+  active reading session in hero counts and statistics.
+- [x] Exclude unavailable books from reading suggestions and prevent a new
+  reading or re-reading from starting until the active loan is returned.
+- [x] Retain completed loans as optional history.
+- [x] Add loan summaries and most-loaned/by-year views to statistics, active
+  loan fields to the books CSV, a separate loans CSV, and loan counts to full
+  backup validation.
+- [x] Validate the complete loan, return, history-management, filtering, map,
+  and responsive mobile workflow against the migrated catalogue.
 - [ ] Optionally retain a history of physical moves.
 
 ## C. Product-scale expansion: users and publication

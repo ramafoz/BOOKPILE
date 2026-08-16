@@ -19,6 +19,11 @@ class ReadingSessionState(str, Enum):
     completed = "COMPLETED"
 
 
+class LoanState(str, Enum):
+    active = "ACTIVE"
+    returned = "RETURNED"
+
+
 class FictionCategory(str, Enum):
     fiction = "FICTION"
     non_fiction = "NON_FICTION"
@@ -293,9 +298,42 @@ class BookBase(BaseModel):
         return self
 
 
+class LoanStartRequest(BaseModel):
+    loaned_to: str = Field(min_length=1, max_length=300)
+    loaned_date: date | None = None
+    expected_return_date: date | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("loaned_to")
+    @classmethod
+    def normalize_loaned_to(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Loaned to is required")
+        return cleaned
+
+    @field_validator("notes")
+    @classmethod
+    def normalize_loan_notes(cls, value: str | None) -> str | None:
+        return value.strip() or None if value else None
+
+
+class LoanReturnRequest(BaseModel):
+    returned_date: date | None = None
+
+
+class LoanHistoryCreate(LoanStartRequest):
+    returned_date: date | None = None
+
+
+class LoanUpdate(LoanHistoryCreate):
+    pass
+
+
 class BookCreate(BookBase):
     shift_existing: bool = False
     shift_direction: ShiftDirection = ShiftDirection.up
+    current_loan: LoanStartRequest | None = None
 
 
 class BookUpdate(BaseModel):
@@ -376,6 +414,7 @@ class Book(BookBase):
     updated_at: str
     cover_filename: str | None = None
     location_label: str | None = None
+    return_location_label: str | None = None
     bookcase_name: str | None = None
     shelf_number: int | None = None
     container_type: ContainerType | None = None
@@ -384,6 +423,10 @@ class Book(BookBase):
     reading_sessions: list["ReadingSession"] = Field(default_factory=list)
     reading_session_count: int = 0
     is_rereading: bool = False
+    loans: list["Loan"] = Field(default_factory=list)
+    loan_count: int = 0
+    active_loan: "Loan | None" = None
+    is_on_loan: bool = False
 
 
 class Stats(BaseModel):
@@ -402,6 +445,19 @@ class ReadingSession(BaseModel):
     started_date: date | None = None
     finished_date: date | None = None
     dates_unknown: bool = False
+    created_at: str
+    updated_at: str
+
+
+class Loan(BaseModel):
+    id: int
+    book_id: int
+    loaned_to: str
+    notes: str | None = None
+    state: LoanState
+    loaned_date: date | None = None
+    expected_return_date: date | None = None
+    returned_date: date | None = None
     created_at: str
     updated_at: str
 
@@ -528,3 +584,4 @@ class VisualLayoutUpdate(BaseModel):
     shelves: list[VisualShelfLayout]
     containers: list[VisualContainerLayout]
     outside: VisualRect
+    loaned: VisualRect

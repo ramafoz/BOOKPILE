@@ -175,6 +175,40 @@ def init_database() -> None:
             CREATE INDEX IF NOT EXISTS idx_reading_sessions_finished
                 ON reading_sessions(finished_date);
 
+            CREATE TABLE IF NOT EXISTS loans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                loaned_to TEXT NOT NULL
+                    CHECK (length(trim(loaned_to)) BETWEEN 1 AND 300),
+                notes TEXT CHECK (notes IS NULL OR length(notes) <= 4000),
+                state TEXT NOT NULL CHECK (state IN ('ACTIVE', 'RETURNED')),
+                loaned_date TEXT,
+                expected_return_date TEXT,
+                returned_date TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+                CHECK (state = 'RETURNED' OR returned_date IS NULL),
+                CHECK (
+                    loaned_date IS NULL OR returned_date IS NULL
+                    OR loaned_date <= returned_date
+                ),
+                CHECK (
+                    loaned_date IS NULL OR expected_return_date IS NULL
+                    OR loaned_date <= expected_return_date
+                )
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_loans_one_active
+                ON loans(book_id) WHERE state = 'ACTIVE';
+            CREATE INDEX IF NOT EXISTS idx_loans_book
+                ON loans(book_id, state, loaned_date, created_at);
+            CREATE INDEX IF NOT EXISTS idx_loans_borrower
+                ON loans(loaned_to COLLATE NOCASE);
+            CREATE INDEX IF NOT EXISTS idx_loans_expected_return
+                ON loans(expected_return_date) WHERE state = 'ACTIVE';
+            CREATE INDEX IF NOT EXISTS idx_loans_returned
+                ON loans(returned_date) WHERE state = 'RETURNED';
+
             CREATE TRIGGER IF NOT EXISTS trg_multiple_authors_insert
             BEFORE INSERT ON books
             WHEN NEW.has_multiple_authors = 1

@@ -223,7 +223,7 @@ def test_newer_database_is_rejected_without_backup(
             )
             """
         )
-        for version in range(1, 7):
+        for version in range(1, 8):
             connection.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, f"schema {version}"),
@@ -265,18 +265,59 @@ def test_backups_record_and_validate_the_schema_they_contain(
         backup_directory=backups,
         approved=True,
     )
-    v5_backup = backups / "catalogue-v5.zip"
-    v5_manifest = create_full_backup(
-        v5_backup,
+    v6_backup = backups / "catalogue-v6.zip"
+    v6_manifest = create_full_backup(
+        v6_backup,
         source_database=database,
         source_covers=covers,
     )
-    v5_validation = extract_and_validate_archive(
-        v5_backup,
-        tmp_path / "validated-v5",
+    v6_validation = extract_and_validate_archive(
+        v6_backup,
+        tmp_path / "validated-v6",
     )
-    assert v5_manifest["schema_version"] == 5
-    assert v5_validation["schema_version"] == 5
+    assert v6_manifest["schema_version"] == 6
+    assert v6_validation["schema_version"] == 6
+
+
+def test_v5_to_v6_adds_empty_loan_history_without_changing_existing_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, covers, backups = create_v1_catalogue(tmp_path, monkeypatch)
+    run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=5,
+    )
+    with closing(connect_database(database)) as connection:
+        before = schema_snapshot(connection)
+        before_fingerprint = snapshot_fingerprint(before)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM reading_sessions"
+        ).fetchone()[0] == 1
+
+    report = run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=6,
+    )
+    assert report.source_version == 5
+    assert report.target_version == 6
+    assert report.applied_versions == (6,)
+    assert report.before_fingerprint == before_fingerprint
+    assert report.after_fingerprint == before_fingerprint
+    with closing(connect_database(database)) as connection:
+        assert schema_version(connection) == 6
+        assert connection.execute("SELECT COUNT(*) FROM loans").fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM reading_sessions"
+        ).fetchone()[0] == 1
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_v2_to_v3_preserves_existing_isbns_and_adds_nullable_metadata(

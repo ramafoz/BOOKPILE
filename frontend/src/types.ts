@@ -51,6 +51,8 @@ export interface MapBook {
   series_volume: string | null;
   status: BookStatus;
   is_rereading: boolean;
+  is_on_loan: boolean;
+  loaned_to: string | null;
   container_id: number | null;
   position: number | null;
   acquisition_date: string | null;
@@ -86,6 +88,7 @@ export interface MapBookcase {
 export interface LibraryMapData {
   bookcases: MapBookcase[];
   outside_books: MapBook[];
+  loaned_books: MapBook[];
   layout: VisualLayout;
 }
 
@@ -101,6 +104,27 @@ export interface VisualLayout {
   shelves: Array<{ id: number; height_weight: number }>;
   containers: Array<VisualRect & { id: number }>;
   outside: VisualRect;
+  loaned: VisualRect;
+}
+
+export interface Loan {
+  id: number;
+  book_id: number;
+  loaned_to: string;
+  notes: string | null;
+  state: "ACTIVE" | "RETURNED";
+  loaned_date: string | null;
+  expected_return_date: string | null;
+  returned_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoanPayload {
+  loaned_to: string;
+  loaned_date: string | null;
+  expected_return_date: string | null;
+  notes: string | null;
 }
 
 export interface Book {
@@ -146,6 +170,11 @@ export interface Book {
   reading_sessions: ReadingSession[];
   reading_session_count: number;
   is_rereading: boolean;
+  loans: Loan[];
+  loan_count: number;
+  active_loan: Loan | null;
+  is_on_loan: boolean;
+  return_location_label: string | null;
 }
 
 export interface ReadingSession {
@@ -245,6 +274,19 @@ export interface CatalogueStatistics {
     completed: number;
     unique_books: number;
     rereads: number;
+  };
+  loans: {
+    active: number;
+    overdue: number;
+    completed: number;
+    unknown_loan_dates: number;
+    by_year: Array<{ year: number; count: number }>;
+    most_loaned: Array<{
+      book_id: number;
+      title: string;
+      author: string;
+      loan_count: number;
+    }>;
   };
   pending_duration: DurationStatistic;
   reading_duration: DurationStatistic;
@@ -370,4 +412,5 @@ export interface BookPayload {
   is_original_collection: boolean;
   container_id: number | null;
   position: number | null;
+  current_loan?: LoanPayload | null;
 }
