@@ -53,16 +53,22 @@ import {
   LEGACY_MAP_ASPECT_RATIO,
   LEGACY_MAP_CAMERA,
   mapCameraTransform,
+  mapViewportPointToWorld,
   panMapCamera,
+  panMapCameraByPixels,
   zoomMapCamera,
   type MapCamera,
   type MapViewportSize,
   type MapWorldBounds,
 } from "./mapCamera";
 import {
+  containerRectWithoutAbsentBooks,
   effectiveCataloguePageMean,
   proportionalBookSegments,
+  proportionalOutsideBookGroups,
+  readingIconGrid,
 } from "./mapBookGeometry";
+import { nextInspectionId } from "./mapInspection";
 import type {
   Book,
   BookPayload,
@@ -4495,6 +4501,15 @@ function LibraryDialog({
 const MAP_WIDTH = 960;
 const MAP_INSET = 22;
 const MAP_HEIGHT = 620;
+const MAP_RETAINED_SPACES_STORAGE_KEY = "bookpile-map-retained-spaces";
+
+function initialRetainedSpacesPreference(): boolean {
+  try {
+    return window.localStorage.getItem(MAP_RETAINED_SPACES_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 type MapColourMode =
   | "status"
@@ -4982,7 +4997,9 @@ function MapContainerGraphic({
   const bookAreaHeight = Math.max(6, height - padding * 2);
   const availableWidth = Math.max(20, width - padding * 2);
   const books = container.books;
-  const occupiedBooks = rearranging ? [...books, ...reservedBooks] : books;
+  const occupiedBooks = [...books, ...reservedBooks].filter(
+    (book, index, items) => items.findIndex((item) => item.id === book.id) === index,
+  );
   const isRow = container.container_type === "ROW";
   const maxPosition = Math.max(
     0,
@@ -4993,9 +5010,17 @@ function MapContainerGraphic({
     : [];
   const slotCount = Math.max(1, rearranging ? maxPosition + 1 : maxPosition);
   const proportionalSegments = proportionalBookSegments(
-    books,
+    occupiedBooks,
     isRow ? availableWidth : bookAreaHeight,
     cataloguePageMean,
+  );
+  const visibleBookIds = new Set(books.map((book) => book.id));
+  const reservedBookIds = new Set(reservedBooks.map((book) => book.id));
+  const visibleSegments = proportionalSegments.filter(
+    ({ book }) => visibleBookIds.has(book.id),
+  );
+  const reservedSegments = proportionalSegments.filter(
+    ({ book }) => reservedBookIds.has(book.id),
   );
   const activate = (event: React.KeyboardEvent<SVGGElement>) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -5060,7 +5085,7 @@ function MapContainerGraphic({
         );
       })}
       {books.length > 0 && isRow ? (
-        proportionalSegments.map(({ book, offset, thickness }) => {
+        visibleSegments.map(({ book, offset, thickness }) => {
           const hitWidth = Math.max(thickness, 2);
           return (
             <g
@@ -5126,7 +5151,7 @@ function MapContainerGraphic({
           );
         })
       ) : books.length > 0 ? (
-        proportionalSegments.map(({ book, offset, thickness }) => {
+        visibleSegments.map(({ book, offset, thickness }) => {
           const hitHeight = Math.max(thickness, 2);
           return (
             <g
@@ -5192,24 +5217,23 @@ function MapContainerGraphic({
           );
         })
       ) : null}
-      {rearranging && reservedBooks.map((book) => {
-        const slotWidth = availableWidth / slotCount;
-        const slotHeight = bookAreaHeight / slotCount;
+      {reservedSegments.map(({ book, offset, thickness }) => {
         return (
           <rect
             key={`reserved-${book.id}`}
-            className={`map-book reserved ${book.id === activeBookId ? "active-move" : ""}`}
+            className={`map-book reserved ${rearranging ? "interactive" : ""} ${book.id === activeBookId ? "active-move" : ""}`}
             data-container-id={container.id}
             data-position={book.position ?? 1}
             x={isRow
-              ? x + padding + ((book.position ?? 1) - 1) * slotWidth
+              ? x + padding + offset
               : x + padding}
             y={isRow
               ? y + padding
-              : y + padding + ((book.position ?? 1) - 1) * slotHeight}
-            width={isRow ? Math.max(1, slotWidth - 0.7) : availableWidth}
-            height={isRow ? bookAreaHeight : Math.max(1, slotHeight - 0.7)}
+              : y + padding + offset}
+            width={isRow ? thickness : availableWidth}
+            height={isRow ? bookAreaHeight : thickness}
             onClick={(event) => {
+              if (!rearranging) return;
               event.stopPropagation();
               if (book.id === activeBookId) {
                 onDestination(container.id, book.position ?? 1);
@@ -5218,7 +5242,11 @@ function MapContainerGraphic({
               }
             }}
           >
-            <title>{book.title} · retained position while Reading</title>
+            <title>
+              {book.title} · retained position while {book.is_on_loan
+                ? "On loan"
+                : "Reading"}
+            </title>
           </rect>
         );
       })}
@@ -5919,6 +5947,10 @@ function LibraryMapDialog({
   const [selectedMapGenre, setSelectedMapGenre] = useState("");
   const [legendExpanded, setLegendExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
+  const [showRetainedShelfSpaces, setShowRetainedShelfSpaces] = useState(
+    initialRetainedSpacesPreference,
+  );
+  const [cameraControlsExpanded, setCameraControlsExpanded] = useState(false);
   const [focusMenuOpen, setFocusMenuOpen] = useState(false);
   const [inspectionMenuOpen, setInspectionMenuOpen] = useState(false);
   const [inspectionMode, setInspectionMode] = useState<MapInspectionMode>(
@@ -5978,6 +6010,23 @@ function LibraryMapDialog({
   const cameraInitialized = useRef(false);
   const cameraHoldDelay = useRef<number | null>(null);
   const cameraHoldInterval = useRef<number | null>(null);
+  const cameraPointers = useRef(new Map<number, { x: number; y: number }>());
+  const cameraGesture = useRef<{
+    moved: boolean;
+    totalDistance: number;
+    pinchDistance: number | null;
+    pinchMidpoint: { x: number; y: number } | null;
+    pinchCamera: MapCamera | null;
+    pinchAnchor: Pick<MapCamera, "centerX" | "centerY"> | null;
+  }>({
+    moved: false,
+    totalDistance: 0,
+    pinchDistance: null,
+    pinchMidpoint: null,
+    pinchCamera: null,
+    pinchAnchor: null,
+  });
+  const suppressNextMapClick = useRef(false);
 
   const loadMap = useCallback(async () => {
     setLoading(true);
@@ -6004,6 +6053,17 @@ function LibraryMapDialog({
     void loadMap();
   }, [loadMap]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        MAP_RETAINED_SPACES_STORAGE_KEY,
+        String(showRetainedShelfSpaces),
+      );
+    } catch {
+      // Presentation preferences may be unavailable in private browsing.
+    }
+  }, [showRetainedShelfSpaces]);
+
   const previewContainerLayouts = new Map(
     (rearrangementPreview?.container_layouts ?? []).map((item) => [item.id, item]),
   );
@@ -6015,7 +6075,57 @@ function LibraryMapDialog({
         ),
       }
     : map.layout;
-  const activeLayout = editingLayout ? draft : projectedVisualLayout;
+  const fullGeometryLayout = editingLayout ? draft : projectedVisualLayout;
+  const activeLayout = useMemo(() => {
+    if (editingLayout || rearranging || showRetainedShelfSpaces) {
+      return fullGeometryLayout;
+    }
+    const absentByContainer = new Map<number, MapBook[]>();
+    const absentBooks = new Map<number, MapBook>();
+    for (const book of [...map.outside_books, ...map.loaned_books]) {
+      absentBooks.set(book.id, book);
+    }
+    for (const book of absentBooks.values()) {
+      if (book.container_id === null || book.position === null) continue;
+      absentByContainer.set(book.container_id, [
+        ...(absentByContainer.get(book.container_id) ?? []),
+        book,
+      ]);
+    }
+    const containers = new Map(
+      map.bookcases.flatMap((bookcase) =>
+        bookcase.shelves.flatMap((shelf) =>
+          shelf.containers.map((container) => [container.id, container] as const),
+        ),
+      ),
+    );
+    return {
+      ...fullGeometryLayout,
+      containers: fullGeometryLayout.containers.map((item) => {
+        const container = containers.get(item.id);
+        const absent = absentByContainer.get(item.id) ?? [];
+        if (!container || absent.length === 0) return item;
+        const rect = containerRectWithoutAbsentBooks(
+          item,
+          container.container_type,
+          item.row_anchor,
+          container.books,
+          absent,
+          map.effective_page_mean,
+        );
+        return { ...item, ...rect };
+      }),
+    };
+  }, [
+    editingLayout,
+    fullGeometryLayout,
+    map.bookcases,
+    map.effective_page_mean,
+    map.loaned_books,
+    map.outside_books,
+    rearranging,
+    showRetainedShelfSpaces,
+  ]);
   const layoutDirty = editingLayout && JSON.stringify(draft) !== JSON.stringify(map.layout);
   const confirmDiscardLayout = useCallback((): boolean => (
     !layoutDirty || window.confirm("Discard the unsaved library layout changes?")
@@ -6185,15 +6295,35 @@ function LibraryMapDialog({
     ),
     loaned_books: projectedBooks.filter((book) => book.is_on_loan),
   }), [map, projectedBooks]);
+  const readingGrid = useMemo(() => readingIconGrid(
+    displayMap.outside_books.length,
+    LEGACY_MAP_ASPECT_RATIO *
+      activeLayout.outside.width / Math.max(activeLayout.outside.height, 0.01) *
+      0.76 / 0.44,
+  ), [
+    activeLayout.outside.height,
+    activeLayout.outside.width,
+    displayMap.outside_books.length,
+  ]);
+  const loanedBookGroups = useMemo(
+    () => proportionalOutsideBookGroups(
+      displayMap.loaned_books,
+      cataloguePageMean,
+    ),
+    [cataloguePageMean, displayMap.loaned_books],
+  );
   const reservedBooksByContainer = useMemo(() => {
     const result = new Map<number, MapBook[]>();
-    if (!rearranging) return result;
+    if (!rearranging && !editingLayout && !showRetainedShelfSpaces) return result;
+    const seen = new Set<number>();
     for (const book of projectedBooks) {
       if (
+        !seen.has(book.id) &&
         (book.status === "CURRENTLY_READING" || book.is_on_loan) &&
         book.container_id !== null &&
         book.position !== null
       ) {
+        seen.add(book.id);
         result.set(book.container_id, [
           ...(result.get(book.container_id) ?? []),
           book,
@@ -6201,7 +6331,7 @@ function LibraryMapDialog({
       }
     }
     return result;
-  }, [projectedBooks, rearranging]);
+  }, [editingLayout, projectedBooks, rearranging, showRetainedShelfSpaces]);
   const activeMoveBookId = rearrangementPreview?.next_active_book_id ??
     selectedMoveBookId;
   const selectedMoveBook = projectedBooks.find(
@@ -6386,6 +6516,137 @@ function LibraryMapDialog({
     };
   }
 
+  function roomPoint(clientX: number, clientY: number) {
+    const bounds = roomRef.current?.getBoundingClientRect();
+    return {
+      x: clientX - (bounds?.left ?? 0),
+      y: clientY - (bounds?.top ?? 0),
+    };
+  }
+
+  function initializePinchGesture() {
+    const points = [...cameraPointers.current.values()];
+    if (points.length < 2) return;
+    const [first, second] = points;
+    const midpoint = {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    };
+    const gesture = cameraGesture.current;
+    gesture.pinchDistance = Math.max(
+      1,
+      Math.hypot(second.x - first.x, second.y - first.y),
+    );
+    gesture.pinchMidpoint = midpoint;
+    gesture.pinchCamera = camera;
+    gesture.pinchAnchor = mapViewportPointToWorld(camera, viewportSize, midpoint);
+    gesture.moved = true;
+  }
+
+  function beginCameraGesture(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const target = event.target as Element;
+    if (target.closest(
+      ".map-camera-controls, .map-direct-handle, .map-svg-resize-handle, " +
+      ".map-shelf-resize-handle, .map-layout-editor, .map-rearrangement-panel",
+    )) return;
+    const point = roomPoint(event.clientX, event.clientY);
+    cameraPointers.current.set(event.pointerId, point);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    if (cameraPointers.current.size === 1) {
+      cameraGesture.current = {
+        moved: false,
+        totalDistance: 0,
+        pinchDistance: null,
+        pinchMidpoint: null,
+        pinchCamera: null,
+        pinchAnchor: null,
+      };
+    } else if (cameraPointers.current.size === 2) {
+      initializePinchGesture();
+    }
+  }
+
+  function moveCameraGesture(event: React.PointerEvent<HTMLDivElement>) {
+    const previous = cameraPointers.current.get(event.pointerId);
+    if (!previous) return;
+    const point = roomPoint(event.clientX, event.clientY);
+    cameraPointers.current.set(event.pointerId, point);
+    const gesture = cameraGesture.current;
+    if (cameraPointers.current.size >= 2) {
+      const points = [...cameraPointers.current.values()];
+      const [first, second] = points;
+      const midpoint = {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+      if (
+        gesture.pinchDistance === null ||
+        gesture.pinchMidpoint === null ||
+        gesture.pinchCamera === null ||
+        gesture.pinchAnchor === null
+      ) {
+        initializePinchGesture();
+        return;
+      }
+      const distance = Math.max(
+        1,
+        Math.hypot(second.x - first.x, second.y - first.y),
+      );
+      const zoomed = zoomMapCamera(
+        gesture.pinchCamera,
+        distance / gesture.pinchDistance,
+        gesture.pinchAnchor,
+      );
+      setCamera(panMapCameraByPixels(
+        zoomed,
+        {
+          x: midpoint.x - gesture.pinchMidpoint.x,
+          y: midpoint.y - gesture.pinchMidpoint.y,
+        },
+        viewportSize,
+      ));
+      gesture.moved = true;
+      return;
+    }
+    const delta = { x: point.x - previous.x, y: point.y - previous.y };
+    gesture.totalDistance += Math.hypot(delta.x, delta.y);
+    if (gesture.totalDistance > 4) gesture.moved = true;
+    if (gesture.moved) {
+      event.preventDefault();
+      setCamera((current) => panMapCameraByPixels(current, delta, viewportSize));
+    }
+  }
+
+  function endCameraGesture(event: React.PointerEvent<HTMLDivElement>) {
+    if (!cameraPointers.current.has(event.pointerId)) return;
+    cameraPointers.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (cameraPointers.current.size === 1) {
+      const remaining = [...cameraPointers.current.values()][0];
+      cameraGesture.current.pinchDistance = null;
+      cameraGesture.current.pinchMidpoint = remaining;
+      cameraGesture.current.pinchCamera = null;
+      cameraGesture.current.pinchAnchor = null;
+    }
+    if (cameraPointers.current.size === 0 && cameraGesture.current.moved) {
+      suppressNextMapClick.current = true;
+    }
+  }
+
+  function zoomCameraWithWheel(event: React.WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const point = roomPoint(event.clientX, event.clientY);
+    const factor = Math.exp(-Math.max(-120, Math.min(120, event.deltaY)) * 0.002);
+    setCamera((current) => zoomMapCamera(
+      current,
+      factor,
+      mapViewportPointToWorld(current, viewportSize, point),
+    ));
+  }
+
   function updateBookcaseRect(field: keyof VisualRect, value: number) {
     setDraft((current) => ({
       ...current,
@@ -6441,7 +6702,12 @@ function LibraryMapDialog({
   }
 
   function inspectBook(book: MapBook, open = false) {
-    setInspectedBookId(book.id);
+    const nextId = nextInspectionId(inspectedBookId, book.id, open);
+    if (nextId === null) {
+      clearInspectionSelection();
+      return;
+    }
+    setInspectedBookId(nextId);
     setInspectedContainerId(null);
     setInspectorOpen(open);
     setInspectorCompleteBook(null);
@@ -6449,7 +6715,12 @@ function LibraryMapDialog({
   }
 
   function inspectContainer(containerId: number, open = false) {
-    setInspectedContainerId(containerId);
+    const nextId = nextInspectionId(inspectedContainerId, containerId, open);
+    if (nextId === null) {
+      clearInspectionSelection();
+      return;
+    }
+    setInspectedContainerId(nextId);
     setInspectedBookId(null);
     setInspectorOpen(open);
     setInspectorCompleteBook(null);
@@ -7196,6 +7467,18 @@ function LibraryMapDialog({
                       </button>
                     </>
                   )}
+                  <label className="map-tools-toggle">
+                    <input
+                      type="checkbox"
+                      checked={showRetainedShelfSpaces}
+                      onChange={(event) =>
+                        setShowRetainedShelfSpaces(event.target.checked)}
+                    />
+                    <span>
+                      <strong>Show retained shelf spaces</strong>
+                      <small>Outline books that are Reading or On loan.</small>
+                    </span>
+                  </label>
                 </div>
               )}
             </div>
@@ -7785,6 +8068,17 @@ function LibraryMapDialog({
               className={`map-room ${editingLayout ? "editing" : ""} ${
                 rearranging ? "rearranging" : ""
               }`}
+              onPointerDown={beginCameraGesture}
+              onPointerMove={moveCameraGesture}
+              onPointerUp={endCameraGesture}
+              onPointerCancel={endCameraGesture}
+              onWheel={zoomCameraWithWheel}
+              onClickCapture={(event) => {
+                if (!suppressNextMapClick.current) return;
+                suppressNextMapClick.current = false;
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               onClick={(event) => {
                 if (event.target === event.currentTarget && inspectionMode) {
                   clearInspectionSelection();
@@ -7810,7 +8104,7 @@ function LibraryMapDialog({
               >
               {(editingLayout || rearranging || displayMap.outside_books.length > 0) && (
                 <section
-                  className={`map-outside ${inspectedContainerId !== null ? "inspection-muted" : ""}`}
+                  className={`map-outside map-reading ${inspectedContainerId !== null ? "inspection-muted" : ""}`}
                   data-reading-target
                   role="button"
                   tabIndex={0}
@@ -7839,7 +8133,28 @@ function LibraryMapDialog({
                     height: `${activeLayout.outside.height}%`,
                   }}
                 >
-                  <div className="map-outside-books">
+                  <svg
+                    className="map-reading-table"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path className="table-lamp-stem" d="M50 10 L50 4" />
+                    <path className="table-lamp-shade" d="M43 10 Q50 3 57 10 Z" />
+                    <rect className="table-surface" x="8" y="10" width="84" height="50" rx="7" />
+                    <rect className="table-edge" x="14" y="56" width="72" height="4" rx="2" />
+                    <path className="table-support" d="M46 60 L46 91 M54 60 L54 91" />
+                    <ellipse className="table-base" cx="50" cy="93" rx="18" ry="5" />
+                  </svg>
+                  <div
+                    className="map-reading-icons"
+                    style={{
+                      width: `${readingGrid.occupiedPercent * 0.76}%`,
+                      height: `${readingGrid.occupiedPercent * 0.44}%`,
+                      gridTemplateRows: `repeat(${readingGrid.rows}, minmax(0, 1fr))`,
+                      gridTemplateColumns: `repeat(${readingGrid.columns}, minmax(0, 1fr))`,
+                    }}
+                  >
                     {displayMap.outside_books.map((book) => (
                       <span
                         key={book.id}
@@ -7883,14 +8198,26 @@ function LibraryMapDialog({
                           }
                         }}
                       >
-                        <i
-                          style={{
-                            background:
-                              inspectedBook?.id === book.id
-                                ? "#287fbd"
-                                : colourScale.colour(book),
-                          }}
-                        />
+                        <svg
+                          className="map-open-book"
+                          viewBox="0 0 100 72"
+                          preserveAspectRatio="xMidYMid meet"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M50 62 C38 52 24 49 9 52 L9 11 C25 8 39 12 50 22 Z"
+                            style={{ fill: inspectedBook?.id === book.id
+                              ? "#287fbd"
+                              : colourScale.colour(book) }}
+                          />
+                          <path
+                            d="M50 62 C62 52 76 49 91 52 L91 11 C75 8 61 12 50 22 Z"
+                            style={{ fill: inspectedBook?.id === book.id
+                              ? "#287fbd"
+                              : colourScale.colour(book) }}
+                          />
+                          <path className="open-book-detail" d="M50 22 L50 62 M15 17 C28 15 39 19 46 25 M85 17 C72 15 61 19 54 25" />
+                        </svg>
                       </span>
                     ))}
                   </div>
@@ -7957,8 +8284,27 @@ function LibraryMapDialog({
                     height: `${activeLayout.loaned.height}%`,
                   }}
                 >
-                  <div className="map-outside-books">
-                    {displayMap.loaned_books.map((book) => (
+                  <svg
+                    className="map-loan-cloud"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 94 C4 94 1 84 7 77 C1 67 4 55 13 51 C8 38 16 27 28 28 C31 14 45 8 56 19 C66 10 82 17 83 31 C96 31 102 44 96 55 C103 65 99 78 90 82 C87 94 73 98 63 92 C52 101 38 97 33 90 C24 98 16 98 12 94 Z" />
+                  </svg>
+                  <div className="map-outside-books map-loaned-books">
+                    {loanedBookGroups.map((group, groupIndex) => (
+                      <div
+                        className="map-loaned-row"
+                        key={`loan-row-${groupIndex}`}
+                        style={{
+                          flexBasis: `${Math.min(
+                            62,
+                            90 / Math.max(1, loanedBookGroups.length),
+                          )}%`,
+                        }}
+                      >
+                      {group.map(({ book, share }) => (
                       <span
                         key={book.id}
                         role={editingLayout ? undefined : "button"}
@@ -7976,7 +8322,10 @@ function LibraryMapDialog({
                           handleBookSelection(book, true);
                         }}
                         onPointerDown={(event) => { if (rearranging) beginBookDrag(book, event); }}
+                        style={{ width: `${share * 100}%` }}
                       ><i style={{ background: inspectedBook?.id === book.id ? "#287fbd" : colourScale.colour(book) }} /></span>
+                      ))}
+                      </div>
                     ))}
                   </div>
                   {editingLayout && <>
@@ -8054,7 +8403,24 @@ function LibraryMapDialog({
                 />
               ))}
               </div>
-              <div className="map-camera-controls" aria-label="Map camera controls">
+              <div
+                className={`map-camera-controls ${cameraControlsExpanded ? "expanded" : ""}`}
+                aria-label="Map camera controls"
+              >
+                <button
+                  type="button"
+                  className={`map-camera-toggle ${cameraControlsExpanded ? "active" : ""}`}
+                  aria-label={cameraControlsExpanded
+                    ? "Hide map camera controls"
+                    : "Show map camera controls"}
+                  aria-expanded={cameraControlsExpanded}
+                  title={cameraControlsExpanded
+                    ? "Hide camera controls"
+                    : "Show camera controls"}
+                  onClick={() => setCameraControlsExpanded((current) => !current)}
+                >
+                  <Camera />
+                </button>
                 <div className="map-zoom-controls">
                   <button
                     type="button"

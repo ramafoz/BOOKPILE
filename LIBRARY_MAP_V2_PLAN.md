@@ -89,8 +89,11 @@ Selection, inspection, and camera framing are distinct actions:
   fit-to-target command to display its complete target.
 - Recalculate screen dimensions with `ResizeObserver` and mobile viewport units
   so rotation and browser-chrome changes do not alter world coordinates.
-- Direct canvas drag, mouse-wheel/trackpad zoom, and pinch-to-zoom form a later
-  increment after button navigation has passed multi-device validation.
+- Direct canvas drag, mouse-wheel/trackpad zoom, and anchored pinch-to-zoom are
+  implemented alongside the button controls. Map gestures yield to book,
+  container, shelf, and floating-workspace interactions.
+- Directional and zoom buttons remain as an accessible fallback, collapsed by
+  default behind one lower-right camera-control button.
 
 ## 5. Reset and focus commands
 
@@ -218,10 +221,13 @@ For each container:
 - If a sub-pixel book is chosen from the compact container list, automatically
   zoom until its thickness is approximately 16 screen pixels and visibly show
   its selection colour.
-- A Reading or On-loan book retains a faint outlined gap and tooltip in its
-  saved container. It still contributes its effective pages to that
-  container's geometry, and a book that is both Reading and On loan leaves only
-  one gap.
+- Rearrangement always gives a Reading or On-loan book a faint proportional
+  outlined gap and tooltip in its saved container. Normal viewing offers a
+  locally remembered `Show retained shelf spaces` toggle; it defaults off.
+  When off, the ROW width or PILE height is temporarily reduced by the absent
+  effective pages while preserving its row anchor or pile bottom support. This
+  presentation projection is never persisted. A book that is both Reading and
+  On loan leaves only one gap.
 - A temporary `last position + 1` rearrangement destination reserves visible
   space with the effective thickness of the book being moved.
 - Freeze the current book geometry throughout a provisional rearrangement so
@@ -234,13 +240,16 @@ For each container:
 - Treat Reading and On-loan as freely positioned and resized top-level world
   objects for framing and reset calculations, while keeping them visually
   distinct from bookcases and from one another.
-- Represent Reading as a table with books lying horizontally and stacking into
-  additional piles automatically when required.
+- Represent Reading as a small reading table with decorative support and lamp.
+  Each active reading is an equal-size open-book icon, filled top-to-bottom and
+  then left-to-right. For `n` active books, their cells occupy exactly
+  `n / (n + 1)` of the table surface, always reserving room for one more.
 - Represent On-loan as an absent/out-of-library area with a soft irregular
   cloud-like boundary and vertical books that flow into additional rows when
   required.
-- Preserve page-proportional visual thickness in both areas. A book without a
-  retained physical container uses the global fallback geometry.
+- Preserve page-proportional visual thickness in the On-loan area. A loaned
+  book without a retained physical container uses the global fallback
+  geometry. Reading icons deliberately do not encode page count.
 
 ## 9. Data and compatibility strategy
 
@@ -352,9 +361,10 @@ Missing page counts use the arithmetic mean across the complete catalogue.
   and all exit/filter paths.
 - [x] Add backend tests for proportional geometry, compression rejection,
   atomic layout persistence, and stale-layout protection.
-- [ ] Add automated frontend tests for camera math, selection state, and
-  proportional books when a browser-oriented frontend test harness is added;
-  until then, enforce TypeScript build, ESLint, and Phase 7 device acceptance.
+- [x] Add automated frontend tests for camera math, selection state,
+  proportional books, outside-area grouping, and temporary retained-space
+  geometry. Continue to enforce TypeScript build, ESLint, and Phase 7 device
+  acceptance for real browser and touch behaviour.
 
 The restored workflow previews page-driven ROW/PILE boundary changes, honours
 the five-percent compression ceiling and movement-local `Release shelf space`,

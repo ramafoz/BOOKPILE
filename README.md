@@ -91,6 +91,10 @@ Visual rearrangement supports:
 - Use a responsive full-screen viewport over an effectively unbounded world,
   with pan, zoom, vertical fit/reset, compact overlays, and a collapsible colour
   legend.
+- Pan by dragging the map with a mouse or one finger, zoom with the mouse wheel
+  or trackpad, and use an anchored two-finger pinch on touchscreens. The compact
+  directional and zoom controls remain available from the collapsed camera
+  button in the lower-right corner.
 - Position and resize furniture and the separate Reading and On-loan areas.
 - Edit unbounded top-level coordinates through direct handles or a floating,
   minimizable editor with explicit Save and Cancel actions.
@@ -105,6 +109,13 @@ Visual rearrangement supports:
   the rest.
 - Give an active loan visual priority over Reading while keeping both the
   reading session and the book's reserved physical position intact.
+- Use the map-tools `Show retained shelf spaces` preference to reveal
+  proportional outlined positions for Reading and On-loan books. With the
+  default setting off, their ROW/PILE is only visually reduced; saved layout
+  geometry is not changed. Rearrangement always displays the retained spaces.
+- Show active readings as equal open-book icons on a small reading table,
+  always reserving surface space for one more book. Show On-loan books as
+  page-proportional vertical volumes inside a cloud-like out-of-library area.
 - Colour visual books by:
   - Reading status.
   - Acquisition recency.

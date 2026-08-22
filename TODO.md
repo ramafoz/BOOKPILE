@@ -116,6 +116,17 @@ acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
   minimizable editor.
 - [x] Restore the complete visual-rearrangement workflow in a floating,
   minimizable panel under the new camera transform.
+- [x] Add direct mouse/touch panning, wheel/trackpad zoom, and anchored
+  pinch-to-zoom without conflicting with layout or book dragging.
+- [x] Add a locally remembered `Show retained shelf spaces` presentation
+  toggle. Rearrangement always shows proportional retained positions; normal
+  viewing defaults to visually shrinking ROW/PILE geometry without persisting
+  that temporary projection.
+- [x] Render active readings as equal open-book icons on a decorative reading
+  table, and On-loan books with page-proportional thickness inside a
+  cloud-like out-of-library area.
+- [x] Add automated frontend tests for camera mathematics, inspection
+  selection, proportional books, and temporary container reduction.
 - [ ] Validate the result on desktop, phone, and tablet before merging the
   feature branch.
 
@@ -509,6 +520,4 @@ decisions in addition to application code.
 ## Explicitly not planned
 
 - [N] Excel export; CSV and full ZIP backups are sufficient.
-- [N] Persistent empty-position markers on the normal visual map. Temporary
-  destination slots are shown only while visual rearrangement is active.
 - [N] Visual duplicate/conflicting-position warnings.

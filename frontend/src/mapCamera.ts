@@ -75,6 +75,35 @@ export function zoomMapCamera(
   };
 }
 
+export function mapViewportPointToWorld(
+  camera: MapCamera,
+  viewport: MapViewportSize,
+  point: { x: number; y: number },
+): Pick<MapCamera, "centerX" | "centerY"> {
+  const worldHeight = Math.max(1, viewport.height) * camera.zoom;
+  const worldWidth = worldHeight * LEGACY_MAP_ASPECT_RATIO;
+  return {
+    centerX: camera.centerX +
+      (point.x - viewport.width / 2) * 100 / worldWidth,
+    centerY: camera.centerY +
+      (point.y - viewport.height / 2) * 100 / worldHeight,
+  };
+}
+
+export function panMapCameraByPixels(
+  camera: MapCamera,
+  delta: { x: number; y: number },
+  viewport: MapViewportSize,
+): MapCamera {
+  const worldHeight = Math.max(1, viewport.height) * camera.zoom;
+  const worldWidth = worldHeight * LEGACY_MAP_ASPECT_RATIO;
+  return {
+    ...camera,
+    centerX: camera.centerX - delta.x * 100 / worldWidth,
+    centerY: camera.centerY - delta.y * 100 / worldHeight,
+  };
+}
+
 export function boundsForMapRects(
   rects: MapWorldRect[],
 ): MapWorldBounds | null {
