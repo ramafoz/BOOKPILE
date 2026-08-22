@@ -31,6 +31,27 @@ def create_v1_catalogue(
     monkeypatch.setenv("BOOKPILE_DATABASE", str(database))
     init_database()
     with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.executescript(
+            """
+            CREATE TABLE visual_container_layout_v1 (
+                container_id INTEGER PRIMARY KEY,
+                x REAL NOT NULL,
+                width REAL NOT NULL,
+                y REAL NOT NULL DEFAULT 0,
+                height REAL NOT NULL DEFAULT 100,
+                FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE
+            );
+            INSERT INTO visual_container_layout_v1 (
+                container_id, x, width, y, height
+            )
+            SELECT container_id, x, width, y, height
+            FROM visual_container_layout;
+            DROP TABLE visual_container_layout;
+            ALTER TABLE visual_container_layout_v1 RENAME TO visual_container_layout;
+            """
+        )
+        connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("DROP TRIGGER trg_multiple_authors_insert")
         connection.execute("DROP TRIGGER trg_multiple_authors_update")
         connection.execute("DROP TRIGGER trg_multiple_authors_delete_member")
@@ -223,7 +244,7 @@ def test_newer_database_is_rejected_without_backup(
             )
             """
         )
-        for version in range(1, 9):
+        for version in range(1, 10):
             connection.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, f"schema {version}"),
@@ -265,18 +286,18 @@ def test_backups_record_and_validate_the_schema_they_contain(
         backup_directory=backups,
         approved=True,
     )
-    v7_backup = backups / "catalogue-v7.zip"
-    v7_manifest = create_full_backup(
-        v7_backup,
+    v8_backup = backups / "catalogue-v8.zip"
+    v8_manifest = create_full_backup(
+        v8_backup,
         source_database=database,
         source_covers=covers,
     )
-    v7_validation = extract_and_validate_archive(
-        v7_backup,
-        tmp_path / "validated-v7",
+    v8_validation = extract_and_validate_archive(
+        v8_backup,
+        tmp_path / "validated-v8",
     )
-    assert v7_manifest["schema_version"] == 7
-    assert v7_validation["schema_version"] == 7
+    assert v8_manifest["schema_version"] == 8
+    assert v8_validation["schema_version"] == 8
 
 
 def test_v5_to_v6_adds_empty_loan_history_without_changing_existing_data(
@@ -381,6 +402,81 @@ def test_v6_to_v7_centres_top_level_visual_coordinates_once(
         target_version=7,
     )
     assert second.applied_versions == ()
+
+
+def test_v7_to_v8_assigns_left_anchors_and_unambiguous_pile_supports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, covers, backups = create_v1_catalogue(tmp_path, monkeypatch)
+    run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=7,
+    )
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            """
+            INSERT INTO containers (
+                id, shelf_id, container_type, layer, container_number
+            ) VALUES (2, 1, 'PILE', 'BACKGROUND', 1)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO books (id, title, author, container_id, position)
+            VALUES (2, 'Supporting row book', 'Author', 1, 2)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO books (id, title, author, container_id, position)
+            VALUES (3, 'Supported pile book', 'Author', 2, 1)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO visual_container_layout (
+                container_id, x, y, width, height
+            ) VALUES (2, 10, 0, 20, 31)
+            """
+        )
+        connection.execute(
+            """
+            UPDATE visual_container_layout
+            SET x = 0, y = 32, width = 100, height = 68
+            WHERE container_id = 1
+            """
+        )
+
+    report = run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=8,
+    )
+
+    assert report.applied_versions == (8,)
+    assert report.before_fingerprint == report.after_fingerprint
+    with closing(connect_database(database)) as connection:
+        assert schema_version(connection) == 8
+        row = connection.execute(
+            "SELECT * FROM visual_container_layout WHERE container_id = 1"
+        ).fetchone()
+        pile = connection.execute(
+            "SELECT * FROM visual_container_layout WHERE container_id = 2"
+        ).fetchone()
+        assert row["row_anchor"] == "LEFT"
+        assert row["pile_support_kind"] is None
+        assert row["pile_support_container_id"] is None
+        assert pile["row_anchor"] == "LEFT"
+        assert pile["pile_support_kind"] == "ROW"
+        assert pile["pile_support_container_id"] == 1
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_v2_to_v3_preserves_existing_isbns_and_adds_nullable_metadata(

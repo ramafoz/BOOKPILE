@@ -262,7 +262,15 @@ def init_database() -> None:
                 width REAL NOT NULL,
                 y REAL NOT NULL DEFAULT 0,
                 height REAL NOT NULL DEFAULT 100,
-                FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE
+                row_anchor TEXT NOT NULL DEFAULT 'LEFT'
+                    CHECK (row_anchor IN ('LEFT', 'RIGHT')),
+                pile_support_kind TEXT
+                    CHECK (pile_support_kind IS NULL
+                           OR pile_support_kind IN ('SHELF', 'ROW')),
+                pile_support_container_id INTEGER,
+                FOREIGN KEY (container_id) REFERENCES containers(id) ON DELETE CASCADE,
+                FOREIGN KEY (pile_support_container_id)
+                    REFERENCES containers(id) ON DELETE RESTRICT
             );
             """
         )

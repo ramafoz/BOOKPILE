@@ -10,9 +10,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from .visual_geometry import (
+    AuditContainer,
+    ContainerKind,
+    LEGACY_SUPPORT_TOLERANCE,
+    Rect,
+    SupportKind,
+    infer_pile_support,
+)
+
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 7
+LATEST_SCHEMA_VERSION = 8
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -329,6 +338,106 @@ def _migration_7_center_unbounded_visual_world(
     )
 
 
+def _visual_audit_containers(
+    connection: sqlite3.Connection,
+) -> list[AuditContainer]:
+    rows = connection.execute(
+        """
+        SELECT
+            containers.id,
+            containers.shelf_id,
+            containers.layer,
+            containers.container_type,
+            visual.x,
+            visual.y,
+            visual.width,
+            visual.height,
+            (SELECT COUNT(*) FROM books
+             WHERE books.container_id = containers.id) AS book_count
+        FROM containers
+        JOIN visual_container_layout AS visual
+          ON visual.container_id = containers.id
+        ORDER BY containers.id
+        """
+    ).fetchall()
+    return [
+        AuditContainer(
+            id=row["id"],
+            shelf_id=row["shelf_id"],
+            layer=row["layer"],
+            kind=ContainerKind(row["container_type"]),
+            rect=Rect(row["x"], row["y"], row["width"], row["height"]),
+            book_count=row["book_count"],
+        )
+        for row in rows
+    ]
+
+
+def _migration_8_store_visual_container_semantics(
+    connection: sqlite3.Connection,
+) -> None:
+    """Store row anchors and explicit, same-layer support for every pile."""
+    columns = table_columns(connection, "visual_container_layout")
+    if "row_anchor" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE visual_container_layout
+            ADD COLUMN row_anchor TEXT NOT NULL DEFAULT 'LEFT'
+                CHECK (row_anchor IN ('LEFT', 'RIGHT'))
+            """
+        )
+    if "pile_support_kind" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE visual_container_layout
+            ADD COLUMN pile_support_kind TEXT
+                CHECK (pile_support_kind IS NULL
+                       OR pile_support_kind IN ('SHELF', 'ROW'))
+            """
+        )
+    if "pile_support_container_id" not in columns:
+        connection.execute(
+            """
+            ALTER TABLE visual_container_layout
+            ADD COLUMN pile_support_container_id INTEGER
+                REFERENCES containers(id) ON DELETE RESTRICT
+            """
+        )
+
+    containers = _visual_audit_containers(connection)
+    connection.execute(
+        """
+        UPDATE visual_container_layout
+        SET row_anchor = 'LEFT',
+            pile_support_kind = NULL,
+            pile_support_container_id = NULL
+        """
+    )
+    for pile in (item for item in containers if item.kind is ContainerKind.PILE):
+        support = infer_pile_support(
+            pile,
+            containers,
+            tolerance=LEGACY_SUPPORT_TOLERANCE,
+        )
+        if support.kind not in {SupportKind.SHELF, SupportKind.ROW}:
+            raise ValueError(
+                f"Pile {pile.id} has no unambiguous legacy support: "
+                f"{support.detail}"
+            )
+        connection.execute(
+            """
+            UPDATE visual_container_layout
+            SET pile_support_kind = ?, pile_support_container_id = ?
+            WHERE container_id = ?
+            """,
+            (
+                support.kind.value,
+                support.container_id,
+                pile.id,
+            ),
+        )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
     Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
@@ -336,6 +445,7 @@ MIGRATIONS = (
     Migration(5, "store complete reading history", _migration_5_store_reading_sessions),
     Migration(6, "store loan history", _migration_6_store_loan_history),
     Migration(7, "center the unbounded visual-library world", _migration_7_center_unbounded_visual_world),
+    Migration(8, "store visual row anchors and pile supports", _migration_8_store_visual_container_semantics),
 )
 
 
@@ -622,12 +732,62 @@ def verify_database(
         if multiple_active:
             raise ValueError("A book has more than one active loan")
 
+    visual_semantics_active = (
+        table_exists(connection, "visual_container_layout")
+        and table_exists(connection, MIGRATION_TABLE)
+        and connection.execute(
+            f"SELECT COALESCE(MAX(version), 0) FROM {MIGRATION_TABLE}"
+        ).fetchone()[0] >= 8
+    )
+    if visual_semantics_active:
+        invalid_visual_semantics = connection.execute(
+            """
+            SELECT c.id
+            FROM containers AS c
+            JOIN visual_container_layout AS visual
+              ON visual.container_id = c.id
+            LEFT JOIN containers AS support
+              ON support.id = visual.pile_support_container_id
+            WHERE
+                visual.row_anchor NOT IN ('LEFT', 'RIGHT')
+                OR (c.container_type = 'ROW' AND (
+                    visual.pile_support_kind IS NOT NULL
+                    OR visual.pile_support_container_id IS NOT NULL
+                ))
+                OR (c.container_type = 'PILE' AND (
+                    visual.pile_support_kind IS NULL
+                    OR (visual.pile_support_kind = 'SHELF'
+                        AND visual.pile_support_container_id IS NOT NULL)
+                    OR (visual.pile_support_kind = 'ROW' AND (
+                        support.id IS NULL
+                        OR support.container_type != 'ROW'
+                        OR support.shelf_id != c.shelf_id
+                        OR support.layer != c.layer
+                        OR NOT EXISTS (
+                            SELECT 1 FROM books
+                            WHERE books.container_id = support.id
+                        )
+                    ))
+                ))
+            LIMIT 1
+            """
+        ).fetchone()
+        if invalid_visual_semantics:
+            raise ValueError("Visual container support verification failed")
+
     snapshot = schema_snapshot(connection, book_columns=book_columns)
     if expected_snapshot is not None:
-        snapshot = {
-            table: snapshot[table]
-            for table in expected_snapshot
-        }
+        normalized_snapshot: dict[str, list[dict]] = {}
+        for table, expected_rows in expected_snapshot.items():
+            actual_rows = snapshot[table]
+            if expected_rows:
+                preserved_columns = tuple(expected_rows[0])
+                actual_rows = [
+                    {column: row[column] for column in preserved_columns}
+                    for row in actual_rows
+                ]
+            normalized_snapshot[table] = actual_rows
+        snapshot = normalized_snapshot
     if expected_snapshot is not None and snapshot != expected_snapshot:
         raise ValueError("Existing catalogue values changed during migration")
     return snapshot_fingerprint(snapshot)

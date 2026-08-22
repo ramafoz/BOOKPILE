@@ -325,16 +325,23 @@ full-screen complete book information, and exact catalogue exits that keep the
 advanced-search panel collapsed. The map API only gained existing cover data
 and a read-only single-book endpoint; no catalogue schema or records changed.
 
-### Phase 5 — page-proportional rendering
+### Phase 5 — page-proportional rendering — complete
 
-- Add tested effective-page and proportional-segment calculations.
-- Render row widths and pile heights from effective page counts.
-- Add accessible hit areas for tiny segments.
-- Integrate projected rearrangement positions and destination slots.
-- Confirm colour modes remain independent from geometry.
+- [x] Add tested effective-page and proportional-segment calculations.
+- [x] Render row widths and pile heights from effective page counts.
+- [x] Add accessible hit areas for tiny segments.
+- [x] Confirm colour modes remain independent from geometry.
+
+Implemented after a rehearsed and verified v7-to-v8 migration that stores row
+anchors and explicit pile supports. The populated catalogue retained all 434
+books and covers, and the live layout now records 18 shelf-supported and 9
+row-supported piles without changing bibliographic or physical-position data.
+Missing page counts use the arithmetic mean across the complete catalogue.
 
 ### Phase 6 — integration hardening
 
+- Integrate projected page-proportional container geometry and destination
+  slots into provisional rearrangement chains.
 - Restore transformed layout handles and pointer drag at arbitrary zoom.
 - Restore visual book rearrangement at arbitrary camera positions and zoom.
 - Migrate all rearrangement modes, position controls, movement-chain summaries,
@@ -419,3 +426,89 @@ until its segment is approximately 16 screen pixels thick.
 
 **Decision:** save the camera before automatic magnification and restore that
 exact state when the book highlight or inspector closes.
+
+## 13. Phase 5 geometry contract
+
+These rules are the approved contract for proportional rendering and the
+later rearrangement integration. They must be implemented as pure, tested
+geometry before any schema or live-layout write is enabled.
+
+### Axes, anchors, and support
+
+- A `ROW` stacks books horizontally. Its height never changes automatically.
+- A `PILE` stacks books vertically. Its width never changes automatically.
+- Every existing and newly created row initially uses a `LEFT` anchor. A later
+  layout edit may select `RIGHT`; numbering remains left to right either way.
+- A pile grows upward and shrinks upward: its bottom edge remains fixed while
+  `y` and `height` change by opposite amounts.
+- Every pile must explicitly rest on either the shelf bottom or a non-empty row
+  in the same shelf and layer. Piles cannot support piles.
+- Shrinking or moving a supporting row so that horizontal support is lost
+  invalidates the complete operation. An empty row cannot support a pile.
+- Same-layer containers constrain growth only when their intervals overlap on
+  the transverse axis. Background and foreground containers do not constrain
+  one another.
+- Foreground may obscure at most 80% of a background container's height; this
+  limit concerns vertical coverage, not overlap area. At least 20% remains
+  visible.
+
+### Page scale and capacity
+
+- Book thickness is strictly proportional to effective pages within its own
+  container. There is no global page scale.
+- Missing, zero, or invalid pages use the arithmetic mean of valid catalogue
+  page counts, falling back to 200 when no valid value exists.
+- Editing page metadata redistributes books inside the existing outer
+  container size; it never resizes that container.
+- A page edit above 2,000 pages, or above 50% of the final effective pages of a
+  non-empty container, requires a warning but remains user-confirmable.
+- A container may compress at most 5%: natural span up to 105% of available
+  capacity is redistributed into 100%; anything larger is invalid.
+- Geometry at or within 0.1 percentage points of its available capacity counts
+  as full.
+- An occupied full container whose pages fall by at most 5% remains full unless
+  the relevant move explicitly requests `Release shelf space`. A larger
+  reduction shrinks it.
+- `Release shelf space` is movement-local and takes effect in sequence. Once a
+  move releases a container, later moves in the same provisional chain evaluate
+  that container as partial. A zero net reduction still produces no shrink.
+- Empty containers visually expose their full available stacking capacity but
+  do not provide physical support. They are available as rearrangement targets
+  and omitted from normal container inspection.
+
+### Cross-container movement and provisional chains
+
+- Internal reordering changes order only. Container dimensions and current
+  book thicknesses remain unchanged.
+- Provisional movement freezes current book thicknesses and displays the
+  projected container boundary and destination slot. Apply recalculates all
+  affected books and containers.
+- Cross-container moves use each container's local scale. An initially empty
+  destination infers scale from occupied containers in the same shelf, then
+  furniture, then the whole visual library. If none exists, the first book is
+  proposed at 10% of available span with a warning to adjust it to reality.
+- A full destination accepts incoming pages only if the final chain removes
+  enough pages or the result fits within the 5% compression allowance.
+- Swap recalculates both affected containers because equal page counts are not
+  assumed.
+- Final validation is atomic: one invalid container invalidates the entire
+  chain. Persist book positions and affected layout geometry together or write
+  nothing.
+
+### Migration sequence
+
+1. Run a read-only audit that infers current pile support and reports every
+   ambiguity. Use the normal 0.1-point geometry tolerance for future data and a
+   separately documented 3-point legacy inference tolerance for small gaps
+   introduced by the existing manual layout editor; always report the original
+   coordinates and never silently repair them during the audit.
+2. Implement and test pure geometry calculations without database writes.
+3. Create and verify a full ZIP backup and rehearse the additive v7-to-v8
+   migration on an isolated copy.
+4. Add `row_anchor`, `pile_support_kind`, and nullable
+   `pile_support_container_id`; initially set all rows to `LEFT` and persist
+   only unambiguous same-layer pile support.
+5. Re-run row counts, foreign-key checks, integrity checks, support validation,
+   and backup validation before touching the live database.
+6. Render page-proportional books using the migrated layout, then obtain
+   desktop and mobile validation before reconnecting rearrangement writes.

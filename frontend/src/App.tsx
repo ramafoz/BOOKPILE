@@ -59,6 +59,10 @@ import {
   type MapViewportSize,
   type MapWorldBounds,
 } from "./mapCamera";
+import {
+  effectiveCataloguePageMean,
+  proportionalBookSegments,
+} from "./mapBookGeometry";
 import type {
   Book,
   BookPayload,
@@ -4928,6 +4932,7 @@ function MapContainerGraphic({
   inspectionMuted,
   inspectionSilhouette,
   focusedBookId,
+  cataloguePageMean,
   colourScale,
   editing,
   rearranging,
@@ -4953,6 +4958,7 @@ function MapContainerGraphic({
   inspectionMuted: boolean;
   inspectionSilhouette: boolean;
   focusedBookId: number | null;
+  cataloguePageMean: number;
   colourScale: MapColourScale;
   editing: boolean;
   rearranging: boolean;
@@ -4986,6 +4992,11 @@ function MapContainerGraphic({
     ? Array.from({ length: maxPosition + 1 }, (_, index) => index + 1)
     : [];
   const slotCount = Math.max(1, rearranging ? maxPosition + 1 : maxPosition);
+  const proportionalSegments = proportionalBookSegments(
+    books,
+    isRow ? availableWidth : bookAreaHeight,
+    cataloguePageMean,
+  );
   const activate = (event: React.KeyboardEvent<SVGGElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -5049,24 +5060,12 @@ function MapContainerGraphic({
         );
       })}
       {books.length > 0 && isRow ? (
-        books.map((book) => {
-          const slotWidth = availableWidth / slotCount;
-          const bookWidth = Math.max(1, slotWidth - 0.7);
+        proportionalSegments.map(({ book, offset, thickness }) => {
+          const hitWidth = Math.max(thickness, 2);
           return (
-            <rect
+            <g
               key={book.id}
-              className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
-                focusedBookId === null
-                  ? ""
-                  : book.id === focusedBookId
-                    ? "focused"
-                    : "muted"
-              }`}
-              x={x + padding + ((book.position ?? 1) - 1) * slotWidth}
-              y={y + padding}
-              width={bookWidth}
-              height={bookAreaHeight}
-              fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              className="map-book-target"
               role={editing ? undefined : "button"}
               tabIndex={editing ? -1 : 0}
               aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
@@ -5098,32 +5097,41 @@ function MapContainerGraphic({
                 }
               }}
             >
+              <rect
+                className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
+                  focusedBookId === null
+                    ? ""
+                    : book.id === focusedBookId
+                      ? "focused"
+                      : "muted"
+                }`}
+                x={x + padding + offset}
+                y={y + padding}
+                width={thickness}
+                height={bookAreaHeight}
+                fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              />
+              <rect
+                className="map-book-hit-area"
+                x={x + padding + offset - (hitWidth - thickness) / 2}
+                y={y + padding}
+                width={hitWidth}
+                height={bookAreaHeight}
+              />
               <title>
                 {book.title}
                 {colourScale.detail(book) ? ` · ${colourScale.detail(book)}` : ""}
               </title>
-            </rect>
+            </g>
           );
         })
       ) : books.length > 0 ? (
-        books.map((book) => {
-          const slotHeight = bookAreaHeight / slotCount;
-          const bookHeight = Math.max(1, slotHeight - 0.7);
+        proportionalSegments.map(({ book, offset, thickness }) => {
+          const hitHeight = Math.max(thickness, 2);
           return (
-            <rect
+            <g
               key={book.id}
-              className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
-                focusedBookId === null
-                  ? ""
-                  : book.id === focusedBookId
-                    ? "focused"
-                    : "muted"
-              }`}
-              x={x + padding}
-              y={y + padding + ((book.position ?? 1) - 1) * slotHeight}
-              width={availableWidth}
-              height={bookHeight}
-              fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              className="map-book-target"
               role={editing ? undefined : "button"}
               tabIndex={editing ? -1 : 0}
               aria-label={editing ? undefined : `Show ${book.title} in the catalogue`}
@@ -5155,11 +5163,32 @@ function MapContainerGraphic({
                 }
               }}
             >
+              <rect
+                className={`map-book ${rearranging && book.id === activeBookId ? "active-move" : ""} ${
+                  focusedBookId === null
+                    ? ""
+                    : book.id === focusedBookId
+                      ? "focused"
+                      : "muted"
+                }`}
+                x={x + padding}
+                y={y + padding + offset}
+                width={availableWidth}
+                height={thickness}
+                fill={focusedBookId === book.id ? "#287fbd" : colourScale.colour(book)}
+              />
+              <rect
+                className="map-book-hit-area"
+                x={x + padding}
+                y={y + padding + offset - (hitHeight - thickness) / 2}
+                width={availableWidth}
+                height={hitHeight}
+              />
               <title>
                 {book.title}
                 {colourScale.detail(book) ? ` · ${colourScale.detail(book)}` : ""}
               </title>
-            </rect>
+            </g>
           );
         })
       ) : null}
@@ -5218,6 +5247,7 @@ function MapShelfGraphic({
   containerLayout,
   inspectedContainerId,
   focusedBookId,
+  cataloguePageMean,
   colourScale,
   editing,
   rearranging,
@@ -5241,6 +5271,7 @@ function MapShelfGraphic({
   containerLayout: Map<number, VisualRect>;
   inspectedContainerId: number | null;
   focusedBookId: number | null;
+  cataloguePageMean: number;
   colourScale: MapColourScale;
   editing: boolean;
   rearranging: boolean;
@@ -5335,6 +5366,7 @@ function MapShelfGraphic({
             }
             inspectionSilhouette={inspectionSilhouette}
             focusedBookId={focusedBookId}
+            cataloguePageMean={cataloguePageMean}
             colourScale={colourScale}
             editing={editing}
             rearranging={rearranging}
@@ -5410,6 +5442,7 @@ function MapBookcaseGraphic({
   containerLayout,
   inspectedContainerId,
   focusedBookId,
+  cataloguePageMean,
   colourScale,
   editing,
   rearranging,
@@ -5437,6 +5470,7 @@ function MapBookcaseGraphic({
   containerLayout: Map<number, VisualRect>;
   inspectedContainerId: number | null;
   focusedBookId: number | null;
+  cataloguePageMean: number;
   colourScale: MapColourScale;
   editing: boolean;
   rearranging: boolean;
@@ -5528,6 +5562,7 @@ function MapBookcaseGraphic({
                 containerLayout={containerLayout}
                 inspectedContainerId={inspectedContainerId}
                 focusedBookId={focusedBookId}
+                cataloguePageMean={cataloguePageMean}
                 colourScale={colourScale}
                 editing={editing}
                 rearranging={rearranging}
@@ -5869,6 +5904,7 @@ function LibraryMapDialog({
     bookcases: [],
     outside_books: [],
     loaned_books: [],
+    effective_page_mean: 200,
     layout: emptyVisualLayout,
   });
   const [loading, setLoading] = useState(true);
@@ -6058,6 +6094,12 @@ function LibraryMapDialog({
       ...map.loaned_books,
     ],
     [map],
+  );
+  const cataloguePageMean = useMemo(
+    () => map.effective_page_mean > 0
+      ? map.effective_page_mean
+      : effectiveCataloguePageMean(allMapBooks),
+    [allMapBooks, map.effective_page_mean],
   );
   const mapContainers = useMemo(
     () => map.bookcases.flatMap((bookcase) =>
@@ -7901,6 +7943,7 @@ function LibraryMapDialog({
                   containerLayout={containerRects}
                   inspectedContainerId={inspectedContainerId}
                   focusedBookId={inspectedBookId}
+                  cataloguePageMean={cataloguePageMean}
                   colourScale={colourScale}
                   editing={editingLayout}
                   rearranging={rearranging}

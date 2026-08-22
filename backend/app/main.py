@@ -2047,10 +2047,18 @@ def ensure_visual_layout(
             connection.execute(
                 """
                 INSERT OR IGNORE INTO visual_container_layout
-                    (container_id, x, y, width, height)
-                VALUES (?, ?, ?, ?, ?)
+                    (container_id, x, y, width, height,
+                     row_anchor, pile_support_kind, pile_support_container_id)
+                VALUES (?, ?, ?, ?, ?, 'LEFT', ?, NULL)
                 """,
-                (container["id"], index * (width + gap), y, width, height),
+                (
+                    container["id"],
+                    index * (width + gap),
+                    y,
+                    width,
+                    height,
+                    "SHELF" if container["container_type"] == "PILE" else None,
+                ),
             )
 
 
@@ -2092,6 +2100,9 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
                 "y": row["y"],
                 "width": row["width"],
                 "height": row["height"],
+                "row_anchor": row["row_anchor"],
+                "pile_support_kind": row["pile_support_kind"],
+                "pile_support_container_id": row["pile_support_container_id"],
             }
             for row in connection.execute(
                 "SELECT * FROM visual_container_layout ORDER BY container_id"
@@ -2134,6 +2145,13 @@ def library_map() -> dict[str, Any]:
         ), '[]') AS structured_authors_json
     """
     with connect() as connection:
+        effective_page_mean = connection.execute(
+            """
+            SELECT COALESCE(AVG(page_count), 200.0)
+            FROM books
+            WHERE page_count IS NOT NULL AND page_count > 0
+            """
+        ).fetchone()[0]
         bookcases = [
             dict(row)
             for row in connection.execute(
@@ -2266,6 +2284,7 @@ def library_map() -> dict[str, Any]:
         "bookcases": bookcases,
         "outside_books": outside_books,
         "loaned_books": loaned_books,
+        "effective_page_mean": effective_page_mean,
         "layout": layout,
     }
 
@@ -2297,16 +2316,63 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail="Container layout is incomplete")
 
         container_context = {
-            row["id"]: (row["shelf_id"], row["layer"])
+            row["id"]: (
+                row["shelf_id"],
+                row["layer"],
+                row["container_type"],
+                row["book_count"],
+            )
             for row in connection.execute(
-                "SELECT id, shelf_id, layer FROM containers"
+                """
+                SELECT c.id, c.shelf_id, c.layer, c.container_type,
+                       (SELECT COUNT(*) FROM books WHERE container_id = c.id)
+                           AS book_count
+                FROM containers AS c
+                """
             )
         }
         grouped_containers: dict[
             tuple[int, str], list[VisualContainerLayout]
         ] = {}
         for item in payload.containers:
-            grouped_containers.setdefault(container_context[item.id], []).append(item)
+            context = container_context[item.id]
+            grouped_containers.setdefault((context[0], context[1]), []).append(item)
+            if context[2] == "ROW":
+                if (
+                    item.pile_support_kind is not None
+                    or item.pile_support_container_id is not None
+                ):
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Rows cannot have a pile support",
+                    )
+            elif item.pile_support_kind == "SHELF":
+                if item.pile_support_container_id is not None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Shelf-supported piles cannot reference a row",
+                    )
+            elif item.pile_support_kind == "ROW":
+                support = container_context.get(item.pile_support_container_id or -1)
+                if (
+                    support is None
+                    or support[0] != context[0]
+                    or support[1] != context[1]
+                    or support[2] != "ROW"
+                    or support[3] < 1
+                ):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(
+                            "A pile must use a non-empty supporting row in the "
+                            "same shelf and layer"
+                        ),
+                    )
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Every pile must rest on the shelf or a row",
+                )
         for group in grouped_containers.values():
             for index, first in enumerate(group):
                 for second in group[index + 1 :]:
@@ -2382,11 +2448,23 @@ def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
         connection.execute("DELETE FROM visual_container_layout")
         connection.executemany(
             """
-            INSERT INTO visual_container_layout (container_id, x, y, width, height)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO visual_container_layout (
+                container_id, x, y, width, height,
+                row_anchor, pile_support_kind, pile_support_container_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (item.id, item.x, item.y, item.width, item.height)
+                (
+                    item.id,
+                    item.x,
+                    item.y,
+                    item.width,
+                    item.height,
+                    item.row_anchor,
+                    item.pile_support_kind,
+                    item.pile_support_container_id,
+                )
                 for item in payload.containers
             ],
         )

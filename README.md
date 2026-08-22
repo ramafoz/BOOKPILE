@@ -367,6 +367,13 @@ in place:
     top-level visual X coordinates, was rehearsed against a validated v6 ZIP,
     and preserved all 434 books and related catalogue data with successful
     integrity and foreign-key checks.
+11. Schema v8 adds visual row anchors and explicit pile support on either a
+    shelf or a non-empty same-layer row. The migration was rehearsed against a
+    verified v7 ZIP and applied with all 434 books and 434 covers preserved,
+    successful integrity and foreign-key checks, and 18 shelf-supported plus 9
+    row-supported piles. The map renders book thickness proportionally to page
+    count within each container; missing values use the complete catalogue's
+    arithmetic mean, falling back to 200 only when no page data exists.
 
 Later database phases include structured subjects and genres, ratings and
 tags.

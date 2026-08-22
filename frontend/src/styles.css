@@ -696,7 +696,9 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-container.inspection-silhouette .map-book { opacity: 0; pointer-events: none; }
 .map-svg-resize-handle { fill: #28574d; stroke: #fffaf1; stroke-width: 2; cursor: nwse-resize; pointer-events: all; touch-action: none; }
 .map-svg-resize-handle:hover { fill: #a85835; }
-.map-book { pointer-events: all; cursor: pointer; stroke: #26332f99; stroke-width: .35; shape-rendering: crispEdges; }
+.map-book-target { cursor: pointer; }
+.map-book { pointer-events: none; stroke: #26332f99; stroke-width: .35; vector-effect: non-scaling-stroke; }
+.map-book-hit-area { fill: transparent; pointer-events: all; }
 .map-container.editing .map-book { pointer-events: none; cursor: move; }
 .map-container.rearranging .map-book { touch-action: none; }
 .map-rearrange-target { fill: #fffaf108; stroke: #28574d45; stroke-width: .7; stroke-dasharray: 2 2; pointer-events: all; cursor: crosshair; }

@@ -109,7 +109,7 @@ acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
   rendering at high camera zoom.
 - [x] Add exclusive book/container inspection modes with read-only compact
   bottom catalogues and explicit filtered exits to the main catalogue.
-- [ ] Render row width and pile thickness proportionally to page count, using
+- [x] Render row width and pile thickness proportionally to page count, using
   the library mean or `200` only as a visual fallback for missing metadata.
 - [x] Preserve layout editing, colour modes, overlapping depth, Reading, and
   On-loan behaviour under the new camera transform, using a floating,

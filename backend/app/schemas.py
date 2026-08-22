@@ -581,6 +581,9 @@ class VisualContainerLayout(BaseModel):
     y: float = Field(ge=0, le=100)
     width: float = Field(gt=0, le=100)
     height: float = Field(gt=0, le=100)
+    row_anchor: Literal["LEFT", "RIGHT"] = "LEFT"
+    pile_support_kind: Literal["SHELF", "ROW"] | None = None
+    pile_support_container_id: int | None = None
 
 
 class VisualLayoutUpdate(BaseModel):

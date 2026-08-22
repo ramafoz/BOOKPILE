@@ -2328,7 +2328,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-                assert schema_version(connection) == 7
+                assert schema_version(connection) == 8
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):
@@ -3216,6 +3216,7 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
         response = client.get("/library-map")
         assert response.status_code == 200
         payload = response.json()
+        assert payload["effective_page_mean"] == 240
         mapped = payload["bookcases"][0]
         assert mapped["name"] == "Visual Bookcase"
         assert mapped["book_count"] == 2

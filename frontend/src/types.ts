@@ -90,6 +90,7 @@ export interface LibraryMapData {
   bookcases: MapBookcase[];
   outside_books: MapBook[];
   loaned_books: MapBook[];
+  effective_page_mean: number;
   layout: VisualLayout;
 }
 
@@ -103,7 +104,12 @@ export interface VisualRect {
 export interface VisualLayout {
   bookcases: Array<VisualRect & { id: number }>;
   shelves: Array<{ id: number; height_weight: number }>;
-  containers: Array<VisualRect & { id: number }>;
+  containers: Array<VisualRect & {
+    id: number;
+    row_anchor: "LEFT" | "RIGHT";
+    pile_support_kind: "SHELF" | "ROW" | null;
+    pile_support_container_id: number | null;
+  }>;
   outside: VisualRect;
   loaned: VisualRect;
 }
