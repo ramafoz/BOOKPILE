@@ -19,6 +19,7 @@ import {
   Download,
   ExternalLink,
   FileSpreadsheet,
+  Focus,
   GalleryVerticalEnd,
   Info,
   LibraryBig,
@@ -47,6 +48,7 @@ import { readCoverText, type CoverOcrProgress } from "./ocr";
 import { MetadataFilterFields } from "./MetadataFilterFields";
 import {
   boundsForMapRects,
+  fitMapBounds,
   fitMapVerticalBounds,
   LEGACY_MAP_ASPECT_RATIO,
   LEGACY_MAP_CAMERA,
@@ -55,6 +57,7 @@ import {
   zoomMapCamera,
   type MapCamera,
   type MapViewportSize,
+  type MapWorldBounds,
 } from "./mapCamera";
 import type {
   Book,
@@ -5576,6 +5579,10 @@ function LibraryMapDialog({
   const [selectedMapGenre, setSelectedMapGenre] = useState("");
   const [legendExpanded, setLegendExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
+  const [focusMenuOpen, setFocusMenuOpen] = useState(false);
+  const [focusBookcase, setFocusBookcase] = useState("");
+  const [focusShelf, setFocusShelf] = useState("");
+  const [focusContainer, setFocusContainer] = useState("");
   const [layoutPanelMinimized, setLayoutPanelMinimized] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
@@ -5629,6 +5636,9 @@ function LibraryMapDialog({
       setSelectedContainer(
         String(result.bookcases[0]?.shelves[0]?.containers[0]?.id ?? ""),
       );
+      setFocusBookcase(String(result.bookcases[0]?.id ?? ""));
+      setFocusShelf("");
+      setFocusContainer("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load map");
     } finally {
@@ -5667,6 +5677,14 @@ function LibraryMapDialog({
       { x: item.x, y: item.y, width: item.width, height: item.height },
     ]),
   );
+  const focusedBookcaseItem = map.bookcases.find(
+    (bookcase) => bookcase.id === Number(focusBookcase),
+  );
+  const focusedShelfItems = focusedBookcaseItem?.shelves ?? [];
+  const focusedShelfItem = focusedShelfItems.find(
+    (shelf) => shelf.id === Number(focusShelf),
+  );
+  const focusedContainerItems = focusedShelfItem?.containers ?? [];
   const selectedBookcaseItem = draft.bookcases.find(
     (item) => item.id === Number(selectedBookcase),
   );
@@ -5900,6 +5918,17 @@ function LibraryMapDialog({
   }, [mapToolsOpen]);
 
   useEffect(() => {
+    if (!focusMenuOpen) return;
+    function closeFocusMenu(event: MouseEvent) {
+      if (!(event.target as Element).closest("[data-map-focus]")) {
+        setFocusMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeFocusMenu);
+    return () => document.removeEventListener("mousedown", closeFocusMenu);
+  }, [focusMenuOpen]);
+
+  useEffect(() => {
     if (!layoutDirty) return;
     function protectDraftFromBrowserBack(event: PopStateEvent) {
       if (window.confirm("Discard the unsaved library layout changes?")) return;
@@ -5959,6 +5988,90 @@ function LibraryMapDialog({
           : item,
       ),
     }));
+  }
+
+  function hierarchyFocusBounds(): MapWorldBounds | null {
+    const bookcase = focusedBookcaseItem;
+    const rect = bookcase ? bookcaseRects.get(bookcase.id) : null;
+    if (!bookcase || !rect) return null;
+    if (!focusedShelfItem) {
+      return {
+        minX: rect.x,
+        minY: rect.y,
+        maxX: rect.x + rect.width,
+        maxY: rect.y + rect.height,
+      };
+    }
+
+    const availableHeight = MAP_HEIGHT - 22;
+    const totalWeight = bookcase.shelves.reduce(
+      (total, shelf) => total + (shelfWeights.get(shelf.id) ?? 1),
+      0,
+    );
+    let shelfY = 11;
+    let shelfHeight = 0;
+    for (const shelf of bookcase.shelves) {
+      const height = availableHeight * (shelfWeights.get(shelf.id) ?? 1) /
+        Math.max(totalWeight, 1);
+      if (shelf.id === focusedShelfItem.id) {
+        shelfHeight = height;
+        break;
+      }
+      shelfY += height;
+    }
+    const shelfRect: VisualRect = {
+      x: rect.x + rect.width * MAP_INSET / MAP_WIDTH,
+      y: rect.y + rect.height * shelfY / MAP_HEIGHT,
+      width: rect.width * (MAP_WIDTH - MAP_INSET * 2) / MAP_WIDTH,
+      height: rect.height * Math.max(1, shelfHeight - 5) / MAP_HEIGHT,
+    };
+    const focusedContainer = focusedContainerItems.find(
+      (container) => container.id === Number(focusContainer),
+    );
+    if (!focusedContainer) {
+      return {
+        minX: shelfRect.x,
+        minY: shelfRect.y,
+        maxX: shelfRect.x + shelfRect.width,
+        maxY: shelfRect.y + shelfRect.height,
+      };
+    }
+
+    const index = focusedShelfItem.containers.findIndex(
+      (container) => container.id === focusedContainer.id,
+    );
+    const fallbackWidth = 100 / Math.max(focusedShelfItem.containers.length, 1);
+    const placement = containerRects.get(focusedContainer.id) ?? {
+      x: Math.max(0, index) * fallbackWidth,
+      y: 0,
+      width: fallbackWidth,
+      height: 100,
+    };
+    const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 16;
+    const contentY = shelfY + 7;
+    const contentHeight = Math.max(8, shelfHeight - 17);
+    const containerRect: VisualRect = {
+      x: rect.x + rect.width *
+        (MAP_INSET + 8 + usableWidth * placement.x / 100) / MAP_WIDTH,
+      y: rect.y + rect.height *
+        (contentY + contentHeight * placement.y / 100) / MAP_HEIGHT,
+      width: rect.width * usableWidth * placement.width / 100 / MAP_WIDTH,
+      height: rect.height * contentHeight * placement.height / 100 / MAP_HEIGHT,
+    };
+    return {
+      minX: containerRect.x,
+      minY: containerRect.y,
+      maxX: containerRect.x + containerRect.width,
+      maxY: containerRect.y + containerRect.height,
+    };
+  }
+
+  function focusSelectedHierarchy() {
+    const bounds = hierarchyFocusBounds();
+    if (!bounds) return;
+    setCamera(fitMapBounds(bounds, viewportSize));
+    setFocusMenuOpen(false);
+    setLegendExpanded(false);
   }
 
   function updateContainerRect(containerId: number, rect: VisualRect) {
@@ -6386,6 +6499,94 @@ function LibraryMapDialog({
             <h2>Library map</h2>
           </div>
           <div className="map-header-actions">
+            <div className="map-focus" data-map-focus>
+              <button
+                className="outline-button map-focus-trigger"
+                type="button"
+                aria-label="Focus map"
+                aria-haspopup="menu"
+                aria-expanded={focusMenuOpen}
+                title="Focus furniture, shelf, or container"
+                onClick={() => {
+                  setMapToolsOpen(false);
+                  setFocusMenuOpen((current) => !current);
+                }}
+              >
+                <Focus size={18} />
+              </button>
+              {focusMenuOpen && (
+                <div className="menu-popover map-focus-menu" role="menu">
+                  <strong>Focus map</strong>
+                  <label>
+                    Furniture
+                    <select
+                      value={focusBookcase}
+                      onChange={(event) => {
+                        setFocusBookcase(event.target.value);
+                        setFocusShelf("");
+                        setFocusContainer("");
+                      }}
+                    >
+                      {map.bookcases.map((bookcase) => (
+                        <option key={bookcase.id} value={bookcase.id}>
+                          {bookcase.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Shelf <small>optional</small>
+                    <select
+                      value={focusShelf}
+                      onChange={(event) => {
+                        setFocusShelf(event.target.value);
+                        setFocusContainer("");
+                      }}
+                    >
+                      <option value="">Whole furniture</option>
+                      {focusedShelfItems.map((shelf) => (
+                        <option key={shelf.id} value={shelf.id}>
+                          Shelf {shelf.shelf_number}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Container <small>optional</small>
+                    <select
+                      value={focusContainer}
+                      disabled={!focusedShelfItem}
+                      onChange={(event) => setFocusContainer(event.target.value)}
+                    >
+                      <option value="">Whole shelf</option>
+                      {focusedContainerItems.map((container) => (
+                        <option key={container.id} value={container.id}>
+                          {container.layer === "BACKGROUND" ? "Background" : "Foreground"}{" "}
+                          {container.container_type === "ROW" ? "row" : "pile"}{" "}
+                          {container.container_number}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="map-focus-actions">
+                    <button type="button" onClick={() => {
+                      resetMapView();
+                      setFocusMenuOpen(false);
+                    }}>
+                      <RotateCcw size={15} /> Reset world
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={!focusedBookcaseItem}
+                      onClick={focusSelectedHierarchy}
+                    >
+                      <Focus size={15} /> Focus
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="map-tools" data-map-tools>
               <button
                 className={`outline-button map-tools-trigger ${editingLayout || rearranging ? "active" : ""}`}
@@ -7022,8 +7223,11 @@ function LibraryMapDialog({
                 ref={worldRef}
                 className="map-world"
                 style={{
-                  width: Math.max(1, viewportSize.height) * LEGACY_MAP_ASPECT_RATIO,
-                  height: Math.max(1, viewportSize.height),
+                  width:
+                    Math.max(1, viewportSize.height) *
+                    LEGACY_MAP_ASPECT_RATIO *
+                    camera.zoom,
+                  height: Math.max(1, viewportSize.height) * camera.zoom,
                   transform: mapCameraTransform(camera),
                 }}
               >

@@ -105,7 +105,8 @@ acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
   state and remove the fixed top-level map boundary.
 - [x] Add full-screen responsive map navigation with pan, zoom, reset, compact
   overlays, and a collapsible colour legend.
-- [ ] Add bookcase, shelf, and container focus controls.
+- [x] Add bookcase, shelf, and container focus controls, with sharp adaptive
+  rendering at high camera zoom.
 - [ ] Add exclusive book/container inspection modes with read-only compact
   bottom catalogues and explicit filtered exits to the main catalogue.
 - [ ] Render row width and pile thickness proportionally to page count, using

@@ -302,11 +302,14 @@ changing the relative layout. The migration was rehearsed against a validated
 v6 ZIP and then applied to the live catalogue with 434 books preserved,
 successful integrity and foreign-key checks, and verified pre/post backups.
 
-### Phase 3 — target focus
+### Phase 3 — target focus — complete
 
 - Add world reset, bookcase chooser, and fit-to-bookcase.
 - Add shelf and container bounds calculation and fit commands.
 - Verify padding and centring at extreme aspect ratios and coordinate values.
+
+Implemented with adaptive-resolution rendering so close shelf/container focus
+remains sharp instead of magnifying a previously rasterized map layer.
 
 ### Phase 4 — inspection modes
 
@@ -396,6 +399,12 @@ will no longer necessarily fill the complete container.
 **Decision:** freeze geometry only throughout the provisional rearrangement.
 After **Apply**, recalculate the source and destination containers from their
 new page totals. Do not introduce a global pages-to-world-unit scale.
+
+For a cross-container **Swap**, compare the two exchanged books' effective-page
+widths and recalculate both affected containers after **Apply**. Equal-width
+books leave their relative container geometry unchanged; unequal-width books
+must update both containers from their resulting page totals. No provisional
+move may silently resize either container before confirmation.
 
 ### B. Camera restoration after magnifying a sub-pixel book
 

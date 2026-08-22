@@ -116,6 +116,31 @@ export function fitMapVerticalBounds(
   };
 }
 
+export function fitMapBounds(
+  bounds: MapWorldBounds,
+  viewport: MapViewportSize,
+): MapCamera {
+  if (viewport.width <= 0 || viewport.height <= 0) return LEGACY_MAP_CAMERA;
+  const padding = Math.min(
+    48,
+    Math.max(16, Math.min(viewport.width, viewport.height) * 0.05),
+  );
+  const usableWidth = Math.max(1, viewport.width - padding * 2);
+  const usableHeight = Math.max(1, viewport.height - padding * 2);
+  const width = Math.max(0.001, bounds.maxX - bounds.minX);
+  const height = Math.max(0.001, bounds.maxY - bounds.minY);
+  const widthAtUnitZoom = viewport.height * LEGACY_MAP_ASPECT_RATIO * width / 100;
+  const heightAtUnitZoom = viewport.height * height / 100;
+  return {
+    centerX: (bounds.minX + bounds.maxX) / 2,
+    centerY: (bounds.minY + bounds.maxY) / 2,
+    zoom: clampMapZoom(Math.min(
+      usableWidth / widthAtUnitZoom,
+      usableHeight / heightAtUnitZoom,
+    )),
+  };
+}
+
 export function mapCameraTransform(camera: MapCamera): string {
-  return `scale(${camera.zoom}) translate(${-camera.centerX}%, ${-camera.centerY}%)`;
+  return `translate(${-camera.centerX}%, ${-camera.centerY}%)`;
 }
