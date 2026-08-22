@@ -122,6 +122,17 @@ def test_full_container_stays_full_until_release_or_large_reduction() -> None:
     assert reduced.span == 94
 
 
+def test_full_container_does_not_hide_page_growth_as_a_small_reduction() -> None:
+    projected = project_occupied_span(
+        current_span=100,
+        current_pages=1000,
+        final_pages=1200,
+        capacity=100,
+    )
+    assert projected.state is CapacityState.INVALID
+    assert projected.natural_span == pytest.approx(120)
+
+
 def test_axis_resize_preserves_row_anchor_and_pile_bottom() -> None:
     rect = Rect(20, 30, 50, 40)
     assert apply_axis_span(rect, ContainerKind.ROW, 30, RowAnchor.LEFT) == Rect(20, 30, 30, 40)

@@ -5877,7 +5877,7 @@ const emptyVisualLayout: VisualLayout = {
   loaned: { x: 84, y: 70, width: 14, height: 18 },
 };
 const MAP_LAYOUT_EDITOR_ENABLED = true;
-const MAP_REARRANGEMENT_ENABLED = false;
+const MAP_REARRANGEMENT_ENABLED = true;
 
 function LibraryMapDialog({
   onClose,
@@ -5936,12 +5936,14 @@ function LibraryMapDialog({
   const [focusShelf, setFocusShelf] = useState("");
   const [focusContainer, setFocusContainer] = useState("");
   const [layoutPanelMinimized, setLayoutPanelMinimized] = useState(false);
+  const [rearrangementPanelMinimized, setRearrangementPanelMinimized] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
   const [oldPositionMode, setOldPositionMode] =
     useState<OldPositionMode>("COLLAPSE");
   const [newPositionMode, setNewPositionMode] =
     useState<NewPositionMode>("SQUEEZE");
+  const [releaseShelfSpace, setReleaseShelfSpace] = useState(false);
   const [rearrangementSteps, setRearrangementSteps] =
     useState<RearrangementStep[]>([]);
   const [completedRearrangements, setCompletedRearrangements] =
@@ -6002,7 +6004,18 @@ function LibraryMapDialog({
     void loadMap();
   }, [loadMap]);
 
-  const activeLayout = editingLayout ? draft : map.layout;
+  const previewContainerLayouts = new Map(
+    (rearrangementPreview?.container_layouts ?? []).map((item) => [item.id, item]),
+  );
+  const projectedVisualLayout = rearranging && previewContainerLayouts.size > 0
+    ? {
+        ...map.layout,
+        containers: map.layout.containers.map(
+          (item) => previewContainerLayouts.get(item.id) ?? item,
+        ),
+      }
+    : map.layout;
+  const activeLayout = editingLayout ? draft : projectedVisualLayout;
   const layoutDirty = editingLayout && JSON.stringify(draft) !== JSON.stringify(map.layout);
   const confirmDiscardLayout = useCallback((): boolean => (
     !layoutDirty || window.confirm("Discard the unsaved library layout changes?")
@@ -6642,6 +6655,7 @@ function LibraryMapDialog({
     if (!leaveMode) {
       setOldPositionMode("COLLAPSE");
       setNewPositionMode("SQUEEZE");
+      setReleaseShelfSpace(false);
     }
   }
 
@@ -6657,6 +6671,7 @@ function LibraryMapDialog({
         completed_operations: completedRearrangements,
         book_id: bookId,
         old_position_mode: oldMode,
+        release_shelf_space: releaseShelfSpace,
         steps,
       });
       setRearrangementSteps(steps);
@@ -6670,6 +6685,10 @@ function LibraryMapDialog({
   }
 
   function startMoveBook(book: MapBook) {
+    if (book.is_on_loan) {
+      setError("Return this book before rearranging its physical position.");
+      return;
+    }
     setSelectedMoveBookId(book.id);
     setRearrangementSteps([]);
     if (completedRearrangements.length === 0) setRearrangementPreview(null);
@@ -6778,6 +6797,7 @@ function LibraryMapDialog({
     setCompletedPreviewStack((current) => current.slice(0, -1));
     setSelectedMoveBookId(previous.book_id);
     setOldPositionMode(previous.old_position_mode);
+    setReleaseShelfSpace(previous.release_shelf_space ?? false);
     setRearrangementSteps(previous.steps);
     setNewPositionMode(
       previous.steps.at(-1)?.new_position_mode ?? "SQUEEZE",
@@ -6831,6 +6851,7 @@ function LibraryMapDialog({
           completed_operations: completedRearrangements,
           book_id: selectedMoveBookId,
           old_position_mode: oldPositionMode,
+          release_shelf_space: releaseShelfSpace,
           steps: rearrangementSteps,
         },
         rearrangementPreview.revision,
@@ -6855,6 +6876,7 @@ function LibraryMapDialog({
       {
         book_id: selectedMoveBookId,
         old_position_mode: oldPositionMode,
+        release_shelf_space: releaseShelfSpace,
         steps: rearrangementSteps,
       },
     ]);
@@ -6866,6 +6888,7 @@ function LibraryMapDialog({
     setRearrangementSteps([]);
     setOldPositionMode("COLLAPSE");
     setNewPositionMode("SQUEEZE");
+    setReleaseShelfSpace(false);
     setReadingExitStatus("");
     setPendingReadingDestination(null);
     setPreciseContainer("");
@@ -7126,6 +7149,9 @@ function LibraryMapDialog({
                     onClick={() => {
                       if (rearranging) resetRearrangement();
                       setRearranging((current) => !current);
+                      setRearrangementPanelMinimized(false);
+                      chooseInspectionMode(null);
+                      setLegendExpanded(false);
                       setMapToolsOpen(false);
                     }}
                   >
@@ -7485,7 +7511,9 @@ function LibraryMapDialog({
               </aside>
             )}
             {rearranging && (
-              <aside className="map-rearrangement-panel">
+              <aside className={`map-rearrangement-panel ${
+                rearrangementPanelMinimized ? "minimized" : ""
+              }`}>
                 <div className="map-rearrangement-heading">
                   <div>
                     <p className="eyebrow dark">Draft movement</p>
@@ -7495,12 +7523,23 @@ function LibraryMapDialog({
                       <h3>Select a book on the map</h3>
                     )}
                   </div>
-                  {selectedMoveBookId !== null && (
-                    <button className="text-button" onClick={() => resetRearrangement()}>
-                      <RotateCcw size={15} /> Cancel draft
+                  <div className="map-workspace-actions">
+                    {selectedMoveBookId !== null && !rearrangementPanelMinimized && (
+                      <button className="text-button" onClick={() => resetRearrangement()}>
+                        <RotateCcw size={15} /> Cancel draft
+                      </button>
+                    )}
+                    <button
+                      className="icon-button"
+                      title={rearrangementPanelMinimized ? "Restore rearrangement" : "Minimize rearrangement"}
+                      aria-label={rearrangementPanelMinimized ? "Restore rearrangement" : "Minimize rearrangement"}
+                      onClick={() => setRearrangementPanelMinimized((current) => !current)}
+                    >
+                      {rearrangementPanelMinimized ? <ChevronUp /> : <ChevronDown />}
                     </button>
-                  )}
+                  </div>
                 </div>
+                {!rearrangementPanelMinimized && <>
                 <div className="map-move-modes">
                   <label>
                     Old position
@@ -7536,6 +7575,15 @@ function LibraryMapDialog({
                       <option value="SWAP">Swap</option>
                       <option value="CONTINUE">Continue</option>
                     </select>
+                  </label>
+                  <label className="checkbox-label map-release-space">
+                    <input
+                      type="checkbox"
+                      checked={releaseShelfSpace}
+                      disabled={rearrangementSteps.length > 0}
+                      onChange={(event) => setReleaseShelfSpace(event.target.checked)}
+                    />
+                    Release shelf space if this move removes pages from its source container
                   </label>
                 </div>
                 {selectedMoveBookId === null ? (
@@ -7601,6 +7649,7 @@ function LibraryMapDialog({
                     >
                       <option value="">Choose book</option>
                       {[...projectedBooks]
+                        .filter((book) => !book.is_on_loan)
                         .sort((first, second) => first.title.localeCompare(second.title))
                         .map((book) => (
                           <option key={book.id} value={book.id}>
@@ -7676,6 +7725,9 @@ function LibraryMapDialog({
                         </p>
                       );
                     })}
+                    {(rearrangementPreview.geometry_errors ?? []).map((message) => (
+                      <p className="map-gap-warning" key={message}>{message}</p>
+                    ))}
                     {!rearrangementPreview.complete && (
                       <p className="map-chain-warning">
                         Continue by choosing a destination for {activeMoveBook?.title}.
@@ -7725,6 +7777,7 @@ function LibraryMapDialog({
                     <Check size={15} /> {applyingMove ? "Applying…" : "Apply"}
                   </button>
                 </div>
+                </>}
               </aside>
             )}
             <div

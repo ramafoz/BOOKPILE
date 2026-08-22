@@ -141,6 +141,7 @@ class RearrangementStep(BaseModel):
 class RearrangementOperation(BaseModel):
     book_id: int
     old_position_mode: OldPositionMode = OldPositionMode.collapse
+    release_shelf_space: bool = False
     steps: list[RearrangementStep] = Field(default_factory=list, max_length=100)
 
 
@@ -167,6 +168,19 @@ class RearrangementGap(BaseModel):
     positions: list[int]
 
 
+class RearrangementContainerLayout(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    id: int
+    x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=100)
+    width: float = Field(gt=0, le=100)
+    height: float = Field(gt=0, le=100)
+    row_anchor: Literal["LEFT", "RIGHT"] = "LEFT"
+    pile_support_kind: Literal["SHELF", "ROW"] | None = None
+    pile_support_container_id: int | None = None
+
+
 class RearrangementResult(BaseModel):
     revision: str
     valid_to_apply: bool
@@ -178,6 +192,8 @@ class RearrangementResult(BaseModel):
     movement_log: list[str]
     movement_groups: list[list[str]]
     warnings: list[str]
+    geometry_errors: list[str] = Field(default_factory=list)
+    container_layouts: list[RearrangementContainerLayout] = Field(default_factory=list)
 
 
 def normalize_optional_isbn(value: str | None, length: int) -> str | None:

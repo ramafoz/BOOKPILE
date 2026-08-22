@@ -340,18 +340,26 @@ Missing page counts use the arithmetic mean across the complete catalogue.
 
 ### Phase 6 — integration hardening
 
-- Integrate projected page-proportional container geometry and destination
+- [x] Integrate projected page-proportional container geometry and destination
   slots into provisional rearrangement chains.
-- Restore transformed layout handles and pointer drag at arbitrary zoom.
-- Restore visual book rearrangement at arbitrary camera positions and zoom.
-- Migrate all rearrangement modes, position controls, movement-chain summaries,
+- [x] Restore transformed layout handles and pointer drag at arbitrary zoom.
+- [x] Restore visual book rearrangement at arbitrary camera positions and zoom.
+- [x] Migrate all rearrangement modes, position controls, movement-chain summaries,
   gap/conflict validation, Undo, Apply, and Cancel into the floating,
   minimizable workspace panel. A minimized rearrangement must retain the full
   provisional chain unchanged.
-- Test overlapping containers, Reading, On-loan priority, focused-book entry,
+- [x] Test overlapping containers, Reading, On-loan priority, focused-book entry,
   and all exit/filter paths.
-- Add frontend tests for camera math, selection state, and proportional books;
-  add backend tests for unbounded finite coordinates and invalid geometry.
+- [x] Add backend tests for proportional geometry, compression rejection,
+  atomic layout persistence, and stale-layout protection.
+- [ ] Add automated frontend tests for camera math, selection state, and
+  proportional books when a browser-oriented frontend test harness is added;
+  until then, enforce TypeScript build, ESLint, and Phase 7 device acceptance.
+
+The restored workflow previews page-driven ROW/PILE boundary changes, honours
+the five-percent compression ceiling and movement-local `Release shelf space`,
+blocks invalid support/collision outcomes, and applies book positions plus
+visual-container geometry in one stale-revision-protected database transaction.
 
 ### Phase 7 — multi-device acceptance and merge
 

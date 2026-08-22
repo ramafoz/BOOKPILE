@@ -16,6 +16,12 @@ from .schemas import (
     RearrangementStep,
 )
 from .reading_sessions import apply_projected_reading_values, sync_book_projection
+from .rearrangement_geometry import (
+    RearrangementContainer,
+    container_layout_payload,
+    project_operation_geometry,
+)
+from .visual_geometry import ContainerKind, Rect, RowAnchor, SupportKind
 
 
 REARRANGEMENT_BOOKS = """
@@ -23,6 +29,7 @@ SELECT
     b.id,
     b.title,
     b.author,
+    b.page_count,
     b.status,
     b.container_id,
     b.position,
@@ -46,14 +53,39 @@ ORDER BY b.id
 REARRANGEMENT_CONTAINERS = """
 SELECT
     c.id,
+    c.shelf_id,
+    s.bookcase_id,
     c.container_type,
     c.layer,
     c.container_number,
     s.shelf_number,
-    bc.name AS bookcase_name
+    bc.name AS bookcase_name,
+    visual.x,
+    visual.y,
+    visual.width,
+    visual.height,
+    visual.row_anchor,
+    visual.pile_support_kind,
+    visual.pile_support_container_id,
+    CASE
+      WHEN c.container_type = 'ROW' THEN COALESCE(bookcase_visual.width, 1)
+      ELSE COALESCE(bookcase_visual.height, 1) *
+           COALESCE(shelf_visual.height_weight, 1) /
+           MAX(1, (
+             SELECT SUM(COALESCE(other_visual.height_weight, 1))
+             FROM shelves other_shelf
+             LEFT JOIN visual_shelf_layout other_visual
+               ON other_visual.shelf_id = other_shelf.id
+             WHERE other_shelf.bookcase_id = s.bookcase_id
+           ))
+    END AS world_axis_factor
 FROM containers c
 JOIN shelves s ON s.id = c.shelf_id
 JOIN bookcases bc ON bc.id = s.bookcase_id
+LEFT JOIN visual_container_layout visual ON visual.container_id = c.id
+LEFT JOIN visual_layout_items bookcase_visual
+  ON bookcase_visual.item_type = 'BOOKCASE' AND bookcase_visual.item_id = bc.id
+LEFT JOIN visual_shelf_layout shelf_visual ON shelf_visual.shelf_id = s.id
 ORDER BY c.id
 """
 
@@ -63,6 +95,7 @@ class PlannedBook:
     id: int
     title: str
     author: str
+    page_count: int | None
     status: str
     container_id: int | None
     position: int | None
@@ -77,12 +110,13 @@ class PlannedBook:
 
 def load_rearrangement_state(
     connection: sqlite3.Connection,
-) -> tuple[dict[int, PlannedBook], dict[int, str]]:
+) -> tuple[dict[int, PlannedBook], dict[int, RearrangementContainer]]:
     books = {
         row["id"]: PlannedBook(
             id=row["id"],
             title=row["title"],
             author=row["author"],
+            page_count=row["page_count"],
             status=row["status"],
             container_id=row["container_id"],
             position=row["position"],
@@ -96,18 +130,49 @@ def load_rearrangement_state(
         )
         for row in connection.execute(REARRANGEMENT_BOOKS)
     }
-    containers = {
-        row["id"]: (
-            f'{row["bookcase_name"]} · Shelf {row["shelf_number"]} · '
-            f'{str(row["layer"]).title()} '
-            f'{str(row["container_type"]).title()} {row["container_number"]}'
+    container_rows = list(connection.execute(REARRANGEMENT_CONTAINERS))
+    groups: dict[tuple[int, str], list[int]] = {}
+    for row in container_rows:
+        groups.setdefault((row["shelf_id"], row["layer"]), []).append(row["id"])
+
+    containers = {}
+    for row in container_rows:
+        group = groups[(row["shelf_id"], row["layer"])]
+        index = group.index(row["id"])
+        gap = 3.0
+        fallback_width = max(8.0, (100.0 - gap * (len(group) - 1)) / len(group))
+        containers[row["id"]] = RearrangementContainer(
+            id=row["id"],
+            shelf_id=row["shelf_id"],
+            bookcase_id=row["bookcase_id"],
+            label=(
+                f'{row["bookcase_name"]} · Shelf {row["shelf_number"]} · '
+                f'{str(row["layer"]).title()} '
+                f'{str(row["container_type"]).title()} {row["container_number"]}'
+            ),
+            kind=ContainerKind(row["container_type"]),
+            layer=row["layer"],
+            rect=Rect(
+                row["x"] if row["x"] is not None else index * (fallback_width + gap),
+                row["y"] if row["y"] is not None else 0.0,
+                row["width"] if row["width"] is not None else fallback_width,
+                row["height"] if row["height"] is not None else 100.0,
+            ),
+            row_anchor=RowAnchor(row["row_anchor"] or "LEFT"),
+            support_kind=(
+                SupportKind(row["pile_support_kind"] or "SHELF")
+                if row["container_type"] == "PILE" else None
+            ),
+            support_container_id=row["pile_support_container_id"],
+            world_axis_factor=float(row["world_axis_factor"] or 1),
         )
-        for row in connection.execute(REARRANGEMENT_CONTAINERS)
-    }
     return books, containers
 
 
-def rearrangement_revision(books: dict[int, PlannedBook]) -> str:
+def rearrangement_revision(
+    books: dict[int, PlannedBook],
+    containers: dict[int, RearrangementContainer] | None = None,
+) -> str:
     digest = hashlib.sha256()
     for book in books.values():
         digest.update(
@@ -116,12 +181,21 @@ def rearrangement_revision(books: dict[int, PlannedBook]) -> str:
                 f"{book.status}|{int(book.is_on_loan)}|{book.updated_at}\n"
             ).encode("utf-8")
         )
+    for container in (containers or {}).values():
+        digest.update(
+            (
+                f"C|{container.id}|{container.rect.x}|{container.rect.y}|"
+                f"{container.rect.width}|{container.rect.height}|"
+                f"{container.row_anchor.value}|{container.support_kind}|"
+                f"{container.support_container_id}\n"
+            ).encode("utf-8")
+        )
     return digest.hexdigest()
 
 
 def plan_rearrangement(
     original: dict[int, PlannedBook],
-    containers: dict[int, str],
+    containers: dict[int, RearrangementContainer],
     request: RearrangementOperation,
 ) -> dict[str, Any]:
     if request.book_id not in original:
@@ -133,6 +207,11 @@ def plan_rearrangement(
     movement_log: list[str] = []
     warnings: list[str] = []
     initial = books[request.book_id]
+    if initial.is_on_loan:
+        raise HTTPException(
+            status_code=422,
+            detail="Return this book before rearranging its physical position",
+        )
     # A loaned book is displayed in the loan area. Moving its reserved shelf
     # position must not finish or cancel a reading that remains active.
     was_reading = (
@@ -400,7 +479,7 @@ def plan_rearrangement(
 
 def plan_rearrangement_draft(
     original: dict[int, PlannedBook],
-    containers: dict[int, str],
+    containers: dict[int, RearrangementContainer],
     request: RearrangementRequest,
 ) -> dict[str, Any]:
     operations = [
@@ -408,15 +487,20 @@ def plan_rearrangement_draft(
         RearrangementOperation(
             book_id=request.book_id,
             old_position_mode=request.old_position_mode,
+            release_shelf_space=request.release_shelf_space,
             steps=request.steps,
         ),
     ]
     books = original
+    planned_containers = containers
     movement_groups: list[list[str]] = []
     warnings: list[str] = []
+    geometry_errors: list[str] = []
+    release_container_ids: set[int] = set()
     current_result: dict[str, Any] | None = None
 
     for index, operation in enumerate(operations):
+        before_books = books
         current_result = plan_rearrangement(books, containers, operation)
         if index < len(operations) - 1 and not current_result["complete"]:
             raise HTTPException(
@@ -427,6 +511,9 @@ def plan_rearrangement_draft(
             movement_groups.append(current_result["movement_log"])
         warnings.extend(current_result["warnings"])
         books = current_result["_planned_books"]
+        source_container_id = before_books[operation.book_id].container_id
+        if operation.release_shelf_space and source_container_id is not None:
+            release_container_ids.add(source_container_id)
 
     assert current_result is not None
     affected = {
@@ -443,6 +530,16 @@ def plan_rearrangement_draft(
         ) != (book.container_id, book.position)
     }
     flattened_log = [line for group in movement_groups for line in group]
+    geometry = project_operation_geometry(
+        containers,
+        original,
+        books,
+        release_container_ids=release_container_ids,
+    )
+    planned_containers = geometry.containers
+    warnings.extend(geometry.warnings)
+    warnings.extend(geometry.errors)
+    geometry_errors.extend(geometry.errors)
     result = result_payload(
         original,
         books,
@@ -455,6 +552,14 @@ def plan_rearrangement_draft(
         complete=current_result["complete"],
     )
     result["movement_groups"] = movement_groups
+    result["revision"] = rearrangement_revision(original, containers)
+    result["container_layouts"] = container_layout_payload(
+        containers, planned_containers
+    )
+    result["geometry_errors"] = list(dict.fromkeys(geometry_errors))
+    if result["geometry_errors"]:
+        result["valid_to_apply"] = False
+    result["_planned_containers"] = planned_containers
     return result
 
 
@@ -620,7 +725,7 @@ def container_gaps(
 def result_payload(
     original: dict[int, PlannedBook],
     books: dict[int, PlannedBook],
-    containers: dict[int, str],
+    containers: dict[int, RearrangementContainer],
     affected: set[int],
     movement_log: list[str],
     warnings: list[str],
@@ -706,11 +811,11 @@ def transition_from_reading(book: PlannedBook, status: str) -> PlannedBook:
 
 
 def position_label(
-    containers: dict[int, str],
+    containers: dict[int, RearrangementContainer],
     container_id: int,
     position: int,
 ) -> str:
-    return f"{containers[container_id]} · Position {position}"
+    return f"{containers[container_id].label} · Position {position}"
 
 
 def apply_planned_books(
@@ -778,3 +883,27 @@ def apply_planned_books(
             )
         else:
             sync_book_projection(connection, book.id)
+
+
+def apply_planned_containers(
+    connection: sqlite3.Connection,
+    original: dict[int, RearrangementContainer],
+    planned: dict[int, RearrangementContainer],
+) -> None:
+    for container_id, container in planned.items():
+        if container.rect == original[container_id].rect:
+            continue
+        connection.execute(
+            """
+            UPDATE visual_container_layout
+            SET x = ?, y = ?, width = ?, height = ?
+            WHERE container_id = ?
+            """,
+            (
+                container.rect.x,
+                container.rect.y,
+                container.rect.width,
+                container.rect.height,
+                container_id,
+            ),
+        )

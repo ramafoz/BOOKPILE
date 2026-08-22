@@ -1219,6 +1219,109 @@ def test_multiple_completed_movement_chains_share_one_preview_and_apply() -> Non
     ]
 
 
+def test_rearrangement_previews_and_atomically_applies_container_geometry() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        initial_map = client.get("/library-map").json()
+        initial_layout = {
+            item["id"]: item for item in initial_map["layout"]["containers"]
+        }
+        payload = {
+            "book_id": books[0]["id"],
+            "old_position_mode": "COLLAPSE",
+            "release_shelf_space": True,
+            "steps": [
+                {
+                    "container_id": second["id"],
+                    "position": 1,
+                    "new_position_mode": "SQUEEZE",
+                }
+            ],
+        }
+        preview = client.post("/rearrangements/preview", json=payload)
+        assert preview.status_code == 200
+        result = preview.json()
+        projected = {item["id"]: item for item in result["container_layouts"]}
+        assert result["geometry_errors"] == []
+        assert result["valid_to_apply"] is True
+        assert projected[first["id"]]["width"] < initial_layout[first["id"]]["width"]
+        assert projected[second["id"]]["width"] < initial_layout[second["id"]]["width"]
+
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": result["revision"]},
+        )
+        final_map = client.get("/library-map").json()
+        final_layout = {
+            item["id"]: item for item in final_map["layout"]["containers"]
+        }
+
+    assert applied.status_code == 200
+    assert final_layout[first["id"]]["width"] == projected[first["id"]]["width"]
+    assert final_layout[second["id"]]["width"] == projected[second["id"]]["width"]
+
+
+def test_rearrangement_blocks_a_destination_beyond_five_percent_compression() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        client.get("/library-map")
+        occupied = client.post(
+            "/books",
+            json={
+                "title": "Already full",
+                "author": "Mover",
+                "container_id": second["id"],
+                "position": 1,
+            },
+        )
+        assert occupied.status_code == 201, occupied.text
+        preview = client.post(
+            "/rearrangements/preview",
+            json={
+                "book_id": books[0]["id"],
+                "old_position_mode": "COLLAPSE",
+                "steps": [
+                    {
+                        "container_id": second["id"],
+                        "position": 1,
+                        "new_position_mode": "SQUEEZE",
+                    }
+                ],
+            },
+        ).json()
+
+    assert preview["valid_to_apply"] is False
+    assert preview["geometry_errors"]
+    assert "maximum compression is 5%" in preview["geometry_errors"][0]
+
+
+def test_rearrangement_apply_rejects_a_stale_visual_layout() -> None:
+    with TestClient(app) as client:
+        first, second, books = create_rearrangement_fixture(client)
+        map_payload = client.get("/library-map").json()
+        payload = {
+            "book_id": books[0]["id"],
+            "steps": [{"container_id": second["id"], "position": 1}],
+        }
+        preview = client.post("/rearrangements/preview", json=payload).json()
+        layout = map_payload["layout"]
+        layout["containers"] = [
+            {
+                **item,
+                "width": item["width"] - 1 if item["id"] == first["id"] else item["width"],
+            }
+            for item in layout["containers"]
+        ]
+        assert client.put("/visual-layout", json=layout).status_code == 200
+        applied = client.post(
+            "/rearrangements/apply",
+            json={**payload, "revision": preview["revision"]},
+        )
+
+    assert applied.status_code == 409
+    assert "changed" in applied.json()["detail"]
+
+
 def test_read_only_statistics_use_known_dates_and_report_exclusions() -> None:
     with TestClient(app) as client:
         books = [

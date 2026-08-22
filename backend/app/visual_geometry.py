@@ -219,7 +219,12 @@ def project_occupied_span(
 
     natural = current_span * final_pages / current_pages
     page_reduction = max(0.0, (current_pages - final_pages) / current_pages)
-    if is_full(current_span, capacity) and page_reduction <= compression_limit and not release_space:
+    if (
+        final_pages <= current_pages
+        and is_full(current_span, capacity)
+        and page_reduction <= compression_limit
+        and not release_space
+    ):
         natural = capacity
 
     if natural <= capacity + GEOMETRY_TOLERANCE:

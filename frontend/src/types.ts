@@ -364,6 +364,7 @@ export interface RearrangementStep {
 export interface RearrangementOperation {
   book_id: number;
   old_position_mode: OldPositionMode;
+  release_shelf_space?: boolean;
   steps: RearrangementStep[];
 }
 
@@ -387,6 +388,8 @@ export interface RearrangementResult {
   movement_log: string[];
   movement_groups?: string[][];
   warnings: string[];
+  geometry_errors: string[];
+  container_layouts: VisualLayout["containers"];
 }
 
 export interface BookPayload {

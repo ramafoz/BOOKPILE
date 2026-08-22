@@ -50,6 +50,7 @@ from .loans import (
 )
 from .rearrangement import (
     apply_planned_books,
+    apply_planned_containers,
     load_rearrangement_state,
     plan_rearrangement_draft,
     rearrangement_revision,
@@ -539,7 +540,7 @@ def apply_rearrangement(payload: RearrangementApplyRequest) -> dict[str, Any]:
         with connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             books, containers = load_rearrangement_state(connection)
-            if rearrangement_revision(books) != payload.revision:
+            if rearrangement_revision(books, containers) != payload.revision:
                 raise HTTPException(
                     status_code=409,
                     detail="The catalogue changed after this rearrangement was previewed",
@@ -551,6 +552,11 @@ def apply_rearrangement(payload: RearrangementApplyRequest) -> dict[str, Any]:
                     detail="Complete the chain and resolve every gap before applying",
                 )
             apply_planned_books(connection, books, result["_planned_books"])
+            apply_planned_containers(
+                connection,
+                containers,
+                result["_planned_containers"],
+            )
     except ReadingSessionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:

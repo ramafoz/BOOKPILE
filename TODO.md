@@ -114,7 +114,7 @@ acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
 - [x] Preserve layout editing, colour modes, overlapping depth, Reading, and
   On-loan behaviour under the new camera transform, using a floating,
   minimizable editor.
-- [ ] Restore the complete visual-rearrangement workflow in a floating,
+- [x] Restore the complete visual-rearrangement workflow in a floating,
   minimizable panel under the new camera transform.
 - [ ] Validate the result on desktop, phone, and tablet before merging the
   feature branch.

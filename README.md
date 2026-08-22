@@ -74,9 +74,13 @@ Visual rearrangement supports:
 - `Collapse` or temporary `Leave gap` behaviour at the old position.
 - `Squeeze`, `Swap`, or chained `Continue` behaviour at the destination.
 - Several completed movement chains in one provisional draft.
-- A projected map and grouped movement history before applying anything.
+- A projected map and grouped movement history before applying anything,
+  including page-proportional ROW widths and PILE heights.
+- Optional per-move `Release shelf space`, with a five-percent physical
+  compression limit and validation of container collisions and pile support.
 - Atomic Apply, Undo, Cancel, stale-preview protection, and rejection of
-  unfinished chains or persistent gaps.
+  unfinished chains, persistent gaps, or invalid projected geometry. Book
+  positions and visual-container dimensions are committed together.
 - Explicit status confirmation when moving books into or out of the Reading
   area.
 
