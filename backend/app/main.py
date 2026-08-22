@@ -1132,6 +1132,11 @@ def list_books(
     return [serialize_book(row) for row in rows]
 
 
+@app.get("/books/{book_id}", response_model=Book)
+def get_book(book_id: int) -> dict[str, Any]:
+    return fetch_book(book_id)
+
+
 @app.post("/books", response_model=Book, status_code=status.HTTP_201_CREATED)
 def create_book(payload: BookCreate) -> dict[str, Any]:
     container_id, position = location_values(payload)
@@ -2100,7 +2105,8 @@ def fetch_visual_layout(connection: sqlite3.Connection) -> dict[str, Any]:
 @app.get("/library-map")
 def library_map() -> dict[str, Any]:
     map_book_fields = """
-        id, title, author, has_multiple_authors, isbn_10, isbn_13, subtitle, page_count,
+        id, title, author, has_multiple_authors, cover_filename,
+        isbn_10, isbn_13, subtitle, page_count,
         publisher, current_ed_year, original_publication_year, language,
         edition_number, fiction_category, binding, publication_type,
         genre_text, series_name, series_volume, status, container_id,

@@ -97,6 +97,7 @@ type AppMenu = "settings" | "add" | "suggestions";
 type MapCameraAction =
   | "up" | "down" | "left" | "right"
   | "zoom-in" | "zoom-out";
+type MapInspectionMode = "book" | "container" | null;
 type CandidateMetadataKey =
   | "title" | "author" | "isbn_10" | "isbn_13" | "subtitle"
   | "page_count" | "publisher" | "current_ed_year"
@@ -418,7 +419,7 @@ function App() {
     setMetadataFilters(emptyMetadataFilters());
     setSortBy("physical");
     setSortOrder("asc");
-    setShowAdvanced(true);
+    setShowAdvanced(false);
     closeLibraryMap();
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
@@ -4839,6 +4840,81 @@ function overlapArea(first: VisualRect, second: VisualRect) {
   return width * height;
 }
 
+function mapHierarchyBounds(
+  bookcase: MapBookcase,
+  shelf: MapShelf | null,
+  container: MapContainer | null,
+  bookcaseRect: VisualRect,
+  shelfLayout: Map<number, number>,
+  containerLayout: Map<number, VisualRect>,
+): MapWorldBounds {
+  if (!shelf) {
+    return {
+      minX: bookcaseRect.x,
+      minY: bookcaseRect.y,
+      maxX: bookcaseRect.x + bookcaseRect.width,
+      maxY: bookcaseRect.y + bookcaseRect.height,
+    };
+  }
+
+  const availableHeight = MAP_HEIGHT - 22;
+  const totalWeight = bookcase.shelves.reduce(
+    (total, item) => total + (shelfLayout.get(item.id) ?? 1),
+    0,
+  );
+  let shelfY = 11;
+  let shelfHeight = 0;
+  for (const item of bookcase.shelves) {
+    const height = availableHeight * (shelfLayout.get(item.id) ?? 1) /
+      Math.max(totalWeight, 1);
+    if (item.id === shelf.id) {
+      shelfHeight = height;
+      break;
+    }
+    shelfY += height;
+  }
+  const shelfRect: VisualRect = {
+    x: bookcaseRect.x + bookcaseRect.width * MAP_INSET / MAP_WIDTH,
+    y: bookcaseRect.y + bookcaseRect.height * shelfY / MAP_HEIGHT,
+    width: bookcaseRect.width * (MAP_WIDTH - MAP_INSET * 2) / MAP_WIDTH,
+    height: bookcaseRect.height * Math.max(1, shelfHeight - 5) / MAP_HEIGHT,
+  };
+  if (!container) {
+    return {
+      minX: shelfRect.x,
+      minY: shelfRect.y,
+      maxX: shelfRect.x + shelfRect.width,
+      maxY: shelfRect.y + shelfRect.height,
+    };
+  }
+
+  const index = shelf.containers.findIndex((item) => item.id === container.id);
+  const fallbackWidth = 100 / Math.max(shelf.containers.length, 1);
+  const placement = containerLayout.get(container.id) ?? {
+    x: Math.max(0, index) * fallbackWidth,
+    y: 0,
+    width: fallbackWidth,
+    height: 100,
+  };
+  const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 16;
+  const contentY = shelfY + 7;
+  const contentHeight = Math.max(8, shelfHeight - 17);
+  const containerRect: VisualRect = {
+    x: bookcaseRect.x + bookcaseRect.width *
+      (MAP_INSET + 8 + usableWidth * placement.x / 100) / MAP_WIDTH,
+    y: bookcaseRect.y + bookcaseRect.height *
+      (contentY + contentHeight * placement.y / 100) / MAP_HEIGHT,
+    width: bookcaseRect.width * usableWidth * placement.width / 100 / MAP_WIDTH,
+    height: bookcaseRect.height * contentHeight * placement.height / 100 / MAP_HEIGHT,
+  };
+  return {
+    minX: containerRect.x,
+    minY: containerRect.y,
+    maxX: containerRect.x + containerRect.width,
+    maxY: containerRect.y + containerRect.height,
+  };
+}
+
 function MapContainerGraphic({
   container,
   x,
@@ -4846,7 +4922,11 @@ function MapContainerGraphic({
   width,
   height,
   onSelect,
+  onOpen,
   obscured,
+  inspectionSelected,
+  inspectionMuted,
+  inspectionSilhouette,
   focusedBookId,
   colourScale,
   editing,
@@ -4856,6 +4936,7 @@ function MapContainerGraphic({
   onEdit,
   onRectPointerDown,
   onBookSelect,
+  onBookOpen,
   onRearrangeBookSelect,
   onDestination,
   onBookPointerDown,
@@ -4866,7 +4947,11 @@ function MapContainerGraphic({
   width: number;
   height: number;
   onSelect: () => void;
+  onOpen: () => void;
   obscured: boolean;
+  inspectionSelected: boolean;
+  inspectionMuted: boolean;
+  inspectionSilhouette: boolean;
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
@@ -4879,6 +4964,7 @@ function MapContainerGraphic({
     mode: "move" | "resize",
   ) => void;
   onBookSelect: (book: MapBook) => void;
+  onBookOpen: (book: MapBook) => void;
   onRearrangeBookSelect: (book: MapBook) => void;
   onDestination: (containerId: number, position: number) => void;
   onBookPointerDown: (
@@ -4910,7 +4996,7 @@ function MapContainerGraphic({
 
   return (
     <g
-      className={`map-container ${editing ? "editing" : ""} ${rearranging ? "rearranging" : ""} ${obscured ? "obscured" : ""} ${
+      className={`map-container ${editing ? "editing" : ""} ${rearranging ? "rearranging" : ""} ${obscured ? "obscured" : ""} ${inspectionSelected ? "inspection-selected" : ""} ${inspectionMuted ? "inspection-muted" : ""} ${inspectionSilhouette ? "inspection-silhouette" : ""} ${
         container.layer === "FOREGROUND" ? "foreground" : ""
       }`}
       role="button"
@@ -4922,6 +5008,11 @@ function MapContainerGraphic({
       }}
       onPointerDown={(event) => {
         if (editing) onRectPointerDown(event, "move");
+      }}
+      onDoubleClick={(event) => {
+        if (editing || rearranging) return;
+        event.stopPropagation();
+        onOpen();
       }}
       onKeyDown={activate}
     >
@@ -4990,6 +5081,11 @@ function MapContainerGraphic({
                 if (rearranging) onRearrangeBookSelect(book);
                 else onBookSelect(book);
               }}
+              onDoubleClick={(event) => {
+                if (editing || rearranging) return;
+                event.stopPropagation();
+                onBookOpen(book);
+              }}
               onKeyDown={(event) => {
                 if (
                   !editing &&
@@ -5041,6 +5137,11 @@ function MapContainerGraphic({
                 event.stopPropagation();
                 if (rearranging) onRearrangeBookSelect(book);
                 else onBookSelect(book);
+              }}
+              onDoubleClick={(event) => {
+                if (editing || rearranging) return;
+                event.stopPropagation();
+                onBookOpen(book);
               }}
               onKeyDown={(event) => {
                 if (
@@ -5113,7 +5214,9 @@ function MapShelfGraphic({
   height,
   onShelf,
   onContainer,
+  onContainerOpen,
   containerLayout,
+  inspectedContainerId,
   focusedBookId,
   colourScale,
   editing,
@@ -5124,6 +5227,7 @@ function MapShelfGraphic({
   onEditContainer,
   onContainerLayoutChange,
   onBookSelect,
+  onBookOpen,
   onRearrangeBookSelect,
   onDestination,
   onBookPointerDown,
@@ -5133,7 +5237,9 @@ function MapShelfGraphic({
   height: number;
   onShelf: () => void;
   onContainer: (container: MapContainer) => void;
+  onContainerOpen: (container: MapContainer) => void;
   containerLayout: Map<number, VisualRect>;
+  inspectedContainerId: number | null;
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
@@ -5144,6 +5250,7 @@ function MapShelfGraphic({
   onEditContainer: (container: MapContainer) => void;
   onContainerLayoutChange: (containerId: number, rect: VisualRect) => void;
   onBookSelect: (book: MapBook) => void;
+  onBookOpen: (book: MapBook) => void;
   onRearrangeBookSelect: (book: MapBook) => void;
   onDestination: (containerId: number, position: number) => void;
   onBookPointerDown: (
@@ -5156,6 +5263,24 @@ function MapShelfGraphic({
   const hasForeground = shelf.containers.some(
     (container) => container.layer === "FOREGROUND",
   );
+  const placementFor = (container: MapContainer, index: number): VisualRect => {
+    const fallbackWidth = 100 / Math.max(shelf.containers.length, 1);
+    return containerLayout.get(container.id) ?? {
+      x: index * fallbackWidth,
+      y: 0,
+      width: fallbackWidth,
+      height: 100,
+    };
+  };
+  const inspectedIndex = shelf.containers.findIndex(
+    (container) => container.id === inspectedContainerId,
+  );
+  const inspectedContainer = inspectedIndex >= 0
+    ? shelf.containers[inspectedIndex]
+    : null;
+  const inspectedPlacement = inspectedContainer
+    ? placementFor(inspectedContainer, inspectedIndex)
+    : null;
 
   return (
     <g
@@ -5186,13 +5311,13 @@ function MapShelfGraphic({
       />
       {shelf.containers.map((container, index) => {
         const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 16;
-        const fallbackWidth = 100 / Math.max(shelf.containers.length, 1);
-        const placement = containerLayout.get(container.id) ?? {
-          x: index * fallbackWidth,
-          y: 0,
-          width: fallbackWidth,
-          height: 100,
-        };
+        const placement = placementFor(container, index);
+        const inspectionSilhouette = Boolean(
+          inspectedContainer?.layer === "BACKGROUND" &&
+          container.layer === "FOREGROUND" &&
+          inspectedPlacement &&
+          overlapArea(placement, inspectedPlacement) > 0.0001,
+        );
         return (
           <MapContainerGraphic
             key={container.id}
@@ -5202,6 +5327,13 @@ function MapShelfGraphic({
             width={usableWidth * placement.width / 100}
             height={contentHeight * placement.height / 100}
             obscured={hasForeground && container.layer === "BACKGROUND"}
+            inspectionSelected={container.id === inspectedContainerId}
+            inspectionMuted={
+              inspectedContainerId !== null &&
+              container.id !== inspectedContainerId &&
+              !inspectionSilhouette
+            }
+            inspectionSilhouette={inspectionSilhouette}
             focusedBookId={focusedBookId}
             colourScale={colourScale}
             editing={editing}
@@ -5210,6 +5342,7 @@ function MapShelfGraphic({
             reservedBooks={reservedBooksByContainer.get(container.id) ?? []}
             onEdit={() => onEditContainer(container)}
             onBookSelect={onBookSelect}
+            onBookOpen={onBookOpen}
             onRearrangeBookSelect={onRearrangeBookSelect}
             onDestination={onDestination}
             onBookPointerDown={onBookPointerDown}
@@ -5251,6 +5384,7 @@ function MapShelfGraphic({
               window.addEventListener("pointerup", stop, { once: true });
             }}
             onSelect={() => onContainer(container)}
+            onOpen={() => onContainerOpen(container)}
           />
         );
       })}
@@ -5270,9 +5404,11 @@ function MapBookcaseGraphic({
   onBookcase,
   onShelf,
   onContainer,
+  onContainerOpen,
   rect,
   shelfLayout,
   containerLayout,
+  inspectedContainerId,
   focusedBookId,
   colourScale,
   editing,
@@ -5286,6 +5422,7 @@ function MapBookcaseGraphic({
   onShelfWeightsChange,
   onRectPointerDown,
   onBookSelect,
+  onBookOpen,
   onRearrangeBookSelect,
   onDestination,
   onBookPointerDown,
@@ -5294,9 +5431,11 @@ function MapBookcaseGraphic({
   onBookcase: () => void;
   onShelf: (shelf: MapShelf) => void;
   onContainer: (shelf: MapShelf, container: MapContainer) => void;
+  onContainerOpen: (shelf: MapShelf, container: MapContainer) => void;
   rect: VisualRect;
   shelfLayout: Map<number, number>;
   containerLayout: Map<number, VisualRect>;
+  inspectedContainerId: number | null;
   focusedBookId: number | null;
   colourScale: MapColourScale;
   editing: boolean;
@@ -5318,6 +5457,7 @@ function MapBookcaseGraphic({
     mode: "move" | "resize",
   ) => void;
   onBookSelect: (book: MapBook) => void;
+  onBookOpen: (book: MapBook) => void;
   onRearrangeBookSelect: (book: MapBook) => void;
   onDestination: (containerId: number, position: number) => void;
   onBookPointerDown: (
@@ -5384,7 +5524,9 @@ function MapBookcaseGraphic({
                 height={currentHeight}
                 onShelf={() => onShelf(shelf)}
                 onContainer={(container) => onContainer(shelf, container)}
+                onContainerOpen={(container) => onContainerOpen(shelf, container)}
                 containerLayout={containerLayout}
+                inspectedContainerId={inspectedContainerId}
                 focusedBookId={focusedBookId}
                 colourScale={colourScale}
                 editing={editing}
@@ -5395,6 +5537,7 @@ function MapBookcaseGraphic({
                 onEditContainer={onEditContainer}
                 onContainerLayoutChange={onContainerLayoutChange}
                 onBookSelect={onBookSelect}
+                onBookOpen={onBookOpen}
                 onRearrangeBookSelect={onRearrangeBookSelect}
                 onDestination={onDestination}
                 onBookPointerDown={onBookPointerDown}
@@ -5530,6 +5673,167 @@ function MapNumberField({
   );
 }
 
+function MapInspectorBookRow({
+  book,
+  selected,
+  onSelect,
+}: {
+  book: MapBook;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`map-inspector-book ${selected ? "selected" : ""}`}
+      onClick={onSelect}
+      aria-pressed={selected}
+    >
+      {book.cover_filename ? (
+        <img
+          src={api.coverUrl(book.cover_filename)}
+          alt=""
+          loading="lazy"
+        />
+      ) : (
+        <span className="map-inspector-cover-placeholder" aria-hidden="true">
+          <BookOpen size={20} />
+        </span>
+      )}
+      <span>
+        <strong>{book.title}</strong>
+        <small>{displayedAuthor(book)}</small>
+      </span>
+    </button>
+  );
+}
+
+function MapCompleteBookInformation({ book }: { book: Book }) {
+  const acquisition = book.acquisition_date
+    ? formatDate(book.acquisition_date)
+    : book.is_original_collection
+      ? "Original collection · exact date unknown"
+      : "Not recorded";
+  const finishedReading = book.read_date
+    ? formatDate(book.read_date)
+    : book.status === "READ" && book.is_read_date_unknown
+      ? "Read · exact date unknown"
+      : "Not recorded";
+  const location = book.container_id
+    ? `${book.bookcase_name} · Shelf ${book.shelf_number} · ${
+      book.layer === "BACKGROUND" ? "Background" : "Foreground"
+    } ${book.container_type === "ROW" ? "Row" : "Pile"} ${
+      book.container_number
+    } · Position ${book.position}`
+    : "No physical location assigned";
+
+  return (
+    <div className="map-complete-book-information">
+      <div className="book-details-summary">
+        {book.cover_filename ? (
+          <img src={api.coverUrl(book.cover_filename)} alt={`Cover of ${book.title}`} />
+        ) : (
+          <div className="book-details-cover-placeholder"><BookOpen size={34} /></div>
+        )}
+        <div>
+          <span className={`status ${book.status.toLowerCase()}`}>
+            {bookStatusLabel(book)}
+          </span>
+          <h3>{book.title}</h3>
+          <p>{displayedAuthor(book)}</p>
+        </div>
+      </div>
+
+      {book.has_multiple_authors && (
+        <section className="book-details-section">
+          <h3>Authors</h3>
+          <ol className="structured-author-list">
+            {book.structured_authors.map((author) => <li key={author}>{author}</li>)}
+          </ol>
+        </section>
+      )}
+
+      <section className="book-details-section">
+        <h3>Bibliographic identifiers</h3>
+        <dl className="book-details-grid">
+          <div><dt>ISBN-10</dt><dd>{book.isbn_10 ?? "Not recorded"}</dd></div>
+          <div><dt>ISBN-13</dt><dd>{book.isbn_13 ?? "Not recorded"}</dd></div>
+          <div className="wide"><dt>Goodreads review</dt><dd>
+            {book.goodreads_url ? (
+              <a href={book.goodreads_url} target="_blank" rel="noreferrer">
+                Open Goodreads <ExternalLink size={14} />
+              </a>
+            ) : "Not recorded"}
+          </dd></div>
+        </dl>
+      </section>
+
+      <section className="book-details-section">
+        <h3>Edition and classification</h3>
+        <dl className="book-details-grid three-columns">
+          <div className="wide"><dt>Subtitle</dt><dd>{book.subtitle ?? "Not recorded"}</dd></div>
+          <div><dt>Pages</dt><dd>{book.page_count ?? "Not recorded"}</dd></div>
+          <div><dt>Publisher</dt><dd>{book.publisher ?? "Not recorded"}</dd></div>
+          <div><dt>Current edition year</dt><dd>{book.current_ed_year ?? "Not recorded"}</dd></div>
+          <div><dt>Original publication year</dt><dd>{book.original_publication_year ?? "Not recorded"}</dd></div>
+          <div><dt>Language</dt><dd>{book.language ?? "Not recorded"}</dd></div>
+          <div><dt>Edition number</dt><dd>{book.edition_number ?? "Not recorded"}</dd></div>
+          <div><dt>Category</dt><dd>{book.fiction_category ? metadataLabel(book.fiction_category) : "Not recorded"}</dd></div>
+          <div><dt>Binding</dt><dd>{book.binding ? metadataLabel(book.binding) : "Not recorded"}</dd></div>
+          <div><dt>Publication type</dt><dd>{book.publication_type ? metadataLabel(book.publication_type) : "Not recorded"}</dd></div>
+          <div><dt>Series</dt><dd>{book.series_name ?? "Not recorded"}</dd></div>
+          <div><dt>Series volume</dt><dd>{book.series_volume ?? "Not recorded"}</dd></div>
+          <div className="wide"><dt>Genre</dt><dd>{book.genre_text ?? "Not recorded"}</dd></div>
+        </dl>
+      </section>
+
+      <section className="book-details-section">
+        <h3>Reading and acquisition history</h3>
+        <dl className="book-details-grid three-columns">
+          <div><dt>Acquired</dt><dd>{acquisition}</dd></div>
+          <div><dt>Reading started</dt><dd>{book.reading_started_date ? formatDate(book.reading_started_date) : "Not recorded"}</dd></div>
+          <div><dt>Finished reading</dt><dd>{finishedReading}</dd></div>
+        </dl>
+        <ReadingHistorySummary book={book} />
+      </section>
+
+      <section className="book-details-section">
+        <h3>Physical catalogue</h3>
+        <dl className="book-details-grid">
+          <div className="wide"><dt>{book.status === "CURRENTLY_READING" ? "Saved return location" : "Location"}</dt><dd>{location}</dd></div>
+          <div><dt>BOOKPILE record</dt><dd>#{book.id}</dd></div>
+          <div><dt>Stored cover</dt><dd>{book.cover_filename ? "Yes" : "No"}</dd></div>
+        </dl>
+      </section>
+
+      <section className="book-details-section">
+        <h3>Loan history</h3>
+        {book.active_loan && (
+          <p className="book-details-note">
+            Currently on loan to <strong>{book.active_loan.loaned_to}</strong>.
+            {book.active_loan.loaned_date
+              ? ` Loaned ${formatDate(book.active_loan.loaned_date)}.`
+              : " Unknown loan date."}
+            {book.active_loan.expected_return_date
+              ? ` Expected back ${formatDate(book.active_loan.expected_return_date)}.`
+              : " No expected return date."}
+          </p>
+        )}
+        <LoanHistorySummary book={book} />
+      </section>
+
+      <section className="book-details-section">
+        <h3>Notes and record history</h3>
+        <dl className="book-details-grid">
+          <div className="wide book-details-notes"><dt>Notes</dt><dd>{book.notes || "No notes"}</dd></div>
+          <div><dt>Added to BOOKPILE</dt><dd>{formatTimestamp(book.created_at)}</dd></div>
+          <div><dt>Last updated</dt><dd>{formatTimestamp(book.updated_at)}</dd></div>
+        </dl>
+      </section>
+    </div>
+  );
+}
+
 const emptyVisualLayout: VisualLayout = {
   bookcases: [],
   shelves: [],
@@ -5557,7 +5861,7 @@ function LibraryMapDialog({
   ) => void;
   onReadingFilter: () => void;
   onLoanFilter: () => void;
-  onBookFilter: (book: MapBook) => void;
+  onBookFilter: (book: { id: number; title: string }) => void;
   onChanged: () => Promise<void>;
   focusedBook: Book | null;
 }) {
@@ -5580,6 +5884,18 @@ function LibraryMapDialog({
   const [legendExpanded, setLegendExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
   const [focusMenuOpen, setFocusMenuOpen] = useState(false);
+  const [inspectionMenuOpen, setInspectionMenuOpen] = useState(false);
+  const [inspectionMode, setInspectionMode] = useState<MapInspectionMode>(
+    focusedBook ? "book" : null,
+  );
+  const [inspectedBookId, setInspectedBookId] = useState<number | null>(
+    focusedBook?.id ?? null,
+  );
+  const [inspectedContainerId, setInspectedContainerId] = useState<number | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorCompleteBook, setInspectorCompleteBook] = useState<Book | null>(null);
+  const [inspectorDetailsLoading, setInspectorDetailsLoading] = useState(false);
+  const [inspectorDetailsError, setInspectorDetailsError] = useState("");
   const [focusBookcase, setFocusBookcase] = useState("");
   const [focusShelf, setFocusShelf] = useState("");
   const [focusContainer, setFocusContainer] = useState("");
@@ -5759,6 +6075,19 @@ function LibraryMapDialog({
     ),
     [map],
   );
+  const inspectedBook = allMapBooks.find((book) => book.id === inspectedBookId) ?? null;
+  const inspectedContainerContext = useMemo(() => {
+    if (inspectedContainerId === null) return null;
+    for (const bookcase of map.bookcases) {
+      for (const shelf of bookcase.shelves) {
+        const container = shelf.containers.find(
+          (candidate) => candidate.id === inspectedContainerId,
+        );
+        if (container) return { bookcase, shelf, container };
+      }
+    }
+    return null;
+  }, [inspectedContainerId, map.bookcases]);
   const projectedBooks = useMemo(() => {
     const placements = new Map(
       (rearrangementPreview?.placements ?? []).map((item) => [item.book_id, item]),
@@ -5899,12 +6228,24 @@ function LibraryMapDialog({
   useEffect(() => {
     function closeWithKeyboard(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (mapToolsOpen) setMapToolsOpen(false);
+      if (inspectorOpen || inspectedBookId !== null || inspectedContainerId !== null) {
+        clearInspectionSelection();
+      } else if (inspectionMenuOpen) setInspectionMenuOpen(false);
+      else if (focusMenuOpen) setFocusMenuOpen(false);
+      else if (mapToolsOpen) setMapToolsOpen(false);
       else requestMapClose();
     }
     window.addEventListener("keydown", closeWithKeyboard);
     return () => window.removeEventListener("keydown", closeWithKeyboard);
-  }, [mapToolsOpen, requestMapClose]);
+  }, [
+    focusMenuOpen,
+    inspectedBookId,
+    inspectedContainerId,
+    inspectionMenuOpen,
+    inspectorOpen,
+    mapToolsOpen,
+    requestMapClose,
+  ]);
 
   useEffect(() => {
     if (!mapToolsOpen) return;
@@ -5927,6 +6268,17 @@ function LibraryMapDialog({
     document.addEventListener("mousedown", closeFocusMenu);
     return () => document.removeEventListener("mousedown", closeFocusMenu);
   }, [focusMenuOpen]);
+
+  useEffect(() => {
+    if (!inspectionMenuOpen) return;
+    function closeInspectionMenu(event: MouseEvent) {
+      if (!(event.target as Element).closest("[data-map-inspection]")) {
+        setInspectionMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeInspectionMenu);
+    return () => document.removeEventListener("mousedown", closeInspectionMenu);
+  }, [inspectionMenuOpen]);
 
   useEffect(() => {
     if (!layoutDirty) return;
@@ -5994,76 +6346,19 @@ function LibraryMapDialog({
     const bookcase = focusedBookcaseItem;
     const rect = bookcase ? bookcaseRects.get(bookcase.id) : null;
     if (!bookcase || !rect) return null;
-    if (!focusedShelfItem) {
-      return {
-        minX: rect.x,
-        minY: rect.y,
-        maxX: rect.x + rect.width,
-        maxY: rect.y + rect.height,
-      };
-    }
-
-    const availableHeight = MAP_HEIGHT - 22;
-    const totalWeight = bookcase.shelves.reduce(
-      (total, shelf) => total + (shelfWeights.get(shelf.id) ?? 1),
-      0,
+    const focusedContainer = focusedShelfItem
+      ? focusedContainerItems.find(
+          (container) => container.id === Number(focusContainer),
+        ) ?? null
+      : null;
+    return mapHierarchyBounds(
+      bookcase,
+      focusedShelfItem ?? null,
+      focusedContainer,
+      rect,
+      shelfWeights,
+      containerRects,
     );
-    let shelfY = 11;
-    let shelfHeight = 0;
-    for (const shelf of bookcase.shelves) {
-      const height = availableHeight * (shelfWeights.get(shelf.id) ?? 1) /
-        Math.max(totalWeight, 1);
-      if (shelf.id === focusedShelfItem.id) {
-        shelfHeight = height;
-        break;
-      }
-      shelfY += height;
-    }
-    const shelfRect: VisualRect = {
-      x: rect.x + rect.width * MAP_INSET / MAP_WIDTH,
-      y: rect.y + rect.height * shelfY / MAP_HEIGHT,
-      width: rect.width * (MAP_WIDTH - MAP_INSET * 2) / MAP_WIDTH,
-      height: rect.height * Math.max(1, shelfHeight - 5) / MAP_HEIGHT,
-    };
-    const focusedContainer = focusedContainerItems.find(
-      (container) => container.id === Number(focusContainer),
-    );
-    if (!focusedContainer) {
-      return {
-        minX: shelfRect.x,
-        minY: shelfRect.y,
-        maxX: shelfRect.x + shelfRect.width,
-        maxY: shelfRect.y + shelfRect.height,
-      };
-    }
-
-    const index = focusedShelfItem.containers.findIndex(
-      (container) => container.id === focusedContainer.id,
-    );
-    const fallbackWidth = 100 / Math.max(focusedShelfItem.containers.length, 1);
-    const placement = containerRects.get(focusedContainer.id) ?? {
-      x: Math.max(0, index) * fallbackWidth,
-      y: 0,
-      width: fallbackWidth,
-      height: 100,
-    };
-    const usableWidth = MAP_WIDTH - MAP_INSET * 2 - 16;
-    const contentY = shelfY + 7;
-    const contentHeight = Math.max(8, shelfHeight - 17);
-    const containerRect: VisualRect = {
-      x: rect.x + rect.width *
-        (MAP_INSET + 8 + usableWidth * placement.x / 100) / MAP_WIDTH,
-      y: rect.y + rect.height *
-        (contentY + contentHeight * placement.y / 100) / MAP_HEIGHT,
-      width: rect.width * usableWidth * placement.width / 100 / MAP_WIDTH,
-      height: rect.height * contentHeight * placement.height / 100 / MAP_HEIGHT,
-    };
-    return {
-      minX: containerRect.x,
-      minY: containerRect.y,
-      maxX: containerRect.x + containerRect.width,
-      maxY: containerRect.y + containerRect.height,
-    };
   }
 
   function focusSelectedHierarchy() {
@@ -6072,6 +6367,127 @@ function LibraryMapDialog({
     setCamera(fitMapBounds(bounds, viewportSize));
     setFocusMenuOpen(false);
     setLegendExpanded(false);
+  }
+
+  function clearInspectionSelection() {
+    setInspectedBookId(null);
+    setInspectedContainerId(null);
+    setInspectorOpen(false);
+    setInspectorCompleteBook(null);
+    setInspectorDetailsError("");
+  }
+
+  function chooseInspectionMode(mode: MapInspectionMode) {
+    clearInspectionSelection();
+    setInspectionMode(mode);
+    setInspectionMenuOpen(false);
+    setFocusMenuOpen(false);
+    setMapToolsOpen(false);
+  }
+
+  function inspectBook(book: MapBook, open = false) {
+    setInspectedBookId(book.id);
+    setInspectedContainerId(null);
+    setInspectorOpen(open);
+    setInspectorCompleteBook(null);
+    setInspectorDetailsError("");
+  }
+
+  function inspectContainer(containerId: number, open = false) {
+    setInspectedContainerId(containerId);
+    setInspectedBookId(null);
+    setInspectorOpen(open);
+    setInspectorCompleteBook(null);
+    setInspectorDetailsError("");
+  }
+
+  function handleBookSelection(book: MapBook, open = false) {
+    if (inspectionMode === "book") {
+      inspectBook(book, open);
+      return;
+    }
+    if (inspectionMode === "container") {
+      if (book.container_id !== null) inspectContainer(book.container_id, open);
+      return;
+    }
+    onBookFilter(book);
+  }
+
+  function selectedInspectionBounds(): MapWorldBounds | null {
+    if (inspectedContainerContext) {
+      const rect = bookcaseRects.get(inspectedContainerContext.bookcase.id);
+      if (!rect) return null;
+      return mapHierarchyBounds(
+        inspectedContainerContext.bookcase,
+        inspectedContainerContext.shelf,
+        inspectedContainerContext.container,
+        rect,
+        shelfWeights,
+        containerRects,
+      );
+    }
+    if (!inspectedBook) return null;
+    if (inspectedBook.is_on_loan) {
+      return {
+        minX: activeLayout.loaned.x,
+        minY: activeLayout.loaned.y,
+        maxX: activeLayout.loaned.x + activeLayout.loaned.width,
+        maxY: activeLayout.loaned.y + activeLayout.loaned.height,
+      };
+    }
+    if (inspectedBook.status === "CURRENTLY_READING") {
+      return {
+        minX: activeLayout.outside.x,
+        minY: activeLayout.outside.y,
+        maxX: activeLayout.outside.x + activeLayout.outside.width,
+        maxY: activeLayout.outside.y + activeLayout.outside.height,
+      };
+    }
+    if (inspectedBook.container_id === null) return null;
+    const context = (() => {
+      for (const bookcase of map.bookcases) {
+        for (const shelf of bookcase.shelves) {
+          const container = shelf.containers.find(
+            (candidate) => candidate.id === inspectedBook.container_id,
+          );
+          if (container) return { bookcase, shelf, container };
+        }
+      }
+      return null;
+    })();
+    if (!context) return null;
+    const rect = bookcaseRects.get(context.bookcase.id);
+    return rect
+      ? mapHierarchyBounds(
+          context.bookcase,
+          context.shelf,
+          context.container,
+          rect,
+          shelfWeights,
+          containerRects,
+        )
+      : null;
+  }
+
+  function frameInspectionSelection() {
+    const bounds = selectedInspectionBounds();
+    if (!bounds) return;
+    setCamera(fitMapBounds(bounds, viewportSize));
+    setLegendExpanded(false);
+  }
+
+  async function showCompleteInspectorBook(bookId: number) {
+    setInspectorDetailsLoading(true);
+    setInspectorDetailsError("");
+    try {
+      setInspectorCompleteBook(await api.book(bookId));
+    } catch (err) {
+      setInspectorDetailsError(
+        err instanceof Error ? err.message : "Unable to load complete book information",
+      );
+    } finally {
+      setInspectorDetailsLoading(false);
+    }
   }
 
   function updateContainerRect(containerId: number, rect: VisualRect) {
@@ -6491,7 +6907,7 @@ function LibraryMapDialog({
   return (
     <div className="dialog-backdrop map-backdrop" onMouseDown={requestMapClose}>
       <div
-        className="dialog map-dialog map-fullscreen"
+        className={`dialog map-dialog map-fullscreen ${inspectorOpen ? "inspector-open" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-header">
@@ -6499,6 +6915,56 @@ function LibraryMapDialog({
             <h2>Library map</h2>
           </div>
           <div className="map-header-actions">
+            <div className="map-inspection" data-map-inspection>
+              <button
+                className={`outline-button map-inspection-trigger ${inspectionMode ? "active" : ""}`}
+                type="button"
+                aria-label="Inspection mode"
+                aria-haspopup="menu"
+                aria-expanded={inspectionMenuOpen}
+                disabled={editingLayout || rearranging}
+                title={inspectionMode === "book"
+                  ? "Inspect books"
+                  : inspectionMode === "container"
+                    ? "Inspect containers"
+                    : "Choose inspection mode"}
+                onClick={() => {
+                  setFocusMenuOpen(false);
+                  setMapToolsOpen(false);
+                  setInspectionMenuOpen((current) => !current);
+                }}
+              >
+                <Info size={18} />
+              </button>
+              {inspectionMenuOpen && (
+                <div className="menu-popover map-inspection-menu" role="menu">
+                  <strong>Inspection mode</strong>
+                  <button
+                    role="menuitemradio"
+                    aria-checked={inspectionMode === "book"}
+                    className={inspectionMode === "book" ? "active" : ""}
+                    onClick={() => chooseInspectionMode("book")}
+                  >
+                    <BookOpen size={16} /> Inspect books
+                  </button>
+                  <button
+                    role="menuitemradio"
+                    aria-checked={inspectionMode === "container"}
+                    className={inspectionMode === "container" ? "active" : ""}
+                    onClick={() => chooseInspectionMode("container")}
+                  >
+                    <LibraryBig size={16} /> Inspect containers
+                  </button>
+                  <button
+                    role="menuitemradio"
+                    aria-checked={inspectionMode === null}
+                    onClick={() => chooseInspectionMode(null)}
+                  >
+                    <X size={16} /> Exit inspection
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="map-focus" data-map-focus>
               <button
                 className="outline-button map-focus-trigger"
@@ -6508,6 +6974,7 @@ function LibraryMapDialog({
                 aria-expanded={focusMenuOpen}
                 title="Focus furniture, shelf, or container"
                 onClick={() => {
+                  setInspectionMenuOpen(false);
                   setMapToolsOpen(false);
                   setFocusMenuOpen((current) => !current);
                 }}
@@ -6595,7 +7062,11 @@ function LibraryMapDialog({
                 aria-haspopup="menu"
                 aria-expanded={mapToolsOpen}
                 title="Map tools"
-                onClick={() => setMapToolsOpen((current) => !current)}
+                onClick={() => {
+                  setInspectionMenuOpen(false);
+                  setFocusMenuOpen(false);
+                  setMapToolsOpen((current) => !current);
+                }}
               >
                 <Settings2 size={18} />
               </button>
@@ -6625,6 +7096,7 @@ function LibraryMapDialog({
                       disabled={!MAP_LAYOUT_EDITOR_ENABLED || rearranging}
                       onClick={() => {
                         setDraft(structuredClone(map.layout));
+                        chooseInspectionMode(null);
                         setEditingLayout(true);
                         setLayoutPanelMinimized(false);
                         setLegendExpanded(false);
@@ -7218,6 +7690,11 @@ function LibraryMapDialog({
               className={`map-room ${editingLayout ? "editing" : ""} ${
                 rearranging ? "rearranging" : ""
               }`}
+              onClick={(event) => {
+                if (event.target === event.currentTarget && inspectionMode) {
+                  clearInspectionSelection();
+                }
+              }}
             >
               <div
                 ref={worldRef}
@@ -7230,10 +7707,15 @@ function LibraryMapDialog({
                   height: Math.max(1, viewportSize.height) * camera.zoom,
                   transform: mapCameraTransform(camera),
                 }}
+                onClick={(event) => {
+                  if (event.target === event.currentTarget && inspectionMode) {
+                    clearInspectionSelection();
+                  }
+                }}
               >
               {(editingLayout || rearranging || displayMap.outside_books.length > 0) && (
                 <section
-                  className="map-outside"
+                  className={`map-outside ${inspectedContainerId !== null ? "inspection-muted" : ""}`}
                   data-reading-target
                   role="button"
                   tabIndex={0}
@@ -7242,12 +7724,15 @@ function LibraryMapDialog({
                     ? undefined
                     : rearranging
                       ? () => void addReadingDestination()
-                      : onReadingFilter}
+                      : inspectionMode
+                        ? clearInspectionSelection
+                        : onReadingFilter}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       if (!editingLayout) {
                         if (rearranging) void addReadingDestination();
+                        else if (inspectionMode) clearInspectionSelection();
                         else onReadingFilter();
                       }
                     }
@@ -7266,8 +7751,8 @@ function LibraryMapDialog({
                         role={editingLayout ? undefined : "button"}
                         tabIndex={editingLayout ? -1 : 0}
                         className={
-                          focusedBook
-                            ? book.id === focusedBook.id
+                          inspectedBook
+                            ? book.id === inspectedBook.id
                               ? "focused"
                               : "muted"
                             : ""
@@ -7281,7 +7766,12 @@ function LibraryMapDialog({
                           if (editingLayout) return;
                           event.stopPropagation();
                           if (rearranging) selectMoveBook(book);
-                          else onBookFilter(book);
+                          else handleBookSelection(book);
+                        }}
+                        onDoubleClick={(event) => {
+                          if (editingLayout || rearranging) return;
+                          event.stopPropagation();
+                          handleBookSelection(book, true);
                         }}
                         onPointerDown={(event) => {
                           if (rearranging) beginBookDrag(book, event);
@@ -7294,14 +7784,14 @@ function LibraryMapDialog({
                             event.preventDefault();
                             event.stopPropagation();
                             if (rearranging) selectMoveBook(book);
-                            else onBookFilter(book);
+                            else handleBookSelection(book);
                           }
                         }}
                       >
                         <i
                           style={{
                             background:
-                              focusedBook?.id === book.id
+                              inspectedBook?.id === book.id
                                 ? "#287fbd"
                                 : colourScale.colour(book),
                           }}
@@ -7349,14 +7839,20 @@ function LibraryMapDialog({
               )}
               {(editingLayout || rearranging || displayMap.loaned_books.length > 0) && (
                 <section
-                  className="map-outside map-loaned"
+                  className={`map-outside map-loaned ${inspectedContainerId !== null ? "inspection-muted" : ""}`}
                   role="button"
                   tabIndex={0}
                   title="Show books currently on loan"
-                  onClick={editingLayout || rearranging ? undefined : onLoanFilter}
+                  onClick={editingLayout || rearranging
+                    ? undefined
+                    : inspectionMode
+                      ? clearInspectionSelection
+                      : onLoanFilter}
                   onKeyDown={(event) => {
                     if (!editingLayout && !rearranging && (event.key === "Enter" || event.key === " ")) {
-                      event.preventDefault(); onLoanFilter();
+                      event.preventDefault();
+                      if (inspectionMode) clearInspectionSelection();
+                      else onLoanFilter();
                     }
                   }}
                   style={{
@@ -7372,15 +7868,20 @@ function LibraryMapDialog({
                         key={book.id}
                         role={editingLayout ? undefined : "button"}
                         tabIndex={editingLayout ? -1 : 0}
-                        className={focusedBook ? book.id === focusedBook.id ? "focused" : "muted" : ""}
+                        className={inspectedBook ? book.id === inspectedBook.id ? "focused" : "muted" : ""}
                         title={`${book.title} · On loan to ${book.loaned_to ?? "unknown"}`}
                         onClick={(event) => {
                           if (editingLayout) return;
                           event.stopPropagation();
-                          if (rearranging) selectMoveBook(book); else onBookFilter(book);
+                          if (rearranging) selectMoveBook(book); else handleBookSelection(book);
+                        }}
+                        onDoubleClick={(event) => {
+                          if (editingLayout || rearranging) return;
+                          event.stopPropagation();
+                          handleBookSelection(book, true);
                         }}
                         onPointerDown={(event) => { if (rearranging) beginBookDrag(book, event); }}
-                      ><i style={{ background: focusedBook?.id === book.id ? "#287fbd" : colourScale.colour(book) }} /></span>
+                      ><i style={{ background: inspectedBook?.id === book.id ? "#287fbd" : colourScale.colour(book) }} /></span>
                     ))}
                   </div>
                   {editingLayout && <>
@@ -7398,7 +7899,8 @@ function LibraryMapDialog({
                   }}
                   shelfLayout={shelfWeights}
                   containerLayout={containerRects}
-                  focusedBookId={focusedBook?.id ?? null}
+                  inspectedContainerId={inspectedContainerId}
+                  focusedBookId={inspectedBookId}
                   colourScale={colourScale}
                   editing={editingLayout}
                   rearranging={rearranging}
@@ -7410,7 +7912,8 @@ function LibraryMapDialog({
                     setSelectedContainer(String(container.id))}
                   onContainerLayoutChange={updateContainerRect}
                   onShelfWeightsChange={updateShelfWeights}
-                  onBookSelect={onBookFilter}
+                  onBookSelect={(book) => handleBookSelection(book)}
+                  onBookOpen={(book) => handleBookSelection(book, true)}
                   onRearrangeBookSelect={selectMoveBook}
                   onDestination={(containerId, position) =>
                     void addPhysicalDestination(containerId, position)}
@@ -7434,11 +7937,24 @@ function LibraryMapDialog({
                         })),
                     );
                   }}
-                  onBookcase={() => onFilter(bookcase.id)}
-                  onShelf={(shelf) => onFilter(bookcase.id, shelf.id)}
-                  onContainer={(shelf, container) =>
-                    onFilter(bookcase.id, shelf.id, container.id)
-                  }
+                  onBookcase={() => {
+                    if (inspectionMode) clearInspectionSelection();
+                    else onFilter(bookcase.id);
+                  }}
+                  onShelf={(shelf) => {
+                    if (inspectionMode) clearInspectionSelection();
+                    else onFilter(bookcase.id, shelf.id);
+                  }}
+                  onContainer={(shelf, container) => {
+                    if (inspectionMode === "container") inspectContainer(container.id);
+                    else if (inspectionMode === "book") clearInspectionSelection();
+                    else onFilter(bookcase.id, shelf.id, container.id);
+                  }}
+                  onContainerOpen={(shelf, container) => {
+                    if (inspectionMode === "container") inspectContainer(container.id, true);
+                    else if (inspectionMode === "book") clearInspectionSelection();
+                    else onFilter(bookcase.id, shelf.id, container.id);
+                  }}
                 />
               ))}
               </div>
@@ -7499,6 +8015,184 @@ function LibraryMapDialog({
                 </div>
               </div>
             </div>
+            {(inspectedBook || inspectedContainerContext) && !inspectorOpen && (
+              <div className="map-selection-bar" role="status">
+                <span>
+                  <strong>
+                    {inspectedContainerContext
+                      ? `${inspectedContainerContext.container.book_count} books selected`
+                      : inspectedBook?.title}
+                  </strong>
+                  <small>
+                    {inspectedContainerContext
+                      ? `${inspectedContainerContext.bookcase.name} · Shelf ${inspectedContainerContext.shelf.shelf_number}`
+                      : inspectedBook
+                        ? displayedAuthor(inspectedBook)
+                        : ""}
+                  </small>
+                </span>
+                <div>
+                  <button type="button" onClick={frameInspectionSelection}>
+                    <Focus size={15} /> Frame
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => setInspectorOpen(true)}
+                  >
+                    <Info size={15} />
+                    {inspectedContainerContext ? "Show books" : "Show book"}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Clear map selection"
+                    title="Clear selection"
+                    onClick={clearInspectionSelection}
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+              </div>
+            )}
+            {inspectorOpen && (inspectedBook || inspectedContainerContext) && (
+              <aside
+                className={`map-inspector-drawer ${inspectorCompleteBook ? "complete" : ""}`}
+                aria-label="Map selection details"
+              >
+                <header>
+                  <div>
+                    <p className="eyebrow">
+                      {inspectorCompleteBook
+                        ? "Complete catalogue record"
+                        : inspectedContainerContext
+                          ? "Container inspection"
+                          : "Book inspection"}
+                    </p>
+                    <h3>
+                      {inspectorCompleteBook
+                        ? inspectorCompleteBook.title
+                        : inspectedContainerContext
+                        ? `${inspectedContainerContext.bookcase.name} · Shelf ${inspectedContainerContext.shelf.shelf_number}`
+                        : inspectedBook?.title}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={inspectorCompleteBook
+                      ? "Back to compact inspector"
+                      : "Close inspector"}
+                    onClick={() => {
+                      if (inspectorCompleteBook) {
+                        setInspectorCompleteBook(null);
+                        setInspectorDetailsError("");
+                      } else {
+                        clearInspectionSelection();
+                      }
+                    }}
+                  >
+                    <X size={18} />
+                  </button>
+                </header>
+                <div className={`map-inspector-content ${inspectorCompleteBook ? "complete" : ""}`}>
+                  {inspectorDetailsLoading ? (
+                    <p className="map-inspector-empty"><LoaderCircle className="spin" /> Loading complete information…</p>
+                  ) : inspectorDetailsError ? (
+                    <div className="form-error map-inspector-error">{inspectorDetailsError}</div>
+                  ) : inspectorCompleteBook ? (
+                    <MapCompleteBookInformation book={inspectorCompleteBook} />
+                  ) : inspectedContainerContext ? (
+                    inspectedContainerContext.container.books.length > 0 ? (
+                      [...inspectedContainerContext.container.books]
+                        .sort((first, second) =>
+                          (first.position ?? 0) - (second.position ?? 0))
+                        .map((book) => (
+                          <MapInspectorBookRow
+                            key={book.id}
+                            book={book}
+                            selected={book.id === inspectedBookId}
+                            onSelect={() => {
+                              setInspectedBookId((current) =>
+                                current === book.id ? null : book.id);
+                              setInspectorCompleteBook(null);
+                              setInspectorDetailsError("");
+                            }}
+                          />
+                        ))
+                    ) : (
+                      <p className="map-inspector-empty">This container is empty.</p>
+                    )
+                  ) : inspectedBook ? (
+                    <MapInspectorBookRow
+                      book={inspectedBook}
+                      selected
+                      onSelect={clearInspectionSelection}
+                    />
+                  ) : null}
+                </div>
+                <footer>
+                  {inspectorCompleteBook ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInspectorCompleteBook(null);
+                          setInspectorDetailsError("");
+                        }}
+                      >
+                        <ArrowLeft size={15} />
+                        {inspectedContainerContext
+                          ? "Back to container inspection"
+                          : "Back to book inspection"}
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => onBookFilter(inspectorCompleteBook)}
+                      >
+                        <ExternalLink size={15} /> Open this book in catalogue
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={frameInspectionSelection}>
+                        <Focus size={15} /> Frame selection
+                      </button>
+                      <button
+                        type="button"
+                        disabled={inspectedBookId === null || inspectorDetailsLoading}
+                        title={inspectedBookId === null ? "Select a book first" : undefined}
+                        onClick={() => {
+                          if (inspectedBookId !== null) {
+                            void showCompleteInspectorBook(inspectedBookId);
+                          }
+                        }}
+                      >
+                        <Info size={15} /> Show book complete information
+                      </button>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => {
+                          if (inspectedContainerContext) {
+                            onFilter(
+                              inspectedContainerContext.bookcase.id,
+                              inspectedContainerContext.shelf.id,
+                              inspectedContainerContext.container.id,
+                            );
+                          } else if (inspectedBook) {
+                            onBookFilter(inspectedBook);
+                          }
+                        }}
+                      >
+                        <ExternalLink size={15} /> Open filtered catalogue
+                      </button>
+                    </>
+                  )}
+                </footer>
+              </aside>
+            )}
             {dragGhost && (
               <div
                 className="map-drag-ghost"

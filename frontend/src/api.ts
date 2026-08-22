@@ -194,6 +194,7 @@ export const api = {
   },
   library: () => request<Bookcase[]>("/library"),
   libraryMap: () => request<LibraryMapData>("/library-map"),
+  book: (bookId: number) => request<Book>(`/books/${bookId}`),
   lookupIsbn: (isbn: string) => {
     const params = new URLSearchParams({ isbn });
     return request<ISBNLookupResult>(`/bibliography/isbn?${params}`);

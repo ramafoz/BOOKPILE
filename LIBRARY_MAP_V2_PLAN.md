@@ -311,13 +311,19 @@ successful integrity and foreign-key checks, and verified pre/post backups.
 Implemented with adaptive-resolution rendering so close shelf/container focus
 remains sharp instead of magnifying a previously rasterized map layer.
 
-### Phase 4 — inspection modes
+### Phase 4 — inspection modes — complete
 
 - Add explicit Book/Container selection mode.
 - Add selected-book highlighting and compact inspector.
 - Add selected-container isolation and compact position-sorted catalogue.
 - Add explicit transitions from the inspector to exact catalogue filters.
 - Keep all inspectors read-only.
+
+Implemented with mutually exclusive Book/Container modes, overlap-aware
+background isolation, compact position-sorted inspectors, reversible
+full-screen complete book information, and exact catalogue exits that keep the
+advanced-search panel collapsed. The map API only gained existing cover data
+and a read-only single-book endpoint; no catalogue schema or records changed.
 
 ### Phase 5 — page-proportional rendering
 

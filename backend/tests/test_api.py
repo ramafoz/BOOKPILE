@@ -74,6 +74,9 @@ def test_catalogue_flow() -> None:
         assert created.json()["location_label"] == (
             "Office · Shelf 1 · Background Row 1 · Position 3"
         )
+        fetched = client.get(f"/books/{created.json()['id']}")
+        assert fetched.status_code == 200
+        assert fetched.json()["title"] == "Piranesi"
 
         stats = client.get("/stats").json()
         assert stats == {
@@ -3228,6 +3231,7 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
             == "2024-01-10"
         )
         mapped_book = mapped_shelf["containers"][0]["books"][0]
+        assert "cover_filename" in mapped_book
         assert mapped_book["page_count"] == 240
         assert mapped_book["language"] == "Galician"
         assert mapped_book["current_ed_year"] == 2024

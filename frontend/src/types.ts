@@ -34,6 +34,7 @@ export interface MapBook {
   author: string;
   has_multiple_authors: boolean;
   structured_authors: string[];
+  cover_filename: string | null;
   isbn_10: string | null;
   isbn_13: string | null;
   subtitle: string | null;
