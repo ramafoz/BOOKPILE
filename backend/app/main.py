@@ -2266,12 +2266,6 @@ def library_map() -> dict[str, Any]:
 
 @app.put("/visual-layout")
 def update_visual_layout(payload: VisualLayoutUpdate) -> dict[str, Any]:
-    for rect in [*payload.bookcases, payload.outside, payload.loaned]:
-        if rect.x + rect.width > 100 or rect.y + rect.height > 100:
-            raise HTTPException(
-                status_code=422,
-                detail="Layout items must remain inside the canvas",
-            )
     for container in payload.containers:
         if container.x + container.width > 100 or container.y + container.height > 100:
             raise HTTPException(

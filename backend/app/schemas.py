@@ -556,10 +556,12 @@ class CatalogueMatchRequest(BaseModel):
 
 
 class VisualRect(BaseModel):
-    x: float = Field(ge=0, le=100)
-    y: float = Field(ge=0, le=100)
-    width: float = Field(gt=0, le=100)
-    height: float = Field(gt=0, le=100)
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
 
 
 class VisualBookcaseLayout(VisualRect):
@@ -572,6 +574,8 @@ class VisualShelfLayout(BaseModel):
 
 
 class VisualContainerLayout(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     id: int
     x: float = Field(ge=0, le=100)
     y: float = Field(ge=0, le=100)

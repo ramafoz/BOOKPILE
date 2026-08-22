@@ -84,7 +84,12 @@ Visual rearrangement supports:
 
 - Display furniture, shelves, foreground/background containers, and books as
   a room-scale visual index.
+- Use a responsive full-screen viewport over an effectively unbounded world,
+  with pan, zoom, vertical fit/reset, compact overlays, and a collapsible colour
+  legend.
 - Position and resize furniture and the separate Reading and On-loan areas.
+- Edit unbounded top-level coordinates through direct handles or a floating,
+  minimizable editor with explicit Save and Cancel actions.
 - Customize relative shelf heights and each container's position, width, and
   height.
 - Allow controlled foreground/background overlap while preventing accidental
@@ -357,6 +362,11 @@ in place:
    status and retained physical position, and are included in map, search,
    statistics, backup validation, and CSV exports. The complete desktop and
    mobile loan/return/history workflow has been manually validated.
+10. Schema v7 recentres the visual-library world at horizontal coordinate zero
+    and removes the old top-level `0–100` boundary. The migration changes only
+    top-level visual X coordinates, was rehearsed against a validated v6 ZIP,
+    and preserved all 434 books and related catalogue data with successful
+    integrity and foreign-key checks.
 
 Later database phases include structured subjects and genres, ratings and
 tags.

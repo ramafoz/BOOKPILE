@@ -101,16 +101,20 @@ This roadmap separates future work by its effect on the current data model.
 Detailed design, risks, open decisions, phased implementation, and multi-device
 acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
 
-- [ ] Separate persistent world coordinates from responsive camera/viewport
+- [x] Separate persistent world coordinates from responsive camera/viewport
   state and remove the fixed top-level map boundary.
-- [ ] Add full-screen responsive map navigation with pan, zoom, reset, and
-  bookcase/shelf/container focus controls.
+- [x] Add full-screen responsive map navigation with pan, zoom, reset, compact
+  overlays, and a collapsible colour legend.
+- [ ] Add bookcase, shelf, and container focus controls.
 - [ ] Add exclusive book/container inspection modes with read-only compact
   bottom catalogues and explicit filtered exits to the main catalogue.
 - [ ] Render row width and pile thickness proportionally to page count, using
   the library mean or `200` only as a visual fallback for missing metadata.
-- [ ] Preserve layout editing, visual rearrangement, colour modes, overlapping
-  depth, Reading, and On-loan behaviour under the new camera transform.
+- [x] Preserve layout editing, colour modes, overlapping depth, Reading, and
+  On-loan behaviour under the new camera transform, using a floating,
+  minimizable editor.
+- [ ] Restore the complete visual-rearrangement workflow in a floating,
+  minimizable panel under the new camera transform.
 - [ ] Validate the result on desktop, phone, and tablet before merging the
   feature branch.
 

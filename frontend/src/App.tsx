@@ -13,6 +13,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronUp,
   Clock3,
   DatabaseBackup,
   Download,
@@ -5498,6 +5499,34 @@ function RangeField({
   );
 }
 
+function MapNumberField({
+  label,
+  value,
+  positive = false,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  positive?: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="map-number-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        step="0.5"
+        min={positive ? 0.5 : undefined}
+        value={value}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next) && (!positive || next > 0)) onChange(next);
+        }}
+      />
+    </label>
+  );
+}
+
 const emptyVisualLayout: VisualLayout = {
   bookcases: [],
   shelves: [],
@@ -5505,7 +5534,8 @@ const emptyVisualLayout: VisualLayout = {
   outside: { x: 54, y: 70, width: 28, height: 18 },
   loaned: { x: 84, y: 70, width: 14, height: 18 },
 };
-const MAP_TRANSFORMED_WRITES_ENABLED = false;
+const MAP_LAYOUT_EDITOR_ENABLED = true;
+const MAP_REARRANGEMENT_ENABLED = false;
 
 function LibraryMapDialog({
   onClose,
@@ -5544,7 +5574,9 @@ function LibraryMapDialog({
   const [saving, setSaving] = useState(false);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
   const [selectedMapGenre, setSelectedMapGenre] = useState("");
+  const [legendExpanded, setLegendExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
+  const [layoutPanelMinimized, setLayoutPanelMinimized] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
   const [oldPositionMode, setOldPositionMode] =
@@ -5609,6 +5641,20 @@ function LibraryMapDialog({
   }, [loadMap]);
 
   const activeLayout = editingLayout ? draft : map.layout;
+  const layoutDirty = editingLayout && JSON.stringify(draft) !== JSON.stringify(map.layout);
+  const confirmDiscardLayout = useCallback((): boolean => (
+    !layoutDirty || window.confirm("Discard the unsaved library layout changes?")
+  ), [layoutDirty]);
+  const cancelLayoutEditing = useCallback(() => {
+    if (!confirmDiscardLayout()) return;
+    setDraft(structuredClone(map.layout));
+    setEditingLayout(false);
+    setError("");
+  }, [confirmDiscardLayout, map.layout]);
+  const requestMapClose = useCallback(() => {
+    if (!confirmDiscardLayout()) return;
+    onClose();
+  }, [confirmDiscardLayout, onClose]);
   const bookcaseRects = new Map(
     activeLayout.bookcases.map((item) => [item.id, item]),
   );
@@ -5783,6 +5829,9 @@ function LibraryMapDialog({
     () => buildMapColourScale(colourMode, projectedBooks, selectedMapGenre),
     [projectedBooks, colourMode, selectedMapGenre],
   );
+  const activeColourLabel = MAP_COLOUR_OPTIONS.find(
+    (option) => option.value === colourMode,
+  )?.label ?? "Reading status";
   const cameraBounds = useMemo(
     () => boundsForMapRects([
       ...activeLayout.bookcases,
@@ -5792,7 +5841,7 @@ function LibraryMapDialog({
     [activeLayout.bookcases, activeLayout.loaned, activeLayout.outside],
   );
   const resetMapView = useCallback(() => {
-    setCamera(fitMapVerticalBounds(cameraBounds, viewportSize, 50));
+    setCamera(fitMapVerticalBounds(cameraBounds, viewportSize, 0));
   }, [cameraBounds, viewportSize]);
   const stopCameraHold = useCallback(() => {
     if (cameraHoldDelay.current !== null) {
@@ -5833,11 +5882,11 @@ function LibraryMapDialog({
     function closeWithKeyboard(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       if (mapToolsOpen) setMapToolsOpen(false);
-      else onClose();
+      else requestMapClose();
     }
     window.addEventListener("keydown", closeWithKeyboard);
     return () => window.removeEventListener("keydown", closeWithKeyboard);
-  }, [mapToolsOpen, onClose]);
+  }, [mapToolsOpen, requestMapClose]);
 
   useEffect(() => {
     if (!mapToolsOpen) return;
@@ -5850,13 +5899,27 @@ function LibraryMapDialog({
     return () => document.removeEventListener("mousedown", closeTools);
   }, [mapToolsOpen]);
 
+  useEffect(() => {
+    if (!layoutDirty) return;
+    function protectDraftFromBrowserBack(event: PopStateEvent) {
+      if (window.confirm("Discard the unsaved library layout changes?")) return;
+      event.stopImmediatePropagation();
+      window.history.pushState(
+        { ...(window.history.state ?? {}), bookpileView: "bookpile-library-map" },
+        "",
+      );
+    }
+    window.addEventListener("popstate", protectDraftFromBrowserBack, true);
+    return () => window.removeEventListener("popstate", protectDraftFromBrowserBack, true);
+  }, [layoutDirty]);
+
   useEffect(() => stopCameraHold, [stopCameraHold]);
 
   function runCameraAction(action: MapCameraAction) {
     setCamera((current) => {
       if (action === "zoom-in") return zoomMapCamera(current, 1.25);
       if (action === "zoom-out") return zoomMapCamera(current, 0.8);
-      return panMapCamera(current, action);
+      return panMapCamera(current, action, viewportSize);
     });
   }
 
@@ -5975,13 +6038,13 @@ function LibraryMapDialog({
         mode === "move"
           ? {
               ...start,
-              x: Math.max(0, Math.min(100 - start.width, start.x + deltaX)),
-              y: Math.max(0, Math.min(100 - start.height, start.y + deltaY)),
+              x: start.x + deltaX,
+              y: start.y + deltaY,
             }
           : {
               ...start,
-              width: Math.max(5, Math.min(100 - start.x, start.width + deltaX)),
-              height: Math.max(5, Math.min(100 - start.y, start.height + deltaY)),
+              width: Math.max(0.5, start.width + deltaX),
+              height: Math.max(0.5, start.height + deltaY),
             },
       );
     };
@@ -6313,7 +6376,7 @@ function LibraryMapDialog({
   }
 
   return (
-    <div className="dialog-backdrop map-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop map-backdrop" onMouseDown={requestMapClose}>
       <div
         className="dialog map-dialog map-fullscreen"
         onMouseDown={(event) => event.stopPropagation()}
@@ -6337,15 +6400,15 @@ function LibraryMapDialog({
               </button>
               {mapToolsOpen && (
                 <div className="menu-popover map-tools-menu" role="menu">
-                  {!MAP_TRANSFORMED_WRITES_ENABLED && (
+                  {!MAP_REARRANGEMENT_ENABLED && (
                     <p className="map-tools-notice">
-                      These tools return after their floating editors are safely
-                      integrated with pan and zoom.
+                      Book rearrangement returns after its complete floating
+                      workflow is integrated with pan and zoom.
                     </p>
                   )}
                   <button
                     role="menuitem"
-                    disabled={!MAP_TRANSFORMED_WRITES_ENABLED}
+                    disabled={!MAP_REARRANGEMENT_ENABLED}
                     onClick={() => {
                       if (rearranging) resetRearrangement();
                       setRearranging((current) => !current);
@@ -6358,10 +6421,12 @@ function LibraryMapDialog({
                   {!editingLayout ? (
                     <button
                       role="menuitem"
-                      disabled={!MAP_TRANSFORMED_WRITES_ENABLED || rearranging}
+                      disabled={!MAP_LAYOUT_EDITOR_ENABLED || rearranging}
                       onClick={() => {
                         setDraft(structuredClone(map.layout));
                         setEditingLayout(true);
+                        setLayoutPanelMinimized(false);
+                        setLegendExpanded(false);
                         setMapToolsOpen(false);
                       }}
                     >
@@ -6372,8 +6437,7 @@ function LibraryMapDialog({
                       <button
                         role="menuitem"
                         onClick={() => {
-                          setDraft(structuredClone(map.layout));
-                          setEditingLayout(false);
+                          cancelLayoutEditing();
                           setMapToolsOpen(false);
                         }}
                       >
@@ -6394,12 +6458,23 @@ function LibraryMapDialog({
                 </div>
               )}
             </div>
-            <button className="outline-button map-exit-button" onClick={onClose}>
+            <button className="outline-button map-exit-button" onClick={requestMapClose}>
               <ArrowLeft size={17} /> <span>Back to catalogue</span>
             </button>
           </div>
         </div>
-        <div className="map-legend">
+        <div className={`map-legend ${legendExpanded ? "expanded" : "collapsed"}`}>
+          {!legendExpanded ? (
+            <button
+              type="button"
+              className="map-legend-summary"
+              aria-expanded="false"
+              onClick={() => setLegendExpanded(true)}
+            >
+              <span>Colour by {activeColourLabel}</span>
+              <ChevronDown size={16} />
+            </button>
+          ) : <>
           <label className="map-colour-picker">
             Colour by
             <select
@@ -6453,6 +6528,16 @@ function LibraryMapDialog({
               ))}
             </div>
           )}
+          <button
+            type="button"
+            className="map-legend-collapse"
+            aria-label="Collapse colour legend"
+            title="Collapse colour legend"
+            onClick={() => setLegendExpanded(false)}
+          >
+            <ChevronUp size={16} />
+          </button>
+          </>}
         </div>
         {error && <div className="form-error">{error}</div>}
         {loading ? (
@@ -6460,7 +6545,50 @@ function LibraryMapDialog({
         ) : (
           <>
             {editingLayout && (
-              <aside className="map-layout-editor">
+              <aside className={`map-layout-editor map-workspace-panel ${
+                layoutPanelMinimized ? "minimized" : ""
+              }`}>
+                <header className="map-workspace-header">
+                  <div>
+                    <p className="eyebrow dark">Visual workspace</p>
+                    <h3>Edit layout</h3>
+                  </div>
+                  <div className="map-workspace-actions">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      title={layoutPanelMinimized ? "Restore editor" : "Minimize editor"}
+                      aria-label={layoutPanelMinimized ? "Restore layout editor" : "Minimize layout editor"}
+                      onClick={() => {
+                        setLayoutPanelMinimized((current) => !current);
+                        setLegendExpanded(false);
+                      }}
+                    >
+                      {layoutPanelMinimized ? <ChevronUp /> : <ChevronDown />}
+                    </button>
+                    {!layoutPanelMinimized && (
+                      <>
+                        <button
+                          className="outline-button"
+                          type="button"
+                          onClick={cancelLayoutEditing}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="primary-button"
+                          type="button"
+                          disabled={saving || draftContainerCollisions.length > 0}
+                          onClick={() => void saveLayout()}
+                        >
+                          <Save size={15} /> {saving ? "Saving…" : "Save"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </header>
+                {!layoutPanelMinimized && <div className="map-layout-editor-content">
+                {error && <div className="form-error map-workspace-error">{error}</div>}
                 <p className="map-direct-help">
                   Direct controls: drag ↕ to move furniture or the Reading area,
                   drag ↘ to resize them, drag a container to move it, and drag
@@ -6490,15 +6618,12 @@ function LibraryMapDialog({
                   {selectedBookcaseItem && (
                     <div className="map-range-grid">
                       {(["x", "y", "width", "height"] as const).map((field) => (
-                        <RangeField
+                        <MapNumberField
                           key={field}
                           label={field === "x" ? "Horizontal" : field === "y"
                             ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
                           value={selectedBookcaseItem[field]}
-                          min={field === "width" || field === "height" ? 5 : 0}
-                          max={field === "x" || field === "width"
-                            ? 100 - (field === "x" ? selectedBookcaseItem.width : selectedBookcaseItem.x)
-                            : 100 - (field === "y" ? selectedBookcaseItem.height : selectedBookcaseItem.y)}
+                          positive={field === "width" || field === "height"}
                           onChange={(value) => updateBookcaseRect(field, value)}
                         />
                       ))}
@@ -6509,12 +6634,11 @@ function LibraryMapDialog({
                   <strong className="map-editor-title">On-loan area</strong>
                   <div className="map-range-grid">
                     {(["x", "y", "width", "height"] as const).map((field) => (
-                      <RangeField
+                      <MapNumberField
                         key={field}
                         label={field === "x" ? "Horizontal" : field === "y" ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
                         value={draft.loaned[field]}
-                        min={field === "width" || field === "height" ? 5 : 0}
-                        max={field === "x" || field === "width" ? 100 - (field === "x" ? draft.loaned.width : draft.loaned.x) : 100 - (field === "y" ? draft.loaned.height : draft.loaned.y)}
+                        positive={field === "width" || field === "height"}
                         onChange={(value) => setDraft((current) => ({ ...current, loaned: { ...current.loaned, [field]: value } }))}
                       />
                     ))}
@@ -6524,15 +6648,12 @@ function LibraryMapDialog({
                   <strong className="map-editor-title">Reading / outside area</strong>
                   <div className="map-range-grid">
                     {(["x", "y", "width", "height"] as const).map((field) => (
-                      <RangeField
+                      <MapNumberField
                         key={field}
                         label={field === "x" ? "Horizontal" : field === "y"
                           ? "Vertical" : field[0].toUpperCase() + field.slice(1)}
                         value={draft.outside[field]}
-                        min={field === "width" || field === "height" ? 5 : 0}
-                        max={field === "x" || field === "width"
-                          ? 100 - (field === "x" ? draft.outside.width : draft.outside.x)
-                          : 100 - (field === "y" ? draft.outside.height : draft.outside.y)}
+                        positive={field === "width" || field === "height"}
                         onChange={(value) =>
                           setDraft((current) => ({
                             ...current,
@@ -6645,6 +6766,7 @@ function LibraryMapDialog({
                     </div>
                   )}
                 </div>
+                </div>}
               </aside>
             )}
             {rearranging && (

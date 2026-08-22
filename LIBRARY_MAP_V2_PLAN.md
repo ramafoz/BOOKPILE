@@ -1,8 +1,7 @@
 # Library Map v2 — viewport, navigation, and inspection plan
 
-Status: **draft specification**. This document records the proposed design and
-open decisions before functional implementation begins on
-`feature/library-map-viewport`.
+Status: **implementation in progress** on `feature/library-map-viewport`.
+Phases 1 and 2 are implemented and manually accepted; phase 3 is next.
 
 No catalogue or layout data should be rewritten merely by opening the new map.
 Any persistent-layout change must continue to require explicit layout-editing
@@ -275,7 +274,7 @@ For each container:
 - Create and validate a full ZIP backup before the first test that saves an
   unbounded layout.
 
-### Phase 1 — camera over the existing map
+### Phase 1 — camera over the existing map — complete
 
 - Introduce world-to-screen transform helpers and camera state.
 - Render the current layout unchanged through the camera abstraction.
@@ -285,7 +284,7 @@ For each container:
   their transformed pointer coordinates are safe.
 - Validate desktop, tablet, portrait phone, landscape phone, and rotation.
 
-### Phase 2 — unbounded top-level layout
+### Phase 2 — unbounded top-level layout — complete
 
 - Remove `0–100` top-level position bounds from frontend interaction and backend
   validation while retaining finite-number and positive-size checks.
@@ -296,6 +295,12 @@ For each container:
   the complete layout editor into it, including precise controls,
   collision/errors, Save, and Cancel.
 - Verify Save/Cancel and backup round trips before enabling editing by default.
+
+Implementation record: schema v7 losslessly shifted legacy top-level X
+coordinates by `-50`, making world coordinate `x = 0` the reset centre without
+changing the relative layout. The migration was rehearsed against a validated
+v6 ZIP and then applied to the live catalogue with 434 books preserved,
+successful integrity and foreign-key checks, and verified pre/post backups.
 
 ### Phase 3 — target focus
 

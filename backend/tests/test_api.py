@@ -2325,7 +2325,7 @@ def test_restore_recovers_deleted_book_and_cover() -> None:
         assert client.get(f"/covers/{restored_cover}").status_code == 200
 
         with closing(connect_database(TEST_DATABASE)) as connection:
-            assert schema_version(connection) == 6
+                assert schema_version(connection) == 7
 
     backup_directory = TEST_DATABASE.parent.parent / "backups"
     for pattern in ("pre-restore-*.zip", "BOOKPILE-pre-migration-*.zip"):
@@ -3275,11 +3275,29 @@ def test_library_map_returns_ordered_hierarchy_books_and_status_counts() -> None
         persisted = client.get("/library-map").json()["layout"]
         assert persisted == saved.json()
 
-        invalid = persisted.copy()
-        invalid["bookcases"] = [
-            {**invalid["bookcases"][0], "x": 90, "width": 35}
+        unbounded = persisted.copy()
+        unbounded["bookcases"] = [
+            {
+                **unbounded["bookcases"][0],
+                "x": -140,
+                "y": 135,
+                "width": 120,
+                "height": 105,
+            }
         ]
-        assert client.put("/visual-layout", json=invalid).status_code == 422
+        unbounded["outside"] = {
+            **unbounded["outside"],
+            "x": 240,
+            "y": -80,
+        }
+        saved_unbounded = client.put("/visual-layout", json=unbounded)
+        assert saved_unbounded.status_code == 200
+        assert saved_unbounded.json()["bookcases"][0]["x"] == -140
+        assert saved_unbounded.json()["outside"]["y"] == -80
+
+        invalid_container = saved_unbounded.json()
+        invalid_container["containers"][0].update({"x": 80, "width": 30})
+        assert client.put("/visual-layout", json=invalid_container).status_code == 422
 
 
 def test_visual_layout_prevents_overlap_within_the_same_shelf_layer() -> None:

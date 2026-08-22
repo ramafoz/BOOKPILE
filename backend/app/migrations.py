@@ -1,5 +1,6 @@
 import hashlib
 import json
+import copy
 import shutil
 import sqlite3
 import tempfile
@@ -11,7 +12,7 @@ from typing import Callable
 
 
 BASELINE_SCHEMA_VERSION = 1
-LATEST_SCHEMA_VERSION = 6
+LATEST_SCHEMA_VERSION = 7
 MIGRATION_TABLE = "schema_migrations"
 
 BASELINE_TABLES = (
@@ -315,12 +316,26 @@ def _migration_6_store_loan_history(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_7_center_unbounded_visual_world(
+    connection: sqlite3.Connection,
+) -> None:
+    """Keep the legacy layout unchanged while moving its world origin to x=0."""
+    connection.execute(
+        """
+        UPDATE visual_layout_items
+        SET x = x - 50
+        WHERE item_type IN ('BOOKCASE', 'OUTSIDE')
+        """
+    )
+
+
 MIGRATIONS = (
     Migration(2, "store normalized ISBN-10 and ISBN-13", _migration_2_store_isbn),
     Migration(3, "store optional bibliographic metadata", _migration_3_store_bibliographic_metadata),
     Migration(4, "store ordered multiple authors", _migration_4_store_multiple_authors),
     Migration(5, "store complete reading history", _migration_5_store_reading_sessions),
     Migration(6, "store loan history", _migration_6_store_loan_history),
+    Migration(7, "center the unbounded visual-library world", _migration_7_center_unbounded_visual_world),
 )
 
 
@@ -429,6 +444,19 @@ def snapshot_fingerprint(snapshot: dict[str, list[dict]]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def expected_snapshot_after_migrations(
+    snapshot: dict[str, list[dict]],
+    source_version: int,
+    target_version: int,
+) -> dict[str, list[dict]]:
+    expected = copy.deepcopy(snapshot)
+    if source_version < 7 <= target_version:
+        for row in expected.get("visual_layout_items", []):
+            if row["item_type"] in {"BOOKCASE", "OUTSIDE"}:
+                row["x"] -= 50
+    return expected
 
 
 def verify_database(
@@ -705,6 +733,11 @@ def run_migrations(
     )
 
     connection = connect_database(database)
+    expected_after_snapshot = expected_snapshot_after_migrations(
+        before_snapshot,
+        source_version,
+        target_version,
+    )
     try:
         connection.execute("BEGIN IMMEDIATE")
         connection.execute(
@@ -735,7 +768,7 @@ def run_migrations(
 
         after_fingerprint = verify_database(
             connection,
-            before_snapshot,
+            expected_after_snapshot,
             book_columns=preserved_book_columns,
         )
         actual_version = schema_version(connection)

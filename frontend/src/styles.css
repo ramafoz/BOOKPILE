@@ -513,9 +513,9 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .restore-success p { color: #52645e; line-height: 1.5; font-size: 13px; }
 .map-dialog { width: min(1180px, 100%); }
 .map-backdrop { place-items: stretch; padding: 0; }
-.map-dialog.map-fullscreen { position: relative; display: block; width: 100vw; height: 100dvh; max-height: none; overflow: hidden; padding: 0; border-radius: 0; }
+.map-dialog.map-fullscreen { --map-overlay-chip-width: min(220px, calc(100vw - 170px)); position: relative; display: block; width: 100vw; height: 100dvh; max-height: none; overflow: hidden; padding: 0; border-radius: 0; }
 .map-fullscreen .dialog-header { position: absolute; z-index: 40; top: max(10px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); align-items: center; margin: 0; pointer-events: none; }
-.map-fullscreen .map-title-chip { padding: 8px 12px; border: 1px solid #f8f3e966; border-radius: 10px; background: #f8f3e9e8; box-shadow: 0 5px 18px #173d3530; backdrop-filter: blur(8px); pointer-events: auto; }
+.map-fullscreen .map-title-chip { width: var(--map-overlay-chip-width); padding: 8px 12px; border: 1px solid #f8f3e966; border-radius: 10px; background: #f8f3e9e8; box-shadow: 0 5px 18px #173d3530; backdrop-filter: blur(8px); pointer-events: auto; }
 .map-fullscreen .dialog-header h2 { font-size: clamp(20px, 2.5vw, 30px); line-height: 1; }
 .map-header-actions { display: flex; align-items: center; gap: 7px; pointer-events: auto; }
 .map-tools { position: relative; }
@@ -527,6 +527,12 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-exit-button { flex: 0 0 auto; min-height: 42px; padding: 9px 13px; background: #f8f3e9e8; box-shadow: 0 5px 18px #173d3530; backdrop-filter: blur(8px); pointer-events: auto; }
 .map-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: -7px 0 18px; padding: 11px 13px; color: #596662; background: #eee7dc; border-radius: 8px; font-size: 12px; }
 .map-fullscreen .map-legend { position: absolute; z-index: 40; top: max(66px, calc(env(safe-area-inset-top) + 66px)); left: max(10px, env(safe-area-inset-left)); max-width: calc(100vw - max(20px, env(safe-area-inset-left) + env(safe-area-inset-right))); margin: 0; padding: 8px 10px; border: 1px solid #f8f3e966; background: #eee7dce8; box-shadow: 0 5px 18px #173d3526; backdrop-filter: blur(8px); }
+.map-fullscreen .map-legend.collapsed { width: var(--map-overlay-chip-width); padding: 0; overflow: hidden; }
+.map-legend-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 10px 11px; border: 0; color: #475650; background: transparent; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.map-legend-summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-legend-summary svg { flex: 0 0 auto; }
+.map-legend-collapse { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; margin-left: auto; padding: 0; border: 1px solid #c8bcaa; border-radius: 6px; color: #475650; background: #fffaf1; cursor: pointer; }
+.map-legend-summary:hover, .map-legend-summary:focus-visible, .map-legend-collapse:hover, .map-legend-collapse:focus-visible { color: #173d35; background: #e2e9e4; outline: 2px solid #a85835; outline-offset: -2px; }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .map-legend i { width: 11px; height: 11px; border-radius: 2px; }
 .map-colour-picker { display: inline-flex; align-items: center; gap: 7px; color: #475650; font-weight: 700; }
@@ -542,7 +548,16 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-edit-button.active { color: #fff; background: #28574d; }
 .map-edit-actions { display: flex; align-items: center; gap: 8px; margin-left: 4px; }
 .map-edit-actions button { padding: 7px 10px; }
-.map-layout-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid #d4c8b7; border-radius: 10px; background: #f4eee4; }
+.map-layout-editor { position: absolute; z-index: 35; top: max(116px, calc(env(safe-area-inset-top) + 116px)); right: max(12px, env(safe-area-inset-right)); display: flex; flex-direction: column; width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 132px); overflow: hidden; border: 1px solid #d4c8b7; border-radius: 12px; background: #f4eee4f5; box-shadow: 0 16px 45px #173d3552; backdrop-filter: blur(10px); }
+.map-layout-editor.minimized { top: max(66px, calc(env(safe-area-inset-top) + 66px)); width: min(330px, calc(100vw - 24px)); }
+.map-workspace-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #d4c8b7; background: #fffaf1; }
+.map-workspace-header .eyebrow { margin: 0 0 2px; font-size: 9px; }
+.map-workspace-header h3 { margin: 0; color: #203a33; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
+.map-workspace-actions { display: flex; align-items: center; gap: 7px; }
+.map-workspace-actions .icon-button { width: 36px; height: 36px; }
+.map-workspace-actions button { white-space: nowrap; }
+.map-layout-editor-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow-y: auto; padding: 12px; overscroll-behavior: contain; }
+.map-workspace-error { grid-column: 1 / -1; margin: 0; }
 .map-rearrangement-panel { display: grid; gap: 13px; margin-bottom: 16px; padding: 15px; border: 1px solid #b9c9c2; border-radius: 10px; background: #edf3f0; }
 .map-rearrangement-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .map-rearrangement-heading h3 { margin: 2px 0 0; color: #203a33; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
@@ -582,10 +597,12 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
 .map-range span { display: flex; justify-content: space-between; color: #68746f; font-size: 11px; }
 .map-range strong { color: #28574d; }
 .map-range input { width: 100%; accent-color: #28574d; }
+.map-number-field { display: grid; gap: 4px; color: #68746f; font-size: 11px; }
+.map-number-field input { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #c8bcaa; border-radius: 6px; color: #2d433c; background: #fff; font: inherit; }
 .map-room { position: relative; flex: 1 1 auto; width: 100%; min-height: 0; overflow: hidden; border: 1px solid #cfc4b4; border-radius: 12px; background: linear-gradient(#eee8dd 0 76%, #d8cec0 76%); box-shadow: inset 0 0 50px #4d403314; }
 .map-fullscreen .map-room { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; }
 .map-world { position: absolute; top: 50%; left: 50%; transform-origin: 0 0; will-change: transform; }
-.map-camera-controls { position: absolute; z-index: 30; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
+.map-camera-controls { position: absolute; z-index: 30; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 8px; pointer-events: none; }
 .map-pan-controls { display: grid; grid-template: repeat(3, 42px) / repeat(3, 42px); gap: 3px; padding: 6px; border: 1px solid #f8f3e966; border-radius: 12px; background: #173d35d9; box-shadow: 0 6px 20px #173d3540; pointer-events: auto; }
 .map-camera-button { display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid #f8f3e955; border-radius: 8px; color: #fffaf1; background: #28574dee; touch-action: none; user-select: none; }
 .map-camera-button:hover, .map-camera-button:focus-visible { border-color: #fffaf1; background: #a85835; outline: 2px solid #fffaf1; outline-offset: 1px; }
@@ -655,7 +672,7 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .row-actions { justify-content: flex-start; }
   .layout-forms { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .map-layout-editor { grid-template-columns: 1fr; }
+  .map-layout-editor-content { grid-template-columns: 1fr; }
   .map-precise-move { grid-template-columns: 1fr 1fr; }
   .map-room { min-width: 900px; }
   .map-dialog { overflow-x: auto; }
@@ -769,10 +786,17 @@ small { display: block; margin-top: 6px; color: #858b88; font-weight: 400; }
   .map-exit-button { width: 42px; padding: 9px; font-size: 12px; }
   .map-exit-button span { display: none; }
   .map-fullscreen .map-legend { top: max(62px, calc(env(safe-area-inset-top) + 62px)); right: max(7px, env(safe-area-inset-right)); flex-wrap: nowrap; overflow-x: auto; padding: 7px 8px; }
+  .map-fullscreen .map-legend.collapsed { right: auto; padding: 0; overflow: hidden; }
   .map-fullscreen .map-colour-picker { flex: 0 0 auto; }
   .map-fullscreen .map-colour-picker select { max-width: 170px; }
   .map-fullscreen .map-status-legend, .map-fullscreen .map-scale-legend { flex: 0 0 auto; flex-wrap: nowrap; }
   .map-fullscreen .map-legend-note { display: none; }
+  .map-layout-editor { top: max(112px, calc(env(safe-area-inset-top) + 112px)); right: max(7px, env(safe-area-inset-right)); left: max(7px, env(safe-area-inset-left)); width: auto; max-height: calc(100dvh - 119px - env(safe-area-inset-bottom)); }
+  .map-layout-editor.minimized { z-index: 45; top: max(62px, calc(env(safe-area-inset-top) + 62px)); right: max(7px, env(safe-area-inset-right)); left: auto; width: min(150px, calc(100vw - var(--map-overlay-chip-width) - 21px)); }
+  .map-layout-editor.minimized .map-workspace-header .eyebrow { display: none; }
+  .map-workspace-header { padding: 8px 9px; }
+  .map-workspace-header h3 { font-size: 18px; }
+  .map-workspace-actions .outline-button, .map-workspace-actions .primary-button { padding: 9px 10px; font-size: 12px; }
   .map-camera-controls { right: max(7px, env(safe-area-inset-right)); bottom: max(7px, env(safe-area-inset-bottom)); gap: 6px; }
   .map-pan-controls { grid-template: repeat(3, 38px) / repeat(3, 38px); }
   .map-camera-button { width: 38px; height: 38px; }

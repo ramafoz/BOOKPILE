@@ -24,7 +24,7 @@ export interface MapWorldBounds {
 }
 
 export const LEGACY_MAP_CAMERA: MapCamera = {
-  centerX: 50,
+  centerX: 0,
   centerY: 50,
   zoom: 1,
 };
@@ -41,12 +41,23 @@ export function clampMapZoom(zoom: number): number {
 export function panMapCamera(
   camera: MapCamera,
   direction: "up" | "down" | "left" | "right",
+  viewport: MapViewportSize,
 ): MapCamera {
-  const distance = 100 / camera.zoom * MAP_PAN_FRACTION;
-  if (direction === "up") return { ...camera, centerY: camera.centerY - distance };
-  if (direction === "down") return { ...camera, centerY: camera.centerY + distance };
-  if (direction === "left") return { ...camera, centerX: camera.centerX - distance };
-  return { ...camera, centerX: camera.centerX + distance };
+  const verticalDistance = 100 / camera.zoom * MAP_PAN_FRACTION;
+  const horizontalSpan = viewport.height > 0
+    ? 100 * viewport.width / (viewport.height * LEGACY_MAP_ASPECT_RATIO)
+    : 100;
+  const horizontalDistance = horizontalSpan / camera.zoom * MAP_PAN_FRACTION;
+  if (direction === "up") {
+    return { ...camera, centerY: camera.centerY - verticalDistance };
+  }
+  if (direction === "down") {
+    return { ...camera, centerY: camera.centerY + verticalDistance };
+  }
+  if (direction === "left") {
+    return { ...camera, centerX: camera.centerX - horizontalDistance };
+  }
+  return { ...camera, centerX: camera.centerX + horizontalDistance };
 }
 
 export function zoomMapCamera(
@@ -87,7 +98,7 @@ export function boundsForMapRects(
 export function fitMapVerticalBounds(
   bounds: MapWorldBounds | null,
   viewport: MapViewportSize,
-  horizontalCenter = 50,
+  horizontalCenter = 0,
 ): MapCamera {
   if (!bounds || viewport.width <= 0 || viewport.height <= 0) {
     return LEGACY_MAP_CAMERA;

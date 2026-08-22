@@ -223,7 +223,7 @@ def test_newer_database_is_rejected_without_backup(
             )
             """
         )
-        for version in range(1, 8):
+        for version in range(1, 9):
             connection.execute(
                 "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
                 (version, f"schema {version}"),
@@ -265,18 +265,18 @@ def test_backups_record_and_validate_the_schema_they_contain(
         backup_directory=backups,
         approved=True,
     )
-    v6_backup = backups / "catalogue-v6.zip"
-    v6_manifest = create_full_backup(
-        v6_backup,
+    v7_backup = backups / "catalogue-v7.zip"
+    v7_manifest = create_full_backup(
+        v7_backup,
         source_database=database,
         source_covers=covers,
     )
-    v6_validation = extract_and_validate_archive(
-        v6_backup,
-        tmp_path / "validated-v6",
+    v7_validation = extract_and_validate_archive(
+        v7_backup,
+        tmp_path / "validated-v7",
     )
-    assert v6_manifest["schema_version"] == 6
-    assert v6_validation["schema_version"] == 6
+    assert v7_manifest["schema_version"] == 7
+    assert v7_validation["schema_version"] == 7
 
 
 def test_v5_to_v6_adds_empty_loan_history_without_changing_existing_data(
@@ -318,6 +318,69 @@ def test_v5_to_v6_adds_empty_loan_history_without_changing_existing_data(
         ).fetchone()[0] == 1
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_v6_to_v7_centres_top_level_visual_coordinates_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database, covers, backups = create_v1_catalogue(tmp_path, monkeypatch)
+    run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=6,
+    )
+    with closing(connect_database(database)) as connection:
+        connection.execute(
+            "UPDATE visual_layout_items SET x = 54 WHERE item_type = 'OUTSIDE'"
+        )
+        connection.commit()
+        before_books = [dict(row) for row in connection.execute("SELECT * FROM books")]
+        before_items = [
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM visual_layout_items ORDER BY item_type, item_id"
+            )
+        ]
+
+    report = run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=7,
+    )
+
+    assert report.source_version == 6
+    assert report.target_version == 7
+    assert report.applied_versions == (7,)
+    assert report.backup_path is not None and report.backup_path.is_file()
+    with closing(connect_database(database)) as connection:
+        assert schema_version(connection) == 7
+        assert [dict(row) for row in connection.execute("SELECT * FROM books")] == before_books
+        after_items = [
+            dict(row)
+            for row in connection.execute(
+                "SELECT * FROM visual_layout_items ORDER BY item_type, item_id"
+            )
+        ]
+        assert len(after_items) == len(before_items)
+        for before, after in zip(before_items, after_items, strict=True):
+            assert after["x"] == before["x"] - 50
+            assert after["y"] == before["y"]
+            assert after["width"] == before["width"]
+            assert after["height"] == before["height"]
+
+    second = run_migrations(
+        database,
+        covers=covers,
+        backup_directory=backups,
+        approved=True,
+        target_version=7,
+    )
+    assert second.applied_versions == ()
 
 
 def test_v2_to_v3_preserves_existing_isbns_and_adds_nullable_metadata(
