@@ -1,6 +1,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowRightLeft,
+  ArrowUp,
   BarChart3,
   BookOpen,
   BookDown,
@@ -33,11 +37,24 @@ import {
   Trash2,
   Upload,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { ApiError, api, type RestoreInspection } from "./api";
 import { decodeIsbnBarcodePhoto } from "./barcode";
 import { readCoverText, type CoverOcrProgress } from "./ocr";
 import { MetadataFilterFields } from "./MetadataFilterFields";
+import {
+  boundsForMapRects,
+  fitMapVerticalBounds,
+  LEGACY_MAP_ASPECT_RATIO,
+  LEGACY_MAP_CAMERA,
+  mapCameraTransform,
+  panMapCamera,
+  zoomMapCamera,
+  type MapCamera,
+  type MapViewportSize,
+} from "./mapCamera";
 import type {
   Book,
   BookPayload,
@@ -73,6 +90,9 @@ import type {
 
 type SuggestionMode = "random" | "oldest" | "waiting";
 type AppMenu = "settings" | "add" | "suggestions";
+type MapCameraAction =
+  | "up" | "down" | "left" | "right"
+  | "zoom-in" | "zoom-out";
 type CandidateMetadataKey =
   | "title" | "author" | "isbn_10" | "isbn_13" | "subtitle"
   | "page_count" | "publisher" | "current_ed_year"
@@ -198,6 +218,7 @@ function App() {
   const [loanDateFrom, setLoanDateFrom] = useState("");
   const [loanDateTo, setLoanDateTo] = useState("");
   const [includeUnknownLoanDates, setIncludeUnknownLoanDates] = useState(false);
+  const mapHistoryActive = useRef(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -321,6 +342,26 @@ function App() {
   }, [activeMenu]);
 
   useEffect(() => {
+    if (!showMap) return;
+    const marker = "bookpile-library-map";
+    if (window.history.state?.bookpileView !== marker) {
+      window.history.pushState(
+        { ...(window.history.state ?? {}), bookpileView: marker },
+        "",
+      );
+    }
+    mapHistoryActive.current = true;
+    function closeMapFromBrowserHistory() {
+      if (!mapHistoryActive.current) return;
+      mapHistoryActive.current = false;
+      setShowMap(false);
+      setFocusedMapBook(null);
+    }
+    window.addEventListener("popstate", closeMapFromBrowserHistory);
+    return () => window.removeEventListener("popstate", closeMapFromBrowserHistory);
+  }, [showMap]);
+
+  useEffect(() => {
     void refresh();
   }, [refresh]);
 
@@ -346,6 +387,18 @@ function App() {
     }
   }
 
+  function closeLibraryMap() {
+    if (
+      mapHistoryActive.current &&
+      window.history.state?.bookpileView === "bookpile-library-map"
+    ) {
+      mapHistoryActive.current = false;
+      window.history.back();
+    }
+    setShowMap(false);
+    setFocusedMapBook(null);
+  }
+
   function openCatalogueAt(
     bookcaseId: number,
     shelfId: number | "" = "",
@@ -362,8 +415,7 @@ function App() {
     setSortBy("physical");
     setSortOrder("asc");
     setShowAdvanced(true);
-    setShowMap(false);
-    setFocusedMapBook(null);
+    closeLibraryMap();
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
         behavior: "smooth",
@@ -386,8 +438,7 @@ function App() {
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(true);
-    setShowMap(false);
-    setFocusedMapBook(null);
+    closeLibraryMap();
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
         behavior: "smooth",
@@ -409,8 +460,7 @@ function App() {
     setSortBy("loaned_date");
     setSortOrder("asc");
     setShowAdvanced(true);
-    setShowMap(false);
-    setFocusedMapBook(null);
+    closeLibraryMap();
   }
 
   function openExactBookCatalogue(book: { id: number; title: string }) {
@@ -432,8 +482,7 @@ function App() {
     setSortBy("title");
     setSortOrder("asc");
     setShowAdvanced(false);
-    setShowMap(false);
-    setFocusedMapBook(null);
+    closeLibraryMap();
     window.setTimeout(
       () => document.querySelector(".catalogue-heading")?.scrollIntoView({
         behavior: "smooth",
@@ -1142,10 +1191,7 @@ function App() {
       {showMap && (
         <LibraryMapDialog
           focusedBook={focusedMapBook}
-          onClose={() => {
-            setShowMap(false);
-            setFocusedMapBook(null);
-          }}
+          onClose={closeLibraryMap}
           onFilter={openCatalogueAt}
           onReadingFilter={openReadingCatalogue}
           onLoanFilter={openLoanCatalogue}
@@ -5459,6 +5505,7 @@ const emptyVisualLayout: VisualLayout = {
   outside: { x: 54, y: 70, width: 28, height: 18 },
   loaned: { x: 84, y: 70, width: 14, height: 18 },
 };
+const MAP_TRANSFORMED_WRITES_ENABLED = false;
 
 function LibraryMapDialog({
   onClose,
@@ -5497,6 +5544,7 @@ function LibraryMapDialog({
   const [saving, setSaving] = useState(false);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
   const [selectedMapGenre, setSelectedMapGenre] = useState("");
+  const [mapToolsOpen, setMapToolsOpen] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   const [selectedMoveBookId, setSelectedMoveBookId] = useState<number | null>(null);
   const [oldPositionMode, setOldPositionMode] =
@@ -5526,8 +5574,17 @@ function LibraryMapDialog({
     x: number;
     y: number;
   } | null>(null);
+  const [camera, setCamera] = useState<MapCamera>(LEGACY_MAP_CAMERA);
+  const [viewportSize, setViewportSize] = useState<MapViewportSize>({
+    width: 0,
+    height: 0,
+  });
   const roomRef = useRef<HTMLDivElement>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
   const ignoreNextBookClick = useRef(false);
+  const cameraInitialized = useRef(false);
+  const cameraHoldDelay = useRef<number | null>(null);
+  const cameraHoldInterval = useRef<number | null>(null);
 
   const loadMap = useCallback(async () => {
     setLoading(true);
@@ -5726,6 +5783,109 @@ function LibraryMapDialog({
     () => buildMapColourScale(colourMode, projectedBooks, selectedMapGenre),
     [projectedBooks, colourMode, selectedMapGenre],
   );
+  const cameraBounds = useMemo(
+    () => boundsForMapRects([
+      ...activeLayout.bookcases,
+      activeLayout.outside,
+      activeLayout.loaned,
+    ]),
+    [activeLayout.bookcases, activeLayout.loaned, activeLayout.outside],
+  );
+  const resetMapView = useCallback(() => {
+    setCamera(fitMapVerticalBounds(cameraBounds, viewportSize, 50));
+  }, [cameraBounds, viewportSize]);
+  const stopCameraHold = useCallback(() => {
+    if (cameraHoldDelay.current !== null) {
+      window.clearTimeout(cameraHoldDelay.current);
+      cameraHoldDelay.current = null;
+    }
+    if (cameraHoldInterval.current !== null) {
+      window.clearInterval(cameraHoldInterval.current);
+      cameraHoldInterval.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const room = roomRef.current;
+    if (!room) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setViewportSize({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    observer.observe(room);
+    return () => observer.disconnect();
+  }, [loading]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      cameraInitialized.current ||
+      viewportSize.width <= 0 ||
+      viewportSize.height <= 0
+    ) return;
+    cameraInitialized.current = true;
+    resetMapView();
+  }, [loading, resetMapView, viewportSize.height, viewportSize.width]);
+
+  useEffect(() => {
+    function closeWithKeyboard(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (mapToolsOpen) setMapToolsOpen(false);
+      else onClose();
+    }
+    window.addEventListener("keydown", closeWithKeyboard);
+    return () => window.removeEventListener("keydown", closeWithKeyboard);
+  }, [mapToolsOpen, onClose]);
+
+  useEffect(() => {
+    if (!mapToolsOpen) return;
+    function closeTools(event: MouseEvent) {
+      if (!(event.target as Element).closest("[data-map-tools]")) {
+        setMapToolsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeTools);
+    return () => document.removeEventListener("mousedown", closeTools);
+  }, [mapToolsOpen]);
+
+  useEffect(() => stopCameraHold, [stopCameraHold]);
+
+  function runCameraAction(action: MapCameraAction) {
+    setCamera((current) => {
+      if (action === "zoom-in") return zoomMapCamera(current, 1.25);
+      if (action === "zoom-out") return zoomMapCamera(current, 0.8);
+      return panMapCamera(current, action);
+    });
+  }
+
+  function startCameraHold(action: MapCameraAction) {
+    stopCameraHold();
+    runCameraAction(action);
+    cameraHoldDelay.current = window.setTimeout(() => {
+      cameraHoldInterval.current = window.setInterval(
+        () => runCameraAction(action),
+        70,
+      );
+    }, 280);
+  }
+
+  function cameraControlHandlers(action: MapCameraAction) {
+    return {
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        startCameraHold(action);
+      },
+      onPointerUp: stopCameraHold,
+      onPointerCancel: stopCameraHold,
+      onPointerLeave: stopCameraHold,
+      onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+        if (event.detail === 0) runCameraAction(action);
+      },
+    };
+  }
 
   function updateBookcaseRect(field: keyof VisualRect, value: number) {
     setDraft((current) => ({
@@ -5803,9 +5963,9 @@ function LibraryMapDialog({
   ) {
     event.preventDefault();
     event.stopPropagation();
-    const room = roomRef.current;
-    if (!room) return;
-    const bounds = room.getBoundingClientRect();
+    const world = worldRef.current;
+    if (!world) return;
+    const bounds = world.getBoundingClientRect();
     const startX = event.clientX;
     const startY = event.clientY;
     const move = (moveEvent: PointerEvent) => {
@@ -6153,36 +6313,92 @@ function LibraryMapDialog({
   }
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop map-backdrop" onMouseDown={onClose}>
       <div
-        className="dialog map-dialog"
+        className="dialog map-dialog map-fullscreen"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-header">
-          <div>
-            <p className="eyebrow dark">
-              {rearranging ? "Visual rearrangement" : "Visual library index"}
-            </p>
+          <div className="map-title-chip">
             <h2>Library map</h2>
           </div>
-          <button className="icon-button" onClick={onClose}><X /></button>
+          <div className="map-header-actions">
+            <div className="map-tools" data-map-tools>
+              <button
+                className={`outline-button map-tools-trigger ${editingLayout || rearranging ? "active" : ""}`}
+                type="button"
+                aria-label="Map tools"
+                aria-haspopup="menu"
+                aria-expanded={mapToolsOpen}
+                title="Map tools"
+                onClick={() => setMapToolsOpen((current) => !current)}
+              >
+                <Settings2 size={18} />
+              </button>
+              {mapToolsOpen && (
+                <div className="menu-popover map-tools-menu" role="menu">
+                  {!MAP_TRANSFORMED_WRITES_ENABLED && (
+                    <p className="map-tools-notice">
+                      These tools return after their floating editors are safely
+                      integrated with pan and zoom.
+                    </p>
+                  )}
+                  <button
+                    role="menuitem"
+                    disabled={!MAP_TRANSFORMED_WRITES_ENABLED}
+                    onClick={() => {
+                      if (rearranging) resetRearrangement();
+                      setRearranging((current) => !current);
+                      setMapToolsOpen(false);
+                    }}
+                  >
+                    <ArrowRightLeft size={16} />
+                    {rearranging ? "Exit rearrange" : "Rearrange books"}
+                  </button>
+                  {!editingLayout ? (
+                    <button
+                      role="menuitem"
+                      disabled={!MAP_TRANSFORMED_WRITES_ENABLED || rearranging}
+                      onClick={() => {
+                        setDraft(structuredClone(map.layout));
+                        setEditingLayout(true);
+                        setMapToolsOpen(false);
+                      }}
+                    >
+                      <Pencil size={16} /> Edit layout
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setDraft(structuredClone(map.layout));
+                          setEditingLayout(false);
+                          setMapToolsOpen(false);
+                        }}
+                      >
+                        <RotateCcw size={16} /> Cancel layout editing
+                      </button>
+                      <button
+                        role="menuitem"
+                        disabled={saving || draftContainerCollisions.length > 0}
+                        onClick={() => {
+                          setMapToolsOpen(false);
+                          void saveLayout();
+                        }}
+                      >
+                        <Save size={16} /> {saving ? "Saving…" : "Save layout"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <button className="outline-button map-exit-button" onClick={onClose}>
+              <ArrowLeft size={17} /> <span>Back to catalogue</span>
+            </button>
+          </div>
         </div>
-        <p className="dialog-intro">
-          {focusedBook ? (
-            <>
-              Finding <strong>{focusedBook.title}</strong>: the selected book is
-              blue and every other book is faded.
-            </>
-          ) : (
-            <>
-              The room layout remembers the relative size and position of each
-              piece. Shelves with overlapping layers are exploded so blocked
-              books remain visible. Click a hierarchy level to filter the
-              catalogue. In layout-editing mode, use the on-map handles or the
-              precise sliders.
-            </>
-          )}
-        </p>
         <div className="map-legend">
           <label className="map-colour-picker">
             Colour by
@@ -6235,51 +6451,6 @@ function LibraryMapDialog({
                   <i style={{ background: item.colour }} /> {item.label}
                 </span>
               ))}
-            </div>
-          )}
-          <span className="map-legend-note">Rows run left → right · piles stack top → bottom</span>
-          {!editingLayout ? (
-            <>
-              <button
-                className={`text-button map-edit-button ${rearranging ? "active" : ""}`}
-                onClick={() => {
-                  if (rearranging) resetRearrangement();
-                  setRearranging((current) => !current);
-                }}
-              >
-                <ArrowRightLeft size={15} />
-                {rearranging ? "Exit rearrange" : "Rearrange books"}
-              </button>
-              {!rearranging && (
-                <button
-                  className="text-button map-edit-button"
-                  onClick={() => {
-                    setDraft(structuredClone(map.layout));
-                    setEditingLayout(true);
-                  }}
-                >
-                  <Pencil size={15} /> Edit layout
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="map-edit-actions">
-              <button
-                className="text-button"
-                onClick={() => {
-                  setDraft(structuredClone(map.layout));
-                  setEditingLayout(false);
-                }}
-              >
-                <RotateCcw size={15} /> Cancel
-              </button>
-              <button
-                className="primary-button"
-                disabled={saving || draftContainerCollisions.length > 0}
-                onClick={() => void saveLayout()}
-              >
-                <Save size={15} /> {saving ? "Saving…" : "Save layout"}
-              </button>
             </div>
           )}
         </div>
@@ -6725,6 +6896,15 @@ function LibraryMapDialog({
                 rearranging ? "rearranging" : ""
               }`}
             >
+              <div
+                ref={worldRef}
+                className="map-world"
+                style={{
+                  width: Math.max(1, viewportSize.height) * LEGACY_MAP_ASPECT_RATIO,
+                  height: Math.max(1, viewportSize.height),
+                  transform: mapCameraTransform(camera),
+                }}
+              >
               {(editingLayout || rearranging || displayMap.outside_books.length > 0) && (
                 <section
                   className="map-outside"
@@ -6935,6 +7115,63 @@ function LibraryMapDialog({
                   }
                 />
               ))}
+              </div>
+              <div className="map-camera-controls" aria-label="Map camera controls">
+                <div className="map-zoom-controls">
+                  <button
+                    type="button"
+                    className="map-camera-button"
+                    aria-label="Zoom map in"
+                    title="Zoom in"
+                    {...cameraControlHandlers("zoom-in")}
+                  ><ZoomIn /></button>
+                  <span aria-live="polite">{Math.round(camera.zoom * 100)}%</span>
+                  <button
+                    type="button"
+                    className="map-camera-button"
+                    aria-label="Zoom map out"
+                    title="Zoom out"
+                    {...cameraControlHandlers("zoom-out")}
+                  ><ZoomOut /></button>
+                </div>
+                <div className="map-pan-controls">
+                  <button
+                    type="button"
+                    className="map-camera-button up"
+                    aria-label="Pan map up"
+                    title="Pan up"
+                    {...cameraControlHandlers("up")}
+                  ><ArrowUp /></button>
+                  <button
+                    type="button"
+                    className="map-camera-button left"
+                    aria-label="Pan map left"
+                    title="Pan left"
+                    {...cameraControlHandlers("left")}
+                  ><ArrowLeft /></button>
+                  <button
+                    type="button"
+                    className="map-camera-button reset"
+                    aria-label="Reset map view"
+                    title="Reset view"
+                    onClick={resetMapView}
+                  ><RotateCcw /></button>
+                  <button
+                    type="button"
+                    className="map-camera-button right"
+                    aria-label="Pan map right"
+                    title="Pan right"
+                    {...cameraControlHandlers("right")}
+                  ><ArrowRight /></button>
+                  <button
+                    type="button"
+                    className="map-camera-button down"
+                    aria-label="Pan map down"
+                    title="Pan down"
+                    {...cameraControlHandlers("down")}
+                  ><ArrowDown /></button>
+                </div>
+              </div>
             </div>
             {dragGhost && (
               <div

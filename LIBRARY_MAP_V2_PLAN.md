@@ -131,6 +131,24 @@ Selection, inspection, and camera framing are distinct actions:
 - Add an explicit **Back to catalogue** control that closes the map and restores
   the catalogue state.
 - Browser Back and `Escape` both return to the catalogue.
+- Keep **Rearrange books** and **Edit layout** discoverable through one compact
+  floating tools button. During increments where transformed writes are not yet
+  safe, show both options as explicitly unavailable instead of hiding them or
+  exposing a partially functional workflow.
+- Each write mode must open its controls in a floating workspace panel above
+  the map. The panel must:
+  - be minimizable and restorable without losing draft state;
+  - remain inside phone, tablet, and desktop safe-area bounds;
+  - expose every mode selector, validation message, movement summary, and
+    Apply/Save/Cancel action without requiring document scrolling;
+  - leave enough of the map visible to select furniture, containers, books, and
+    destinations;
+  - preserve its draft while the camera pans or zooms;
+  - block closing the map or changing mode when unsaved changes exist until the
+    user explicitly confirms discarding them.
+- Layout editing and rearrangement are not considered restored merely because
+  their map gestures work. Their complete floating-panel workflows and backend
+  confirmation/save paths must pass multi-device validation first.
 - Use reliable CSS application fullscreen (`100dvh`) as the guaranteed
   behaviour. Native browser fullscreen is not required for this increment.
 - Respect safe-area insets on notched mobile devices.
@@ -274,6 +292,9 @@ For each container:
 - Replace bounded X/Y sliders with suitable numeric/direct manipulation tools.
 - Convert screen pointer deltas into world deltas at every zoom level.
 - Include Reading and On-loan areas in the same world model.
+- Build the reusable floating, minimizable workspace-panel shell and migrate
+  the complete layout editor into it, including precise controls,
+  collision/errors, Save, and Cancel.
 - Verify Save/Cancel and backup round trips before enabling editing by default.
 
 ### Phase 3 — target focus
@@ -302,6 +323,10 @@ For each container:
 
 - Restore transformed layout handles and pointer drag at arbitrary zoom.
 - Restore visual book rearrangement at arbitrary camera positions and zoom.
+- Migrate all rearrangement modes, position controls, movement-chain summaries,
+  gap/conflict validation, Undo, Apply, and Cancel into the floating,
+  minimizable workspace panel. A minimized rearrangement must retain the full
+  provisional chain unchanged.
 - Test overlapping containers, Reading, On-loan priority, focused-book entry,
   and all exit/filter paths.
 - Add frontend tests for camera math, selection state, and proportional books;
