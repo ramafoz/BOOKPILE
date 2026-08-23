@@ -127,8 +127,8 @@ acceptance criteria are maintained in `LIBRARY_MAP_V2_PLAN.md`.
   cloud-like out-of-library area.
 - [x] Add automated frontend tests for camera mathematics, inspection
   selection, proportional books, and temporary container reduction.
-- [ ] Validate the result on desktop, phone, and tablet before merging the
-  feature branch.
+- [x] Validate Library Map v2 on desktop, phone, and tablet, then merge and
+  push the accepted feature branch to `main`.
 
 ### Catalogue entry, dates, sorting, and filtering
 

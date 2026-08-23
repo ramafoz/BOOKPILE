@@ -4522,6 +4522,8 @@ type MapColourMode =
   | "current_ed_year"
   | "original_publication_year"
   | "genre"
+  | "publisher"
+  | "author"
   | "fiction_category"
   | "binding"
   | "publication_type";
@@ -4548,6 +4550,8 @@ const MAP_COLOUR_OPTIONS: Array<{ value: MapColourMode; label: string }> = [
   { value: "current_ed_year", label: "Current edition year" },
   { value: "original_publication_year", label: "Original publication year" },
   { value: "genre", label: "Genre focus" },
+  { value: "publisher", label: "Publisher focus" },
+  { value: "author", label: "Author focus" },
   { value: "fiction_category", label: "Fiction / non-fiction" },
   { value: "binding", label: "Binding" },
   { value: "publication_type", label: "Publication type" },
@@ -4613,6 +4617,13 @@ function categoricalMapValue(book: MapBook, mode: MapColourMode) {
 
 function bookGenres(book: MapBook) {
   return (book.genre_text ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+function bookAuthors(book: MapBook) {
+  if (book.has_multiple_authors && book.structured_authors.length > 0) {
+    return book.structured_authors;
+  }
+  return [book.author];
 }
 
 function interpolateHex(start: string, end: string, amount: number) {
@@ -4702,7 +4713,7 @@ function percentile(sortedValues: number[], fraction: number) {
 function buildMapColourScale(
   mode: MapColourMode,
   books: MapBook[],
-  selectedGenre = "",
+  selectedFocus = "",
 ): MapColourScale {
   const option = MAP_COLOUR_OPTIONS.find((item) => item.value === mode);
   if (mode === "status") {
@@ -4720,18 +4731,40 @@ function buildMapColourScale(
     return {
       mode,
       label: option?.label ?? "Genre focus",
-      colour: (book) => selectedGenre && bookGenres(book).includes(selectedGenre)
+      colour: (book) => selectedFocus && bookGenres(book).includes(selectedFocus)
         ? FOCUSED_GENRE_COLOUR
         : MISSING_MAP_COLOUR,
-      detail: (book) => selectedGenre && bookGenres(book).includes(selectedGenre)
-        ? selectedGenre
+      detail: (book) => selectedFocus && bookGenres(book).includes(selectedFocus)
+        ? selectedFocus
         : "Not selected",
-      legendItems: selectedGenre
+      legendItems: selectedFocus
         ? [
-            { label: selectedGenre, colour: FOCUSED_GENRE_COLOUR },
+            { label: selectedFocus, colour: FOCUSED_GENRE_COLOUR },
             { label: "Other books", colour: MISSING_MAP_COLOUR },
           ]
         : [{ label: "Choose a genre", colour: MISSING_MAP_COLOUR }],
+      continuous: false,
+    };
+  }
+
+  if (mode === "publisher" || mode === "author") {
+    const matches = (book: MapBook) => mode === "publisher"
+      ? book.publisher === selectedFocus
+      : bookAuthors(book).includes(selectedFocus);
+    const itemName = mode === "publisher" ? "publisher" : "author";
+    return {
+      mode,
+      label: option?.label ?? `${metadataLabel(itemName)} focus`,
+      colour: (book) => selectedFocus && matches(book)
+        ? FOCUSED_GENRE_COLOUR
+        : MISSING_MAP_COLOUR,
+      detail: (book) => selectedFocus && matches(book) ? selectedFocus : "Not selected",
+      legendItems: selectedFocus
+        ? [
+            { label: selectedFocus, colour: FOCUSED_GENRE_COLOUR },
+            { label: "Other books", colour: MISSING_MAP_COLOUR },
+          ]
+        : [{ label: `Choose a ${itemName}`, colour: MISSING_MAP_COLOUR }],
       continuous: false,
     };
   }
@@ -5945,6 +5978,8 @@ function LibraryMapDialog({
   const [saving, setSaving] = useState(false);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
   const [selectedMapGenre, setSelectedMapGenre] = useState("");
+  const [selectedMapPublisher, setSelectedMapPublisher] = useState("");
+  const [selectedMapAuthor, setSelectedMapAuthor] = useState("");
   const [legendExpanded, setLegendExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
   const [showRetainedShelfSpaces, setShowRetainedShelfSpaces] = useState(
@@ -6273,6 +6308,20 @@ function LibraryMapDialog({
     ),
     [projectedBooks],
   );
+  const mapPublishers = useMemo(
+    () => Array.from(new Set(
+      projectedBooks.map((book) => book.publisher?.trim()).filter(
+        (value): value is string => Boolean(value),
+      ),
+    )).sort((first, second) => first.localeCompare(second)),
+    [projectedBooks],
+  );
+  const mapAuthors = useMemo(
+    () => Array.from(new Set(projectedBooks.flatMap(bookAuthors))).sort(
+      (first, second) => first.localeCompare(second),
+    ),
+    [projectedBooks],
+  );
   const displayMap = useMemo<LibraryMapData>(() => ({
     ...map,
     bookcases: map.bookcases.map((bookcase) => ({
@@ -6358,12 +6407,35 @@ function LibraryMapDialog({
     ? `${selectedOriginalContainer.label} · Position ${selectedOriginalMoveBook.position}`
     : "No retained physical position";
   const colourScale = useMemo(
-    () => buildMapColourScale(colourMode, projectedBooks, selectedMapGenre),
-    [projectedBooks, colourMode, selectedMapGenre],
+    () => buildMapColourScale(
+      colourMode,
+      projectedBooks,
+      colourMode === "genre"
+        ? selectedMapGenre
+        : colourMode === "publisher"
+          ? selectedMapPublisher
+          : colourMode === "author"
+            ? selectedMapAuthor
+            : "",
+    ),
+    [
+      projectedBooks,
+      colourMode,
+      selectedMapGenre,
+      selectedMapPublisher,
+      selectedMapAuthor,
+    ],
   );
   const activeColourLabel = MAP_COLOUR_OPTIONS.find(
     (option) => option.value === colourMode,
   )?.label ?? "Reading status";
+  const collapsedColourLabel = colourMode === "genre" && selectedMapGenre
+    ? selectedMapGenre
+    : colourMode === "publisher" && selectedMapPublisher
+      ? selectedMapPublisher
+      : colourMode === "author" && selectedMapAuthor
+        ? selectedMapAuthor
+        : activeColourLabel;
   const cameraBounds = useMemo(
     () => boundsForMapRects([
       ...activeLayout.bookcases,
@@ -6552,7 +6624,6 @@ function LibraryMapDialog({
     )) return;
     const point = roomPoint(event.clientX, event.clientY);
     cameraPointers.current.set(event.pointerId, point);
-    event.currentTarget.setPointerCapture(event.pointerId);
     if (cameraPointers.current.size === 1) {
       cameraGesture.current = {
         moved: false,
@@ -6564,6 +6635,11 @@ function LibraryMapDialog({
       };
     } else if (cameraPointers.current.size === 2) {
       initializePinchGesture();
+      for (const pointerId of cameraPointers.current.keys()) {
+        if (!event.currentTarget.hasPointerCapture(pointerId)) {
+          event.currentTarget.setPointerCapture(pointerId);
+        }
+      }
     }
   }
 
@@ -6611,7 +6687,12 @@ function LibraryMapDialog({
     }
     const delta = { x: point.x - previous.x, y: point.y - previous.y };
     gesture.totalDistance += Math.hypot(delta.x, delta.y);
-    if (gesture.totalDistance > 4) gesture.moved = true;
+    if (gesture.totalDistance > 4 && !gesture.moved) {
+      gesture.moved = true;
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+    }
     if (gesture.moved) {
       event.preventDefault();
       setCamera((current) => panMapCameraByPixels(current, delta, viewportSize));
@@ -6701,7 +6782,7 @@ function LibraryMapDialog({
     setMapToolsOpen(false);
   }
 
-  function inspectBook(book: MapBook, open = false) {
+  function inspectBook(book: MapBook, open = true) {
     const nextId = nextInspectionId(inspectedBookId, book.id, open);
     if (nextId === null) {
       clearInspectionSelection();
@@ -6714,7 +6795,7 @@ function LibraryMapDialog({
     setInspectorDetailsError("");
   }
 
-  function inspectContainer(containerId: number, open = false) {
+  function inspectContainer(containerId: number, open = true) {
     const nextId = nextInspectionId(inspectedContainerId, containerId, open);
     if (nextId === null) {
       clearInspectionSelection();
@@ -6727,7 +6808,7 @@ function LibraryMapDialog({
     setInspectorDetailsError("");
   }
 
-  function handleBookSelection(book: MapBook, open = false) {
+  function handleBookSelection(book: MapBook, open = true) {
     if (inspectionMode === "book") {
       inspectBook(book, open);
       return;
@@ -7495,7 +7576,7 @@ function LibraryMapDialog({
               aria-expanded="false"
               onClick={() => setLegendExpanded(true)}
             >
-              <span>Colour by {activeColourLabel}</span>
+              <span>{collapsedColourLabel}</span>
               <ChevronDown size={16} />
             </button>
           ) : <>
@@ -7522,6 +7603,34 @@ function LibraryMapDialog({
                 <option value="">Choose a genre…</option>
                 {mapGenres.map((genre) => (
                   <option key={genre} value={genre}>{genre}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {colourMode === "publisher" && (
+            <label className="map-colour-picker map-publisher-picker">
+              Publisher
+              <select
+                value={selectedMapPublisher}
+                onChange={(event) => setSelectedMapPublisher(event.target.value)}
+              >
+                <option value="">Choose a publisher…</option>
+                {mapPublishers.map((publisher) => (
+                  <option key={publisher} value={publisher}>{publisher}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {colourMode === "author" && (
+            <label className="map-colour-picker map-author-picker">
+              Author
+              <select
+                value={selectedMapAuthor}
+                onChange={(event) => setSelectedMapAuthor(event.target.value)}
+              >
+                <option value="">Choose an author…</option>
+                {mapAuthors.map((author) => (
+                  <option key={author} value={author}>{author}</option>
                 ))}
               </select>
             </label>
