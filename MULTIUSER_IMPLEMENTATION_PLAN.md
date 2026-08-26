@@ -1,0 +1,851 @@
+# BOOKPILE Server — multi-user implementation plan
+
+Status: product and architecture planning. No multi-user implementation has
+started. This document records the decisions agreed before changing the local
+application or creating the hosted edition.
+
+## 1. Product boundary
+
+BOOKPILE will have two related but independent editions.
+
+### BOOKPILE Local v1
+
+- Preserve the current SQLite application as a stable, downloadable,
+  self-contained GitHub release.
+- It has no accounts, central service, or social features.
+- Keep a dedicated maintenance branch after the final local release.
+- Limit future local-v1 changes to severe bug and security fixes, plus the
+  installation and user documentation needed to start a library from scratch.
+- Its full ZIP remains the portable format for moving a local library into
+  BOOKPILE Server.
+- Do not maintain a runtime switch such as `BOOKPILE_EDITION=local|server`.
+  The editions share a history and concepts, but are separate products.
+
+### BOOKPILE Server
+
+- Start as a small invitation-only beta and evolve towards a service hosted by
+  the BOOKPILE project.
+- Use PostgreSQL and explicit tenancy rather than treating the existing SQLite
+  database as a multi-user database.
+- Allow one account to own several libraries and to co-own libraries with
+  other accounts.
+- Keep libraries private. There is no anonymous catalogue, map, cover, or
+  reading-history access in the beta.
+- Allow a validated Local-v1 ZIP to be imported into a selected Server
+  library and assign its historical readings to a selected Owner.
+
+## 2. Terminology
+
+- **Account**: one authenticated BOOKPILE identity, identified privately by a
+  unique email address and publicly by a unique username.
+- **Library**: a catalogue and its shared physical structure, covers, books,
+  loans, layouts, and backups.
+- **Membership**: the accepted relationship between an account and a library.
+- **Owner**: a full and equal co-owner of a library. There is no privileged
+  primary Owner.
+- **Viewer**: a read-only member invited by an Owner.
+- **Reading perspective**: the Owner whose personal reading states, sessions,
+  and statistics are currently being displayed.
+- **Slug**: an optional URL-safe readable identifier such as
+  `biblioteca-de-casa`. It is not an authorization boundary or primary key.
+- **Physical custody**: shared information about whether the physical copy is
+  shelved, being read, or on loan.
+
+## 3. Identity and authentication
+
+Authentication is managed by BOOKPILE, not by an external identity provider.
+
+### 3.1 Account fields
+
+The initial account model includes:
+
+- Non-predictable public/internal ID.
+- Private unique email address.
+- Unique case-insensitive username.
+- Argon2id password hash.
+- Email-verification state.
+- Account state: invited, active, suspended, pending deletion, or deleted.
+- Privacy preferences for public counters.
+- Creation and update timestamps.
+
+Email addresses are never visible to other ordinary users. Usernames are
+globally searchable.
+
+Initial reserved usernames include:
+
+- `admin`
+- `administrator`
+- `bookpile`
+- `moderator`
+- `rama`
+- `ramafoz`
+- `root`
+- `security`
+- `support`
+- `system`
+
+`rama` and `ramafoz` are reserved from public registration for assignment to
+the project owner's account. Username uniqueness and reservation checks are
+case-insensitive.
+
+### 3.2 Password and session security
+
+- Hash passwords with Argon2id using versioned, configurable parameters.
+- Rehash transparently when stronger parameters are adopted.
+- Never store or log plaintext passwords.
+- Use opaque, cryptographically random, server-side sessions rather than
+  browser-stored JWTs.
+- Store only a hash of each session token.
+- Send the session in a `Secure`, `HttpOnly`, appropriately `SameSite` cookie.
+- Rotate the session on sign-in and sensitive account changes.
+- Support sign-out of one session and revocation of all sessions.
+- Rate-limit sign-in, password reset, username search, and invitation
+  acceptance.
+
+### 3.3 CSRF
+
+- Every state-changing browser request requires a CSRF token associated with
+  the authenticated session.
+- Validate `Origin`/`Host` and never place side effects in `GET` routes.
+- CSRF validation is additional to, not a replacement for, authorization.
+
+### 3.4 Invitations
+
+- The beta is invitation-only.
+- An Owner may generate an invitation for any person; an email destination is
+  not required.
+- Invitation links use a long random token, store only its hash, expire, are
+  revocable, and are single-use.
+- The first authenticated account that accepts a valid link consumes it.
+- Before acceptance, show the library, inviting Owner, role, and map scope.
+- Possessing a link alone never grants access: registration/sign-in and
+  explicit acceptance are required.
+
+### 3.5 Global username search and public counters
+
+- Username search returns only the username and public profile fields.
+- Never expose email, libraries, activity dates, storage, or membership lists.
+- Require a minimum query length, limit/paginate results, and rate-limit the
+  endpoint to discourage account enumeration.
+- Each user independently chooses whether searches show:
+  - Total books owned.
+  - Unique books personally read.
+- Both settings are private by default.
+- Public total-book counts include books in every library where the user is an
+  Owner, including co-owned libraries, counting each physical book once for
+  that user.
+- Public read counts use personal reading sessions and count unique books;
+  rereads belong in detailed statistics, not this headline counter.
+
+## 4. Libraries, co-ownership, and membership
+
+### 4.1 Ownership
+
+- A library has one or more equal Owners.
+- `created_by_user_id` may be retained for audit/history but grants no extra
+  authority.
+- Any Owner can invite another Owner or Viewer.
+- All Owners can edit every shared library record, manage physical layout,
+  manage their own readings, view other Owners' readings, manage loans,
+  import/export/restore, manage membership, and initiate deletion.
+- Only Owners may export or restore a full ZIP.
+- There is no `EDITOR` role in the initial product. The schema and permission
+  service should remain extensible if a genuine collaboration use case later
+  justifies a new role.
+
+Granting Ownership must display a strong warning: a co-owner receives equal
+authority, can remove the granting Owner, and can ultimately delete the whole
+library.
+
+### 4.2 Viewer scopes
+
+An Owner chooses one of two scopes for each Viewer:
+
+- `CATALOG_ONLY`
+- `CATALOG_AND_MAP`
+
+`MAP_ONLY` is invalid because the physical map is more sensitive than the
+catalogue. Owners always have catalogue and map access.
+
+Viewer access is read-only. Viewers can see:
+
+- Catalogue and complete bibliographic metadata.
+- Covers.
+- Acquisition dates.
+- General book notes; users are responsible for what they write there.
+- Shared availability (`Shelved`, `Being read`, or `On loan`).
+- Reading states, dates, sessions, and statistics for each Owner through the
+  reading-perspective selector.
+- The map and physical locations only with `CATALOG_AND_MAP`.
+
+Viewers never see:
+
+- The `Loaned to` value or private loan notes.
+- Audit history.
+- Member-management controls.
+- ZIP export/restore controls.
+- Another user's email, storage usage, or private account settings.
+
+A `CATALOG_ONLY` API response must omit physical furniture, shelf, container,
+position, and map-focus data. Hiding those fields only in React is not
+sufficient.
+
+### 4.3 Removing an Owner
+
+Any Owner may remove another Owner. For every operation, ask whether the
+affected account should:
+
+- Be downgraded to a Viewer, with a selected Viewer scope; or
+- Lose membership completely.
+
+The action requires reauthentication, an explicit confirmation, audit entry,
+notification, and immediate permission/session invalidation for that library.
+
+If the library remains active, Owner removal is allowed only when the
+remaining Owners can absorb its storage allocation. It must never create an
+over-quota active state.
+
+The final Owner cannot remove themselves without transferring Ownership or
+deleting the library.
+
+## 5. Shared books and personal reading data
+
+The physical book belongs to the library. Reading history belongs to a
+person. Server must not retain the Local-v1 assumption that `books.status` is
+globally meaningful.
+
+### 5.1 Shared book data
+
+Shared library-level data includes:
+
+- Bibliographic metadata and identifiers.
+- Cover.
+- Acquisition information.
+- General notes.
+- Physical retained location and layout.
+- Shared physical custody/availability.
+- Loan history.
+
+### 5.2 Personal reading data
+
+Every reading session has a `user_id`. Personal projections include:
+
+- `Pending`, `Reading`, `Re-reading`, and `Read`.
+- Reading dates and unknown historical dates.
+- Reading and rereading sessions.
+- Reading rate and page totals.
+- Personal suggestions and statistics.
+
+The server may keep a synchronized per-user projection for query speed, but
+the session history remains the source of truth.
+
+### 5.3 Reading perspective
+
+- Owners default to their own perspective.
+- Owners may select another Owner and then see that perspective read-only.
+- Viewers select one of the Owners and always see it read-only.
+- Remember the selected perspective per account and library.
+- Perspective changes update catalogue statuses, reading dates/history,
+  statistics, hero reading counters, map status colouring, and suggestions.
+- Write actions are available only when an Owner is viewing their own
+  perspective.
+- The physical availability of the copy remains shared and does not change
+  with perspective.
+
+### 5.4 Shared physical custody
+
+Maintain a shared state independent from personal status:
+
+- `SHELVED`
+- `BEING_READ`
+- `ON_LOAN`
+
+Rules:
+
+- Only one active reading session is permitted for a physical copy.
+- Another Owner cannot start reading it until the active session ends.
+- `BEING_READ` is sufficient in shared views; do not identify the reader on
+  the map.
+- Viewers can see that a book is being read.
+- An active loan takes physical priority as in Local v1.
+- Suggestions exclude copies currently being read by another Owner or on
+  loan.
+- Map colouring by reading status uses the selected reading perspective.
+
+### 5.5 Statistics
+
+- Reading statistics are calculated per user, never per library membership as
+  a whole.
+- Owners and Viewers can inspect each Owner's dates, sessions, rereads,
+  pages, rates, yearly totals, genres, and other existing insights read-only.
+- Hero total-book ownership remains shared; reading totals are personal.
+- Rereads count in yearly sessions and pages, while the headline books-read
+  count remains unique books, matching Local v1.
+
+### 5.6 Local ZIP import
+
+A Local-v1 ZIP contains implicit single-user reading history. During import:
+
+1. Select or create the target library.
+2. Ask which Owner the imported reading history belongs to; default to the
+   importing account.
+3. Import books and physical/library data as shared data.
+4. Import every reading session and personal status under the selected user.
+5. Adding another Owner later does not copy the imported reading history.
+
+## 6. Loans and sensitive fields
+
+- Loans and their physical effect belong to the shared library.
+- Only Owners can create, return, edit, or delete loans.
+- Owners can see borrower text and loan notes.
+- Viewers can see that a book is on loan and other explicitly non-sensitive
+  loan fields, but API responses must omit `loaned_to` and private loan notes.
+- Never rely on frontend hiding for borrower privacy.
+
+## 7. Covers and user-uploaded images
+
+All covers remain private in the beta.
+
+- A cover is visible only to an authenticated Owner or Viewer of that library.
+- No anonymous access and no permanent public object URLs.
+- Keep the object-storage bucket private.
+- Initially proxy cover reads through an authenticated backend permission
+  check, or use an equivalently session-bound private-delivery mechanism.
+- Validate that uploads decode as real supported images.
+- Enforce file-size, dimensions, and total-pixel limits.
+- Strip EXIF and other metadata.
+- Re-encode to a controlled format and maximum resolution.
+- Discard the original upload after successful processing.
+- Use random object keys with no username, title, or original filename.
+- Apply quotas and upload rate limits.
+- Automated image classification may be an additional safeguard but is not a
+  guarantee and must not be the only abuse control.
+- Public cover sharing and public catalogues are outside the beta.
+
+## 8. Storage quota and allocation
+
+### 8.1 Account quota
+
+- Every account has a hard 300 MB persistent-user-data quota during the beta
+  and in future plans unless explicitly changed.
+- There is no beta book-count limit. A future free tier may introduce one,
+  with paid tiers increasing product limits.
+- User-visible storage usage is private account information.
+- Operational encrypted disaster-recovery backups do not consume user quota.
+- Temporary streamed exports should not create a persistent quota charge.
+
+The exact byte-accounting definition (decimal MB versus MiB and how database
+row overhead is estimated) must be fixed before implementation. Object sizes
+are exact; relational metadata requires a stable logical accounting rule
+rather than pretending that PostgreSQL's shared indexes can be assigned
+exactly to one account.
+
+### 8.2 Flexible co-owner allocation
+
+A shared library's bytes are stored physically once and allocated logically
+across its Owners. Equal division is preferred, but it is not a hard rule.
+
+For every library `L` and Owner `U`, define `allocation[L,U]` such that:
+
+```text
+sum(allocation[L,U] for owners U of L) = stored_size[L]
+sum(allocation[L,U] for libraries L owned by U) <= 300 MB
+allocation[L,U] >= 0
+```
+
+The operation is accepted whenever any valid allocation exists. Use a
+transactional flow/min-cost-flow calculation that:
+
+1. Tries to keep shared allocation balanced.
+2. Minimizes changes to prior allocations.
+3. Shifts overflow to co-owners with remaining capacity.
+4. Locks the relevant quota/membership rows to prevent concurrent overcommit.
+
+Consequences:
+
+- Two otherwise empty co-owners can use 600 MB in one shared library.
+- Three co-owners can contribute up to 900 MB if their other owned libraries
+  leave all of that quota available.
+- Free quota cannot flow to a library the account does not own.
+- Adding an Owner requires a feasible recalculation.
+- Removing an Owner from an active library requires the remaining Owners to
+  absorb that allocation.
+- Every co-ownership invitation warns that other Owners may consume capacity
+  from the recipient's account.
+
+Worked example:
+
+```text
+Ana private data:                 250 MB
+Ana/Luis shared allocation:        40 MB each
+Luis private data:                190 MB
+Luis/Mohammed shared allocation:   50 MB each
+Mohammed private data:             50 MB
+
+Current account usage:
+Ana:      290/300 MB
+Luis:     280/300 MB
+Mohammed: 100/300 MB
+Physical stored data: 670/900 MB
+```
+
+If the Luis/Mohammed library grows by 200 MB, an equal extra split would make
+Luis exceed quota. The allocator can instead assign 20 MB to Luis and 180 MB
+to Mohammed:
+
+```text
+Ana:      290/300 MB
+Luis:     300/300 MB
+Mohammed: 280/300 MB
+Physical stored data: 870/900 MB
+```
+
+The upload is valid because every byte is allocated once and no account
+exceeds 300 MB. Exact equal division is subordinate to feasible use of the
+Owners' combined capacity.
+
+Each account can privately inspect its own total and per-library allocation.
+No user can inspect another account's quota or allocation. A failed shared
+upload reports only that one or more Owners lack sufficient shared capacity;
+it does not identify the constrained account or reveal exact values.
+
+### 8.3 Behaviour at the hard limit
+
+At the limit, an account can still:
+
+- Read its data.
+- Delete covers, backups, or libraries to free storage.
+- Edit ordinary text where that does not materially increase charged storage.
+- Stream a downloadable export without saving another persistent snapshot.
+
+Reject new persistent images, saved ZIPs, or imports that do not fit. Validate
+imports before consolidation and never leave a partially over-quota library.
+
+## 9. Shared-library deletion and retention
+
+Removing an Owner and deleting a library are different operations.
+
+### 9.1 Atomic shared deletion
+
+Deletion must not require manually removing Owners and temporarily assigning
+the whole library to the final Owner. Provide one atomic destructive workflow:
+
+1. Confirm the requester is an Owner.
+2. Lock the library and memberships.
+3. Record all Owners, Viewers, scopes, counts, and allocations needed for
+   recovery/audit.
+4. Reauthenticate the requester.
+5. Require the exact library name and explicit acknowledgement of the affected
+   books, covers, readings, loans, and members.
+6. Mark the library pending deletion and revoke all active access.
+7. Release every Owner's logical allocation immediately.
+8. Move/mark persistent objects for a 48-hour quarantine.
+9. Notify all members.
+
+No intermediate active state needs to satisfy quota because the final state
+contains no active library.
+
+### 9.2 Recovery and final deletion
+
+- The user-facing recovery window is 48 hours.
+- A cancelled deletion restores the exact previous Owners, Viewers, and
+  scopes, but only if a valid quota allocation can be found at restore time.
+- If Owners used the released capacity, explain how much space must be freed
+  before the deadline; never partially restore.
+- Quarantined bytes do not consume user quota.
+- After 48 hours, remove active data and objects.
+- Encrypted operational backups may retain inaccessible disaster-recovery
+  copies for at most 30 days. Restoring a server backup must replay completed
+  deletion tombstones.
+
+The exact set of people allowed to cancel a pending shared deletion remains a
+product decision: deleting Owner only, any former Owner, or platform support
+under a documented recovery process.
+
+### 9.3 Account deletion
+
+- Requesting account deletion revokes sessions and starts a 48-hour recovery
+  window.
+- An account cannot be finally deleted while it remains an Owner.
+- It must transfer, remove, or delete every owned/co-owned library first.
+- Final active-data deletion is followed by the same maximum 30-day
+  operational-backup expiry policy.
+- BOOKPILE has no item-level book recycle bin; destructive book deletion still
+  requires confirmation and audit.
+
+## 10. Authorization architecture
+
+Every request follows this chain:
+
+```text
+HTTPS request
+  -> authenticated session
+  -> selected library
+  -> active membership
+  -> role and Viewer scope
+  -> selected reading perspective
+  -> service-level operation
+  -> library/user-scoped repository query
+  -> PostgreSQL / private object storage
+```
+
+Rules:
+
+- Never authorize from a client-supplied `user_id`.
+- Every library-owned row carries `library_id` directly or through a
+  mandatory parent relationship.
+- Every personal reading row carries `user_id` and `library_id`/`book_id`.
+- Use non-predictable public IDs; IDs do not replace permission checks.
+- Enforce ownership/scope in backend dependencies and services.
+- Repositories require scope explicitly and should make an unscoped query
+  difficult to express.
+- Return `404` where appropriate instead of confirming another tenant's
+  object exists.
+- Cover and backup reads receive the same authorization as database records.
+- Record destructive and permission-changing operations in an append-oriented
+  audit trail visible only to Owners and platform security staff under policy.
+
+## 11. Proposed server data model
+
+Initial entities include:
+
+- `users`
+- `sessions`
+- `invitations`
+- `email_verification_tokens`
+- `password_reset_tokens`
+- `libraries`
+- `library_memberships`
+- `books`
+- `book_authors`
+- physical hierarchy and visual-layout tables
+- `reading_sessions` with `user_id`
+- optional synchronized `book_user_reading_state`
+- shared `book_custody`
+- `loans`
+- cover-object metadata
+- saved backup/export metadata
+- `library_storage_allocations`
+- deletion tombstones/quarantine records
+- `audit_events`
+
+Important database constraints include:
+
+- At least one Owner for every active library.
+- Unique active membership per account/library.
+- Viewer scope limited to catalogue-only or catalogue-and-map.
+- Owners always have map access.
+- At most one active reading session per physical book.
+- At most one active loan per physical book.
+- Personal reading-session chronology and rereading rules retained from Local
+  v1, scoped by user.
+- Referential deletion rules that cannot silently orphan covers, sessions,
+  loans, layout records, or allocations.
+
+## 12. Backend restructuring before tenancy
+
+The current local backend combines routes, SQL, storage paths, and business
+rules in a large application module. Adding `library_id` ad hoc to every query
+would be error-prone.
+
+Refactor Server incrementally towards:
+
+```text
+backend/app/
+  api/routes/
+    auth.py
+    users.py
+    libraries.py
+    books.py
+    readings.py
+    loans.py
+    layout.py
+    backups.py
+  core/
+    config.py
+    security.py
+    csrf.py
+    permissions.py
+  services/
+  repositories/
+  db/models/
+  db/migrations/
+  storage/
+```
+
+- Routes parse requests and serialize responses.
+- Permission dependencies establish actor, library, role, scope, and reading
+  perspective.
+- Services own business transactions.
+- Repositories own scoped persistence.
+- Storage adapters own private covers and backups.
+- Alembic owns incremental PostgreSQL schema migrations.
+
+Refactor and tenancy are tested in small increments. Do not simultaneously
+rewrite every subsystem, change database engines, add authentication, and
+import live data in one unrehearsed step.
+
+## 13. Safe Local-v1 ZIP import
+
+Never restore a Local ZIP directly over the hosted PostgreSQL database.
+
+1. Upload to isolated temporary storage.
+2. Enforce compressed and expanded size/file-count limits.
+3. Reject path traversal, symlinks, unsupported files, and compression bombs.
+4. Validate manifest, schema version, checksums, database integrity, and
+   expected media.
+5. Convert into temporary Server records with a new `library_id` and new
+   non-predictable IDs.
+6. Assign historical personal readings to the selected Owner.
+7. Process covers through the Server image pipeline.
+8. Verify counts for books, authors, sessions, loans, hierarchy, layout, and
+   covers.
+9. Calculate storage and find a valid allocation before consolidation.
+10. Commit in one transaction plus a compensating object-storage workflow.
+11. On failure, remove temporary objects/rows and leave the target unchanged.
+12. Produce a human-readable import report.
+
+Maintain import fixtures for every supported Local ZIP schema version.
+
+## 14. Hosting and operations
+
+### 14.1 Initial constraints
+
+- Hosted in Spain.
+- Invitation-only trusted beta.
+- Target operating budget: no more than EUR 25/month initially.
+- Self-managed European/Spanish VPS is accepted as a learning goal.
+
+### 14.2 Candidate deployment
+
+Primary candidate:
+
+- IONOS VPS in Spain for reverse proxy, React, FastAPI, PostgreSQL, and
+  scheduled/background work.
+
+Alternative:
+
+- Arsys VPS in Spain.
+
+Related services to evaluate:
+
+- Dinahosting for domain, low-volume email, and private S3-compatible storage
+  in Madrid.
+
+Before purchase, compare non-promotional price, VAT, RAM/CPU/NVMe, backup
+options, DPA/subprocessors, actual data location, egress, support, scaling,
+and exit/export procedures. ChatGPT Sites may be useful for a promotional or
+lightweight site but is not the planned infrastructure for BOOKPILE's custom
+authentication, PostgreSQL, image processing, migrations, and operational
+control.
+
+### 14.3 Initial topology
+
+```text
+Spanish VPS
+  reverse proxy + HTTPS
+  React frontend
+  FastAPI backend
+  PostgreSQL
+  scheduled/background worker
+
+Private Spanish S3-compatible storage
+  processed covers
+  user-saved ZIPs
+  encrypted off-site database backups
+```
+
+PostgreSQL may share the VPS during the small beta, with tested encrypted
+off-site backups. Move it to a managed/dedicated service when scale or
+availability justifies the cost.
+
+### 14.4 Operations
+
+- Automated encrypted PostgreSQL backups and restore drills.
+- Object inventory/checksum verification.
+- Health checks, structured logs, metrics, and alerting.
+- Secret management outside Git.
+- Firewall, least-privilege service accounts, unattended security update
+  policy, and dependency scanning.
+- Staging environment or reproducible temporary staging deployment.
+- Deployment with migration preflight, backup, health verification, and
+  rollback procedure.
+- Capacity monitoring: account quotas bound logical user data, while database
+  indexes, quarantine, logs, and operational backups require separate server
+  reserve.
+
+## 15. Platform administration
+
+`SYSTEM_ADMIN` is a platform role, not a library role.
+
+It is needed for invitation-beta administration, account suspension, service
+health, quota incidents, and recovery. It must not silently grant routine
+access to private catalogues or covers.
+
+Any future support access to private data requires a documented break-glass
+policy: reason, limited duration, least privilege, audit, and user notice when
+appropriate. The exact support-access mechanism must be decided before beta.
+
+## 16. Threat model to complete before implementation
+
+Document assets, actors, entry points, and controls for at least:
+
+- Cross-library ID guessing and authorization bypass.
+- SQL injection and unsafe unscoped repository methods.
+- CSRF, session theft/fixation, credential stuffing, and password reset abuse.
+- Username enumeration and invitation-token leakage.
+- Malicious covers, decompression bombs, and storage exhaustion.
+- Malicious ZIP traversal, malformed SQLite, and partial imports.
+- Co-owner quota races, concurrent membership changes, and deletion races.
+- Abuse of equal Ownership to remove members or delete a library.
+- Sensitive borrower fields leaking through API serializers or logs.
+- Public-counter privacy leakage.
+- Administrative misuse and overbroad support tooling.
+- Backup loss, untested restoration, secret loss, and provider outage.
+
+## 17. Implementation roadmap and gates
+
+### Phase 0 — freeze and preserve Local v1
+
+- Create and verify a final Local backup.
+- Tag/release Local v1 and create its maintenance branch.
+- Write clean-install and first-use documentation.
+- Prove the downloadable release works on a clean machine.
+- Freeze the Local ZIP contract and collect import fixtures.
+
+Gate: Local v1 remains independently installable and recoverable.
+
+### Phase 1 — Server skeleton and modular boundaries
+
+- Create the Server development line without altering the Local release.
+- Add configuration, dependency injection, repository/service boundaries, and
+  PostgreSQL/Alembic infrastructure.
+- Port read-only catalogue behavior first with regression tests.
+
+Gate: no authentication yet, but Server tests prove scoped repository design.
+
+### Phase 2 — identity, sessions, and invitations
+
+- Implement users, reserved usernames, Argon2id, opaque sessions, CSRF,
+  invitation registration, password reset, and verification.
+- Add rate limits and security audit events.
+
+Gate: independent security review/tests for login, reset, CSRF, revocation,
+enumeration, and invitation reuse.
+
+### Phase 3 — libraries, equal Owners, and Viewer scopes
+
+- Implement libraries, co-ownership, Viewer scopes, membership changes, and
+  backend serializers that omit map/loan-sensitive fields.
+- Add reading-perspective selection state without reading writes yet.
+
+Gate: two test tenants cannot access each other's IDs, covers, map, or ZIPs;
+catalogue-only viewers receive no physical location data.
+
+### Phase 4 — shared catalogue and private covers
+
+- Port books, metadata, authors, hierarchy, layout, covers, search, and
+  catalogue reads/writes.
+- Implement the private image pipeline and authenticated delivery.
+
+Gate: Owners retain current catalogue behavior; Viewers are read-only; image
+abuse and cross-library cover tests pass.
+
+### Phase 5 — personal readings and shared custody
+
+- Port reading/rereading rules into user-owned sessions.
+- Add perspective-aware catalogue, statistics, map colouring, and suggestions.
+- Add shared `SHELVED`/`BEING_READ`/`ON_LOAN` custody and one-active-reader
+  enforcement.
+
+Gate: two Owners see different statuses for the same book, can inspect each
+other read-only, and cannot start concurrent physical readings.
+
+### Phase 6 — loans and sensitive-field projections
+
+- Port shared loan workflow and history.
+- Ensure borrower identity/notes are returned only to Owners.
+
+Gate: API-level tests prove Viewers cannot recover borrower data.
+
+### Phase 7 — storage quota and co-owner allocation
+
+- Define exact charged-byte rules.
+- Implement transactional allocation solver, usage UI, limits, and concurrent
+upload/membership tests.
+- Add atomic shared-library deletion and quarantine.
+
+Gate: allocation examples, edge cases, removal, restore, races, and limit
+behavior reconcile charged bytes exactly once.
+
+### Phase 8 — Local ZIP import and Server export/restore
+
+- Implement isolated conversion, validation reports, selected reading Owner,
+quota preflight, and atomic consolidation.
+- Define a Server-portable export that does not expose account credentials or
+unrelated libraries.
+
+Gate: repeated imports of real anonymized fixtures preserve every expected
+count/value and failed imports leave no residue.
+
+### Phase 9 — production operations
+
+- Provision Spanish staging/production infrastructure.
+- Automate HTTPS, deployment, migration, backup, restore, monitoring, and
+rollback.
+- Perform recovery and provider-export drills.
+
+Gate: restore to a fresh environment and document measured recovery results.
+
+### Phase 10 — invitation beta
+
+- Complete privacy notice, terms, deletion/export instructions, abuse contact,
+and user help.
+- Run desktop, mobile, tablet, accessibility, browser, and concurrent-user
+acceptance tests.
+- Invite only a few trusted users and expand gradually.
+
+Gate: explicit go/no-go review after security, privacy, data integrity,
+recovery, and cost checks.
+
+### Later product phases
+
+- Freemium/paid plans and book-count entitlements only after observing beta
+  usage.
+- Public catalogues/covers only after a separate moderation and privacy plan.
+- Optional new collaboration role only after a demonstrated use case.
+- Interface localization after the model and terminology stabilize.
+
+## 18. Acceptance criteria that apply to every phase
+
+- Back up and verify before every destructive schema/data operation.
+- Use incremental, reversible Alembic migrations with rehearsed downgrade or
+  forward-recovery procedures.
+- Preserve Local v1 and its real library throughout Server development.
+- Run unit, integration, authorization, migration, import, and frontend tests
+  appropriate to the phase.
+- Test every authorization rule by calling the API directly, not only through
+  hidden UI controls.
+- Never consolidate a migration/import if counts, checksums, foreign keys, or
+  business invariants differ unexpectedly.
+- Record design/security decisions in this document or focused ADRs before
+  implementation changes their meaning.
+- Require explicit user validation before merging major functional phases.
+
+## 19. Remaining decisions
+
+The following are intentionally unresolved:
+
+- Exact person/role allowed to cancel a shared-library deletion during the
+  48-hour quarantine.
+- Decimal 300 MB versus 300 MiB and relational-metadata accounting rules.
+- Final VPS, object-storage, domain, and email providers/contracts.
+- Final domain (`bookpile.es`, `bookpile.gal`, `bookpile.app`, or another).
+- Exact expiry periods for invitation, verification, reset, and session
+  tokens.
+- Whether usernames can opt out of global discovery later.
+- Detailed `SYSTEM_ADMIN` and break-glass support policy.
+- Exact non-sensitive loan fields visible to Viewers beyond `On loan`.
+- Whether saved user ZIP snapshots remain limited to two in the no-book-limit
+  beta.
+- Long-term monetization and free/paid book-count entitlements.

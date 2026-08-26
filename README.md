@@ -395,3 +395,7 @@ Later database phases include structured subjects and genres, ratings and
 tags.
 Multi-user accounts and publication as a hosted application are a separate,
 larger product phase rather than assumptions in the current local-first build.
+The agreed separation between stable BOOKPILE Local v1 and the hosted Server
+edition, together with its co-ownership, Viewer privacy, personal reading,
+quota, authentication, migration, and deployment roadmap, is documented in
+[MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).

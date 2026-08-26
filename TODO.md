@@ -468,30 +468,62 @@ protects the completed catalogue.
 This is a separate scale of project. It changes BOOKPILE from a trusted
 single-user local application into a multi-user product exposed to the
 internet. It requires product, privacy, security, hosting, and operational
-decisions in addition to application code.
+decisions in addition to application code. The agreed product model,
+permissions, personal-reading model, shared-storage allocation, deletion
+workflow, security architecture, migration gates, and implementation phases
+are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
 ### Multi-user foundation
 
-- [ ] Define the intended product model: self-hosted instance, hosted service,
-  installable app, or a combination.
+- [x] Define the product boundary: preserve BOOKPILE Local v1 as an independent
+  downloadable SQLite release and build BOOKPILE Server as a separately
+  hosted product.
+- [x] Define the initial account/library model: invitation-only accounts,
+  multiple libraries, equal co-Owners, and read-only Viewers.
+- [x] Define Viewer scopes: catalogue-only or catalogue-and-map; never map
+  without catalogue access.
+- [x] Define personal reading sessions and statistics with a selectable Owner
+  perspective, separate from shared physical custody.
+- [x] Define private authenticated cover access and the initial image-safety
+  pipeline.
+- [x] Define the 300 MB account quota and flexible shared-library allocation
+  across co-Owners.
+- [x] Define atomic shared-library deletion, 48-hour recovery, and 30-day
+  operational-backup retention.
+- [ ] Freeze, document, tag, and publish the stable BOOKPILE Local v1 release
+  before Server implementation begins.
+- [ ] Resolve the remaining decisions listed in the multi-user implementation
+  plan.
+- [ ] Select and contract the Spanish beta infrastructure within the initial
+  EUR 25/month target.
 - [ ] Introduce user accounts with secure registration, sign-in, sign-out,
-  password recovery, and session management.
-- [ ] Assign every library, book, cover, hierarchy record, and visual layout to
-  an owner.
-- [ ] Migrate the current library safely to the first owner account.
-- [ ] Enforce strict data separation between users.
-- [ ] Give each user an independent catalogue, physical hierarchy, visual map,
-  backup, restore, and export flow.
+  password recovery, Argon2id, opaque sessions, and CSRF protection.
+- [ ] Assign every library-level record to a library and every personal reading
+  record to an Owner.
+- [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,
+  transfer/removal, and audit logging.
+- [ ] Enforce strict backend data separation between libraries and users.
+- [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
+  and assign its implicit reading history to a selected Owner.
+- [ ] Implement private per-library catalogue, physical hierarchy, visual map,
+  backup, restore, and export flows.
+- [ ] Implement perspective-aware catalogue states, statistics, map colouring,
+  suggestions, and personal reading/rereading sessions.
+- [ ] Implement shared physical custody and prevent simultaneous active reading
+  of one physical copy.
+- [ ] Implement transactional shared quota allocation and atomic library
+  deletion/recovery.
 
 ### Privacy and social features
 
-- [ ] Define library visibility levels such as private, friends-only, or
-  public.
-- [ ] Define separate visibility controls for catalogue information and the
-  physical map, since the map may reveal details about a user's home.
-- [ ] Add friendship requests, acceptance, removal, and blocking.
-- [ ] Create a privacy-safe public/friends catalogue view that can omit physical
-  location and map information.
+- [x] Keep libraries, covers, catalogues, maps, and reading histories private
+  to authenticated members during the beta.
+- [x] Treat the physical map as more sensitive than the catalogue.
+- [x] Keep borrower identity and private loan notes visible only to Owners.
+- [x] Allow users to expose only optional public total-owned and unique-read
+  counters alongside a globally searchable username.
+- [ ] Consider friendship, blocking, and public catalogue features only after
+  a separate privacy and moderation design; they are not part of the beta.
 
 ### Publishable web/app infrastructure
 
@@ -504,8 +536,8 @@ decisions in addition to application code.
 
 - [ ] Replace local-only assumptions with production configuration for the
   database, cover storage, API URLs, and secrets.
-- [ ] Choose production hosting, a managed database, durable image storage,
-  domain, and HTTPS.
+- [ ] Choose the Spanish VPS, private object storage, domain, email service,
+  and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
 - [ ] Add authorization checks to every user-owned backend operation.
 - [ ] Add upload validation, rate limiting, security headers, audit logging,
   monitoring, and error reporting.
