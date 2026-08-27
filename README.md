@@ -7,6 +7,10 @@ It is currently a single-user application intended to run on a Windows PC and
 be used from that computer or from a phone on the same private Wi-Fi network.
 The catalogue, covers, and physical layout remain under the user's control.
 
+BOOKPILE Local v1 is distributed as source with a guided Windows installer.
+New users should begin with [INSTALLATION.md](INSTALLATION.md), then read the
+[user guide](USER_GUIDE.md) and [backup guide](BACKUP_AND_RECOVERY.md).
+
 ## Current capabilities
 
 ### Catalogue and reading history
@@ -208,6 +212,21 @@ are not imported.
 
 ## Running BOOKPILE
 
+### First installation
+
+Install 64-bit Python 3.11+ and Node.js 20+, extract the complete release ZIP,
+then run from its permanent folder:
+
+```powershell
+Set-ExecutionPolicy -Scope Process RemoteSigned
+.\install-bookpile.ps1
+```
+
+The installer creates private dependencies, builds the frontend, initializes
+an empty catalogue only when needed, and creates Start/Stop desktop shortcuts.
+It does not overwrite existing catalogue data. Full prerequisites and update
+instructions are in [INSTALLATION.md](INSTALLATION.md).
+
 ### Recommended launcher
 
 From the project root:
@@ -217,7 +236,8 @@ From the project root:
 ```
 
 The launcher starts the backend and optimized frontend, then displays the LAN
-URL for this computer and other devices on the same Wi-Fi.
+URL for this computer and other devices on the same Wi-Fi. Without an active
+home network it falls back to localhost for use on the computer itself.
 
 For future starts, install the desktop shortcuts once:
 
@@ -335,6 +355,14 @@ third-party services.
 
 ## Project documentation
 
+- `INSTALLATION.md` is the end-user installation, update, and uninstall guide.
+- `USER_GUIDE.md` explains normal catalogue, reading, loan, map, and statistics
+  workflows.
+- `BACKUP_AND_RECOVERY.md` defines the practical backup and restore routine.
+- `TROUBLESHOOTING.md` covers common installation, startup, and LAN problems.
+- `LIMITATIONS.md` states the security and product boundaries of Local v1.
+- `RELEASE_NOTES.md` summarizes the Local v1.0.0 release for end users.
+- `RELEASE_CHECKLIST.md` records automated and manual release gates.
 - `TODO.md` is the authoritative roadmap and separates work possible with the
   current database from schema expansion and product-scale development.
 - `SCANNING_PLAN.md` documents ISBN, barcode, OCR, catalogue matching, and
@@ -399,3 +427,16 @@ The agreed separation between stable BOOKPILE Local v1 and the hosted Server
 edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
+
+## Licence
+
+Copyright © 2026 Javier Ramalleira Fernández.
+
+BOOKPILE is free software licensed under the
+[GNU Affero General Public License, version 3 or later](LICENSE)
+(`AGPL-3.0-or-later`). You may use, study, modify, redistribute, and offer the
+software as a service under the licence terms. Modified network versions must
+offer their corresponding source to users interacting with them remotely.
+
+BOOKPILE is provided without warranty. See [COPYRIGHT](COPYRIGHT) and
+[LICENSE](LICENSE) for the complete notice and legal terms.

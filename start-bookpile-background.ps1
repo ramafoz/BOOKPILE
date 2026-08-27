@@ -74,7 +74,7 @@ try {
 
     $LanAddress = Get-LanAddress
     if (-not $LanAddress) {
-        throw "No home-network address was detected."
+        $LanAddress = "127.0.0.1"
     }
     $Url = "http://${LanAddress}:5173"
 
@@ -160,7 +160,12 @@ try {
     }
 
     Set-Clipboard $Url
-    Show-BookpileMessage "BOOKPILE is ready.`n`n$Url`n`nThe address has been copied to the clipboard."
+    $NetworkNote = if ($LanAddress -eq "127.0.0.1") {
+        "No home network was detected, so this address works on this computer only."
+    } else {
+        "Open this address on devices connected to the same private Wi-Fi."
+    }
+    Show-BookpileMessage "BOOKPILE is ready.`n`n$Url`n`n$NetworkNote`n`nThe address has been copied to the clipboard."
 }
 catch {
     Show-BookpileMessage `

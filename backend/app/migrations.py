@@ -487,6 +487,25 @@ def infer_unversioned_schema(connection: sqlite3.Connection) -> int:
             "Cannot identify the unversioned BOOKPILE schema; missing book fields: "
             + ", ".join(missing_columns)
         )
+    visual_container_columns = table_columns(
+        connection,
+        "visual_container_layout",
+    )
+    if (
+        V4_BOOK_COLUMNS <= book_columns
+        and table_exists(connection, "book_authors")
+        and table_exists(connection, "reading_sessions")
+        and table_exists(connection, "loans")
+        and {
+            "row_anchor",
+            "pile_support_kind",
+            "pile_support_container_id",
+        }
+        <= visual_container_columns
+    ):
+        # A catalogue created directly by the current initializer has the
+        # complete v8 schema but deliberately needs no migration ledger yet.
+        return 8
     if V4_BOOK_COLUMNS <= book_columns and table_exists(connection, "book_authors"):
         if table_exists(connection, "reading_sessions"):
             if table_exists(connection, "loans"):

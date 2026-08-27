@@ -37,7 +37,7 @@ $LanAddress = [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInt
     Select-Object -First 1
 
 if (-not $LanAddress) {
-    throw "No active LAN address was detected. Connect this computer to the home network and try again."
+    $LanAddress = "127.0.0.1"
 }
 
 function Test-TcpPort {
@@ -120,6 +120,10 @@ Start-Process powershell -WindowStyle Normal -ArgumentList @(
 Write-Host ""
 Write-Host "BOOKPILE is starting." -ForegroundColor Green
 Write-Host "On this computer and phone: http://${LanAddress}:5173" -ForegroundColor Cyan
-Write-Host "Both devices must be connected to the same Wi-Fi."
+if ($LanAddress -eq "127.0.0.1") {
+    Write-Host "No home-network address was detected; BOOKPILE is available on this computer only."
+} else {
+    Write-Host "Both devices must be connected to the same Wi-Fi."
+}
 Write-Host ""
 Write-Host "Keep both server windows open while using BOOKPILE."

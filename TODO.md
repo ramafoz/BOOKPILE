@@ -6,6 +6,35 @@ This roadmap separates future work by its effect on the current data model.
 - `[ ]` Planned or under consideration.
 - `[N]` Explicitly not planned.
 
+## Local v1 release preparation
+
+- [x] Preserve the accepted single-user application on the dedicated
+  `release/local-v1` branch while the hosted multi-user product remains a
+  separate future line of development.
+- [x] Create and validate a full pre-release backup before distribution work.
+- [x] Add a repeatable Windows installer for isolated backend/frontend
+  dependencies, the optimized build, safe empty-catalogue initialization, and
+  optional desktop shortcuts.
+- [x] Allow host-only use through localhost when no LAN address is available.
+- [x] Add English installation, user, backup/recovery, troubleshooting, and
+  limitations documentation for Local v1.
+- [x] Rehearse installation from a clean working copy without using or
+  modifying the populated development catalogue.
+- [x] Validate empty-library initialization, schema detection, isolated API and
+  frontend startup, safety-backup creation, and full restore against a copied
+  backup.
+- [ ] Validate the final committed release artifact, desktop shortcuts, and
+  private-LAN access manually on host, phone, and tablet.
+- [x] Add a reproducible maintainer script that builds the committed release
+  ZIP and its SHA-256 checksum without catalogue data, covers, dependencies,
+  runtime files, or ignored local context.
+- [x] Licence Local v1 under `AGPL-3.0-or-later`, copyright © 2026 Javier
+  Ramalleira Fernández.
+- [ ] Obtain explicit release-candidate approval, tag `v1.0.0`, and publish the
+  GitHub release with checksums and release notes.
+- [ ] Add multilingual Local and Server interfaces after v1.0; keep the first
+  Local release and its documentation English-only.
+
 ## Implemented foundation
 
 ### Backup and data portability

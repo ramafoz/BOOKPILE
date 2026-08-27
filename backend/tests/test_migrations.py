@@ -21,6 +21,22 @@ from app.migrations import (
 from app.restore import extract_and_validate_archive
 
 
+def test_fresh_catalogue_is_identified_as_latest_schema(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "fresh" / "bookpile.db"
+    monkeypatch.setenv("BOOKPILE_DATABASE", str(database))
+
+    init_database()
+
+    with closing(connect_database(database)) as connection:
+        assert schema_version(connection) == 8
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 0
+
+
 def create_v1_catalogue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
