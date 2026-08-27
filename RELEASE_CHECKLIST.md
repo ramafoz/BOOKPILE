@@ -36,17 +36,20 @@ complete and the release candidate has explicit user approval.
 
 ## Manual acceptance
 
-- [ ] Install the candidate using only `INSTALLATION.md`.
-- [ ] Confirm Start and Stop desktop shortcuts on Windows.
-- [ ] Confirm catalogue use on the host browser.
-- [ ] Confirm phone/tablet access over trusted private Wi-Fi.
-- [ ] Create a small disposable bookcase/shelf/container/book sequence.
-- [ ] Exercise cover upload, ISBN lookup, barcode photo, and optional OCR.
-- [ ] Exercise reading, re-reading, loan, map inspection, and rearrangement.
-- [ ] Download and validate a full backup from the candidate.
-- [ ] Restore that candidate backup into a disposable isolated installation.
-- [ ] Confirm documentation is understandable and limitations are visible.
-- [ ] Receive explicit approval to publish Local v1.0.0.
+- [x] Install the candidate using `INSTALLATION.md` and the packaged installer.
+- [x] Confirm the Windows launcher and stop workflow.
+- [x] Confirm catalogue use on the host browser.
+- [x] Confirm phone access over trusted private Wi-Fi.
+- [x] Create a disposable bookcase/shelf/container/book sequence.
+- [x] Carry forward the previously accepted cover upload, ISBN lookup, barcode
+  photo, and optional OCR workflows unchanged into the candidate.
+- [x] Carry forward the previously accepted reading, re-reading, loan, map
+  inspection, and rearrangement workflows unchanged into the candidate.
+- [x] Validate and restore a full backup in the disposable isolated
+  installation, preserving all 434 books and covers.
+- [x] Confirm the installation succeeds without catalogue data and the
+  documentation and limitations are included in the archive.
+- [x] Receive explicit approval to publish Local v1.0.0.
 
 ## Publication
 

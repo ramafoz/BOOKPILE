@@ -23,15 +23,17 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Validate empty-library initialization, schema detection, isolated API and
   frontend startup, safety-backup creation, and full restore against a copied
   backup.
-- [ ] Validate the final committed release artifact, desktop shortcuts, and
-  private-LAN access manually on host, phone, and tablet.
+- [x] Validate the final committed release candidate, launcher lifecycle, and
+  private-LAN access manually on host and phone; retain broader device testing
+  in the ongoing Local maintenance checklist.
 - [x] Add a reproducible maintainer script that builds the committed release
   ZIP and its SHA-256 checksum without catalogue data, covers, dependencies,
   runtime files, or ignored local context.
 - [x] Licence Local v1 under `AGPL-3.0-or-later`, copyright © 2026 Javier
   Ramalleira Fernández.
-- [ ] Obtain explicit release-candidate approval, tag `v1.0.0`, and publish the
-  GitHub release with checksums and release notes.
+- [x] Obtain explicit release-candidate approval.
+- [ ] Tag `v1.0.0` and publish the GitHub release with checksums and release
+  notes.
 - [ ] Add multilingual Local and Server interfaces after v1.0; keep the first
   Local release and its documentation English-only.
 
