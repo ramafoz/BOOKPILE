@@ -30,8 +30,8 @@ complete and the release candidate has explicit user approval.
   backup first.
 - [x] Re-running the installer over that restored isolated installation keeps
   all 434 books and 434 cover references intact.
-- [ ] Build the committed release ZIP and SHA-256 file from the final tag.
-- [ ] Extract that exact artifact into another clean folder and repeat the
+- [x] Build the committed release ZIP and SHA-256 file from the final tag.
+- [x] Extract that exact artifact into another clean folder and repeat the
   installer/start smoke test.
 
 ## Manual acceptance
@@ -53,12 +53,12 @@ complete and the release candidate has explicit user approval.
 
 ## Publication
 
-- [ ] Merge or fast-forward the approved release work according to the chosen
+- [x] Merge or fast-forward the approved release work according to the chosen
   maintenance policy.
-- [ ] Create the annotated `v1.0.0` tag at the approved commit.
-- [ ] Push the release branch and tag.
-- [ ] Publish `BOOKPILE-Local-v1.0.0.zip`, its `.sha256`, and release notes on
+- [x] Create the annotated `v1.0.0` tag at the approved commit.
+- [x] Push the release branch and tag.
+- [x] Publish `BOOKPILE-Local-v1.0.0.zip`, its `.sha256`, and release notes on
   GitHub.
-- [ ] Preserve `release/local-v1` for critical Local fixes.
+- [x] Preserve `release/local-v1` for critical Local fixes.
 - [ ] Create the separate multi-user foundation branch only after Local v1 is
   recoverable from its public tag and artifact.

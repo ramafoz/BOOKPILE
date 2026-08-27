@@ -32,7 +32,7 @@ This roadmap separates future work by its effect on the current data model.
 - [x] Licence Local v1 under `AGPL-3.0-or-later`, copyright © 2026 Javier
   Ramalleira Fernández.
 - [x] Obtain explicit release-candidate approval.
-- [ ] Tag `v1.0.0` and publish the GitHub release with checksums and release
+- [x] Tag `v1.0.0` and publish the GitHub release with checksums and release
   notes.
 - [ ] Add multilingual Local and Server interfaces after v1.0; keep the first
   Local release and its documentation English-only.
