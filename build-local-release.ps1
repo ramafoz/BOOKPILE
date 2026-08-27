@@ -6,7 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = [System.IO.Path]::GetFullPath(
+    (Split-Path -Parent $MyInvocation.MyCommand.Path)
+)
 $Git = Get-Command git.exe -ErrorAction SilentlyContinue
 if (-not $Git) {
     throw "Git was not found. Install Git for Windows before building a release."
@@ -17,7 +19,9 @@ if ($Version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
 
 Push-Location $ProjectRoot
 try {
-    $RepositoryRoot = (& $Git.Source rev-parse --show-toplevel 2>$null).Trim()
+    $RepositoryRoot = [System.IO.Path]::GetFullPath(
+        (& $Git.Source rev-parse --show-toplevel 2>$null).Trim()
+    )
     if ($LASTEXITCODE -ne 0 -or $RepositoryRoot -ne $ProjectRoot) {
         throw "Run this script from the BOOKPILE repository checkout."
     }
