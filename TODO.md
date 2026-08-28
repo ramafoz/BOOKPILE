@@ -521,8 +521,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   across co-Owners.
 - [x] Define atomic shared-library deletion, 48-hour recovery, and 30-day
   operational-backup retention.
-- [ ] Freeze, document, tag, and publish the stable BOOKPILE Local v1 release
-  before Server implementation begins.
+- [x] Freeze, document, tag, and publish the stable BOOKPILE Local v1 release
+  before Server implementation begins. `v1.0.0` is available from the GitHub
+  Releases page with its SHA-256 checksum; `release/local-v1` remains the
+  dedicated maintenance line.
 - [ ] Resolve the remaining decisions listed in the multi-user implementation
   plan.
 - [ ] Select and contract the Spanish beta infrastructure within the initial
