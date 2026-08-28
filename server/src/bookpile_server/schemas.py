@@ -15,5 +15,8 @@ class BookSummary(BaseModel):
 
 class CatalogueResponse(BaseModel):
     library_id: UUID
+    total: int
+    limit: int
+    offset: int
     books: list[BookSummary]
 

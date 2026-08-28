@@ -43,6 +43,9 @@ def test_catalogue_api_does_not_leak_another_library(
     assert response.status_code == 200
     body = response.json()
     assert body["library_id"] == str(first.id)
+    assert body["total"] == 1
+    assert body["limit"] == 50
+    assert body["offset"] == 0
     assert [book["title"] for book in body["books"]] == ["Piranesi"]
     assert "Dune" not in response.text
 
@@ -64,8 +67,44 @@ def test_unknown_library_returns_an_empty_scoped_catalogue(
     assert response.status_code == 200
     assert response.json() == {
         "library_id": str(missing_library_id),
+        "total": 0,
+        "limit": 50,
+        "offset": 0,
         "books": [],
     }
+
+
+def test_search_count_and_pagination_remain_library_scoped(
+    client: TestClient, session: Session
+) -> None:
+    first, second = seed_two_libraries(session)
+    session.add_all(
+        [
+            Book(library_id=first.id, title="Dune Messiah", author="Frank Herbert"),
+            Book(library_id=first.id, title="The Left Hand", author="Ursula Le Guin"),
+            Book(library_id=second.id, title="Another Dune", author="Other Author"),
+        ]
+    )
+    session.commit()
+
+    response = client.get(
+        f"/api/v1/libraries/{first.id}/catalogue",
+        params={"search": "dune", "limit": 1, "offset": 0},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["limit"] == 1
+    assert [book["title"] for book in body["books"]] == ["Dune Messiah"]
+    assert "Another Dune" not in response.text
+
+    empty_page = client.get(
+        f"/api/v1/libraries/{first.id}/catalogue",
+        params={"search": "dune", "limit": 1, "offset": 1},
+    ).json()
+    assert empty_page["total"] == 1
+    assert empty_page["books"] == []
 
 
 def test_health_identifies_server_edition(client: TestClient) -> None:

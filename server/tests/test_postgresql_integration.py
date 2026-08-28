@@ -10,10 +10,13 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient
 
+from bookpile_server.database import get_session
+from bookpile_server.main import create_app
 from bookpile_server.models import Book, Library
 from bookpile_server.repositories.books import BookRepository
 
@@ -56,7 +59,27 @@ def test_postgresql_migration_and_tenant_scope() -> None:
 
             books = BookRepository(session).list_for_library(first.id)
             assert [book.title for book in books] == ["One"]
+
+            app = create_app()
+
+            def override_session():
+                yield session
+
+            app.dependency_overrides[get_session] = override_session
+            with TestClient(app) as client:
+                response = client.get(
+                    f"/api/v1/libraries/{first.id}/catalogue",
+                    params={"search": "one"},
+                )
+            assert response.status_code == 200
+            assert response.json()["total"] == 1
+            assert [book["title"] for book in response.json()["books"]] == [
+                "One"
+            ]
+            assert "Two" not in response.text
     finally:
         command.downgrade(alembic, "base")
+        remaining_tables = set(inspect(engine).get_table_names())
+        assert remaining_tables <= {"alembic_version"}
         engine.dispose()
 

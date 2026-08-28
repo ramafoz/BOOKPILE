@@ -40,7 +40,7 @@ The PostgreSQL integration test is skipped unless an explicitly disposable
 database is configured. Its database name must end in `_test`:
 
 ```powershell
-$env:BOOKPILE_SERVER_TEST_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@localhost:5432/bookpile_test"
+$env:BOOKPILE_SERVER_TEST_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@127.0.0.1:5432/bookpile_test"
 server\.venv\Scripts\python -m pytest server\tests\test_postgresql_integration.py
 ```
 
@@ -48,15 +48,52 @@ Run PostgreSQL with Docker, when Docker is available:
 
 ```powershell
 docker compose -f server\compose.yaml up -d db
-$env:BOOKPILE_SERVER_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@localhost:5432/bookpile"
+$env:BOOKPILE_SERVER_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@127.0.0.1:5432/bookpile"
 server\.venv\Scripts\alembic -c server\alembic.ini upgrade head
 server\.venv\Scripts\uvicorn bookpile_server.main:app --app-dir server\src --reload --port 8100
 ```
+
+The first volume initialization creates two databases:
+
+- `bookpile` stores disposable development data.
+- `bookpile_test` is emptied by migration/integration tests.
+
+Apply migrations and optionally insert the deliberately small synthetic demo:
+
+```powershell
+server\.venv\Scripts\alembic -c server\alembic.ini upgrade head
+server\.venv\Scripts\python server\scripts\seed_development.py
+```
+
+The seed script refuses non-development environments, remote hosts, databases
+not named exactly `bookpile`, and non-PostgreSQL targets. Its records are not
+copied from a Local catalogue.
 
 Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-The in-memory isolation suite and PostgreSQL migration SQL can be validated
-without PostgreSQL. Phase 1 is not accepted until the opt-in PostgreSQL test
-also passes against a disposable instance.
+Phase 1's migration and isolation gate passed on 2026-08-28 against PostgreSQL
+17 running in Docker Desktop/WSL 2. The test performs an Alembic upgrade,
+checks repository and HTTP isolation with two synthetic libraries, and then
+downgrades the disposable `bookpile_test` database until no BOOKPILE
+application tables remain. Alembic may retain its empty administrative
+`alembic_version` table.
+
+The committed password is for loopback-only local development. Hosted and
+staging environments must obtain unique secrets from deployment configuration.
+
+Common lifecycle commands preserve the named volume unless `-v` is explicitly
+requested:
+
+```powershell
+# Stop PostgreSQL while preserving Server development data.
+docker compose -f server\compose.yaml stop
+
+# Recreate/start it later using the same volume.
+docker compose -f server\compose.yaml up -d db
+```
+
+Do not use `docker compose down -v` as a routine stop command: `-v` deliberately
+deletes the Server PostgreSQL volume. It still cannot affect BOOKPILE Local's
+SQLite catalogue, which is outside Docker in the separate Local worktree.

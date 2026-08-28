@@ -529,14 +529,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   plan.
 - [ ] Select and contract the Spanish beta infrastructure within the initial
   EUR 25/month target.
-- [ ] Complete Server Phase 1 on `feature/server-foundation`:
+- [x] Complete Server Phase 1 on `feature/server-foundation`:
   - [x] Isolate Server code from Local v1.
   - [x] Add environment configuration, dependency injection, SQLAlchemy
     repository/service boundaries, and an initial Alembic migration.
   - [x] Prove basic read-only catalogue isolation with fast tests.
-  - [ ] Validate migration upgrade/downgrade and isolation against a disposable
+  - [x] Validate migration upgrade/downgrade and isolation against a disposable
     PostgreSQL database.
-  - [ ] Expand and approve the reusable read-only catalogue projection.
+  - [x] Expand and approve the reusable read-only catalogue projection with
+    scoped search, counts, and pagination.
 - [ ] Introduce user accounts with secure registration, sign-in, sign-out,
   password recovery, Argon2id, opaque sessions, and CSRF protection.
 - [ ] Assign every library-level record to a library and every personal reading

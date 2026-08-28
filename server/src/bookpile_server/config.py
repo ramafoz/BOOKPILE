@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         "development"
     )
     database_url: str = Field(
-        default="postgresql+psycopg://bookpile:bookpile-dev@localhost:5432/bookpile"
+        default="postgresql+psycopg://bookpile:bookpile-dev@127.0.0.1:5432/bookpile"
     )
     sql_echo: bool = False
 

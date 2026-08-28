@@ -722,10 +722,14 @@ Gate: Local v1 remains independently installable and recoverable.
   repository/service boundaries, and
   PostgreSQL/Alembic infrastructure.
 - [x] Port a minimal read-only catalogue behavior with fast isolation tests.
-- [ ] Run the migration and isolation integration gate against a disposable
+- [x] Run the migration and isolation integration gate against a disposable
   PostgreSQL database.
-- [ ] Expand the read-only slice enough to establish the reusable Server
+- [x] Expand the read-only slice enough to establish the reusable Server
   catalogue projection without copying Local's monolithic route module.
+
+Phase 1 gate passed locally on 2026-08-28 with PostgreSQL 17 in Docker
+Desktop/WSL 2. The scoped catalogue supports search, count, limit, and offset;
+tests prove that list results and totals cannot include another library.
 
 Gate: no authentication yet, but Server tests prove scoped repository design.
 
