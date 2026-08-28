@@ -8,7 +8,7 @@ document from `C:\Users\Russula\.code\_BOOKPILE_SERVER`. The sibling
 `_PERSONAL_LIBRARY_MANAGER` directory is the live Local v1 installation and
 must not be used for Server migrations or test databases.
 
-## Current Phase 1 slice
+## Current Server slice
 
 - Environment-based Server configuration.
 - SQLAlchemy session boundaries.
@@ -17,9 +17,12 @@ must not be used for Server migrations or test databases.
 - Read-only catalogue endpoint scoped by library ID.
 - Repository and API tests proving that one library cannot read another
   library's catalogue through this slice.
+- Reversible Phase 2A identity foundation: users, hashed opaque-session
+  records, and structured security events.
 
-Authentication is intentionally absent. A path library ID is only a temporary
-Phase 1 input used to prove architectural scoping; it is not authorization.
+Authentication endpoints are intentionally still absent. A path library ID is
+only a temporary Phase 1 input used to prove architectural scoping; it is not
+authorization. Password hashing and login/logout begin in Phase 2B.
 
 ## Development setup
 
@@ -73,12 +76,13 @@ Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-Phase 1's migration and isolation gate passed on 2026-08-28 against PostgreSQL
-17 running in Docker Desktop/WSL 2. The test performs an Alembic upgrade,
-checks repository and HTTP isolation with two synthetic libraries, and then
-downgrades the disposable `bookpile_test` database until no BOOKPILE
-application tables remain. Alembic may retain its empty administrative
-`alembic_version` table.
+The migration and isolation gate passed on 2026-08-28 against PostgreSQL 17
+running in Docker Desktop/WSL 2. The test upgrades through Phase 2A, checks
+repository and HTTP isolation with two synthetic libraries, creates synthetic
+identity/session/audit records, and rolls back `0002` to prove Phase 1
+catalogue records survive. It then downgrades the disposable `bookpile_test`
+database until no BOOKPILE application tables remain. Alembic may retain its
+empty administrative `alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and
 staging environments must obtain unique secrets from deployment configuration.

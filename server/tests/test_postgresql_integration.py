@@ -5,6 +5,7 @@ in `_test`. The safety suffix prevents this test from targeting a normal or
 production database accidentally.
 """
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from bookpile_server.database import get_session
 from bookpile_server.main import create_app
-from bookpile_server.models import Book, Library
+from bookpile_server.models import Book, Library, SecurityEvent, User, UserSession
 from bookpile_server.repositories.books import BookRepository
 
 
@@ -44,6 +45,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
 
     try:
         command.upgrade(alembic, "head")
+        assert {
+            "libraries",
+            "books",
+            "users",
+            "user_sessions",
+            "security_events",
+        } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = Library(name="First", slug="postgres-first")
             second = Library(name="Second", slug="postgres-second")
@@ -54,6 +62,33 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     Book(library_id=first.id, title="One", author="Author A"),
                     Book(library_id=second.id, title="Two", author="Author B"),
                 ]
+            )
+            now = datetime.now(UTC)
+            user = User(
+                email="reader@example.test",
+                username="reader_one",
+                password_hash="not-a-real-password-hash",
+                state="active",
+                email_verified_at=now,
+            )
+            session.add(user)
+            session.flush()
+            session.add(
+                UserSession(
+                    user_id=user.id,
+                    token_hash="a" * 64,
+                    csrf_token_hash="b" * 64,
+                    last_seen_at=now,
+                    expires_at=now + timedelta(days=7),
+                    absolute_expires_at=now + timedelta(days=30),
+                )
+            )
+            session.add(
+                SecurityEvent(
+                    user_id=user.id,
+                    event_type="identity_foundation_test",
+                    details={"source": "postgresql-integration"},
+                )
             )
             session.commit()
 
@@ -77,6 +112,20 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 "One"
             ]
             assert "Two" not in response.text
+
+        # Prove that 0002 can be removed without removing Phase 1 catalogue
+        # records. This is the incremental rollback gate for identity work.
+        command.downgrade(alembic, "0001_server_foundation")
+        phase_one_tables = set(inspect(engine).get_table_names())
+        assert {"libraries", "books"} <= phase_one_tables
+        assert {
+            "users",
+            "user_sessions",
+            "security_events",
+        }.isdisjoint(phase_one_tables)
+        with Session(engine) as session:
+            assert session.query(Library).count() == 2
+            assert session.query(Book).count() == 2
     finally:
         command.downgrade(alembic, "base")
         remaining_tables = set(inspect(engine).get_table_names())
