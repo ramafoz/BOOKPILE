@@ -542,7 +542,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   password recovery, Argon2id, opaque sessions, and CSRF protection:
   - [x] Add the reversible user, hashed-session, and security-event schema in
     Server migration `0002_identity_foundation`.
-  - [ ] Implement Argon2id credentials and login/logout.
+  - [x] Implement Argon2id credentials and login/logout with opaque hashed
+    sessions and generic credential failures.
   - [ ] Implement CSRF, session rotation/revocation, invitations, verification,
     password reset, rate limiting, security tests, and the auth frontend.
 - [ ] Assign every library-level record to a library and every personal reading

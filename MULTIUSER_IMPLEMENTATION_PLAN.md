@@ -737,7 +737,7 @@ Gate: no authentication yet, but Server tests prove scoped repository design.
 
 - [x] Phase 2A: establish users, hashed opaque-session records, and structured
   security events through reversible migration `0002_identity_foundation`.
-- [ ] Phase 2B: implement password validation and Argon2id login/logout.
+- [x] Phase 2B: implement password validation and Argon2id login/logout.
 - [ ] Phase 2C: add CSRF protection, session rotation, expiry, and revocation.
 - [ ] Phase 2D: implement invitation-only registration.
 - [ ] Phase 2E: add email verification and password reset using Mailpit in
@@ -750,6 +750,14 @@ The accepted identity policy is recorded in
 PostgreSQL incremental gate on 2026-08-28: `0001 -> 0002 -> 0001 -> base`,
 including verification that rolling back identity preserved Phase 1 catalogue
 records.
+
+Phase 2B passed its PostgreSQL gate on 2026-08-28. It provides generic-failure
+login by normalized username or email, Argon2id password verification and
+rehashing, opaque `HttpOnly` session cookies whose credentials are stored only
+as hashes, logout revocation, and structured success/failure/logout events.
+Session authentication on protected requests, inactivity renewal, CSRF, token
+rotation, and global revocation deliberately remain Phase 2C work; this branch
+is not deployable before those controls exist.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.

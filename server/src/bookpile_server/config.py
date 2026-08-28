@@ -25,6 +25,8 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://bookpile:bookpile-dev@127.0.0.1:5432/bookpile"
     )
     sql_echo: bool = False
+    session_cookie_name: str = "bookpile_session"
+    session_cookie_secure: bool = False
 
 
 @lru_cache
