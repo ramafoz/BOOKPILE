@@ -15,6 +15,11 @@ runtime would put the stable application and its existing catalogues at risk.
 - Tag `v1.0.0` is immutable.
 - Branch `release/local-v1` is the maintenance line for critical Local fixes.
 - Server development begins on `feature/server-foundation`.
+- The working copies are physically separated with Git worktrees:
+  - `C:\Users\Russula\.code\_PERSONAL_LIBRARY_MANAGER` stays checked out on
+    `release/local-v1` and remains Javier's live personal library.
+  - `C:\Users\Russula\.code\_BOOKPILE_SERVER` is checked out on
+    `feature/server-foundation` and contains hosted-product development.
 - Server code lives under `server/` while the existing `backend/` and
   `frontend/` remain the Local application during the foundation phases.
 - Local keeps SQLite. Server targets PostgreSQL and uses Alembic migrations.
@@ -33,4 +38,7 @@ runtime would put the stable application and its existing catalogues at risk.
   exists.
 - A future Local ZIP import is a conversion process into Server data, not a
   direct replacement of a Server database.
+- Server commands, migrations, virtual environments, and disposable databases
+  must be created from the Server worktree. The Local worktree's
+  `backend/data` and `backend/backups` directories are never Server inputs.
 

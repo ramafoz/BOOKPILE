@@ -3,6 +3,11 @@
 This directory is the isolated beginning of the hosted multi-user edition.
 It does not read or modify BOOKPILE Local data.
 
+The repository currently uses two Git worktrees. Run every command in this
+document from `C:\Users\Russula\.code\_BOOKPILE_SERVER`. The sibling
+`_PERSONAL_LIBRARY_MANAGER` directory is the live Local v1 installation and
+must not be used for Server migrations or test databases.
+
 ## Current Phase 1 slice
 
 - Environment-based Server configuration.
