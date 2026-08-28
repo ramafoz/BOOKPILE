@@ -707,20 +707,25 @@ Document assets, actors, entry points, and controls for at least:
 
 ### Phase 0 — freeze and preserve Local v1
 
-- Create and verify a final Local backup.
-- Tag/release Local v1 and create its maintenance branch.
-- Write clean-install and first-use documentation.
-- Prove the downloadable release works on a clean machine.
-- Freeze the Local ZIP contract and collect import fixtures.
+- [x] Create and verify a final Local backup.
+- [x] Tag/release Local v1 and create its maintenance branch.
+- [x] Write clean-install and first-use documentation.
+- [x] Prove the downloadable release works on a clean machine.
+- [x] Freeze the Local ZIP contract and collect import fixtures.
 
 Gate: Local v1 remains independently installable and recoverable.
 
 ### Phase 1 — Server skeleton and modular boundaries
 
-- Create the Server development line without altering the Local release.
-- Add configuration, dependency injection, repository/service boundaries, and
+- [x] Create the Server development line without altering the Local release.
+- [x] Add the initial configuration, dependency injection,
+  repository/service boundaries, and
   PostgreSQL/Alembic infrastructure.
-- Port read-only catalogue behavior first with regression tests.
+- [x] Port a minimal read-only catalogue behavior with fast isolation tests.
+- [ ] Run the migration and isolation integration gate against a disposable
+  PostgreSQL database.
+- [ ] Expand the read-only slice enough to establish the reusable Server
+  catalogue projection without copying Local's monolithic route module.
 
 Gate: no authentication yet, but Server tests prove scoped repository design.
 

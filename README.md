@@ -371,6 +371,12 @@ third-party services.
   CSV export design.
 - `MIGRATION_RECOVERY.md` documents versioned schema changes, isolated
   rehearsals, mandatory pre-migration backups, and recovery.
+- `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
+  tenancy, privacy, quota, migration, and deployment roadmap.
+- `docs/adr/` records architectural decisions that must remain traceable as
+  BOOKPILE Server evolves.
+- `server/README.md` documents the isolated Server foundation and its test
+  workflow. This code never opens the Local catalogue database.
 - `BOOKPILE_PROJECT_CONTEXT_LOCAL.md` contains detailed local project history
   and is intentionally excluded from Git.
 

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bookpile-server"
+version = "0.1.0.dev0"
+description = "Hosted multi-user BOOKPILE server"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic==1.16.5",
+  "fastapi==0.115.12",
+  "psycopg[binary]==3.2.10",
+  "pydantic-settings==2.10.1",
+  "sqlalchemy==2.0.43",
+  "uvicorn[standard]==0.34.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "pytest==8.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

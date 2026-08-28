@@ -10,5 +10,6 @@ frontend/dist/
 release-artifacts/
 maintenance/reports/
 *.tsbuildinfo
+*.egg-info/
 .env
 .DS_Store
