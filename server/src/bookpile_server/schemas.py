@@ -33,3 +33,8 @@ class LoginResponse(BaseModel):
     expires_at: datetime
     absolute_expires_at: datetime
 
+
+class CurrentUserResponse(BaseModel):
+    user_id: UUID
+    username: str
+

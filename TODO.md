@@ -544,8 +544,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     Server migration `0002_identity_foundation`.
   - [x] Implement Argon2id credentials and login/logout with opaque hashed
     sessions and generic credential failures.
-  - [ ] Implement CSRF, session rotation/revocation, invitations, verification,
-    password reset, rate limiting, security tests, and the auth frontend.
+  - [x] Implement protected-session validation, inactivity/absolute expiry,
+    CSRF, session rotation, and individual/global revocation.
+  - [ ] Implement invitations, verification, password reset, rate limiting,
+    dedicated security tests, and the auth frontend.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,

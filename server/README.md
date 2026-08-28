@@ -21,12 +21,14 @@ must not be used for Server migrations or test databases.
   records, and structured security events.
 - Phase 2B Argon2id password verification plus login/logout with opaque
   `HttpOnly` session cookies and audit events.
+- Phase 2C protected-request authentication, inactivity and absolute expiry,
+  CSRF enforcement, credential rotation, and global session revocation.
 
-Authentication endpoints now issue and revoke sessions, but protected-request
-authentication, inactivity renewal, CSRF, and token rotation remain Phase 2C.
-The Server branch is therefore not deployable yet. A path library ID is still
-a temporary Phase 1 input used to prove architectural scoping; it is not
-authorization.
+The authentication core now protects requests and session mutations, but
+invitation registration, verification/reset mail, rate limits, and the
+dedicated security gate remain. The Server branch is therefore not deployable
+yet. A path library ID is still a temporary Phase 1 input used to prove
+architectural scoping; it is not authorization.
 
 ## Development setup
 

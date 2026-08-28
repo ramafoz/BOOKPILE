@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -59,7 +59,9 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
     assert response.status_code == 200
     assert response.json()["username"] == "reader_one"
     cookie = response.cookies.get("bookpile_session")
+    csrf_token = response.cookies.get("bookpile_csrf")
     assert cookie
+    assert csrf_token
     assert "HttpOnly" in response.headers["set-cookie"]
     assert "SameSite=lax" in response.headers["set-cookie"]
 
@@ -70,7 +72,18 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
     assert cookie not in stored_session.token_hash
     assert len(stored_session.csrf_token_hash) == 64
 
-    response = client.post("/api/v1/auth/logout")
+    assert client.get("/api/v1/auth/me").json() == {
+        "user_id": str(user.id),
+        "username": "reader_one",
+    }
+
+    rejected_logout = client.post("/api/v1/auth/logout")
+    assert rejected_logout.status_code == 403
+    assert stored_session.revoked_at is None
+
+    response = client.post(
+        "/api/v1/auth/logout", headers={"X-CSRF-Token": csrf_token}
+    )
     assert response.status_code == 204
     session.expire_all()
     stored_session = session.scalar(select(UserSession))
@@ -116,3 +129,68 @@ def test_unverified_user_cannot_login(client, session: Session) -> None:
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid credentials"}
+
+
+def test_session_rotation_revokes_old_token(client, session: Session) -> None:
+    add_active_user(session)
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": "reader_one",
+            "password": "a valid password 🔐",
+        },
+    )
+    old_cookie = login.cookies.get("bookpile_session")
+    csrf_token = login.cookies.get("bookpile_csrf")
+    assert old_cookie and csrf_token
+
+    rotated = client.post(
+        "/api/v1/auth/session/rotate",
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert rotated.status_code == 200
+    new_cookie = rotated.cookies.get("bookpile_session")
+    assert new_cookie and new_cookie != old_cookie
+
+    sessions = list(
+        session.scalars(select(UserSession).order_by(UserSession.created_at))
+    )
+    assert len(sessions) == 2
+    assert sessions[0].revoked_at is not None
+    assert sessions[1].revoked_at is None
+    assert sessions[1].absolute_expires_at == sessions[0].absolute_expires_at
+    assert client.get("/api/v1/auth/me").status_code == 200
+
+    rotated_csrf = rotated.cookies.get("bookpile_csrf")
+    assert rotated_csrf
+    revoked = client.post(
+        "/api/v1/auth/sessions/revoke-all",
+        headers={"X-CSRF-Token": rotated_csrf},
+    )
+    assert revoked.status_code == 204
+    assert client.get("/api/v1/auth/me").status_code == 401
+    session.expire_all()
+    assert all(
+        item.revoked_at is not None
+        for item in session.scalars(select(UserSession))
+    )
+
+
+def test_expired_session_is_rejected(client, session: Session) -> None:
+    add_active_user(session)
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": "reader_one",
+            "password": "a valid password 🔐",
+        },
+    )
+    assert login.status_code == 200
+    stored_session = session.scalar(select(UserSession))
+    assert stored_session is not None
+    stored_session.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    session.commit()
+
+    response = client.get("/api/v1/auth/me")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}

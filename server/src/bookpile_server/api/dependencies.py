@@ -1,12 +1,18 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..database import get_session
 from ..repositories.books import BookRepository
 from ..repositories.auth import AuthRepository
-from ..services.auth import AuthService
+from ..config import get_settings
+from ..services.auth import (
+    AuthContext,
+    AuthService,
+    InvalidCsrfTokenError,
+    InvalidSessionError,
+)
 from ..services.catalogue import CatalogueService
 
 
@@ -27,4 +33,41 @@ def get_auth_service(session: SessionDependency) -> AuthService:
 
 
 AuthServiceDependency = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def get_current_auth(
+    request: Request, service: AuthServiceDependency
+) -> AuthContext:
+    settings = get_settings()
+    try:
+        return service.authenticate(
+            request.cookies.get(settings.session_cookie_name)
+        )
+    except InvalidSessionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        ) from exc
+
+
+CurrentAuthDependency = Annotated[AuthContext, Depends(get_current_auth)]
+
+
+def require_csrf(
+    context: CurrentAuthDependency,
+    service: AuthServiceDependency,
+    x_csrf_token: Annotated[
+        str | None, Header(alias="X-CSRF-Token")
+    ] = None,
+) -> None:
+    try:
+        service.require_csrf(context, x_csrf_token)
+    except InvalidCsrfTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid CSRF token",
+        ) from exc
+
+
+CsrfDependency = Annotated[None, Depends(require_csrf)]
 
