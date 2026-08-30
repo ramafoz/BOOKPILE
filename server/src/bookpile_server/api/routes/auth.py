@@ -3,9 +3,21 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ...config import get_settings
-from ...schemas import CurrentUserResponse, LoginRequest, LoginResponse
+from ...schemas import (
+    CurrentUserResponse,
+    LoginRequest,
+    LoginResponse,
+    RegisterAccountRequest,
+    RegisterAccountResponse,
+)
+from ...services.account_invitations import (
+    AccountInvitationError,
+    RegistrationConflictError,
+    RegistrationValidationError,
+)
 from ...services.auth import InvalidCredentialsError, LoginResult
 from ..dependencies import (
+    AccountInvitationServiceDependency,
     AuthServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
@@ -48,6 +60,47 @@ def clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     response.delete_cookie(key=settings.session_cookie_name, path="/api/v1")
     response.delete_cookie(key=settings.csrf_cookie_name, path="/api/v1")
+
+
+@router.post(
+    "/register",
+    response_model=RegisterAccountResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_account(
+    payload: RegisterAccountRequest,
+    request: Request,
+    service: AccountInvitationServiceDependency,
+) -> RegisterAccountResponse:
+    try:
+        account = service.register(
+            raw_token=payload.invitation_token,
+            email=payload.email,
+            username=payload.username,
+            password=payload.password,
+            password_confirmation=payload.password_confirmation,
+            ip_address=request_ip(request),
+        )
+    except RegistrationValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except AccountInvitationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account invitation is invalid or expired",
+        ) from exc
+    except RegistrationConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account could not be created",
+        ) from exc
+    return RegisterAccountResponse(
+        user_id=account.user_id,
+        username=account.username,
+        state=account.state,
+    )
 
 
 @router.post("/login", response_model=LoginResponse)

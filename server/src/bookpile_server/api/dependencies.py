@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from ..database import get_session
 from ..repositories.books import BookRepository
 from ..repositories.auth import AuthRepository
+from ..repositories.account_invitations import AccountInvitationRepository
+from ..services.account_invitations import AccountInvitationService
 from ..config import get_settings
 from ..services.auth import (
     AuthContext,
@@ -33,6 +35,17 @@ def get_auth_service(session: SessionDependency) -> AuthService:
 
 
 AuthServiceDependency = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def get_account_invitation_service(
+    session: SessionDependency,
+) -> AccountInvitationService:
+    return AccountInvitationService(AccountInvitationRepository(session))
+
+
+AccountInvitationServiceDependency = Annotated[
+    AccountInvitationService, Depends(get_account_invitation_service)
+]
 
 
 def get_current_auth(

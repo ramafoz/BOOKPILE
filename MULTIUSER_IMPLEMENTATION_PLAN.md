@@ -749,11 +749,11 @@ Gate: no authentication yet, but Server tests prove scoped repository design.
   security events through reversible migration `0002_identity_foundation`.
 - [x] Phase 2B: implement password validation and Argon2id login/logout.
 - [x] Phase 2C: add CSRF protection, session rotation, expiry, and revocation.
-- [ ] Phase 2D: implement invitation-only registration.
+- [x] Phase 2D: implement invitation-only registration.
   - [x] Phase 2D-A: separate account invitations from future library
     invitations; add reversible hashed-token storage and operator
     create/revoke commands.
-  - [ ] Phase 2D-B: atomically register one pending-verification account from
+  - [x] Phase 2D-B: atomically register one pending-verification account from
     one valid account invitation.
 - [ ] Phase 2E: add email verification and password reset using Mailpit in
   development.
@@ -781,6 +781,14 @@ while rotation replaces both browser credentials without extending the
 original absolute lifetime. Users can revoke every active session. The Server
 remains a development branch pending invitation-only account creation, email
 verification/reset, rate limiting, and the security/frontend gates.
+
+Phase 2D passed its PostgreSQL gate on 2026-08-30. Account invitations and
+future library invitations are separate concepts. Operator-generated account
+tokens are hashed, seven-day, revocable, and single-use. Registration validates
+and normalizes identity fields, enforces reserved usernames and Argon2id, then
+creates exactly one `pending_verification` account in the same transaction that
+consumes the invitation. A two-connection PostgreSQL race test proves that only
+one concurrent registration can win.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.

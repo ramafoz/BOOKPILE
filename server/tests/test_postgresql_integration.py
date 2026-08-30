@@ -5,6 +5,7 @@ in `_test`. The safety suffix prevents this test from targeting a normal or
 production database accidentally.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -27,6 +28,13 @@ from bookpile_server.models import (
     UserSession,
 )
 from bookpile_server.repositories.books import BookRepository
+from bookpile_server.repositories.account_invitations import (
+    AccountInvitationRepository,
+)
+from bookpile_server.services.account_invitations import (
+    AccountInvitationError,
+    AccountInvitationService,
+)
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -127,13 +135,50 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             ]
             assert "Two" not in response.text
 
+            invitation_result = AccountInvitationService(
+                AccountInvitationRepository(session)
+            ).create()
+
+        def register_concurrently(number: int) -> bool:
+            with Session(engine) as concurrent_session:
+                service = AccountInvitationService(
+                    AccountInvitationRepository(concurrent_session)
+                )
+                try:
+                    service.register(
+                        raw_token=invitation_result.raw_token,
+                        email=f"concurrent{number}@example.com",
+                        username=f"concurrent_{number}",
+                        password="a valid concurrent password",
+                        password_confirmation="a valid concurrent password",
+                        ip_address="127.0.0.1",
+                    )
+                except AccountInvitationError:
+                    return False
+                return True
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(register_concurrently, (1, 2)))
+        assert sorted(results) == [False, True]
+        with Session(engine) as session:
+            assert (
+                session.query(User)
+                .filter(User.username.in_(("concurrent_1", "concurrent_2")))
+                .count()
+                == 1
+            )
+
         # Prove 0003 can be removed without removing Phase 2 identity records.
         command.downgrade(alembic, "0002_identity_foundation")
         phase_two_tables = set(inspect(engine).get_table_names())
         assert "account_invitations" not in phase_two_tables
         assert {"users", "user_sessions", "security_events"} <= phase_two_tables
         with Session(engine) as session:
-            assert session.query(User).count() == 1
+            assert session.query(User).count() == 2
+            assert sorted(user.state for user in session.query(User)) == [
+                "active",
+                "invited",
+            ]
 
         # Then prove 0002 can be removed without removing Phase 1 catalogue.
         command.downgrade(alembic, "0001_server_foundation")

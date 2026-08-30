@@ -25,9 +25,11 @@ must not be used for Server migrations or test databases.
   CSRF enforcement, credential rotation, and global session revocation.
 - Phase 2D-A temporary account invitations, stored only as token hashes and
   managed separately from future library-sharing invitations.
+- Phase 2D-B atomic invitation-only registration into a
+  `pending_verification` account. Registration never creates a login session.
 
-The authentication core now protects requests and session mutations, but
-invitation registration, verification/reset mail, rate limits, and the
+The authentication core now protects requests and supports temporary
+invitation registration, but verification/reset mail, rate limits, and the
 dedicated security gate remain. The Server branch is therefore not deployable
 yet. A path library ID is still a temporary Phase 1 input used to prove
 architectural scoping; it is not authorization.

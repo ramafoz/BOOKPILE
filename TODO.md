@@ -548,8 +548,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     CSRF, session rotation, and individual/global revocation.
   - [x] Add reversible, single-use account-invitation storage and operator
     create/revoke commands, separately from future library invitations.
-  - [ ] Implement invitation-only registration, verification, password reset,
-    rate limiting, dedicated security tests, and the auth frontend.
+  - [x] Implement atomic invitation-only registration into an unverified
+    account, including normalized identity fields and reserved usernames.
+  - [ ] Implement verification, password reset, rate limiting, dedicated
+    security tests, and the auth frontend.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,

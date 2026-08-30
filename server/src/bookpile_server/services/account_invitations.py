@@ -4,8 +4,16 @@ from hashlib import sha256
 from secrets import token_urlsafe
 from uuid import UUID
 
-from ..models import AccountInvitation
+from sqlalchemy.exc import IntegrityError
+
+from ..models import AccountInvitation, User
 from ..repositories.account_invitations import AccountInvitationRepository
+from ..security.identities import (
+    IdentityValidationError,
+    normalize_email,
+    normalize_username,
+)
+from ..security.passwords import PasswordPolicyError, hash_password
 
 
 ACCOUNT_INVITATION_LIFETIME = timedelta(days=7)
@@ -28,6 +36,21 @@ class CreatedAccountInvitation:
 
 class AccountInvitationError(Exception):
     pass
+
+
+class RegistrationValidationError(Exception):
+    pass
+
+
+class RegistrationConflictError(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class RegisteredAccount:
+    user_id: UUID
+    username: str
+    state: str
 
 
 class AccountInvitationService:
@@ -71,6 +94,65 @@ class AccountInvitationService:
                 details={"invitation_id": str(invitation.id)},
             )
             self._repository.commit()
+
+    def register(
+        self,
+        *,
+        raw_token: str,
+        email: str,
+        username: str,
+        password: str,
+        password_confirmation: str,
+        ip_address: str | None,
+    ) -> RegisteredAccount:
+        if password != password_confirmation:
+            raise RegistrationValidationError("Passwords do not match.")
+        try:
+            normalized_email = normalize_email(email)
+            normalized_username = normalize_username(username)
+            password_hash = hash_password(password)
+        except (IdentityValidationError, PasswordPolicyError) as exc:
+            raise RegistrationValidationError(str(exc)) from exc
+
+        now = datetime.now(UTC)
+        invitation = self._repository.get_by_token_hash_for_update(
+            hash_invitation_token(raw_token)
+        )
+        if invitation is None or not self.is_usable(invitation, now=now):
+            self._repository.rollback()
+            raise AccountInvitationError("Account invitation is invalid or expired.")
+        if self._repository.account_identity_exists(
+            email=normalized_email, username=normalized_username
+        ):
+            self._repository.rollback()
+            raise RegistrationConflictError("Account could not be created.")
+
+        user = User(
+            email=normalized_email,
+            username=normalized_username,
+            password_hash=password_hash,
+            state="pending_verification",
+        )
+        self._repository.add_user(user)
+        try:
+            self._repository.flush()
+            invitation.consumed_at = now
+            invitation.consumed_by_user_id = user.id
+            self._repository.add_event(
+                "account_registered",
+                user_id=user.id,
+                ip_address=ip_address,
+                details={"invitation_id": str(invitation.id)},
+            )
+            self._repository.commit()
+        except IntegrityError as exc:
+            self._repository.rollback()
+            raise RegistrationConflictError("Account could not be created.") from exc
+        return RegisteredAccount(
+            user_id=user.id,
+            username=user.username,
+            state=user.state,
+        )
 
     @staticmethod
     def is_usable(invitation: AccountInvitation, *, now: datetime) -> bool:

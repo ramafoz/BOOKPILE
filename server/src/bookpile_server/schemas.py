@@ -38,3 +38,17 @@ class CurrentUserResponse(BaseModel):
     user_id: UUID
     username: str
 
+
+class RegisterAccountRequest(BaseModel):
+    invitation_token: str = Field(min_length=32, max_length=200)
+    email: str = Field(min_length=3, max_length=320)
+    username: str = Field(min_length=1, max_length=30)
+    password: str = Field(min_length=1, max_length=128)
+    password_confirmation: str = Field(min_length=1, max_length=128)
+
+
+class RegisterAccountResponse(BaseModel):
+    user_id: UUID
+    username: str
+    state: str
+

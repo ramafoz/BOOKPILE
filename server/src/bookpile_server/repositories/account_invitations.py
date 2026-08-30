@@ -1,10 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import AccountInvitation, SecurityEvent
+from ..models import AccountInvitation, SecurityEvent, User
 
 
 class AccountInvitationRepository:
@@ -29,17 +29,32 @@ class AccountInvitationRepository:
             .with_for_update()
         )
 
+    def account_identity_exists(self, *, email: str, username: str) -> bool:
+        return (
+            self._session.scalar(
+                select(User.id).where(
+                    or_(User.email == email, User.username == username)
+                )
+            )
+            is not None
+        )
+
+    def add_user(self, user: User) -> None:
+        self._session.add(user)
+
     def add_event(
         self,
         event_type: str,
         *,
         user_id: UUID | None = None,
+        ip_address: str | None = None,
         details: dict[str, object] | None = None,
     ) -> None:
         self._session.add(
             SecurityEvent(
                 user_id=user_id,
                 event_type=event_type,
+                ip_address=ip_address,
                 details=details or {},
             )
         )
