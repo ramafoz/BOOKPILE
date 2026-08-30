@@ -550,8 +550,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     create/revoke commands, separately from future library invitations.
   - [x] Implement atomic invitation-only registration into an unverified
     account, including normalized identity fields and reserved usernames.
-  - [ ] Implement verification, password reset, rate limiting, dedicated
-    security tests, and the auth frontend.
+  - [x] Implement email verification/resend and password recovery with hashed,
+    purpose-restricted, expiring tokens and development Mailpit delivery.
+  - [ ] Implement rate limiting, dedicated security tests, and the auth
+    frontend.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,
@@ -593,6 +595,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Choose the Spanish VPS, private object storage, domain, email service,
   and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
 - [ ] Add authorization checks to every user-owned backend operation.
+- [ ] Add a restricted platform-administration panel for account invitations,
+  accounts, abuse/security operations, and service health. Platform operators
+  must remain separate from library `OWNER`/`VIEWER` membership and receive no
+  implicit private-library access.
 - [ ] Add upload validation, rate limiting, security headers, audit logging,
   monitoring, and error reporting.
 - [ ] Define storage limits, backup retention, account deletion, and data

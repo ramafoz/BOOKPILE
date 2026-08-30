@@ -21,6 +21,7 @@ from bookpile_server.database import get_session
 from bookpile_server.main import create_app
 from bookpile_server.models import (
     AccountInvitation,
+    AccountActionToken,
     Book,
     Library,
     SecurityEvent,
@@ -67,6 +68,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "user_sessions",
             "security_events",
             "account_invitations",
+            "account_action_tokens",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = Library(name="First", slug="postgres-first")
@@ -110,6 +112,14 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 AccountInvitation(
                     token_hash="c" * 64,
                     expires_at=now + timedelta(days=7),
+                )
+            )
+            session.add(
+                AccountActionToken(
+                    user_id=user.id,
+                    purpose="email_verification",
+                    token_hash="d" * 64,
+                    expires_at=now + timedelta(hours=24),
                 )
             )
             session.commit()
@@ -167,6 +177,12 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 .count()
                 == 1
             )
+
+        # Prove 0004 can be removed without removing invitations or identities.
+        command.downgrade(alembic, "0003_account_invitations")
+        phase_three_tables = set(inspect(engine).get_table_names())
+        assert "account_action_tokens" not in phase_three_tables
+        assert {"account_invitations", "users"} <= phase_three_tables
 
         # Prove 0003 can be removed without removing Phase 2 identity records.
         command.downgrade(alembic, "0002_identity_foundation")

@@ -4,10 +4,13 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..database import get_session
+from ..email_delivery import EmailSender, SmtpEmailSender
+from ..repositories.account_actions import AccountActionRepository
 from ..repositories.books import BookRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
 from ..services.account_invitations import AccountInvitationService
+from ..services.account_actions import AccountActionService
 from ..config import get_settings
 from ..services.auth import (
     AuthContext,
@@ -45,6 +48,27 @@ def get_account_invitation_service(
 
 AccountInvitationServiceDependency = Annotated[
     AccountInvitationService, Depends(get_account_invitation_service)
+]
+
+
+def get_email_sender() -> EmailSender:
+    return SmtpEmailSender(get_settings())
+
+
+EmailSenderDependency = Annotated[EmailSender, Depends(get_email_sender)]
+
+
+def get_account_action_service(
+    session: SessionDependency,
+    email_sender: EmailSenderDependency,
+) -> AccountActionService:
+    return AccountActionService(
+        AccountActionRepository(session), email_sender, get_settings()
+    )
+
+
+AccountActionServiceDependency = Annotated[
+    AccountActionService, Depends(get_account_action_service)
 ]
 
 

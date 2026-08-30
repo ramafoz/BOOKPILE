@@ -3,12 +3,20 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from ...config import get_settings
+from ...email_delivery import EmailDeliveryError
 from ...schemas import (
+    AccountTokenRequest,
     CurrentUserResponse,
+    EmailAddressRequest,
     LoginRequest,
     LoginResponse,
+    PasswordResetConfirmRequest,
     RegisterAccountRequest,
     RegisterAccountResponse,
+)
+from ...services.account_actions import (
+    InvalidAccountActionTokenError,
+    PasswordResetValidationError,
 )
 from ...services.account_invitations import (
     AccountInvitationError,
@@ -17,6 +25,7 @@ from ...services.account_invitations import (
 )
 from ...services.auth import InvalidCredentialsError, LoginResult
 from ..dependencies import (
+    AccountActionServiceDependency,
     AccountInvitationServiceDependency,
     AuthServiceDependency,
     CsrfDependency,
@@ -71,6 +80,7 @@ def register_account(
     payload: RegisterAccountRequest,
     request: Request,
     service: AccountInvitationServiceDependency,
+    account_actions: AccountActionServiceDependency,
 ) -> RegisterAccountResponse:
     try:
         account = service.register(
@@ -96,11 +106,98 @@ def register_account(
             status_code=status.HTTP_409_CONFLICT,
             detail="Account could not be created",
         ) from exc
+    try:
+        verification_email_sent = account_actions.send_verification_for_user(
+            account.user_id, ip_address=request_ip(request)
+        )
+    except EmailDeliveryError:
+        # Registration is already safely committed. The user can retry through
+        # the enumeration-safe resend endpoint.
+        verification_email_sent = False
     return RegisterAccountResponse(
         user_id=account.user_id,
         username=account.username,
         state=account.state,
+        verification_email_sent=verification_email_sent,
     )
+
+
+@router.post("/verification/resend", status_code=status.HTTP_202_ACCEPTED)
+def resend_verification(
+    payload: EmailAddressRequest,
+    request: Request,
+    response: Response,
+    service: AccountActionServiceDependency,
+) -> Response:
+    try:
+        service.resend_verification(payload.email, ip_address=request_ip(request))
+    except EmailDeliveryError:
+        pass
+    response.status_code = status.HTTP_202_ACCEPTED
+    return response
+
+
+@router.post("/verification/confirm", status_code=status.HTTP_204_NO_CONTENT)
+def confirm_verification(
+    payload: AccountTokenRequest,
+    request: Request,
+    response: Response,
+    service: AccountActionServiceDependency,
+) -> Response:
+    try:
+        service.verify_email(payload.token, ip_address=request_ip(request))
+    except InvalidAccountActionTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification link is invalid or expired",
+        ) from exc
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+def request_password_reset(
+    payload: EmailAddressRequest,
+    request: Request,
+    response: Response,
+    service: AccountActionServiceDependency,
+) -> Response:
+    try:
+        service.request_password_reset(
+            payload.email, ip_address=request_ip(request)
+        )
+    except EmailDeliveryError:
+        pass
+    response.status_code = status.HTTP_202_ACCEPTED
+    return response
+
+
+@router.post("/password-reset/confirm", status_code=status.HTTP_204_NO_CONTENT)
+def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    request: Request,
+    response: Response,
+    service: AccountActionServiceDependency,
+) -> Response:
+    try:
+        service.reset_password(
+            raw_token=payload.token,
+            password=payload.password,
+            password_confirmation=payload.password_confirmation,
+            ip_address=request_ip(request),
+        )
+    except PasswordResetValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except InvalidAccountActionTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset link is invalid or expired",
+        ) from exc
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.post("/login", response_model=LoginResponse)

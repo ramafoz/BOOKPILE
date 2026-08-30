@@ -74,6 +74,9 @@ class User(Base):
         back_populates="consumed_by_user",
         uselist=False,
     )
+    account_action_tokens: Mapped[list["AccountActionToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AccountInvitation(Base):
@@ -107,6 +110,37 @@ class AccountInvitation(Base):
         foreign_keys=[consumed_by_user_id],
         back_populates="consumed_account_invitation",
     )
+
+
+class AccountActionToken(Base):
+    __tablename__ = "account_action_tokens"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('email_verification', 'password_reset')",
+            name="ck_account_action_tokens_purpose",
+        ),
+        Index(
+            "ix_account_action_tokens_user_purpose",
+            "user_id",
+            "purpose",
+        ),
+        Index("ix_account_action_tokens_expires_at", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(back_populates="account_action_tokens")
 
 
 class UserSession(Base):

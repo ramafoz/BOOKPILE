@@ -71,6 +71,12 @@ The initial account model includes:
 Email addresses are never visible to other ordinary users. Usernames are
 globally searchable.
 
+Platform administration is operationally separate from library membership.
+A future restricted administration panel will manage beta account invitations,
+accounts, security/abuse operations, and service health. A platform operator
+does not thereby become an `OWNER` or `VIEWER`, and administration must not
+silently expose private library data.
+
 Initial reserved usernames include:
 
 - `admin`
@@ -755,7 +761,7 @@ Gate: no authentication yet, but Server tests prove scoped repository design.
     create/revoke commands.
   - [x] Phase 2D-B: atomically register one pending-verification account from
     one valid account invitation.
-- [ ] Phase 2E: add email verification and password reset using Mailpit in
+- [x] Phase 2E: add email verification and password reset using Mailpit in
   development.
 - [ ] Phase 2F: add rate limiting and dedicated security tests.
 - [ ] Phase 2G: build the minimal authentication frontend.
@@ -789,6 +795,13 @@ and normalizes identity fields, enforces reserved usernames and Argon2id, then
 creates exactly one `pending_verification` account in the same transaction that
 consumes the invitation. A two-connection PostgreSQL race test proves that only
 one concurrent registration can win.
+
+Phase 2E passed its PostgreSQL and SMTP gates on 2026-08-30. Purpose-restricted
+hashed tokens provide 24-hour email verification and 30-minute password reset.
+Resends revoke older links, activation enables login, and password replacement
+revokes every session. Enumeration-safe request responses reveal no account
+existence. Mailpit 1.31.0 is loopback-only and captured an actual BOOKPILE SMTP
+message; it is strictly a development dependency, not the production provider.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.

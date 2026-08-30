@@ -49,6 +49,7 @@ class RegistrationConflictError(Exception):
 @dataclass(frozen=True)
 class RegisteredAccount:
     user_id: UUID
+    email: str
     username: str
     state: str
 
@@ -150,6 +151,7 @@ class AccountInvitationService:
             raise RegistrationConflictError("Account could not be created.") from exc
         return RegisteredAccount(
             user_id=user.id,
+            email=user.email,
             username=user.username,
             state=user.state,
         )

@@ -27,12 +27,14 @@ must not be used for Server migrations or test databases.
   managed separately from future library-sharing invitations.
 - Phase 2D-B atomic invitation-only registration into a
   `pending_verification` account. Registration never creates a login session.
+- Phase 2E email verification/resend and password recovery with expiring,
+  purpose-restricted hashed tokens. Password changes revoke every session.
 
-The authentication core now protects requests and supports temporary
-invitation registration, but verification/reset mail, rate limits, and the
-dedicated security gate remain. The Server branch is therefore not deployable
-yet. A path library ID is still a temporary Phase 1 input used to prove
-architectural scoping; it is not authorization.
+The authentication core now supports temporary invitation registration,
+verification, and password recovery, but rate limits, the dedicated security
+gate, and the authentication frontend remain. The Server branch is therefore
+not deployable yet. A path library ID is still a temporary Phase 1 input used
+to prove architectural scoping; it is not authorization.
 
 ## Development setup
 
@@ -60,7 +62,7 @@ server\.venv\Scripts\python -m pytest server\tests\test_postgresql_integration.p
 Run PostgreSQL with Docker, when Docker is available:
 
 ```powershell
-docker compose -f server\compose.yaml up -d db
+docker compose -f server\compose.yaml up -d db mailpit
 $env:BOOKPILE_SERVER_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@127.0.0.1:5432/bookpile"
 server\.venv\Scripts\alembic -c server\alembic.ini upgrade head
 server\.venv\Scripts\uvicorn bookpile_server.main:app --app-dir server\src --reload --port 8100
@@ -98,13 +100,11 @@ Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-The migration and isolation gate passed on 2026-08-28 against PostgreSQL 17
-running in Docker Desktop/WSL 2. The test upgrades through Phase 2A, checks
-repository and HTTP isolation with two synthetic libraries, creates synthetic
-identity/session/audit records, and rolls back `0002` to prove Phase 1
-catalogue records survive. It then downgrades the disposable `bookpile_test`
-database until no BOOKPILE application tables remain. Alembic may retain its
-empty administrative `alembic_version` table.
+The migration and isolation gate now upgrades through Phase 2E against
+PostgreSQL 17, checks catalogue isolation, identity/session/invitation/action
+records, concurrent invitation consumption, and each incremental rollback. It
+then downgrades disposable `bookpile_test` until no BOOKPILE application tables
+remain. Alembic may retain its empty administrative `alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and
 staging environments must obtain unique secrets from deployment configuration.
@@ -117,8 +117,12 @@ requested:
 docker compose -f server\compose.yaml stop
 
 # Recreate/start it later using the same volume.
-docker compose -f server\compose.yaml up -d db
+docker compose -f server\compose.yaml up -d db mailpit
 ```
+
+Development email is captured at <http://127.0.0.1:8025>. SMTP and the Mailpit
+web interface are bound to loopback only. Mailpit must never be used as the
+hosted email provider.
 
 Do not use `docker compose down -v` as a routine stop command: `-v` deliberately
 deletes the Server PostgreSQL volume. It still cannot affect BOOKPILE Local's

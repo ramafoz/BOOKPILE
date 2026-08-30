@@ -1,9 +1,15 @@
 from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from bookpile_server.models import AccountInvitation, SecurityEvent, User
+from bookpile_server.models import (
+    AccountActionToken,
+    AccountInvitation,
+    SecurityEvent,
+    User,
+)
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
@@ -65,7 +71,9 @@ def registration_payload(token: str, **changes: str) -> dict[str, str]:
     return payload
 
 
-def test_registration_atomically_consumes_invitation(client, session: Session) -> None:
+def test_registration_atomically_consumes_invitation(
+    client, session: Session, email_sender
+) -> None:
     service = AccountInvitationService(AccountInvitationRepository(session))
     invitation_result = service.create()
 
@@ -77,7 +85,10 @@ def test_registration_atomically_consumes_invitation(client, session: Session) -
     assert response.status_code == 201
     assert response.json()["username"] == "new_reader"
     assert response.json()["state"] == "pending_verification"
+    assert response.json()["verification_email_sent"] is True
     assert "bookpile_session" not in response.cookies
+    assert len(email_sender.emails) == 1
+    assert email_sender.emails[0].recipient == "new.reader@example.com"
     user = session.scalar(select(User).where(User.username == "new_reader"))
     assert user is not None
     assert user.email == "new.reader@example.com"
@@ -107,6 +118,64 @@ def test_registration_atomically_consumes_invitation(client, session: Session) -
         },
     )
     assert login.status_code == 401
+
+    verification_url = next(
+        line for line in email_sender.emails[0].text.splitlines() if "?token=" in line
+    )
+    verification_token = parse_qs(urlparse(verification_url).query)["token"][0]
+    verified = client.post(
+        "/api/v1/auth/verification/confirm",
+        json={"token": verification_token},
+    )
+    assert verified.status_code == 204
+    session.expire_all()
+    user = session.scalar(select(User).where(User.username == "new_reader"))
+    assert user is not None
+    assert user.state == "active"
+    assert user.email_verified_at is not None
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": "new_reader",
+            "password": "a valid registration password 🔐",
+        },
+    )
+    assert login.status_code == 200
+
+
+def test_verification_resend_is_generic_and_revokes_old_token(
+    client, session: Session, email_sender
+) -> None:
+    service = AccountInvitationService(AccountInvitationRepository(session))
+    invitation_result = service.create()
+    registered = client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(invitation_result.raw_token),
+    )
+    assert registered.status_code == 201
+    assert len(email_sender.emails) == 1
+
+    resent = client.post(
+        "/api/v1/auth/verification/resend",
+        json={"email": "NEW.READER@example.com"},
+    )
+    unknown = client.post(
+        "/api/v1/auth/verification/resend",
+        json={"email": "unknown@example.com"},
+    )
+    assert resent.status_code == unknown.status_code == 202
+    assert resent.content == unknown.content
+    assert len(email_sender.emails) == 2
+
+    tokens = list(
+        session.scalars(
+            select(AccountActionToken).order_by(AccountActionToken.created_at)
+        )
+    )
+    assert len(tokens) == 2
+    assert tokens[0].revoked_at is not None
+    assert tokens[1].revoked_at is None
 
 
 def test_invalid_registration_does_not_consume_invitation(client, session: Session) -> None:

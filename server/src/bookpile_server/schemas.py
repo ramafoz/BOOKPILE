@@ -51,4 +51,18 @@ class RegisterAccountResponse(BaseModel):
     user_id: UUID
     username: str
     state: str
+    verification_email_sent: bool
+
+
+class EmailAddressRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class AccountTokenRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=200)
+
+
+class PasswordResetConfirmRequest(AccountTokenRequest):
+    password: str = Field(min_length=1, max_length=128)
+    password_confirmation: str = Field(min_length=1, max_length=128)
 
