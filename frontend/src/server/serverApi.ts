@@ -15,6 +15,38 @@ export interface LoginResult extends CurrentUser {
   absolute_expires_at: string;
 }
 
+export interface LibrarySummary {
+  library_id: string;
+  name: string;
+  slug: string;
+  role: "OWNER" | "VIEWER";
+  viewer_scope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+  selected_reading_user_id: string | null;
+  can_view_map: boolean;
+}
+
+export interface LibraryMember {
+  user_id: string;
+  username: string;
+  role: "OWNER" | "VIEWER";
+  viewer_scope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+  selected_reading_user_id: string | null;
+  created_at: string;
+}
+
+export interface ReadingPerspective {
+  user_id: string;
+  username: string;
+  selected: boolean;
+  writable: boolean;
+}
+
+export interface CreatedLibraryInvitation {
+  invitation_id: string;
+  invitation_token: string;
+  expires_at: string;
+}
+
 export class ServerApiError extends Error {
   status: number;
   retryAfter: number | null;
@@ -114,4 +146,62 @@ export const serverApi = {
         password_confirmation: confirmation,
       }),
     }),
+  libraries: () => request<LibrarySummary[]>("/libraries"),
+  createLibrary: (name: string) => request<LibrarySummary>(
+    "/libraries",
+    { method: "POST", body: JSON.stringify({ name }) },
+    true,
+  ),
+  libraryMembers: (libraryId: string) =>
+    request<LibraryMember[]>(`/libraries/${libraryId}/members`),
+  createLibraryInvitation: (
+    libraryId: string,
+    role: "OWNER" | "VIEWER",
+    viewerScope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null,
+    acknowledgeEqualOwnerPower: boolean,
+  ) => request<CreatedLibraryInvitation>(
+    `/libraries/${libraryId}/invitations`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        role,
+        viewer_scope: viewerScope,
+        acknowledge_equal_owner_power: acknowledgeEqualOwnerPower,
+      }),
+    },
+    true,
+  ),
+  acceptLibraryInvitation: (invitationToken: string) =>
+    request<LibrarySummary>(
+      "/library-invitations/accept",
+      {
+        method: "POST",
+        body: JSON.stringify({ invitation_token: invitationToken }),
+      },
+      true,
+    ),
+  changeLibraryMember: (
+    libraryId: string,
+    userId: string,
+    payload: {
+      action: string;
+      viewer_scope?: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+      current_password: string;
+      acknowledge_equal_owner_power?: boolean;
+    },
+  ) => request<LibraryMember | null>(
+    `/libraries/${libraryId}/members/${userId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    true,
+  ),
+  readingPerspectives: (libraryId: string) =>
+    request<ReadingPerspective[]>(
+      `/libraries/${libraryId}/reading-perspectives`,
+    ),
+  selectReadingPerspective: (libraryId: string, userId: string) =>
+    request<ReadingPerspective[]>(
+      `/libraries/${libraryId}/reading-perspective`,
+      { method: "PUT", body: JSON.stringify({ user_id: userId }) },
+      true,
+    ),
 };

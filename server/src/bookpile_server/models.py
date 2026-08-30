@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -76,6 +77,11 @@ class User(Base):
     )
     account_action_tokens: Mapped[list["AccountActionToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    library_memberships: Mapped[list["LibraryMembership"]] = relationship(
+        foreign_keys="LibraryMembership.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
 
 
@@ -222,16 +228,166 @@ class SecurityEvent(Base):
 
 class Library(Base):
     __tablename__ = "libraries"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('active', 'pending_deletion', 'deleted')",
+            name="ck_libraries_state",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     books: Mapped[list["Book"]] = relationship(
         back_populates="library", cascade="all, delete-orphan"
+    )
+    memberships: Mapped[list["LibraryMembership"]] = relationship(
+        back_populates="library", cascade="all, delete-orphan"
+    )
+    invitations: Mapped[list["LibraryInvitation"]] = relationship(
+        back_populates="library", cascade="all, delete-orphan"
+    )
+
+
+class LibraryMembership(Base):
+    __tablename__ = "library_memberships"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('OWNER', 'VIEWER')", name="ck_library_memberships_role"
+        ),
+        CheckConstraint(
+            "viewer_scope IS NULL OR viewer_scope IN "
+            "('CATALOG_ONLY', 'CATALOG_AND_MAP')",
+            name="ck_library_memberships_viewer_scope_value",
+        ),
+        CheckConstraint(
+            "(role = 'OWNER' AND viewer_scope IS NULL) OR "
+            "(role = 'VIEWER' AND viewer_scope IS NOT NULL)",
+            name="ck_library_memberships_role_scope",
+        ),
+        UniqueConstraint(
+            "library_id", "user_id", name="uq_library_memberships_library_user"
+        ),
+        Index("ix_library_memberships_user_role", "user_id", "role"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    viewer_scope: Mapped[str | None] = mapped_column(String(32))
+    selected_reading_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    library: Mapped[Library] = relationship(back_populates="memberships")
+    user: Mapped[User] = relationship(
+        foreign_keys=[user_id], back_populates="library_memberships"
+    )
+    selected_reading_user: Mapped[User | None] = relationship(
+        foreign_keys=[selected_reading_user_id]
+    )
+
+
+class LibraryInvitation(Base):
+    __tablename__ = "library_invitations"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('OWNER', 'VIEWER')", name="ck_library_invitations_role"
+        ),
+        CheckConstraint(
+            "viewer_scope IS NULL OR viewer_scope IN "
+            "('CATALOG_ONLY', 'CATALOG_AND_MAP')",
+            name="ck_library_invitations_viewer_scope_value",
+        ),
+        CheckConstraint(
+            "(role = 'OWNER' AND viewer_scope IS NULL) OR "
+            "(role = 'VIEWER' AND viewer_scope IS NOT NULL)",
+            name="ck_library_invitations_role_scope",
+        ),
+        Index("ix_library_invitations_library_active", "library_id", "consumed_at"),
+        Index("ix_library_invitations_expires_at", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    viewer_scope: Mapped[str | None] = mapped_column(String(32))
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    consumed_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    library: Mapped[Library] = relationship(back_populates="invitations")
+    created_by_user: Mapped[User] = relationship(
+        foreign_keys=[created_by_user_id]
+    )
+    consumed_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[consumed_by_user_id]
+    )
+
+
+class LibraryAuditEvent(Base):
+    __tablename__ = "library_audit_events"
+    __table_args__ = (
+        Index(
+            "ix_library_audit_events_library_occurred",
+            "library_id",
+            "occurred_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
+    library_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    details: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default="{}"
     )
 
 

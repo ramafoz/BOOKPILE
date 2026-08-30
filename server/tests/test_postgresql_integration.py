@@ -12,18 +12,22 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 
 from bookpile_server.database import get_session
+from bookpile_server.config import get_settings
 from bookpile_server.main import create_app
 from bookpile_server.models import (
     AccountInvitation,
     AccountActionToken,
     Book,
     Library,
+    LibraryAuditEvent,
+    LibraryInvitation,
+    LibraryMembership,
     RateLimitBucket,
     SecurityEvent,
     User,
@@ -44,6 +48,7 @@ from bookpile_server.services.rate_limits import (
     RateLimiter,
     RateLimitPolicy,
 )
+from bookpile_server.services.auth import hash_session_secret
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -78,6 +83,9 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "account_invitations",
             "account_action_tokens",
             "rate_limit_buckets",
+            "library_memberships",
+            "library_invitations",
+            "library_audit_events",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = Library(name="First", slug="postgres-first")
@@ -100,10 +108,37 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             session.add(user)
             session.flush()
+            first.created_by_user_id = user.id
+            session.add(
+                LibraryMembership(
+                    library_id=first.id,
+                    user_id=user.id,
+                    role="OWNER",
+                    selected_reading_user_id=user.id,
+                )
+            )
+            session.add(
+                LibraryInvitation(
+                    library_id=first.id,
+                    token_hash="e" * 64,
+                    role="VIEWER",
+                    viewer_scope="CATALOG_ONLY",
+                    created_by_user_id=user.id,
+                    expires_at=now + timedelta(days=7),
+                )
+            )
+            session.add(
+                LibraryAuditEvent(
+                    library_id=first.id,
+                    actor_user_id=user.id,
+                    event_type="membership_foundation_test",
+                    details={"source": "postgresql-integration"},
+                )
+            )
             session.add(
                 UserSession(
                     user_id=user.id,
-                    token_hash="a" * 64,
+                    token_hash=hash_session_secret("postgres-test-session"),
                     csrf_token_hash="b" * 64,
                     last_seen_at=now,
                     expires_at=now + timedelta(days=7),
@@ -143,6 +178,10 @@ def test_postgresql_migration_and_tenant_scope() -> None:
 
             app.dependency_overrides[get_session] = override_session
             with TestClient(app) as client:
+                client.cookies.set(
+                    get_settings().session_cookie_name,
+                    "postgres-test-session",
+                )
                 response = client.get(
                     f"/api/v1/libraries/{first.id}/catalogue",
                     params={"search": "one"},
@@ -225,6 +264,16 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             assert bucket is not None
             assert bucket.attempt_count == 2
 
+        # Prove 0006 can be removed without removing Phase 2 security data.
+        command.downgrade(alembic, "0005_rate_limit_buckets")
+        phase_five_tables = set(inspect(engine).get_table_names())
+        assert {
+            "library_memberships",
+            "library_invitations",
+            "library_audit_events",
+        }.isdisjoint(phase_five_tables)
+        assert "rate_limit_buckets" in phase_five_tables
+
         # Prove 0005 can be removed without removing account-action tokens.
         command.downgrade(alembic, "0004_account_action_tokens")
         phase_four_tables = set(inspect(engine).get_table_names())
@@ -258,9 +307,9 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "user_sessions",
             "security_events",
         }.isdisjoint(phase_one_tables)
-        with Session(engine) as session:
-            assert session.query(Library).count() == 2
-            assert session.query(Book).count() == 2
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM libraries")) == 2
+            assert connection.scalar(text("SELECT count(*) FROM books")) == 2
     finally:
         command.downgrade(alembic, "base")
         remaining_tables = set(inspect(engine).get_table_names())

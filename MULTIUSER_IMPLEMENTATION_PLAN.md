@@ -820,20 +820,43 @@ current/global logout, password-reset request and completion, and a minimal
 authenticated landing view. It handles empty `202` responses, generic errors,
 rate-limit waits, CSRF cookies, and one-time token URL cleanup. The user
 validated the complete Mailpit-backed cycle, including changing a password and
-signing in with the replacement. Libraries remain deliberately absent until
-Phase 3 establishes membership and authorization.
+signing in with the replacement. Library authorization is added separately in
+Phase 3; account invitations never grant library membership.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.
 
 ### Phase 3 — libraries, equal Owners, and Viewer scopes
 
-- Implement libraries, co-ownership, Viewer scopes, membership changes, and
-  backend serializers that omit map/loan-sensitive fields.
-- Add reading-perspective selection state without reading writes yet.
+- [x] Implement libraries, equal co-ownership, Viewer scopes, membership
+  invitations and changes, and authorization-safe catalogue access.
+- [x] Add reading-perspective selection state without reading writes yet.
+- [x] Require password reauthentication and explicit warnings for destructive
+  or authority-changing membership operations.
+- [x] Keep account invitations and library invitations as distinct token
+  families and workflows.
 
 Gate: two test tenants cannot access each other's IDs, covers, map, or ZIPs;
 catalogue-only viewers receive no physical location data.
+
+Phase 3 passed its implementation and user-acceptance gate on 2026-08-31. The
+reversible `0006_library_memberships` migration adds library lifecycle fields,
+equal `OWNER`/read-only `VIEWER` memberships, Viewer scopes, hashed single-use
+library invitations, selected reading perspectives, and audit events. Existing
+Phase 1 demonstration libraries deliberately receive no invented Owner and are
+therefore inaccessible through membership-authorized APIs.
+
+Backend checks resolve membership afresh for protected operations, conceal
+unauthorized library identifiers, prevent removing or downgrading the final
+Owner, and reassign invalid reading perspectives after membership changes.
+The responsive dashboard supports creating and selecting libraries, joining by
+raw token or full invitation URL, creating Viewer or equal co-Owner
+invitations, and managing members through a masked-password confirmation
+dialog that explains the exact effect of each operation. Manual acceptance
+covered catalogue-only viewing, read-only perspective selection, absence of
+Owner controls for Viewers, granting and removing map access, and promotion to
+equal co-Owner. Porting the complete catalogue, map, covers, reading data,
+loans, backups, and ZIP import remains work for Phases 4 onward.
 
 ### Phase 4 — shared catalogue and private covers
 

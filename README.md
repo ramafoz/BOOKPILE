@@ -434,6 +434,14 @@ edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
+The isolated Server edition has completed its Phase 3 foundation: secure
+accounts can create and join libraries as equal co-Owners or scoped read-only
+Viewers, catalogue access is membership-authorized, and authority changes use
+password reauthentication and audit events. This does not alter or replace the
+Local v1 application. The complete catalogue, private covers, map, personal
+readings, loans, backups, and Local ZIP import are intentionally still pending
+for later Server phases.
+
 ## Licence
 
 Copyright © 2026 Javier Ramalleira Fernández.

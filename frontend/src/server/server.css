@@ -213,6 +213,58 @@ button { cursor: pointer; }
 .server-account-status small { color: #687a74; }
 .server-danger-link { margin-top: 8px; }
 
+.server-library-dashboard { max-width: 1240px; margin: 54px auto 0; padding: clamp(24px, 4vw, 42px); border: 1px solid #dfd4c4; border-radius: 17px; color: #203b34; background: #fffaf2; box-shadow: 0 24px 70px #102d261f; }
+.server-dashboard-title { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 22px; margin-bottom: 28px; }
+.server-dashboard-title .server-account-icon { margin: 0; border-color: #fffaf2; }
+.server-dashboard-title h1 { margin: 0; font: 700 clamp(32px, 5vw, 52px)/1 Georgia, "Times New Roman", serif; }
+.server-dashboard-title .server-account-status { margin: 0; min-width: 250px; }
+.server-dashboard-grid { display: grid; grid-template-columns: minmax(230px, 300px) 1fr; gap: 25px; margin-top: 24px; }
+.server-library-sidebar { padding-right: 24px; border-right: 1px solid #e0d5c6; }
+.server-library-sidebar h2, .server-library-main h2, .server-dashboard-panel h3 { font-family: Georgia, "Times New Roman", serif; }
+.server-library-sidebar h2 { margin: 0 0 14px; }
+.server-library-list { display: grid; gap: 7px; }
+.server-library-list > button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px; border: 1px solid transparent; border-radius: 8px; color: #29453e; background: transparent; text-align: left; }
+.server-library-list > button:hover, .server-library-list > button.active { border-color: #b9cfc5; background: #eaf2ed; }
+.server-library-list span, .server-member-list span { display: grid; gap: 2px; }
+.server-library-list small, .server-member-list small { color: #70807a; }
+.server-library-list > p { color: #71807b; font-size: 13px; line-height: 1.5; }
+.server-compact-form { display: grid; gap: 9px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #e4dacd; }
+.server-compact-form label, .server-invite-form label { display: grid; gap: 6px; color: #3d554f; font-size: 12px; font-weight: 700; }
+.server-compact-form input, .server-invite-form select, .server-dashboard-panel > select, .server-generated-invitation input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
+.server-compact-form button, .server-invite-form button, .server-generated-invitation button, .server-member-actions button { border: 1px solid #9db6ab; border-radius: 7px; display: inline-flex; justify-content: center; align-items: center; gap: 7px; padding: 9px 11px; color: #24574b; background: #f5faf7; font-weight: 700; }
+.server-compact-form button:disabled, .server-invite-form button:disabled { opacity: .55; }
+.server-library-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 15px; }
+.server-library-heading h2 { margin: 0; font-size: clamp(31px, 5vw, 45px); }
+.server-library-heading > span { display: flex; align-items: center; gap: 7px; color: #62746e; font-size: 13px; }
+.server-dashboard-panel { margin-top: 13px; padding: 19px; border: 1px solid #ded2c2; border-radius: 10px; background: #fffdf8; }
+.server-dashboard-panel h3 { margin: 0 0 7px; font-size: 20px; }
+.server-dashboard-panel p { margin: 0 0 13px; color: #6b7975; font-size: 13px; line-height: 1.5; }
+.server-dashboard-panel.muted { background: #f4eee5; }
+.server-member-list { display: grid; }
+.server-member-list > div { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 11px 0; border-top: 1px solid #eee4d8; }
+.server-member-actions { display: flex !important; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; }
+.server-member-actions button { padding: 6px 8px; font-size: 11px; }
+.server-invite-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.server-invite-form > label:not(.server-check) { min-width: 180px; flex: 1; }
+.server-invite-form .server-check { flex: 1 1 100%; }
+.server-generated-invitation { display: grid; gap: 10px; margin-top: 15px; }
+.server-generated-invitation label { display: grid; gap: 5px; color: #536760; font-size: 12px; font-weight: 700; }
+.server-generated-invitation label > span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.server-empty-library { min-height: 330px; display: grid; place-content: center; justify-items: center; color: #577068; text-align: center; }
+.server-empty-library h2 { margin-bottom: 4px; font-size: 31px; }
+.server-empty-library p { max-width: 470px; }
+.server-modal-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 18px; background: #102f29b8; backdrop-filter: blur(5px); }
+.server-permission-dialog { width: min(560px, 100%); padding: clamp(24px, 5vw, 40px); border: 1px solid #d8cbb9; border-radius: 15px; color: #203a33; background: #fffaf2; box-shadow: 0 28px 90px #09201966; }
+.server-permission-dialog h2 { margin: 0; font: 700 clamp(29px, 5vw, 42px)/1.06 Georgia, "Times New Roman", serif; }
+.server-permission-dialog > p:not(.server-card-eyebrow) { margin: 18px 0 23px; color: #5f706b; line-height: 1.6; }
+.server-permission-dialog form { display: grid; gap: 18px; }
+.server-permission-dialog select { min-height: 46px; padding: 9px 12px; border: 1px solid #d3c6b4; border-radius: 8px; color: #18342d; background: #fffdf9; }
+.server-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.server-dialog-actions button { min-height: 44px; padding: 10px 16px; border: 1px solid #b7aa99; border-radius: 7px; color: #31534a; background: transparent; font-weight: 750; }
+.server-dialog-actions button.confirm { border-color: #1d5548; color: #fff; background: #21594d; }
+.server-dialog-actions button.danger { border-color: #93472f; color: #fff; background: #a75235; }
+.server-dialog-actions button:disabled { opacity: .55; cursor: wait; }
+
 @media (max-width: 850px) {
   .server-shell { display: block; }
   .server-story { min-height: 300px; padding: 26px 25px 36px; }
@@ -224,6 +276,11 @@ button { cursor: pointer; }
   .server-auth-card { padding: 27px 22px; }
   .server-account-shell { background: linear-gradient(#123c33 0 280px, #f4eee4 280px); }
   .server-account-card { margin-top: 75px; }
+  .server-library-dashboard { margin-top: 38px; }
+  .server-dashboard-title { grid-template-columns: auto 1fr; }
+  .server-dashboard-title .server-account-status { grid-column: 1 / -1; width: 100%; }
+  .server-dashboard-grid { grid-template-columns: 1fr; }
+  .server-library-sidebar { padding-right: 0; padding-bottom: 22px; border-right: 0; border-bottom: 1px solid #e0d5c6; }
 }
 
 @media (max-width: 480px) {
@@ -239,6 +296,13 @@ button { cursor: pointer; }
   .server-account-header { height: 76px; }
   .server-account-header .server-brand > span:last-child { display: none; }
   .server-account-card { padding-inline: 23px; }
+  .server-library-dashboard { padding: 20px 14px; }
+  .server-dashboard-title { grid-template-columns: 1fr; text-align: center; }
+  .server-dashboard-title .server-account-icon { margin: 0 auto; }
+  .server-dashboard-title .server-account-status { grid-column: auto; }
+  .server-library-heading, .server-member-list > div { align-items: flex-start; flex-direction: column; }
+  .server-member-actions { justify-content: flex-start; }
+  .server-generated-invitation label > span { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

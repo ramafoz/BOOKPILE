@@ -13,10 +13,18 @@ must not be used for Server migrations or test databases.
 - Environment-based Server configuration.
 - SQLAlchemy session boundaries.
 - PostgreSQL schema managed by Alembic.
-- Minimal `libraries` and `books` tables.
-- Read-only catalogue endpoint scoped by library ID.
+- Minimal `libraries` and `books` tables, now protected by real membership
+  authorization rather than a path identifier alone.
+- Equal co-Owners and read-only Viewers, with catalogue-only or
+  catalogue-and-map Viewer scopes.
+- Hashed, expiring, single-use library invitations kept separate from beta
+  account-registration invitations.
+- Membership management with password reauthentication, explicit consequence
+  warnings, final-Owner protection, and structured audit events.
+- Reading-perspective selection state, while personal reading writes remain a
+  later phase.
 - Repository and API tests proving that one library cannot read another
-  library's catalogue through this slice.
+  library's catalogue merely by knowing its UUID.
 - Reversible Phase 2A identity foundation: users, hashed opaque-session
   records, and structured security events.
 - Phase 2B Argon2id password verification plus login/logout with opaque
@@ -34,13 +42,16 @@ must not be used for Server migrations or test databases.
   responses also carry baseline defensive and no-cache headers.
 - Phase 2G responsive Server authentication shell for invitation registration,
   verification, login/logout, and password recovery.
+- Phase 3 responsive library dashboard for creating/selecting libraries,
+  joining through a full invitation URL or raw token, and managing Viewer
+  scope or equal co-Ownership.
 
-The authentication core now supports temporary invitation registration,
-verification, password recovery, shared rate limits, the backend security gate,
-and its minimal frontend. Phase 2 is complete. The Server branch is still not
-deployable: a path library ID is a temporary Phase 1 input used to prove
-architectural scoping; it is not authorization. Phase 3 must establish actual
-library membership and permissions first.
+The authentication and library-membership foundations are complete through
+Phase 3. Catalogue access now requires an authenticated membership; a library
+ID is never authorization. The Server branch is still not deployable because
+the full Local catalogue, private covers, visual map, personal reading data,
+loans, backup/restore, storage quota, and production infrastructure have not
+yet been ported.
 
 ## Development setup
 
@@ -106,8 +117,12 @@ server\.venv\Scripts\python server\scripts\manage_account_invitations.py revoke 
 ```
 
 The registration URL is displayed once. PostgreSQL stores only its token hash.
-These account invitations do not grant access to any library; library
-invitations depend on the later membership model.
+These account invitations create eligibility to register but never grant
+access to a library. After registration, an existing Owner creates a separate
+library invitation from the Server dashboard. Library invitations can grant
+either catalogue-only Viewer access, catalogue-and-map Viewer access, or equal
+co-Ownership. The join field accepts either the displayed full link or its raw
+token.
 
 The seed script refuses non-development environments, remote hosts, databases
 not named exactly `bookpile`, and non-PostgreSQL targets. Its records are not
@@ -117,12 +132,14 @@ Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-The migration and isolation gate now upgrades through Phase 2F against
-PostgreSQL 17, checks catalogue isolation, identity/session/invitation/action
-records, concurrent invitation consumption, atomic concurrent rate limiting,
-and each incremental rollback. It then downgrades disposable `bookpile_test`
-until no BOOKPILE application tables remain. Alembic may retain its empty
-administrative `alembic_version` table.
+The migration and isolation gate now upgrades through Phase 3 migration
+`0006_library_memberships` against PostgreSQL 17. It checks catalogue and
+membership isolation, identity/session/account-invitation/library-invitation
+records, concurrent invitation consumption, atomic rate limiting, final-Owner
+protection, scope changes, reading perspectives, and each incremental
+rollback. It then downgrades disposable `bookpile_test` until no BOOKPILE
+application tables remain. Alembic may retain its empty administrative
+`alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and
 staging environments must obtain unique secrets from deployment configuration.

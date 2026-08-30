@@ -9,11 +9,17 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  Map,
+  Plus,
   ShieldCheck,
+  Users,
   UserRound,
 } from "lucide-react";
 import {
   type CurrentUser,
+  type LibraryMember,
+  type LibrarySummary,
+  type ReadingPerspective,
   ServerApiError,
   serverApi,
 } from "./serverApi";
@@ -25,6 +31,14 @@ type Route =
   | "resend-verification"
   | "forgot-password"
   | "reset-password";
+
+interface PendingMemberChange {
+  member: LibraryMember;
+  action: "CHANGE_VIEWER_SCOPE" | "PROMOTE_TO_OWNER" | "DOWNGRADE_TO_VIEWER" | "REMOVE";
+  title: string;
+  explanation: string;
+  viewerScope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+}
 
 function routeFromPath(pathname: string): Route {
   const route = pathname.replace(/^\/+|\/+$/g, "");
@@ -397,6 +411,63 @@ function TokenActionPage({
 function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: () => void }) {
   const [busy, setBusy] = useState<"logout" | "all" | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [members, setMembers] = useState<LibraryMember[]>([]);
+  const [perspectives, setPerspectives] = useState<ReadingPerspective[]>([]);
+  const [libraryName, setLibraryName] = useState("");
+  const [invitationToken, setInvitationToken] = useState(
+    () => new URLSearchParams(window.location.search).get("library-invite") ?? "",
+  );
+  const [inviteRole, setInviteRole] = useState<"OWNER" | "VIEWER">("VIEWER");
+  const [inviteScope, setInviteScope] = useState<"CATALOG_ONLY" | "CATALOG_AND_MAP">("CATALOG_ONLY");
+  const [ownerWarning, setOwnerWarning] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState("");
+  const [generatedToken, setGeneratedToken] = useState("");
+  const [dataBusy, setDataBusy] = useState(false);
+  const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
+  const [memberChangePassword, setMemberChangePassword] = useState("");
+
+  const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
+
+  const reloadLibraries = useCallback(async (preferredId?: string) => {
+    const result = await serverApi.libraries();
+    setLibraries(result);
+    setSelectedId((current) => {
+      const wanted = preferredId ?? current;
+      return result.some((item) => item.library_id === wanted)
+        ? wanted
+        : (result[0]?.library_id ?? "");
+    });
+  }, []);
+
+  useEffect(() => {
+    void reloadLibraries().catch((caught) => setError(friendlyError(caught)));
+  }, [reloadLibraries]);
+
+  useEffect(() => {
+    if (!selected) {
+      setMembers([]);
+      setPerspectives([]);
+      return;
+    }
+    let active = true;
+    Promise.all([
+      serverApi.readingPerspectives(selected.library_id),
+      selected.role === "OWNER"
+        ? serverApi.libraryMembers(selected.library_id)
+        : Promise.resolve([]),
+    ]).then(([nextPerspectives, nextMembers]) => {
+      if (active) {
+        setPerspectives(nextPerspectives);
+        setMembers(nextMembers);
+      }
+    }).catch((caught) => {
+      if (active) setError(friendlyError(caught));
+    });
+    return () => { active = false; };
+  }, [selected]);
 
   async function signOut(all: boolean) {
     setBusy(all ? "all" : "logout");
@@ -412,6 +483,142 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     }
   }
 
+  async function createLibrary(event: FormEvent) {
+    event.preventDefault();
+    setDataBusy(true);
+    setError("");
+    try {
+      const created = await serverApi.createLibrary(libraryName);
+      setLibraryName("");
+      await reloadLibraries(created.library_id);
+      setNotice(`“${created.name}” was created. You are its first Owner.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function acceptInvitation(event: FormEvent) {
+    event.preventDefault();
+    setDataBusy(true);
+    setError("");
+    try {
+      const accepted = await serverApi.acceptLibraryInvitation(invitationToken.trim());
+      setInvitationToken("");
+      window.history.replaceState({}, "", "/");
+      await reloadLibraries(accepted.library_id);
+      setNotice(`You joined “${accepted.name}” as ${accepted.role === "OWNER" ? "an Owner" : "a Viewer"}.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function createInvitation(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setDataBusy(true);
+    setError("");
+    try {
+      const result = await serverApi.createLibraryInvitation(
+        selected.library_id,
+        inviteRole,
+        inviteRole === "VIEWER" ? inviteScope : null,
+        ownerWarning,
+      );
+      const url = new URL("/login", window.location.origin);
+      url.searchParams.set("library-invite", result.invitation_token);
+      setGeneratedLink(url.toString());
+      setGeneratedToken(result.invitation_token);
+      setNotice("The single-use library invitation is ready. It expires in seven days.");
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function copyInvitation(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setError("");
+      setNotice(`${label} copied to the clipboard.`);
+    } catch {
+      setError("BOOKPILE could not access the clipboard. Select and copy the visible value manually.");
+    }
+  }
+
+  async function selectPerspective(userId: string) {
+    if (!selected) return;
+    setDataBusy(true);
+    try {
+      setPerspectives(await serverApi.selectReadingPerspective(selected.library_id, userId));
+      await reloadLibraries(selected.library_id);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  function requestMemberChange(
+    member: LibraryMember,
+    action: PendingMemberChange["action"],
+  ) {
+    let title = "Update membership";
+    let explanation = "Confirm this change to the member's library access.";
+    let viewerScope: PendingMemberChange["viewerScope"] = member.viewer_scope;
+    if (action === "CHANGE_VIEWER_SCOPE") {
+      const grantingMap = member.viewer_scope === "CATALOG_ONLY";
+      viewerScope = grantingMap ? "CATALOG_AND_MAP" : "CATALOG_ONLY";
+      title = grantingMap ? `Give ${member.username} map access?` : `Remove ${member.username}'s map access?`;
+      explanation = grantingMap
+        ? "This Viewer will be able to see the physical Library Map and saved book locations, in addition to the catalogue. Access remains read-only."
+        : "This Viewer will retain read-only catalogue access, but physical locations and the Library Map will no longer be available.";
+    } else if (action === "PROMOTE_TO_OWNER") {
+      viewerScope = null;
+      title = `Make ${member.username} an equal co-Owner?`;
+      explanation = "A co-Owner receives the same authority as you: they can edit the catalogue and layout, manage members and loans, remove your own membership, export or restore data, and initiate deletion of the entire library. Only grant this role to someone you fully trust.";
+    } else if (action === "DOWNGRADE_TO_VIEWER") {
+      viewerScope = "CATALOG_ONLY";
+      title = `Change ${member.username} from Owner to Viewer?`;
+      explanation = "This person will lose all editing and member-management powers. Choose whether their remaining read-only access includes the physical Library Map.";
+    } else if (action === "REMOVE") {
+      viewerScope = null;
+      title = `Remove ${member.username} from this library?`;
+      explanation = "This immediately removes their access to the catalogue, map, covers, reading perspectives, and library membership. Their BOOKPILE account is not deleted.";
+    }
+    setMemberChangePassword("");
+    setPendingMemberChange({ member, action, title, explanation, viewerScope });
+  }
+
+  async function confirmMemberChange(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !pendingMemberChange) return;
+    const { member, action, viewerScope } = pendingMemberChange;
+    setDataBusy(true);
+    setError("");
+    try {
+      await serverApi.changeLibraryMember(selected.library_id, member.user_id, {
+        action,
+        viewer_scope: viewerScope,
+        current_password: memberChangePassword,
+        acknowledge_equal_owner_power: action === "PROMOTE_TO_OWNER",
+      });
+      setMembers(await serverApi.libraryMembers(selected.library_id));
+      setPerspectives(await serverApi.readingPerspectives(selected.library_id));
+      setNotice(`${member.username}'s membership was updated.`);
+      setPendingMemberChange(null);
+      setMemberChangePassword("");
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
   return (
     <main className="server-account-shell">
       <header className="server-account-header">
@@ -423,23 +630,84 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <LogOut size={18} /> Sign out
         </button>
       </header>
-      <section className="server-account-card">
-        <span className="server-account-icon"><BookOpen size={34} /></span>
-        <p className="server-card-eyebrow">Identity foundation complete</p>
-        <h1>Welcome, {user.username}.</h1>
-        <p>
-          Your verified session is working. Libraries and memberships arrive in
-          Phase 3; no Local catalogue has been imported or modified.
-        </p>
-        <div className="server-account-status">
-          <ShieldCheck size={22} />
-          <span><b>Private session active</b><small>Opaque cookie · CSRF protected</small></span>
+      <section className="server-library-dashboard">
+        <div className="server-dashboard-title">
+          <span className="server-account-icon"><BookOpen size={34} /></span>
+          <div><p className="server-card-eyebrow">Private library workspace</p><h1>Welcome, {user.username}.</h1></div>
+          <div className="server-account-status"><ShieldCheck size={20} /><span><b>Session protected</b><small>Membership checked per request</small></span></div>
         </div>
         {error && <Message kind="error">{error}</Message>}
-        <button className="server-danger-link" type="button" onClick={() => void signOut(true)} disabled={busy !== null}>
-          Sign out from every device
-        </button>
+        {notice && <Message kind="success">{notice}</Message>}
+
+        <div className="server-dashboard-grid">
+          <aside className="server-library-sidebar">
+            <h2>Your libraries</h2>
+            <div className="server-library-list">
+              {libraries.map((library) => (
+                <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => setSelectedId(library.library_id)}>
+                  <LibraryBig size={18} /><span><b>{library.name}</b><small>{library.role === "OWNER" ? "Owner" : library.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue"}</small></span>
+                </button>
+              ))}
+              {!libraries.length && <p>No libraries yet. Create your first one below.</p>}
+            </div>
+            <form className="server-compact-form" onSubmit={createLibrary}>
+              <label>New library name<input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} maxLength={160} required /></label>
+              <button type="submit" disabled={dataBusy}><Plus size={17} /> Create library</button>
+            </form>
+            <form className="server-compact-form" onSubmit={acceptInvitation}>
+              <label>Library invitation link or token<input value={invitationToken} onChange={(event) => setInvitationToken(event.target.value)} minLength={32} required /></label>
+              <button type="submit" disabled={dataBusy}><Users size={17} /> Join library</button>
+            </form>
+          </aside>
+
+          <div className="server-library-main">
+            {selected ? <>
+              <div className="server-library-heading"><div><p className="server-card-eyebrow">{selected.role}</p><h2>{selected.name}</h2></div><span>{selected.can_view_map ? <><Map size={17} /> Catalogue and map</> : "Catalogue only"}</span></div>
+              <section className="server-dashboard-panel">
+                <h3>Reading perspective</h3>
+                <p>Reading data will be personal in Phase 5. This selection already remembers whose future history you are viewing.</p>
+                <select value={perspectives.find((item) => item.selected)?.user_id ?? ""} onChange={(event) => void selectPerspective(event.target.value)} disabled={dataBusy}>
+                  {perspectives.map((item) => <option key={item.user_id} value={item.user_id}>{item.username}{item.writable ? " · your editable perspective" : " · read only"}</option>)}
+                </select>
+              </section>
+
+              {selected.role === "OWNER" && <>
+                <section className="server-dashboard-panel">
+                  <h3>Members</h3>
+                  <div className="server-member-list">{members.map((member) => <div key={member.user_id}><span><b>{member.username}</b><small>{member.role === "OWNER" ? "Equal co-Owner" : member.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue only"}</small></span><span className="server-member-actions">{member.role === "VIEWER" ? <><button type="button" onClick={() => requestMemberChange(member, "CHANGE_VIEWER_SCOPE")}>{member.viewer_scope === "CATALOG_ONLY" ? "Give map access" : "Remove map access"}</button><button type="button" onClick={() => requestMemberChange(member, "PROMOTE_TO_OWNER")}>Make co-Owner</button></> : member.user_id !== user.user_id && <button type="button" onClick={() => requestMemberChange(member, "DOWNGRADE_TO_VIEWER")}>Make Viewer</button>}<button type="button" onClick={() => requestMemberChange(member, "REMOVE")}>Remove</button></span></div>)}</div>
+                </section>
+                <section className="server-dashboard-panel">
+                  <h3>Invite a member</h3>
+                  <form className="server-invite-form" onSubmit={createInvitation}>
+                    <label>Role<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value as "OWNER" | "VIEWER"); setOwnerWarning(false); }}><option value="VIEWER">Viewer</option><option value="OWNER">Equal co-Owner</option></select></label>
+                    {inviteRole === "VIEWER" && <label>Access<select value={inviteScope} onChange={(event) => setInviteScope(event.target.value as typeof inviteScope)}><option value="CATALOG_ONLY">Catalogue only</option><option value="CATALOG_AND_MAP">Catalogue and map</option></select></label>}
+                    {inviteRole === "OWNER" && <label className="server-check"><input type="checkbox" checked={ownerWarning} onChange={(event) => setOwnerWarning(event.target.checked)} /> I understand this person receives equal authority and may remove me.</label>}
+                    <button type="submit" disabled={dataBusy}>Generate invitation</button>
+                  </form>
+                  {generatedLink && <div className="server-generated-invitation">
+                    <label>Invitation link<span><input readOnly value={generatedLink} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedLink, "Invitation link")}>Copy link</button></span></label>
+                    <label>Token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Invitation token")}>Copy token</button></span></label>
+                  </div>}
+                </section>
+              </>}
+              <section className="server-dashboard-panel muted"><h3>Catalogue porting comes next</h3><p>This Server library is intentionally empty. Phase 4 will port the full private catalogue and later import a Local-v1 ZIP without modifying its source.</p></section>
+            </> : <div className="server-empty-library"><LibraryBig size={48} /><h2>Create or join a library</h2><p>Accounts and libraries are separate: an account may own or view several libraries.</p></div>}
+          </div>
+        </div>
+        <button className="server-danger-link" type="button" onClick={() => void signOut(true)} disabled={busy !== null}>Sign out from every device</button>
       </section>
+      {pendingMemberChange && <div className="server-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !dataBusy) setPendingMemberChange(null); }}>
+        <section className="server-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-dialog-title">
+          <p className="server-card-eyebrow">Permission change</p>
+          <h2 id="permission-dialog-title">{pendingMemberChange.title}</h2>
+          <p>{pendingMemberChange.explanation}</p>
+          <form onSubmit={confirmMemberChange}>
+            {pendingMemberChange.action === "DOWNGRADE_TO_VIEWER" && <label className="server-field">Viewer access<select value={pendingMemberChange.viewerScope ?? "CATALOG_ONLY"} onChange={(event) => setPendingMemberChange({ ...pendingMemberChange, viewerScope: event.target.value as "CATALOG_ONLY" | "CATALOG_AND_MAP" })}><option value="CATALOG_ONLY">Catalogue only</option><option value="CATALOG_AND_MAP">Catalogue and map</option></select></label>}
+            <Field label="Your current password" icon={<LockKeyhole size={18} />} type="password" value={memberChangePassword} onChange={(event) => setMemberChangePassword(event.target.value)} autoComplete="current-password" autoFocus />
+            <div className="server-dialog-actions"><button type="button" onClick={() => setPendingMemberChange(null)} disabled={dataBusy}>Cancel</button><button className={pendingMemberChange.action === "REMOVE" ? "danger" : "confirm"} type="submit" disabled={dataBusy || !memberChangePassword}>{dataBusy ? "Applying…" : "Confirm change"}</button></div>
+          </form>
+        </section>
+      </div>}
     </main>
   );
 }

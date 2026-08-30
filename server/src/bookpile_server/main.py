@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 
 from .api.routes.catalogue import router as catalogue_router
 from .api.routes.auth import router as auth_router
+from .api.routes.libraries import router as libraries_router
 
 
 def create_app() -> FastAPI:
@@ -12,6 +13,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(catalogue_router, prefix="/api/v1")
+    app.include_router(libraries_router, prefix="/api/v1")
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next):

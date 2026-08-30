@@ -570,9 +570,22 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     registration, verification, login/logout, and password recovery end to end.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
-- [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,
-  transfer/removal, and audit logging.
-- [ ] Enforce strict backend data separation between libraries and users.
+- [x] Implement the Phase 3 library-membership and authorization foundation:
+  - [x] Support equal co-Owners and read-only Viewers, without an Editor role.
+  - [x] Support catalogue-only and catalogue-and-map Viewer scopes; map access
+    always implies catalogue access.
+  - [x] Keep account-registration invitations separate from library-sharing
+    invitations, with hashed, expiring, single-use library tokens.
+  - [x] Require password reauthentication and explicit consequence warnings
+    for scope changes, promotion to equal co-Owner, downgrade, and removal.
+  - [x] Prevent removal or downgrade of the final Owner and preserve a valid
+    reading-perspective selection after membership changes.
+  - [x] Record membership and invitation audit events.
+- [x] Enforce authenticated membership isolation for the current Server
+  library and catalogue APIs; knowledge of a library UUID is not authority.
+- [ ] Extend strict backend separation and Viewer-safe projections to every
+  catalogue, map, cover, loan, reading, backup, and ZIP record ported in later
+  Server phases.
 - [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,

@@ -66,3 +66,60 @@ class PasswordResetConfirmRequest(AccountTokenRequest):
     password: str = Field(min_length=1, max_length=128)
     password_confirmation: str = Field(min_length=1, max_length=128)
 
+
+class CreateLibraryRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+
+
+class LibrarySummaryResponse(BaseModel):
+    library_id: UUID
+    name: str
+    slug: str
+    role: str
+    viewer_scope: str | None
+    selected_reading_user_id: UUID | None
+    can_view_map: bool
+
+
+class LibraryMemberResponse(BaseModel):
+    user_id: UUID
+    username: str
+    role: str
+    viewer_scope: str | None
+    selected_reading_user_id: UUID | None
+    created_at: datetime
+
+
+class CreateLibraryInvitationRequest(BaseModel):
+    role: str = Field(min_length=1, max_length=16)
+    viewer_scope: str | None = Field(default=None, max_length=32)
+    acknowledge_equal_owner_power: bool = False
+
+
+class CreatedLibraryInvitationResponse(BaseModel):
+    invitation_id: UUID
+    invitation_token: str
+    expires_at: datetime
+
+
+class AcceptLibraryInvitationRequest(BaseModel):
+    invitation_token: str = Field(min_length=32, max_length=200)
+
+
+class ChangeLibraryMemberRequest(BaseModel):
+    action: str = Field(min_length=1, max_length=32)
+    viewer_scope: str | None = Field(default=None, max_length=32)
+    current_password: str = Field(min_length=1, max_length=128)
+    acknowledge_equal_owner_power: bool = False
+
+
+class ReadingPerspectiveResponse(BaseModel):
+    user_id: UUID
+    username: str
+    selected: bool
+    writable: bool
+
+
+class SelectReadingPerspectiveRequest(BaseModel):
+    user_id: UUID
+

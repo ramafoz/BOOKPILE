@@ -8,6 +8,7 @@ from ..email_delivery import EmailSender, SmtpEmailSender
 from ..repositories.account_actions import AccountActionRepository
 from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
+from ..repositories.libraries import LibraryRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
 from ..services.account_invitations import AccountInvitationService
@@ -21,6 +22,8 @@ from ..services.auth import (
     InvalidSessionError,
 )
 from ..services.catalogue import CatalogueService
+from ..services.library_access import LibraryAccessService
+from ..services.libraries import LibraryService
 
 
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -32,6 +35,26 @@ def get_catalogue_service(session: SessionDependency) -> CatalogueService:
 
 CatalogueServiceDependency = Annotated[
     CatalogueService, Depends(get_catalogue_service)
+]
+
+
+def get_library_access_service(
+    session: SessionDependency,
+) -> LibraryAccessService:
+    return LibraryAccessService(LibraryRepository(session))
+
+
+LibraryAccessServiceDependency = Annotated[
+    LibraryAccessService, Depends(get_library_access_service)
+]
+
+
+def get_library_service(session: SessionDependency) -> LibraryService:
+    return LibraryService(LibraryRepository(session))
+
+
+LibraryServiceDependency = Annotated[
+    LibraryService, Depends(get_library_service)
 ]
 
 
