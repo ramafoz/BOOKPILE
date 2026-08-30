@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     session_cookie_name: str = "bookpile_session"
     csrf_cookie_name: str = "bookpile_csrf"
     session_cookie_secure: bool = False
+    public_base_url: str = "http://127.0.0.1:5173"
 
 
 @lru_cache

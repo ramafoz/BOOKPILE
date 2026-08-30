@@ -18,7 +18,14 @@ from fastapi.testclient import TestClient
 
 from bookpile_server.database import get_session
 from bookpile_server.main import create_app
-from bookpile_server.models import Book, Library, SecurityEvent, User, UserSession
+from bookpile_server.models import (
+    AccountInvitation,
+    Book,
+    Library,
+    SecurityEvent,
+    User,
+    UserSession,
+)
 from bookpile_server.repositories.books import BookRepository
 
 
@@ -51,6 +58,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "users",
             "user_sessions",
             "security_events",
+            "account_invitations",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = Library(name="First", slug="postgres-first")
@@ -90,6 +98,12 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     details={"source": "postgresql-integration"},
                 )
             )
+            session.add(
+                AccountInvitation(
+                    token_hash="c" * 64,
+                    expires_at=now + timedelta(days=7),
+                )
+            )
             session.commit()
 
             books = BookRepository(session).list_for_library(first.id)
@@ -113,8 +127,15 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             ]
             assert "Two" not in response.text
 
-        # Prove that 0002 can be removed without removing Phase 1 catalogue
-        # records. This is the incremental rollback gate for identity work.
+        # Prove 0003 can be removed without removing Phase 2 identity records.
+        command.downgrade(alembic, "0002_identity_foundation")
+        phase_two_tables = set(inspect(engine).get_table_names())
+        assert "account_invitations" not in phase_two_tables
+        assert {"users", "user_sessions", "security_events"} <= phase_two_tables
+        with Session(engine) as session:
+            assert session.query(User).count() == 1
+
+        # Then prove 0002 can be removed without removing Phase 1 catalogue.
         command.downgrade(alembic, "0001_server_foundation")
         phase_one_tables = set(inspect(engine).get_table_names())
         assert {"libraries", "books"} <= phase_one_tables

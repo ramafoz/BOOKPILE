@@ -546,8 +546,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     sessions and generic credential failures.
   - [x] Implement protected-session validation, inactivity/absolute expiry,
     CSRF, session rotation, and individual/global revocation.
-  - [ ] Implement invitations, verification, password reset, rate limiting,
-    dedicated security tests, and the auth frontend.
+  - [x] Add reversible, single-use account-invitation storage and operator
+    create/revoke commands, separately from future library invitations.
+  - [ ] Implement invitation-only registration, verification, password reset,
+    rate limiting, dedicated security tests, and the auth frontend.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,

@@ -27,7 +27,8 @@ class User(Base):
         CheckConstraint("username = lower(username)", name="ck_users_username_lowercase"),
         CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),
         CheckConstraint(
-            "state IN ('invited', 'active', 'suspended', 'pending_deletion', 'deleted')",
+            "state IN ('pending_verification', 'active', 'suspended', "
+            "'pending_deletion', 'deleted')",
             name="ck_users_state",
         ),
     )
@@ -37,7 +38,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="invited", server_default="invited"
+        String(32),
+        nullable=False,
+        default="pending_verification",
+        server_default="pending_verification",
     )
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
@@ -60,6 +64,48 @@ class User(Base):
     )
     security_events: Mapped[list["SecurityEvent"]] = relationship(
         back_populates="user"
+    )
+    created_account_invitations: Mapped[list["AccountInvitation"]] = relationship(
+        foreign_keys="AccountInvitation.created_by_user_id",
+        back_populates="created_by_user",
+    )
+    consumed_account_invitation: Mapped["AccountInvitation | None"] = relationship(
+        foreign_keys="AccountInvitation.consumed_by_user_id",
+        back_populates="consumed_by_user",
+        uselist=False,
+    )
+
+
+class AccountInvitation(Base):
+    __tablename__ = "account_invitations"
+    __table_args__ = (
+        Index("ix_account_invitations_expires_at", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    consumed_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        unique=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    created_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[created_by_user_id],
+        back_populates="created_account_invitations",
+    )
+    consumed_by_user: Mapped[User | None] = relationship(
+        foreign_keys=[consumed_by_user_id],
+        back_populates="consumed_account_invitation",
     )
 
 

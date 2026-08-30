@@ -23,6 +23,8 @@ must not be used for Server migrations or test databases.
   `HttpOnly` session cookies and audit events.
 - Phase 2C protected-request authentication, inactivity and absolute expiry,
   CSRF enforcement, credential rotation, and global session revocation.
+- Phase 2D-A temporary account invitations, stored only as token hashes and
+  managed separately from future library-sharing invitations.
 
 The authentication core now protects requests and session mutations, but
 invitation registration, verification/reset mail, rate limits, and the
@@ -73,6 +75,18 @@ Apply migrations and optionally insert the deliberately small synthetic demo:
 server\.venv\Scripts\alembic -c server\alembic.ini upgrade head
 server\.venv\Scripts\python server\scripts\seed_development.py
 ```
+
+Generate or revoke a temporary beta account invitation after applying the
+latest migration:
+
+```powershell
+server\.venv\Scripts\python server\scripts\manage_account_invitations.py create
+server\.venv\Scripts\python server\scripts\manage_account_invitations.py revoke <invitation-uuid>
+```
+
+The registration URL is displayed once. PostgreSQL stores only its token hash.
+These account invitations do not grant access to any library; library
+invitations depend on the later membership model.
 
 The seed script refuses non-development environments, remote hosts, databases
 not named exactly `bookpile`, and non-PostgreSQL targets. Its records are not
