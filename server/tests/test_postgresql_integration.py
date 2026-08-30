@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
@@ -24,6 +24,7 @@ from bookpile_server.models import (
     AccountActionToken,
     Book,
     Library,
+    RateLimitBucket,
     SecurityEvent,
     User,
     UserSession,
@@ -35,6 +36,12 @@ from bookpile_server.repositories.account_invitations import (
 from bookpile_server.services.account_invitations import (
     AccountInvitationError,
     AccountInvitationService,
+)
+from bookpile_server.repositories.rate_limits import RateLimitRepository
+from bookpile_server.services.rate_limits import (
+    RateLimitExceededError,
+    RateLimiter,
+    RateLimitPolicy,
 )
 
 
@@ -69,6 +76,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "security_events",
             "account_invitations",
             "account_action_tokens",
+            "rate_limit_buckets",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = Library(name="First", slug="postgres-first")
@@ -177,6 +185,43 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 .count()
                 == 1
             )
+
+        def consume_rate_limit_concurrently(_: int) -> bool:
+            with Session(engine) as concurrent_session:
+                limiter = RateLimiter(
+                    RateLimitRepository(concurrent_session), "integration-secret"
+                )
+                try:
+                    limiter.enforce(
+                        RateLimitPolicy(
+                            "postgres_concurrency", 1, timedelta(minutes=1)
+                        ),
+                        key="same-logical-key",
+                        ip_address="127.0.0.1",
+                    )
+                except RateLimitExceededError:
+                    return False
+                return True
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rate_results = list(
+                executor.map(consume_rate_limit_concurrently, (1, 2))
+            )
+        assert sorted(rate_results) == [False, True]
+        with Session(engine) as session:
+            bucket = session.scalar(
+                select(RateLimitBucket).where(
+                    RateLimitBucket.scope == "postgres_concurrency"
+                )
+            )
+            assert bucket is not None
+            assert bucket.attempt_count == 2
+
+        # Prove 0005 can be removed without removing account-action tokens.
+        command.downgrade(alembic, "0004_account_action_tokens")
+        phase_four_tables = set(inspect(engine).get_table_names())
+        assert "rate_limit_buckets" not in phase_four_tables
+        assert "account_action_tokens" in phase_four_tables
 
         # Prove 0004 can be removed without removing invitations or identities.
         command.downgrade(alembic, "0003_account_invitations")

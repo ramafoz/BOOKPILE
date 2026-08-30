@@ -2,11 +2,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 SERVER_DIRECTORY = Path(__file__).resolve().parents[2]
+DEVELOPMENT_RATE_LIMIT_SECRET = "bookpile-development-rate-limit-secret"
 
 
 class Settings(BaseSettings):
@@ -32,6 +33,24 @@ class Settings(BaseSettings):
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"
+    rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
+
+    @model_validator(mode="after")
+    def require_production_security_settings(self) -> "Settings":
+        if self.environment == "production":
+            if self.rate_limit_key_secret == DEVELOPMENT_RATE_LIMIT_SECRET:
+                raise ValueError(
+                    "Production requires a private BOOKPILE_SERVER_RATE_LIMIT_KEY_SECRET"
+                )
+            if not self.session_cookie_secure:
+                raise ValueError(
+                    "Production requires BOOKPILE_SERVER_SESSION_COOKIE_SECURE=true"
+                )
+            if not self.public_base_url.startswith("https://"):
+                raise ValueError(
+                    "Production requires an HTTPS BOOKPILE_SERVER_PUBLIC_BASE_URL"
+                )
+        return self
 
 
 @lru_cache

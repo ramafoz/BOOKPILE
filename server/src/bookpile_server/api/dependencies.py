@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 from ..database import get_session
 from ..email_delivery import EmailSender, SmtpEmailSender
 from ..repositories.account_actions import AccountActionRepository
+from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
 from ..services.account_invitations import AccountInvitationService
 from ..services.account_actions import AccountActionService
+from ..services.rate_limits import RateLimiter
 from ..config import get_settings
 from ..services.auth import (
     AuthContext,
@@ -70,6 +72,16 @@ def get_account_action_service(
 AccountActionServiceDependency = Annotated[
     AccountActionService, Depends(get_account_action_service)
 ]
+
+
+def get_rate_limiter(session: SessionDependency) -> RateLimiter:
+    settings = get_settings()
+    return RateLimiter(
+        RateLimitRepository(session), settings.rate_limit_key_secret
+    )
+
+
+RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
 
 
 def get_current_auth(

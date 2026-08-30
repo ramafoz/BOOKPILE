@@ -552,8 +552,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     account, including normalized identity fields and reserved usernames.
   - [x] Implement email verification/resend and password recovery with hashed,
     purpose-restricted, expiring tokens and development Mailpit delivery.
-  - [ ] Implement rate limiting, dedicated security tests, and the auth
-    frontend.
+  - [x] Implement shared PostgreSQL-backed rate limiting and dedicated
+    security tests, including concurrent final-attempt enforcement.
+  - [ ] Implement the authentication frontend.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,
@@ -599,8 +600,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   accounts, abuse/security operations, and service health. Platform operators
   must remain separate from library `OWNER`/`VIEWER` membership and receive no
   implicit private-library access.
-- [ ] Add upload validation, rate limiting, security headers, audit logging,
-  monitoring, and error reporting.
+- [ ] Complete the production security/operations layer: upload validation,
+  reverse-proxy rate limits, stale rate-bucket pruning, CSP/HSTS, asynchronous
+  email delivery, audit operations, monitoring, and error reporting. Baseline
+  application rate limits and defensive API headers are implemented.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [ ] Add automated deployment, migration, test, and rollback procedures.

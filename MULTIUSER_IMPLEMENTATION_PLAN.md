@@ -763,7 +763,7 @@ Gate: no authentication yet, but Server tests prove scoped repository design.
     one valid account invitation.
 - [x] Phase 2E: add email verification and password reset using Mailpit in
   development.
-- [ ] Phase 2F: add rate limiting and dedicated security tests.
+- [x] Phase 2F: add rate limiting and dedicated security tests.
 - [ ] Phase 2G: build the minimal authentication frontend.
 
 The accepted identity policy is recorded in
@@ -802,6 +802,17 @@ Resends revoke older links, activation enables login, and password replacement
 revokes every session. Enumeration-safe request responses reveal no account
 existence. Mailpit 1.31.0 is loopback-only and captured an actual BOOKPILE SMTP
 message; it is strictly a development dependency, not the production provider.
+
+Phase 2F passed its PostgreSQL gate on 2026-08-30. Shared fixed-window buckets
+use HMAC-only logical keys and atomic upserts, with combined IP and
+resource-specific limits, generic `429` responses, `Retry-After`, and a single
+audit event when a bucket first blocks. A two-connection test proves that only
+one concurrent request can consume the final allowed attempt. Authentication
+responses are non-cacheable and carry baseline anti-sniffing, anti-framing,
+and referrer headers. Production configuration rejects a development HMAC
+secret, insecure session cookies, or a non-HTTPS public URL. Reverse-proxy
+limits, stale-bucket pruning, and asynchronous production email remain
+deployment gates rather than reasons to expose this branch publicly now.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.

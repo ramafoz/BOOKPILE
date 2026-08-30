@@ -29,12 +29,15 @@ must not be used for Server migrations or test databases.
   `pending_verification` account. Registration never creates a login session.
 - Phase 2E email verification/resend and password recovery with expiring,
   purpose-restricted hashed tokens. Password changes revoke every session.
+- Phase 2F shared PostgreSQL-backed limits on every public identity flow,
+  atomic under concurrent workers and keyed only by HMAC digests. Auth
+  responses also carry baseline defensive and no-cache headers.
 
 The authentication core now supports temporary invitation registration,
-verification, and password recovery, but rate limits, the dedicated security
-gate, and the authentication frontend remain. The Server branch is therefore
-not deployable yet. A path library ID is still a temporary Phase 1 input used
-to prove architectural scoping; it is not authorization.
+verification, password recovery, shared rate limits, and the dedicated backend
+security gate. The authentication frontend is the remaining Phase 2 increment.
+The Server branch is still not deployable: a path library ID is a temporary
+Phase 1 input used to prove architectural scoping; it is not authorization.
 
 ## Development setup
 
@@ -100,14 +103,18 @@ Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-The migration and isolation gate now upgrades through Phase 2E against
+The migration and isolation gate now upgrades through Phase 2F against
 PostgreSQL 17, checks catalogue isolation, identity/session/invitation/action
-records, concurrent invitation consumption, and each incremental rollback. It
-then downgrades disposable `bookpile_test` until no BOOKPILE application tables
-remain. Alembic may retain its empty administrative `alembic_version` table.
+records, concurrent invitation consumption, atomic concurrent rate limiting,
+and each incremental rollback. It then downgrades disposable `bookpile_test`
+until no BOOKPILE application tables remain. Alembic may retain its empty
+administrative `alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and
 staging environments must obtain unique secrets from deployment configuration.
+Production refuses to start with the development rate-limit HMAC secret,
+insecure session cookies, or a non-HTTPS public URL. Set
+`BOOKPILE_SERVER_RATE_LIMIT_KEY_SECRET` to a long random deployment secret.
 
 Common lifecycle commands preserve the named volume unless `-v` is explicitly
 requested:

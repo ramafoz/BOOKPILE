@@ -64,6 +64,17 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
     assert csrf_token
     assert "HttpOnly" in response.headers["set-cookie"]
     assert "SameSite=lax" in response.headers["set-cookie"]
+    set_cookies = response.headers.get_list("set-cookie")
+    session_cookie = next(item for item in set_cookies if "bookpile_session=" in item)
+    csrf_cookie = next(item for item in set_cookies if "bookpile_csrf=" in item)
+    assert "Path=/api/v1" in session_cookie
+    assert "HttpOnly" in session_cookie
+    assert "Path=/;" in csrf_cookie
+    assert "HttpOnly" not in csrf_cookie
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "same-origin"
 
     stored_session = session.scalar(select(UserSession))
     assert stored_session is not None

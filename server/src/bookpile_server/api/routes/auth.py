@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
@@ -24,20 +24,57 @@ from ...services.account_invitations import (
     RegistrationValidationError,
 )
 from ...services.auth import InvalidCredentialsError, LoginResult
+from ...services.rate_limits import (
+    RateLimitExceededError,
+    RateLimiter,
+    RateLimitPolicy,
+)
 from ..dependencies import (
     AccountActionServiceDependency,
     AccountInvitationServiceDependency,
     AuthServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
+    RateLimiterDependency,
 )
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
+REGISTER_IP = RateLimitPolicy("register_ip", 10, timedelta(hours=1))
+REGISTER_INVITATION = RateLimitPolicy("register_invitation", 10, timedelta(hours=1))
+LOGIN_IP = RateLimitPolicy("login_ip", 60, timedelta(minutes=15))
+LOGIN_IDENTITY = RateLimitPolicy("login_identity", 20, timedelta(minutes=15))
+EMAIL_ACTION_IP = RateLimitPolicy("email_action_ip", 10, timedelta(hours=1))
+VERIFICATION_EMAIL = RateLimitPolicy("verification_email", 5, timedelta(hours=1))
+PASSWORD_RESET_EMAIL = RateLimitPolicy("password_reset_email", 5, timedelta(hours=1))
+TOKEN_CONFIRM_IP = RateLimitPolicy("token_confirm_ip", 30, timedelta(minutes=15))
+TOKEN_CONFIRM_VALUE = RateLimitPolicy("token_confirm_value", 10, timedelta(minutes=15))
+
 
 def request_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+def enforce_rate_limit(
+    limiter: RateLimiter,
+    policy: RateLimitPolicy,
+    *,
+    key: str,
+    request: Request,
+) -> None:
+    try:
+        limiter.enforce(
+            policy,
+            key=key,
+            ip_address=request_ip(request),
+        )
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
 
 
 def set_auth_cookies(response: Response, result: LoginResult) -> None:
@@ -61,14 +98,28 @@ def set_auth_cookies(response: Response, result: LoginResult) -> None:
         httponly=False,
         secure=settings.session_cookie_secure,
         samesite="lax",
-        path="/api/v1",
+        # The SPA is served from `/` and must be able to read this non-secret
+        # double-submit value before sending it in X-CSRF-Token.
+        path="/",
     )
 
 
 def clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
-    response.delete_cookie(key=settings.session_cookie_name, path="/api/v1")
-    response.delete_cookie(key=settings.csrf_cookie_name, path="/api/v1")
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/api/v1",
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=settings.csrf_cookie_name,
+        path="/",
+        secure=settings.session_cookie_secure,
+        httponly=False,
+        samesite="lax",
+    )
 
 
 @router.post(
@@ -81,7 +132,20 @@ def register_account(
     request: Request,
     service: AccountInvitationServiceDependency,
     account_actions: AccountActionServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> RegisterAccountResponse:
+    enforce_rate_limit(
+        rate_limiter,
+        REGISTER_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        REGISTER_INVITATION,
+        key=payload.invitation_token,
+        request=request,
+    )
     try:
         account = service.register(
             raw_token=payload.invitation_token,
@@ -128,7 +192,20 @@ def resend_verification(
     request: Request,
     response: Response,
     service: AccountActionServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> Response:
+    enforce_rate_limit(
+        rate_limiter,
+        EMAIL_ACTION_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        VERIFICATION_EMAIL,
+        key=payload.email.strip().lower(),
+        request=request,
+    )
     try:
         service.resend_verification(payload.email, ip_address=request_ip(request))
     except EmailDeliveryError:
@@ -143,7 +220,20 @@ def confirm_verification(
     request: Request,
     response: Response,
     service: AccountActionServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> Response:
+    enforce_rate_limit(
+        rate_limiter,
+        TOKEN_CONFIRM_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        TOKEN_CONFIRM_VALUE,
+        key=payload.token,
+        request=request,
+    )
     try:
         service.verify_email(payload.token, ip_address=request_ip(request))
     except InvalidAccountActionTokenError as exc:
@@ -161,7 +251,20 @@ def request_password_reset(
     request: Request,
     response: Response,
     service: AccountActionServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> Response:
+    enforce_rate_limit(
+        rate_limiter,
+        EMAIL_ACTION_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        PASSWORD_RESET_EMAIL,
+        key=payload.email.strip().lower(),
+        request=request,
+    )
     try:
         service.request_password_reset(
             payload.email, ip_address=request_ip(request)
@@ -178,7 +281,20 @@ def confirm_password_reset(
     request: Request,
     response: Response,
     service: AccountActionServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> Response:
+    enforce_rate_limit(
+        rate_limiter,
+        TOKEN_CONFIRM_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        TOKEN_CONFIRM_VALUE,
+        key=payload.token,
+        request=request,
+    )
     try:
         service.reset_password(
             raw_token=payload.token,
@@ -206,7 +322,20 @@ def login(
     request: Request,
     response: Response,
     service: AuthServiceDependency,
+    rate_limiter: RateLimiterDependency,
 ) -> LoginResponse:
+    enforce_rate_limit(
+        rate_limiter,
+        LOGIN_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    enforce_rate_limit(
+        rate_limiter,
+        LOGIN_IDENTITY,
+        key=payload.identifier.strip().lower(),
+        request=request,
+    )
     try:
         result = service.login(
             identifier=payload.identifier,

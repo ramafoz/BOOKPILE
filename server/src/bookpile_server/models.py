@@ -143,6 +143,26 @@ class AccountActionToken(Base):
     user: Mapped[User] = relationship(back_populates="account_action_tokens")
 
 
+class RateLimitBucket(Base):
+    __tablename__ = "rate_limit_buckets"
+    __table_args__ = (
+        CheckConstraint(
+            "attempt_count > 0", name="ck_rate_limit_buckets_attempt_count"
+        ),
+        Index("ix_rate_limit_buckets_updated_at", "updated_at"),
+    )
+
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    window_started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    attempt_count: Mapped[int] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
     __table_args__ = (
