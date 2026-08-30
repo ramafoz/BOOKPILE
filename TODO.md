@@ -306,6 +306,14 @@ fields.
 - [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
   while preserving its current container, position, direction, and collision
   handling.
+- [ ] **Local v1 and Server:** enrich barcode/ISBN scanning from every
+  configured bibliographic source rather than accepting only one result.
+  Merge candidates with provenance and conflict review; import genuine authors
+  through structured multiple authorship while keeping translators, editors,
+  and illustrators out of the author list.
+- [ ] **Local v1 and Server:** remember the user's selected subset of imported
+  metadata during one Batch Add session, so each next scan initially proposes
+  the same fields without making that preference permanent or silent.
 - [x] Add optional OCR from a temporary front-cover photograph.
   - Let the user select or correct recognized Title and Author text.
   - Optionally resolve the corrected text against bibliographic providers.
@@ -378,6 +386,10 @@ protects the completed catalogue.
 - [x] Add the four-digit year of the current edition and the original
   publication year as separate optional values.
 - [x] Add optional free-text language.
+- [ ] **Local v1 and Server:** distinguish an original-language edition from a
+  translation and store an ordered structured list of one or more translators.
+  Introduce it through a safe additive migration and include it in details,
+  editing, search, import/export, and ISBN candidate review.
 - [x] Add an optional positive edition number.
 - [x] Add optional series name and free-text series volume.
 - [x] Add a controlled binding classification independently from publication
@@ -538,7 +550,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     PostgreSQL database.
   - [x] Expand and approve the reusable read-only catalogue projection with
     scoped search, counts, and pagination.
-- [ ] Introduce user accounts with secure registration, sign-in, sign-out,
+- [x] Introduce user accounts with secure registration, sign-in, sign-out,
   password recovery, Argon2id, opaque sessions, and CSRF protection:
   - [x] Add the reversible user, hashed-session, and security-event schema in
     Server migration `0002_identity_foundation`.
@@ -554,7 +566,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     purpose-restricted, expiring tokens and development Mailpit delivery.
   - [x] Implement shared PostgreSQL-backed rate limiting and dedicated
     security tests, including concurrent final-attempt enforcement.
-  - [ ] Implement the authentication frontend.
+  - [x] Implement the isolated responsive authentication frontend and validate
+    registration, verification, login/logout, and password recovery end to end.
 - [ ] Assign every library-level record to a library and every personal reading
   record to an Owner.
 - [ ] Implement equal co-Ownership, Viewer scopes, membership invitations,

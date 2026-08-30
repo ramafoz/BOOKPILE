@@ -33,6 +33,7 @@ from bookpile_server.repositories.books import BookRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
+from bookpile_server.repositories.account_actions import AccountActionRepository
 from bookpile_server.services.account_invitations import (
     AccountInvitationError,
     AccountInvitationService,
@@ -152,6 +153,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 "One"
             ]
             assert "Two" not in response.text
+
+            locked_action = AccountActionRepository(session).get_token_for_update(
+                token_hash="d" * 64,
+                purpose="email_verification",
+            )
+            assert locked_action is not None
+            assert locked_action.user.id == user.id
 
             invitation_result = AccountInvitationService(
                 AccountInvitationRepository(session)

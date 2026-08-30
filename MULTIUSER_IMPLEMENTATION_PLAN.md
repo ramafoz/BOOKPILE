@@ -764,7 +764,7 @@ Gate: no authentication yet, but Server tests prove scoped repository design.
 - [x] Phase 2E: add email verification and password reset using Mailpit in
   development.
 - [x] Phase 2F: add rate limiting and dedicated security tests.
-- [ ] Phase 2G: build the minimal authentication frontend.
+- [x] Phase 2G: build the minimal authentication frontend.
 
 The accepted identity policy is recorded in
 `docs/adr/0003-identity-and-session-policy.md`. Phase 2A passed the real
@@ -813,6 +813,15 @@ and referrer headers. Production configuration rejects a development HMAC
 secret, insecure session cookies, or a non-HTTPS public URL. Reverse-proxy
 limits, stale-bucket pruning, and asynchronous production email remain
 deployment gates rather than reasons to expose this branch publicly now.
+
+Phase 2G passed its desktop acceptance gate on 2026-08-30. The isolated Server
+shell supports invitation registration, email verification and resend, login,
+current/global logout, password-reset request and completion, and a minimal
+authenticated landing view. It handles empty `202` responses, generic errors,
+rate-limit waits, CSRF cookies, and one-time token URL cleanup. The user
+validated the complete Mailpit-backed cycle, including changing a password and
+signing in with the replacement. Libraries remain deliberately absent until
+Phase 3 establishes membership and authorization.
 
 Gate: independent security review/tests for login, reset, CSRF, revocation,
 enumeration, and invitation reuse.

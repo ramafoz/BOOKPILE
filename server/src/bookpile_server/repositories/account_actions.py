@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload
 
 from ..models import AccountActionToken, SecurityEvent, User, UserSession
 
@@ -39,7 +39,9 @@ class AccountActionRepository:
     ) -> AccountActionToken | None:
         return self._session.scalar(
             select(AccountActionToken)
-            .options(joinedload(AccountActionToken.user))
+            # Keep the related user out of the locking SELECT. PostgreSQL does
+            # not allow FOR UPDATE on the nullable side of joined eager loads.
+            .options(selectinload(AccountActionToken.user))
             .where(
                 AccountActionToken.token_hash == token_hash,
                 AccountActionToken.purpose == purpose,

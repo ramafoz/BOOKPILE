@@ -32,12 +32,15 @@ must not be used for Server migrations or test databases.
 - Phase 2F shared PostgreSQL-backed limits on every public identity flow,
   atomic under concurrent workers and keyed only by HMAC digests. Auth
   responses also carry baseline defensive and no-cache headers.
+- Phase 2G responsive Server authentication shell for invitation registration,
+  verification, login/logout, and password recovery.
 
 The authentication core now supports temporary invitation registration,
-verification, password recovery, shared rate limits, and the dedicated backend
-security gate. The authentication frontend is the remaining Phase 2 increment.
-The Server branch is still not deployable: a path library ID is a temporary
-Phase 1 input used to prove architectural scoping; it is not authorization.
+verification, password recovery, shared rate limits, the backend security gate,
+and its minimal frontend. Phase 2 is complete. The Server branch is still not
+deployable: a path library ID is a temporary Phase 1 input used to prove
+architectural scoping; it is not authorization. Phase 3 must establish actual
+library membership and permissions first.
 
 ## Development setup
 
@@ -70,6 +73,17 @@ $env:BOOKPILE_SERVER_DATABASE_URL = "postgresql+psycopg://bookpile:bookpile-dev@
 server\.venv\Scripts\alembic -c server\alembic.ini upgrade head
 server\.venv\Scripts\uvicorn bookpile_server.main:app --app-dir server\src --reload --port 8100
 ```
+
+In a second terminal, start the isolated Server frontend:
+
+```powershell
+cd frontend
+npm ci
+npm run dev -- --host=127.0.0.1
+```
+
+Open <http://127.0.0.1:5173>. Vite proxies `/api/v1` to the Server backend on
+port 8100. Mailpit captures verification and recovery links during development.
 
 The first volume initialization creates two databases:
 
