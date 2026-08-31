@@ -858,6 +858,21 @@ Owner controls for Viewers, granting and removing map access, and promotion to
 equal co-Owner. Porting the complete catalogue, map, covers, reading data,
 loans, backups, and ZIP import remains work for Phases 4 onward.
 
+### Phase 3.5 — cross-edition semantic model
+
+- [x] Classify platform, shared-library, personal-Owner, presentation, and
+  transient provider data.
+- [x] Define a semantic Local-to-Server mapping instead of copying Local's
+  SQLite tables into PostgreSQL.
+- [x] Define ordered contributors with roles, edition/original language,
+  optional physical dimensions, and progressive multi-source lookup behavior.
+- [x] Define a versioned Local ZIP adapter contract and atomic import pipeline.
+
+The approved baseline is documented in `CROSS_EDITION_DATA_MODEL.md`. Phase
+3.5 changes no database and leaves the Local v1.0.0 release immutable. It
+allows Local and Server persistence to evolve independently while preserving
+compatible meanings and explicit import rules.
+
 ### Phase 4 — shared catalogue and private covers
 
 - Port books, metadata, authors, hierarchy, layout, covers, search, and

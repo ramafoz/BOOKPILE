@@ -387,9 +387,15 @@ protects the completed catalogue.
   publication year as separate optional values.
 - [x] Add optional free-text language.
 - [ ] **Local v1 and Server:** distinguish an original-language edition from a
-  translation and store an ordered structured list of one or more translators.
-  Introduce it through a safe additive migration and include it in details,
-  editing, search, import/export, and ISBN candidate review.
+  translation and store ordered structured contributors with roles including
+  author, translator, illustrator, editor, photographer, and other. Introduce
+  it through safe edition-specific additive migrations and include it in
+  details, editing, search, import/export, and ISBN candidate review.
+- [ ] **Local and Server experimental:** add optional measured dimensions in
+  integer millimetres for physical book copies, furniture, and usable shelf
+  interiors, while retaining percentage layout and page-based fallbacks.
+  Prototype measured/estimated map calibration before allowing dimensions to
+  rewrite persisted geometry.
 - [x] Add an optional positive edition number.
 - [x] Add optional series name and free-text series volume.
 - [x] Add a controlled binding classification independently from publication
@@ -586,6 +592,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Extend strict backend separation and Viewer-safe projections to every
   catalogue, map, cover, loan, reading, backup, and ZIP record ported in later
   Server phases.
+- [x] Define the cross-edition semantic model and versioned Local ZIP import
+  contract before porting the complete catalogue; see
+  `CROSS_EDITION_DATA_MODEL.md`.
 - [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,

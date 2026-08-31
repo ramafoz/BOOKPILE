@@ -373,6 +373,9 @@ third-party services.
   rehearsals, mandatory pre-migration backups, and recovery.
 - `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
   tenancy, privacy, quota, migration, and deployment roadmap.
+- `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
+  future contributors/languages/dimensions, and specifies versioned conversion
+  from Local ZIPs into Server libraries.
 - `docs/adr/` records architectural decisions that must remain traceable as
   BOOKPILE Server evolves.
 - `server/README.md` documents the isolated Server foundation and its test

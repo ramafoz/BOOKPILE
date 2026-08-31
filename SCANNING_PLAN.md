@@ -61,6 +61,15 @@ offers that choice and the user confirms it.
   frontend.
 - Preserve Batch Add's container, next position, direction, and
   collision-and-shift behaviour.
+- Query configured bibliographic providers concurrently and surface usable
+  field-level results progressively. Never hold the first useful answer until
+  the slowest provider finishes.
+- Preserve provider provenance and visible conflicts, and never overwrite a
+  field the user has already edited, accepted, or deselected when a later
+  provider responds.
+- During one Batch Add session, carry the user's accepted-field subset forward
+  as the next book's initial selection without turning it into silent saving
+  or a permanent preference.
 
 ## Shared recognition and matching pipeline
 
