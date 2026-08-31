@@ -265,6 +265,64 @@ button { cursor: pointer; }
 .server-dialog-actions button.danger { border-color: #93472f; color: #fff; background: #a75235; }
 .server-dialog-actions button:disabled { opacity: .55; cursor: wait; }
 
+.server-catalogue-workspace { margin: 17px 0 22px; padding: 20px; border: 1px solid #d8cbbb; border-radius: 12px; background: #fffdf8; }
+.server-catalogue-workspace > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.server-catalogue-workspace > header h3 { margin: 0; font: 700 29px/1 Georgia, "Times New Roman", serif; }
+.server-catalogue-workspace > header small { display: block; margin-top: 6px; color: #6d7c77; }
+.server-primary-action, .server-catalogue-search button, .server-advanced-actions button { min-height: 42px; border: 1px solid #24584c; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 13px; color: #fff; background: #24584c; font-weight: 750; }
+.server-catalogue-search { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; gap: 9px; }
+.server-catalogue-search > label { min-height: 44px; border: 1px solid #d3c5b3; border-radius: 8px; display: flex; align-items: center; gap: 9px; padding: 0 12px; background: #fff; }
+.server-catalogue-search input { width: 100%; border: 0; outline: 0; color: #203b34; background: transparent; }
+.server-catalogue-search button:last-child { border-color: #9db5aa; color: #285a4f; background: #f5faf7; }
+.server-catalogue-search button.active { color: #fff; background: #527a6f; }
+.server-advanced-search { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid #e0d4c4; border-radius: 9px; background: #f4eee5; }
+.server-advanced-search label, .server-book-form label { display: grid; align-content: start; gap: 5px; color: #3b564f; font-size: 12px; font-weight: 750; }
+.server-advanced-search input, .server-advanced-search select, .server-book-form input, .server-book-form select, .server-book-form textarea { width: 100%; min-height: 41px; padding: 8px 10px; border: 1px solid #d0c2af; border-radius: 7px; color: #1e3b33; background: #fffdf9; font: inherit; }
+.server-advanced-search select[multiple] { min-height: 91px; }
+.server-advanced-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; }
+.server-advanced-actions button:first-child { border-color: #aa9d8c; color: #4f625d; background: transparent; }
+.server-book-list { min-height: 85px; margin-top: 15px; border-top: 1px solid #e4d8c8; transition: opacity .15s; }
+.server-book-list.loading { opacity: .5; pointer-events: none; }
+.server-book-list article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 3px; border-bottom: 1px solid #e9dfd2; }
+.server-book-placeholder { width: 38px; height: 50px; display: grid; place-items: center; border: 1px solid #b8c9c1; border-radius: 3px; color: #315f54; background: #e7f0eb; }
+.server-book-list h4 { margin: 0; font: 700 18px/1.15 Georgia, "Times New Roman", serif; }
+.server-book-list p { margin: 4px 0; color: #526a63; }
+.server-book-list small { color: #87624e; }
+.server-book-row-actions { display: flex; gap: 4px; }
+.server-book-row-actions button, .server-dialog-close, .server-contributor-editor button { width: 36px; height: 36px; border: 1px solid transparent; border-radius: 7px; display: grid; place-items: center; color: #49675f; background: transparent; }
+.server-book-row-actions button:hover, .server-contributor-editor button:hover { border-color: #b8c9c1; background: #edf4f0; }
+.server-empty-catalogue { min-height: 180px; display: grid; place-content: center; justify-items: center; color: #71817b; text-align: center; }
+.server-empty-catalogue h4 { margin: 10px 0 0; }
+.server-empty-catalogue p { margin: 6px 0; }
+.server-pagination { display: flex; align-items: center; justify-content: center; gap: 13px; padding-top: 15px; }
+.server-pagination button { border: 1px solid #b5c4bd; border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; color: #315b51; background: #f8fbf9; }
+.server-pagination button:disabled { opacity: .4; cursor: default; }
+
+.server-catalogue-dialog { position: relative; width: min(880px, 100%); max-height: calc(100vh - 30px); overflow: auto; padding: clamp(24px, 4vw, 40px); border: 1px solid #d8cbb9; border-radius: 15px; color: #203a33; background: #fffaf2; box-shadow: 0 28px 90px #09201966; }
+.server-catalogue-dialog.editor { width: min(980px, 100%); }
+.server-catalogue-dialog h2 { max-width: calc(100% - 44px); margin: 0; font: 700 clamp(31px, 5vw, 48px)/1.05 Georgia, "Times New Roman", serif; }
+.server-dialog-close { position: absolute; top: 18px; right: 18px; }
+.server-book-author { margin: 9px 0 22px; color: #5d716a; font-size: 17px; }
+.server-catalogue-dialog section { margin: 17px 0; padding: 16px; border: 1px solid #e1d5c5; border-radius: 9px; background: #fffdf8; }
+.server-catalogue-dialog section h3 { margin: 0 0 10px; font: 700 20px Georgia, "Times New Roman", serif; }
+.server-contributor-credits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.server-contributor-credits span { display: grid; gap: 2px; color: #4d645d; }
+.server-contributor-credits b, .server-book-metadata dt { color: #9d5937; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.server-book-metadata { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px; margin: 22px 0; padding: 18px; border: 1px solid #e1d5c5; border-radius: 9px; background: #fffdf8; }
+.server-book-metadata div { min-width: 0; }
+.server-book-metadata dd { overflow-wrap: anywhere; margin: 5px 0 0; color: #344f48; white-space: pre-wrap; }
+.server-book-form { display: grid; gap: 15px; margin-top: 20px; }
+.server-book-form fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid #d9cdbc; border-radius: 9px; }
+.server-book-form legend { padding: 0 7px; font: 700 18px Georgia, "Times New Roman", serif; }
+.server-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.server-form-grid .wide { grid-column: 1 / -1; }
+.server-inline-check { display: flex !important; align-items: center; align-content: center; gap: 8px !important; min-height: 41px; padding-top: 17px; }
+.server-inline-check input { width: 18px; min-height: 18px; accent-color: #285f52; }
+.server-field-help { margin: 0 0 10px; color: #6a7b76; font-size: 12px; }
+.server-contributor-editor { display: grid; gap: 7px; margin-bottom: 10px; }
+.server-contributor-editor > div { display: grid; grid-template-columns: 150px minmax(150px, 1fr) repeat(3, 36px); gap: 6px; }
+.server-book-form fieldset > button { border: 1px solid #9db6ab; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; color: #24574b; background: #f5faf7; font-weight: 700; }
+
 @media (max-width: 850px) {
   .server-shell { display: block; }
   .server-story { min-height: 300px; padding: 26px 25px 36px; }
@@ -281,6 +339,7 @@ button { cursor: pointer; }
   .server-dashboard-title .server-account-status { grid-column: 1 / -1; width: 100%; }
   .server-dashboard-grid { grid-template-columns: 1fr; }
   .server-library-sidebar { padding-right: 0; padding-bottom: 22px; border-right: 0; border-bottom: 1px solid #e0d5c6; }
+  .server-advanced-search { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 480px) {
@@ -303,6 +362,18 @@ button { cursor: pointer; }
   .server-library-heading, .server-member-list > div { align-items: flex-start; flex-direction: column; }
   .server-member-actions { justify-content: flex-start; }
   .server-generated-invitation label > span { grid-template-columns: 1fr; }
+  .server-catalogue-workspace { padding: 15px 11px; }
+  .server-catalogue-workspace > header { align-items: flex-start; }
+  .server-catalogue-search { grid-template-columns: 1fr 1fr; }
+  .server-catalogue-search > label { grid-column: 1 / -1; }
+  .server-advanced-search, .server-form-grid, .server-book-metadata, .server-contributor-credits { grid-template-columns: 1fr; }
+  .server-book-list article { grid-template-columns: 34px minmax(0, 1fr); }
+  .server-book-placeholder { width: 32px; height: 44px; }
+  .server-book-row-actions { grid-column: 2; }
+  .server-contributor-editor > div { grid-template-columns: 1fr repeat(3, 36px); }
+  .server-contributor-editor select, .server-contributor-editor input { grid-column: 1 / -1; }
+  .server-modal-backdrop { padding: 7px; }
+  .server-catalogue-dialog { max-height: calc(100vh - 14px); padding: 25px 18px; border-radius: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

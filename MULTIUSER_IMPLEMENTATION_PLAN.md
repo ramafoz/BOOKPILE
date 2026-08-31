@@ -878,7 +878,7 @@ compatible meanings and explicit import rules.
 - [x] Phase 4A: add the reversible shared catalogue schema, extensible ordered
   contributors, language/translation fields, optional dimensions, physical
   hierarchy, and visual-layout storage with cross-library foreign-key guards.
-- [ ] Phase 4B: port catalogue reads/writes, metadata validation, contributors,
+- [x] Phase 4B: port catalogue reads/writes, metadata validation, contributors,
   search, filters, and Owner/Viewer projections.
 - [ ] Phase 4C: implement the private image pipeline and authenticated cover
   delivery.
@@ -893,12 +893,27 @@ is independently reversible. Composite library/parent foreign keys reject
 cross-library hierarchy, placement, contributor, and visual-support links.
 The decision and its boundaries are recorded in ADR 0008.
 
+Phase 4B passed its service and PostgreSQL gates on 2026-09-01. Every list,
+detail, metadata-option, create, replacement-update, and delete operation is
+scoped by `library_id` and authenticated membership. Viewers receive the full
+shared bibliographic record but cannot mutate it; Owners receive CSRF-protected
+create, edit, and explicitly confirmed delete actions. Ordered contributors,
+strict ISBNs, translation coherence, normalized genres, simple contributor
+search, combinable metadata filters, pagination, and structured audit events
+are covered by isolated and PostgreSQL integration tests. The responsive
+Server catalogue is now available inside the selected-library dashboard.
+Private covers, physical hierarchy/map APIs, personal readings, loans, and ZIP
+conversion remain deliberately outside this slice. See ADR 0009.
+
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
 
 ### Phase 5 — personal readings and shared custody
 
 - Port reading/rereading rules into user-owned sessions.
+- Add per-Owner Goodreads review links keyed by library, book, and user.
+  Owners edit only their own review; Owners and Viewers can read all reviews,
+  identified by visible username. Map Local links to the importing Owner.
 - Add perspective-aware catalogue, statistics, map colouring, and suggestions.
 - Add shared `SHELVED`/`BEING_READ`/`ON_LOAN` custody and one-active-reader
   enforcement.

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cookieValue, serverApi } from "./serverApi";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("cookieValue", () => {
   it("finds and decodes the named CSRF cookie", () => {
@@ -25,5 +28,64 @@ describe("empty accepted responses", () => {
     await expect(
       serverApi.requestPasswordReset("reader@example.com"),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("Server catalogue requests", () => {
+  it("encodes repeated advanced filters without losing their AND/OR structure", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        library_id: "library-1", role: "VIEWER", can_edit: false,
+        total: 0, limit: 25, offset: 0, books: [],
+      }), { status: 200 }),
+    );
+
+    await serverApi.catalogue("library-1", {
+      search: "Le Guin",
+      language: ["English", "Galician"],
+      genre: ["Fantasy", "Science Fiction"],
+      page_max: 300,
+    });
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    const query = new URL(url, "http://bookpile.test").searchParams;
+    expect(query.get("search")).toBe("Le Guin");
+    expect(query.getAll("language")).toEqual(["English", "Galician"]);
+    expect(query.getAll("genre")).toEqual(["Fantasy", "Science Fiction"]);
+    expect(query.get("page_max")).toBe("300");
+  });
+
+  it("sends CSRF protection with catalogue writes", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=write-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "book-1" }), { status: 201 }),
+    );
+
+    await serverApi.createBook("library-1", {
+      title: "A book", author: "An author", contributors: [],
+      isbn_10: null, isbn_13: null, subtitle: null, page_count: null,
+      publisher: null, current_ed_year: null, original_publication_year: null,
+      language: null, original_language: null, translation_status: "UNKNOWN",
+      edition_number: null, fiction_category: null, binding: null,
+      publication_type: null, genre_text: null, series_name: null,
+      series_volume: null, notes: null,
+      acquisition_date: null, is_original_collection: false,
+      height_mm: null, width_mm: null, thickness_mm: null,
+    });
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("write-token");
+    expect(options.method).toBe("POST");
+  });
+
+  it("surfaces Pydantic validation details to the user", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        detail: [{ msg: "Value error, ISBN-13 checksum is invalid" }],
+      }), { status: 422 }),
+    );
+
+    await expect(serverApi.catalogue("library-1"))
+      .rejects.toThrow("ISBN-13 checksum is invalid");
   });
 });

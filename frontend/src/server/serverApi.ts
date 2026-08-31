@@ -47,6 +47,106 @@ export interface CreatedLibraryInvitation {
   expires_at: string;
 }
 
+export interface Contributor {
+  id?: string;
+  role_code: string;
+  role_label?: string;
+  position?: number;
+  name: string;
+}
+
+export interface ContributorRole {
+  code: string;
+  label: string;
+  sort_order: number;
+}
+
+export interface ServerBookSummary {
+  id: string;
+  title: string;
+  author: string;
+  display_author: string;
+  subtitle: string | null;
+  page_count: number | null;
+  publisher: string | null;
+  current_ed_year: number | null;
+  language: string | null;
+  fiction_category: string | null;
+  binding: string | null;
+  publication_type: string | null;
+  genre_text: string | null;
+  series_name: string | null;
+  series_volume: string | null;
+  contributors: Contributor[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServerBook extends ServerBookSummary {
+  library_id: string;
+  isbn_10: string | null;
+  isbn_13: string | null;
+  original_publication_year: number | null;
+  original_language: string | null;
+  translation_status: "UNKNOWN" | "ORIGINAL" | "TRANSLATED";
+  edition_number: number | null;
+  notes: string | null;
+  acquisition_date: string | null;
+  is_original_collection: boolean;
+  height_mm: number | null;
+  width_mm: number | null;
+  thickness_mm: number | null;
+}
+
+export type ServerBookWrite = Omit<
+  ServerBook,
+  "id" | "library_id" | "display_author" | "created_at" | "updated_at"
+> & { contributors: Array<{ role_code: string; name: string }> };
+
+export interface CataloguePage {
+  library_id: string;
+  role: "OWNER" | "VIEWER";
+  can_edit: boolean;
+  total: number;
+  limit: number;
+  offset: number;
+  books: ServerBookSummary[];
+}
+
+export interface CatalogueMetadataOptions {
+  languages: string[];
+  original_languages: string[];
+  publishers: string[];
+  genres: string[];
+  series_names: string[];
+  contributor_roles: ContributorRole[];
+}
+
+export interface CatalogueQuery {
+  search?: string;
+  isbn?: string;
+  language?: string[];
+  original_language?: string[];
+  translation_status?: string[];
+  genre?: string[];
+  publisher?: string[];
+  fiction_category?: string[];
+  binding?: string[];
+  publication_type?: string[];
+  series_name?: string[];
+  series_state?: "ANY" | "YES" | "NO";
+  author_structure?: "ANY" | "SINGLE" | "MULTIPLE";
+  page_min?: number;
+  page_max?: number;
+  year_field?: "current_ed_year" | "original_publication_year";
+  year_min?: number;
+  year_max?: number;
+  sort_by?: string;
+  sort_order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+
 export class ServerApiError extends Error {
   status: number;
   retryAfter: number | null;
@@ -86,9 +186,16 @@ async function request<T>(
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { detail?: unknown };
+    const validationMessage = Array.isArray(body.detail)
+      ? body.detail.map((item) => {
+        if (!item || typeof item !== "object") return "";
+        const message = "msg" in item ? String(item.msg) : "";
+        return message.replace(/^Value error, /, "");
+      }).filter(Boolean).join(" ")
+      : "";
     const message = typeof body.detail === "string"
       ? body.detail
-      : "BOOKPILE could not complete that request.";
+      : validationMessage || "BOOKPILE could not complete that request.";
     const retryHeader = response.headers.get("Retry-After");
     const retryAfter = retryHeader ? Number.parseInt(retryHeader, 10) : null;
     throw new ServerApiError(
@@ -202,6 +309,40 @@ export const serverApi = {
     request<ReadingPerspective[]>(
       `/libraries/${libraryId}/reading-perspective`,
       { method: "PUT", body: JSON.stringify({ user_id: userId }) },
+      true,
+    ),
+  catalogue: (libraryId: string, query: CatalogueQuery = {}) => {
+    const parameters = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      if (Array.isArray(value)) value.forEach((item) => parameters.append(key, item));
+      else parameters.set(key, String(value));
+    });
+    const suffix = parameters.size ? `?${parameters.toString()}` : "";
+    return request<CataloguePage>(`/libraries/${libraryId}/catalogue${suffix}`);
+  },
+  catalogueOptions: (libraryId: string) =>
+    request<CatalogueMetadataOptions>(
+      `/libraries/${libraryId}/catalogue/metadata-options`,
+    ),
+  book: (libraryId: string, bookId: string) =>
+    request<ServerBook>(`/libraries/${libraryId}/catalogue/${bookId}`),
+  createBook: (libraryId: string, book: ServerBookWrite) =>
+    request<ServerBook>(
+      `/libraries/${libraryId}/catalogue`,
+      { method: "POST", body: JSON.stringify(book) },
+      true,
+    ),
+  updateBook: (libraryId: string, bookId: string, book: ServerBookWrite) =>
+    request<ServerBook>(
+      `/libraries/${libraryId}/catalogue/${bookId}`,
+      { method: "PUT", body: JSON.stringify(book) },
+      true,
+    ),
+  deleteBook: (libraryId: string, bookId: string, title: string) =>
+    request<void>(
+      `/libraries/${libraryId}/catalogue/${bookId}`,
+      { method: "DELETE", body: JSON.stringify({ confirmation_title: title }) },
       true,
     ),
 };

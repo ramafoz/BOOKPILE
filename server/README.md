@@ -49,14 +49,17 @@ must not be used for Server migrations or test databases.
   ordered contributor roles, translation/language fields, optional physical
   dimensions, hierarchy, and fixed-precision visual layout. Composite foreign
   keys prevent cross-library parent relationships.
+- Phase 4B library-scoped catalogue services and responsive frontend: complete
+  shared metadata, ordered contributors, strict validation, simple and
+  advanced search, metadata options, sorting, pagination, read-only details,
+  Owner-only writes, CSRF, explicit deletion confirmation, and audit events.
 
 The authentication and library-membership foundations are complete through
-Phase 3, and the shared persistence foundation is complete through Phase 4A.
+Phase 3, and the shared catalogue foundation is complete through Phase 4B.
 Catalogue access requires an authenticated membership; a library ID is never
-authorization. The Server branch is still not deployable because Phase 4B+
-catalogue services, private covers, the visual-map API, personal reading data,
-loans, backup/restore, storage quota, and production infrastructure have not
-yet been ported.
+authorization. The Server branch is still not deployable because private
+covers, the visual-map API, personal reading data, loans, backup/restore,
+storage quota, and production infrastructure have not yet been ported.
 
 ## Development setup
 
@@ -135,6 +138,24 @@ copied from a Local catalogue.
 
 Do not reuse production credentials or Local catalogue paths in development.
 
+## Catalogue API
+
+All routes require an authenticated library membership. A Viewer may use the
+GET routes; an Owner may additionally use POST, PUT, and DELETE with a valid
+CSRF token.
+
+- `GET /api/v1/libraries/{library_id}/catalogue`
+- `GET /api/v1/libraries/{library_id}/catalogue/metadata-options`
+- `GET /api/v1/libraries/{library_id}/catalogue/{book_id}`
+- `POST /api/v1/libraries/{library_id}/catalogue`
+- `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}`
+- `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}`
+
+Updates are complete replacements rather than partial patches. The client
+must send the complete editable bibliographic record and contributor order.
+Delete requests must repeat the exact current title. Covers, physical
+positions, readings, and loans are intentionally not part of these payloads.
+
 ## Safety status
 
 The migration and isolation gate now upgrades through Phase 4A migration
@@ -143,7 +164,8 @@ membership isolation, identity/session/account-invitation/library-invitation
 records, concurrent invitation consumption, atomic rate limiting, final-Owner
 protection, scope changes, reading perspectives, shared metadata constraints,
 cross-library physical relationships, contributor normalization, preservation
-of pre-Phase-4A books, and each incremental rollback. It then downgrades
+of pre-Phase-4A books, Phase 4B service writes and ordered contributors, and
+each incremental rollback. It then downgrades
 disposable `bookpile_test` until no BOOKPILE application tables remain.
 Alembic may retain its empty administrative `alembic_version` table.
 

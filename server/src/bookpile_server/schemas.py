@@ -1,7 +1,187 @@
-from datetime import datetime
+from datetime import date, datetime
+import re
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+from .isbn import InvalidISBN, normalize_isbn
+
+
+TranslationStatus = Literal["UNKNOWN", "ORIGINAL", "TRANSLATED"]
+FictionCategory = Literal["FICTION", "NON_FICTION"]
+Binding = Literal["HARDCOVER", "PAPERBACK", "FLEXIBOUND", "SPIRAL", "STAPLED", "OTHER"]
+PublicationType = Literal[
+    "CONVENTIONAL_BOOK",
+    "COMIC_GRAPHIC_NOVEL",
+    "ATLAS",
+    "REFERENCE",
+    "ART_PHOTOGRAPHY_ILLUSTRATED",
+    "MAGAZINE_PERIODICAL",
+    "OTHER",
+]
+
+
+def optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
+
+
+def normalize_genres(value: str | None) -> str | None:
+    if value is None:
+        return None
+    genres: dict[str, str] = {}
+    for part in re.split(r"[,;\r\n]+", value):
+        cleaned = " ".join(part.split())
+        if cleaned:
+            genres.setdefault(cleaned.casefold(), cleaned)
+    return ", ".join(sorted(genres.values(), key=str.casefold)) or None
+
+
+class ContributorWrite(BaseModel):
+    role_code: str = Field(min_length=1, max_length=40)
+    name: str = Field(min_length=1, max_length=300)
+
+    @field_validator("role_code")
+    @classmethod
+    def normalize_role(cls, value: str) -> str:
+        cleaned = value.strip().upper()
+        if not cleaned:
+            raise ValueError("Contributor role is required")
+        return cleaned
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Contributor name is required")
+        return cleaned
+
+
+class ContributorResponse(ContributorWrite):
+    id: UUID
+    position: int
+    role_label: str
+
+
+class ContributorRoleResponse(BaseModel):
+    code: str
+    label: str
+    sort_order: int
+
+
+class BookWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=500)
+    author: str = Field(min_length=1, max_length=500)
+    isbn_10: str | None = Field(default=None, max_length=40)
+    isbn_13: str | None = Field(default=None, max_length=40)
+    subtitle: str | None = Field(default=None, max_length=500)
+    page_count: int | None = Field(default=None, gt=0)
+    publisher: str | None = Field(default=None, max_length=300)
+    current_ed_year: int | None = Field(default=None, ge=1000, le=9999)
+    original_publication_year: int | None = Field(default=None, ge=1000, le=9999)
+    language: str | None = Field(default=None, max_length=200)
+    original_language: str | None = Field(default=None, max_length=200)
+    translation_status: TranslationStatus = "UNKNOWN"
+    edition_number: int | None = Field(default=None, gt=0)
+    fiction_category: FictionCategory | None = None
+    binding: Binding | None = None
+    publication_type: PublicationType | None = None
+    genre_text: str | None = Field(default=None, max_length=1000)
+    series_name: str | None = Field(default=None, max_length=300)
+    series_volume: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=4000)
+    acquisition_date: date | None = None
+    is_original_collection: bool = False
+    height_mm: int | None = Field(default=None, gt=0, le=10000)
+    width_mm: int | None = Field(default=None, gt=0, le=10000)
+    thickness_mm: int | None = Field(default=None, gt=0, le=10000)
+    contributors: list[ContributorWrite] = Field(default_factory=list, max_length=250)
+
+    @field_validator("title", "author")
+    @classmethod
+    def normalize_required(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Title and author are required")
+        return cleaned
+
+    @field_validator(
+        "subtitle",
+        "publisher",
+        "language",
+        "original_language",
+        "series_name",
+        "series_volume",
+        "notes",
+    )
+    @classmethod
+    def normalize_optional(cls, value: str | None) -> str | None:
+        return optional_text(value)
+
+    @field_validator("genre_text")
+    @classmethod
+    def normalize_genre_text(cls, value: str | None) -> str | None:
+        return normalize_genres(value)
+
+    @field_validator("isbn_10")
+    @classmethod
+    def normalize_isbn_10(cls, value: str | None) -> str | None:
+        if not value or not value.strip():
+            return None
+        try:
+            normalized = normalize_isbn(value)
+        except InvalidISBN as exc:
+            raise ValueError(str(exc)) from exc
+        if len(normalized) != 10:
+            raise ValueError("ISBN-10 must be entered in the ISBN-10 field")
+        return normalized
+
+    @field_validator("isbn_13")
+    @classmethod
+    def normalize_isbn_13(cls, value: str | None) -> str | None:
+        if not value or not value.strip():
+            return None
+        try:
+            normalized = normalize_isbn(value)
+        except InvalidISBN as exc:
+            raise ValueError(str(exc)) from exc
+        if len(normalized) != 13:
+            raise ValueError("ISBN-13 must be entered in the ISBN-13 field")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_structure(self) -> "BookWrite":
+        seen: set[tuple[str, str]] = set()
+        authors = 0
+        for contributor in self.contributors:
+            key = (contributor.role_code, contributor.name.casefold())
+            if key in seen:
+                raise ValueError("The same contributor cannot have the same role twice")
+            seen.add(key)
+            if contributor.role_code == "AUTHOR":
+                authors += 1
+        if authors >= 2 and self.author != "Multiple authors":
+            raise ValueError("Two or more structured authors require author = Multiple authors")
+        if authors < 2 and self.author == "Multiple authors":
+            raise ValueError("Multiple authors requires at least two AUTHOR contributors")
+        if self.translation_status == "TRANSLATED":
+            if not self.language or not self.original_language:
+                raise ValueError("Translated books require current and original languages")
+            if self.language.casefold() == self.original_language.casefold():
+                raise ValueError("Translated books require two different languages")
+        return self
 
 
 class BookSummary(BaseModel):
@@ -10,11 +190,56 @@ class BookSummary(BaseModel):
     id: UUID
     title: str
     author: str
+    display_author: str
+    subtitle: str | None
+    page_count: int | None
+    publisher: str | None
+    current_ed_year: int | None
+    language: str | None
+    fiction_category: str | None
+    binding: str | None
+    publication_type: str | None
+    genre_text: str | None
+    series_name: str | None
+    series_volume: str | None
+    contributors: list[ContributorResponse]
     created_at: datetime
+    updated_at: datetime
+
+
+class BookResponse(BookSummary):
+    library_id: UUID
+    isbn_10: str | None
+    isbn_13: str | None
+    original_publication_year: int | None
+    original_language: str | None
+    translation_status: str
+    edition_number: int | None
+    notes: str | None
+    acquisition_date: date | None
+    is_original_collection: bool
+    height_mm: int | None
+    width_mm: int | None
+    thickness_mm: int | None
+
+
+class DeleteBookRequest(BaseModel):
+    confirmation_title: str = Field(min_length=1, max_length=500)
+
+
+class CatalogueMetadataOptions(BaseModel):
+    languages: list[str]
+    original_languages: list[str]
+    publishers: list[str]
+    genres: list[str]
+    series_names: list[str]
+    contributor_roles: list[ContributorRoleResponse]
 
 
 class CatalogueResponse(BaseModel):
     library_id: UUID
+    role: str
+    can_edit: bool
     total: int
     limit: int
     offset: int

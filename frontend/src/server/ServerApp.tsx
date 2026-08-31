@@ -23,6 +23,7 @@ import {
   ServerApiError,
   serverApi,
 } from "./serverApi";
+import CatalogueWorkspace from "./CatalogueWorkspace";
 
 type Route =
   | "login"
@@ -663,6 +664,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div className="server-library-main">
             {selected ? <>
               <div className="server-library-heading"><div><p className="server-card-eyebrow">{selected.role}</p><h2>{selected.name}</h2></div><span>{selected.can_view_map ? <><Map size={17} /> Catalogue and map</> : "Catalogue only"}</span></div>
+              <CatalogueWorkspace library={selected} />
               <section className="server-dashboard-panel">
                 <h3>Reading perspective</h3>
                 <p>Reading data will be personal in Phase 5. This selection already remembers whose future history you are viewing.</p>
@@ -690,7 +692,6 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   </div>}
                 </section>
               </>}
-              <section className="server-dashboard-panel muted"><h3>Catalogue porting comes next</h3><p>This Server library is intentionally empty. Phase 4 will port the full private catalogue and later import a Local-v1 ZIP without modifying its source.</p></section>
             </> : <div className="server-empty-library"><LibraryBig size={48} /><h2>Create or join a library</h2><p>Accounts and libraries are separate: an account may own or view several libraries.</p></div>}
           </div>
         </div>

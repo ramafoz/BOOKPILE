@@ -602,12 +602,26 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   metadata, extensible contributors, languages, optional physical dimensions,
   hierarchy, and visual layout, including cross-library database constraints
   and an independently reversible PostgreSQL gate.
+- [x] Complete Server Phase 4B catalogue services and responsive interface:
+  - [x] Scope every list, detail, metadata-option, create, update, and delete
+    operation by authenticated library membership.
+  - [x] Give Owners CSRF-protected catalogue writes and Viewers read-only
+    access to shared bibliographic metadata.
+  - [x] Port ordered contributors, ISBN and translation validation, normalized
+    genres, simple search, combinable advanced filters, sorting, pagination,
+    complete-information views, and structured audit events.
+  - [x] Pass isolated backend/frontend gates and the reversible PostgreSQL
+    integration test without modifying BOOKPILE Local or development data.
 - [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
 - [ ] Implement perspective-aware catalogue states, statistics, map colouring,
   suggestions, and personal reading/rereading sessions.
+- [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase
+  5: only the Owner edits their own link; Owners and Viewers see all reviews
+  labelled by username; Local import assigns existing links to its chosen
+  Owner. Retire the dormant shared-book compatibility column safely.
 - [ ] Implement shared physical custody and prevent simultaneous active reading
   of one physical copy.
 - [ ] Implement transactional shared quota allocation and atomic library

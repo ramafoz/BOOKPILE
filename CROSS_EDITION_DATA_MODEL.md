@@ -69,7 +69,7 @@ read-only projection:
 - Ordered contributors and their roles.
 - Bookcases, shelves, containers, book positions, and visual layout.
 - Covers, subject to authenticated private delivery.
-- Acquisition information, notes, Goodreads links, and copy dimensions.
+- Acquisition information, shared notes, and copy dimensions.
 - Shared physical custody: shelved, being read, or on loan.
 - Loan records. Borrower identity and loan notes remain Owner-only.
 - Future structured genres and subjects.
@@ -80,6 +80,9 @@ These records are attached to both a library book and an Owner:
 
 - Reading sessions, active reading, rereading, and historical unknown reading.
 - Per-Owner reading-status projections and statistics.
+- Each Owner's Goodreads review URL for a library book. Owners may edit only
+  their own link; all Owners and authorized Viewers may read every recorded
+  review, labelled with the reviewer's visible username.
 - The Owner currently holding/reading a physical copy where custody requires
   it.
 - Future personal ratings and personal tags.
@@ -135,8 +138,8 @@ One record represents one physical copy and includes:
   year, edition number, series name, and series volume.
 - Edition language, original language, and translation status.
 - Fiction category, binding, publication type, and interim genre text.
-- Goodreads URL, shared notes, acquisition data, cover reference, timestamps,
-  and physical position.
+- Shared notes, acquisition data, cover reference, timestamps, and physical
+  position.
 - Optional physical dimensions.
 
 The current Local `status`, `reading_started_date`, `read_date`, and
@@ -144,6 +147,12 @@ The current Local `status`, `reading_started_date`, `read_date`, and
 Local reader. They must not become shared columns with the same meaning in
 Server. Server derives the corresponding view from the selected Owner's
 reading sessions.
+
+Local's current Goodreads URL is the implicit Local user's personal review,
+not shared bibliography. Server import assigns it to the Owner selected for
+the imported Local user. The dormant Phase 4A `books.goodreads_url` column is
+not exposed by Phase 4B and will be retired through a backed-up migration when
+the personal Owner/book relation is introduced in Phase 5.
 
 ### 4.3 Ordered contributors
 
@@ -510,8 +519,9 @@ Phase 4 should proceed in reviewable increments:
 1. **4A — shared catalogue schema (completed):** expand Server books, contributors,
    language/translation, optional dimensions, hierarchy, and layout with
    library scoping and migration tests.
-2. **4B — catalogue services:** port create/edit/search/filter behavior and
-   enforce Owner writes versus Viewer projections.
+2. **4B — catalogue services (completed):** port create/edit/search/filter
+   behavior, complete replacement updates, ordered contributors, normalized
+   shared metadata, and Owner-write versus Viewer-read authorization.
 3. **4C — private covers:** authenticated storage/delivery, strict image
    validation, non-public object identifiers, abuse limits, and isolation
    tests.

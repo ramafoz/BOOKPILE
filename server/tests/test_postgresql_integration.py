@@ -328,7 +328,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 UserSession(
                     user_id=user.id,
                     token_hash=hash_session_secret("postgres-test-session"),
-                    csrf_token_hash="b" * 64,
+                    csrf_token_hash=hash_session_secret("postgres-test-csrf"),
                     last_seen_at=now,
                     expires_at=now + timedelta(days=7),
                     absolute_expires_at=now + timedelta(days=30),
@@ -375,12 +375,54 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     f"/api/v1/libraries/{first.id}/catalogue",
                     params={"search": "one"},
                 )
+                client.cookies.set(
+                    get_settings().csrf_cookie_name,
+                    "postgres-test-csrf",
+                )
+                created_response = client.post(
+                    f"/api/v1/libraries/{first.id}/catalogue",
+                    headers={"X-CSRF-Token": "postgres-test-csrf"},
+                    json={
+                        "title": "PostgreSQL catalogue write",
+                        "author": "Multiple authors",
+                        "isbn_13": "9780441478125",
+                        "page_count": 240,
+                        "language": "English",
+                        "original_language": "Spanish",
+                        "translation_status": "TRANSLATED",
+                        "genre_text": "Testing; Science Fiction",
+                        "contributors": [
+                            {"role_code": "AUTHOR", "name": "First Writer"},
+                            {"role_code": "AUTHOR", "name": "Second Writer"},
+                            {"role_code": "TRANSLATOR", "name": "Translator"},
+                        ],
+                    },
+                )
+                options_response = client.get(
+                    f"/api/v1/libraries/{first.id}/catalogue/metadata-options"
+                )
             assert response.status_code == 200
             assert response.json()["total"] == 1
             assert [book["title"] for book in response.json()["books"]] == [
                 "One"
             ]
             assert "Two" not in response.text
+            assert created_response.status_code == 201, created_response.text
+            assert created_response.json()["display_author"] == (
+                "First Writer & Second Writer"
+            )
+            assert created_response.json()["genre_text"] == (
+                "Science Fiction, Testing"
+            )
+            assert options_response.status_code == 200, options_response.text
+            assert options_response.json()["languages"] == ["English", "Galician"]
+            assert options_response.json()["genres"] == [
+                "Science Fiction",
+                "Testing",
+            ]
+            assert options_response.json()["contributor_roles"][0]["code"] == (
+                "AUTHOR"
+            )
 
             locked_action = AccountActionRepository(session).get_token_for_update(
                 token_hash="d" * 64,
@@ -510,7 +552,11 @@ def test_postgresql_migration_and_tenant_scope() -> None:
         with engine.connect() as connection:
             assert connection.execute(
                 text("SELECT title, author FROM books ORDER BY title")
-            ).all() == [("One", "Author A"), ("Two", "Author B")]
+            ).all() == [
+                ("One", "Author A"),
+                ("PostgreSQL catalogue write", "Multiple authors"),
+                ("Two", "Author B"),
+            ]
 
         # Prove 0006 can be removed without removing Phase 2 security data.
         command.downgrade(alembic, "0005_rate_limit_buckets")
@@ -557,7 +603,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
         }.isdisjoint(phase_one_tables)
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM libraries")) == 2
-            assert connection.scalar(text("SELECT count(*) FROM books")) == 2
+            assert connection.scalar(text("SELECT count(*) FROM books")) == 3
     finally:
         command.downgrade(alembic, "base")
         remaining_tables = set(inspect(engine).get_table_names())
