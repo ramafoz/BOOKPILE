@@ -875,9 +875,23 @@ compatible meanings and explicit import rules.
 
 ### Phase 4 — shared catalogue and private covers
 
-- Port books, metadata, authors, hierarchy, layout, covers, search, and
-  catalogue reads/writes.
-- Implement the private image pipeline and authenticated delivery.
+- [x] Phase 4A: add the reversible shared catalogue schema, extensible ordered
+  contributors, language/translation fields, optional dimensions, physical
+  hierarchy, and visual-layout storage with cross-library foreign-key guards.
+- [ ] Phase 4B: port catalogue reads/writes, metadata validation, contributors,
+  search, filters, and Owner/Viewer projections.
+- [ ] Phase 4C: implement the private image pipeline and authenticated cover
+  delivery.
+- [ ] Phase 4D: port physical hierarchy and map services with scope-safe
+  projections and layout validation.
+- [ ] Phase 4E: implement Local ZIP validation adapters and dry-run reports.
+
+Phase 4A passed its schema gate on 2026-08-31. Migration
+`0007_shared_catalogue_schema` preserves every pre-existing Server user,
+library, book, and membership; seeds fifteen extensible contributor roles; and
+is independently reversible. Composite library/parent foreign keys reject
+cross-library hierarchy, placement, contributor, and visual-support links.
+The decision and its boundaries are recorded in ADR 0008.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.

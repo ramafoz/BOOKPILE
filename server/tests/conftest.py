@@ -33,6 +33,8 @@ def session() -> Generator[Session, None, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys = ON")
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory() as database_session:

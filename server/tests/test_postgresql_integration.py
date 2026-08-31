@@ -7,13 +7,16 @@ production database accidentally.
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 
@@ -24,14 +27,23 @@ from bookpile_server.models import (
     AccountInvitation,
     AccountActionToken,
     Book,
+    BookContributor,
+    Bookcase,
+    Container,
+    ContributorRole,
     Library,
     LibraryAuditEvent,
     LibraryInvitation,
     LibraryMembership,
     RateLimitBucket,
     SecurityEvent,
+    Shelf,
     User,
     UserSession,
+    VisualBookcaseLayout,
+    VisualContainerLayout,
+    VisualOutsideArea,
+    VisualShelfLayout,
 )
 from bookpile_server.repositories.books import BookRepository
 from bookpile_server.repositories.account_invitations import (
@@ -73,6 +85,53 @@ def test_postgresql_migration_and_tenant_scope() -> None:
     engine = create_engine(TEST_DATABASE_URL)
 
     try:
+        # Create Phase 1 catalogue rows before 0007 so the migration must
+        # preserve real pre-existing IDs, titles, and legacy Author text.
+        command.upgrade(alembic, "0006_library_memberships")
+        first_library_id = uuid4()
+        second_library_id = uuid4()
+        first_book_id = uuid4()
+        second_book_id = uuid4()
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO libraries (id, name, slug) "
+                    "VALUES (:id, :name, :slug)"
+                ),
+                [
+                    {
+                        "id": first_library_id,
+                        "name": "First",
+                        "slug": "postgres-first",
+                    },
+                    {
+                        "id": second_library_id,
+                        "name": "Second",
+                        "slug": "postgres-second",
+                    },
+                ],
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO books (id, library_id, title, author) "
+                    "VALUES (:id, :library_id, :title, :author)"
+                ),
+                [
+                    {
+                        "id": first_book_id,
+                        "library_id": first_library_id,
+                        "title": "One",
+                        "author": "Author A",
+                    },
+                    {
+                        "id": second_book_id,
+                        "library_id": second_library_id,
+                        "title": "Two",
+                        "author": "Author B",
+                    },
+                ],
+            )
+
         command.upgrade(alembic, "head")
         assert {
             "libraries",
@@ -86,16 +145,146 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "library_memberships",
             "library_invitations",
             "library_audit_events",
+            "contributor_roles",
+            "book_contributors",
+            "bookcases",
+            "shelves",
+            "containers",
+            "visual_bookcase_layouts",
+            "visual_shelf_layouts",
+            "visual_container_layouts",
+            "visual_outside_areas",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
-            first = Library(name="First", slug="postgres-first")
-            second = Library(name="Second", slug="postgres-second")
-            session.add_all([first, second])
+            first = session.get(Library, first_library_id)
+            second = session.get(Library, second_library_id)
+            first_book = session.get(Book, first_book_id)
+            second_book = session.get(Book, second_book_id)
+            assert first is not None
+            assert second is not None
+            assert first_book is not None
+            assert second_book is not None
+            assert (first_book.title, first_book.author) == ("One", "Author A")
+            assert first_book.translation_status == "UNKNOWN"
+            assert first_book.is_original_collection is False
+            assert first_book.updated_at is not None
+
+            role_codes = list(
+                session.scalars(
+                    select(ContributorRole.code).order_by(
+                        ContributorRole.sort_order
+                    )
+                )
+            )
+            assert role_codes == [
+                "AUTHOR",
+                "SCRIPTWRITER",
+                "TRANSLATOR",
+                "ILLUSTRATOR",
+                "PENCILLER",
+                "INKER",
+                "COLORIST",
+                "LETTERER",
+                "COVER_ARTIST",
+                "EDITOR",
+                "COORDINATOR",
+                "COMPILER",
+                "PHOTOGRAPHER",
+                "ADAPTER",
+                "OTHER",
+            ]
+
+            first_bookcase = Bookcase(
+                library_id=first.id,
+                name="First bookcase",
+                height_mm=2100,
+                width_mm=800,
+                depth_mm=300,
+            )
+            second_bookcase = Bookcase(
+                library_id=second.id,
+                name="Second bookcase",
+            )
+            session.add_all([first_bookcase, second_bookcase])
             session.flush()
+            first_shelf = Shelf(
+                library_id=first.id,
+                bookcase_id=first_bookcase.id,
+                shelf_number=1,
+                usable_width_mm=760,
+            )
+            second_shelf = Shelf(
+                library_id=second.id,
+                bookcase_id=second_bookcase.id,
+                shelf_number=1,
+            )
+            session.add_all([first_shelf, second_shelf])
+            session.flush()
+            first_container = Container(
+                library_id=first.id,
+                shelf_id=first_shelf.id,
+                container_type="ROW",
+                layer="BACKGROUND",
+                container_number=1,
+            )
+            second_container = Container(
+                library_id=second.id,
+                shelf_id=second_shelf.id,
+                container_type="ROW",
+                layer="BACKGROUND",
+                container_number=1,
+            )
+            session.add_all([first_container, second_container])
+            session.flush()
+            second_container_id = second_container.id
+            first_book.container_id = first_container.id
+            first_book.position = 1
+            first_book.page_count = 320
+            first_book.language = "Galician"
+            first_book.original_language = "English"
+            first_book.translation_status = "TRANSLATED"
+            first_book.height_mm = 235
+            first_book.width_mm = 155
+            first_book.thickness_mm = 28
             session.add_all(
                 [
-                    Book(library_id=first.id, title="One", author="Author A"),
-                    Book(library_id=second.id, title="Two", author="Author B"),
+                    BookContributor(
+                        library_id=first.id,
+                        book_id=first_book.id,
+                        role_code="AUTHOR",
+                        position=1,
+                        name="Author A",
+                    ),
+                    VisualBookcaseLayout(
+                        library_id=first.id,
+                        bookcase_id=first_bookcase.id,
+                        x=Decimal("-20"),
+                        y=Decimal("5"),
+                        width=Decimal("25"),
+                        height=Decimal("80"),
+                    ),
+                    VisualShelfLayout(
+                        library_id=first.id,
+                        shelf_id=first_shelf.id,
+                        height_weight=Decimal("1"),
+                    ),
+                    VisualContainerLayout(
+                        library_id=first.id,
+                        container_id=first_container.id,
+                        x=Decimal("0"),
+                        y=Decimal("0"),
+                        width=Decimal("100"),
+                        height=Decimal("100"),
+                        row_anchor="LEFT",
+                    ),
+                    VisualOutsideArea(
+                        library_id=first.id,
+                        area_kind="READING",
+                        x=Decimal("50"),
+                        y=Decimal("70"),
+                        width=Decimal("20"),
+                        height=Decimal("18"),
+                    ),
                 ]
             )
             now = datetime.now(UTC)
@@ -204,6 +393,35 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 AccountInvitationRepository(session)
             ).create()
 
+        with pytest.raises(IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE books SET container_id = :container_id, "
+                        "position = 2 WHERE id = :book_id"
+                    ),
+                    {
+                        "container_id": second_container_id,
+                        "book_id": first_book_id,
+                    },
+                )
+
+        with pytest.raises(IntegrityError):
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO book_contributors "
+                        "(id, library_id, book_id, role_code, position, name) "
+                        "VALUES (:id, :library_id, :book_id, "
+                        "'AUTHOR', 2, ' author a ')"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "library_id": first_library_id,
+                        "book_id": first_book_id,
+                    },
+                )
+
         def register_concurrently(number: int) -> bool:
             with Session(engine) as concurrent_session:
                 service = AccountInvitationService(
@@ -263,6 +481,36 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Prove 0007 is independently reversible and preserves the original
+        # Phase 1 catalogue values while removing only Phase 4A structures.
+        command.downgrade(alembic, "0006_library_memberships")
+        phase_six_tables = set(inspect(engine).get_table_names())
+        assert {
+            "contributor_roles",
+            "book_contributors",
+            "bookcases",
+            "shelves",
+            "containers",
+            "visual_bookcase_layouts",
+            "visual_shelf_layouts",
+            "visual_container_layouts",
+            "visual_outside_areas",
+        }.isdisjoint(phase_six_tables)
+        phase_six_book_columns = {
+            column["name"] for column in inspect(engine).get_columns("books")
+        }
+        assert phase_six_book_columns == {
+            "id",
+            "library_id",
+            "title",
+            "author",
+            "created_at",
+        }
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT title, author FROM books ORDER BY title")
+            ).all() == [("One", "Author A"), ("Two", "Author B")]
 
         # Prove 0006 can be removed without removing Phase 2 security data.
         command.downgrade(alembic, "0005_rate_limit_buckets")

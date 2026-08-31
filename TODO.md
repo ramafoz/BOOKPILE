@@ -598,6 +598,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [x] Define the cross-edition semantic model and versioned Local ZIP import
   contract before porting the complete catalogue; see
   `CROSS_EDITION_DATA_MODEL.md`.
+- [x] Complete Server Phase 4A schema migration `0007` for shared book
+  metadata, extensible contributors, languages, optional physical dimensions,
+  hierarchy, and visual layout, including cross-library database constraints
+  and an independently reversible PostgreSQL gate.
 - [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,

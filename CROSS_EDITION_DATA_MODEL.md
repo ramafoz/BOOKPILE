@@ -507,7 +507,7 @@ would couple stable Local operation to hosted deployment concerns.
 
 Phase 4 should proceed in reviewable increments:
 
-1. **4A — shared catalogue schema:** expand Server books, contributors,
+1. **4A — shared catalogue schema (completed):** expand Server books, contributors,
    language/translation, optional dimensions, hierarchy, and layout with
    library scoping and migration tests.
 2. **4B — catalogue services:** port create/edit/search/filter behavior and

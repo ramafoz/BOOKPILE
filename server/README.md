@@ -45,11 +45,16 @@ must not be used for Server migrations or test databases.
 - Phase 3 responsive library dashboard for creating/selecting libraries,
   joining through a full invitation URL or raw token, and managing Viewer
   scope or equal co-Ownership.
+- Phase 4A shared catalogue schema: full nullable book metadata, extensible
+  ordered contributor roles, translation/language fields, optional physical
+  dimensions, hierarchy, and fixed-precision visual layout. Composite foreign
+  keys prevent cross-library parent relationships.
 
 The authentication and library-membership foundations are complete through
-Phase 3. Catalogue access now requires an authenticated membership; a library
-ID is never authorization. The Server branch is still not deployable because
-the full Local catalogue, private covers, visual map, personal reading data,
+Phase 3, and the shared persistence foundation is complete through Phase 4A.
+Catalogue access requires an authenticated membership; a library ID is never
+authorization. The Server branch is still not deployable because Phase 4B+
+catalogue services, private covers, the visual-map API, personal reading data,
 loans, backup/restore, storage quota, and production infrastructure have not
 yet been ported.
 
@@ -132,14 +137,15 @@ Do not reuse production credentials or Local catalogue paths in development.
 
 ## Safety status
 
-The migration and isolation gate now upgrades through Phase 3 migration
-`0006_library_memberships` against PostgreSQL 17. It checks catalogue and
+The migration and isolation gate now upgrades through Phase 4A migration
+`0007_shared_catalogue_schema` against PostgreSQL 17. It checks catalogue and
 membership isolation, identity/session/account-invitation/library-invitation
 records, concurrent invitation consumption, atomic rate limiting, final-Owner
-protection, scope changes, reading perspectives, and each incremental
-rollback. It then downgrades disposable `bookpile_test` until no BOOKPILE
-application tables remain. Alembic may retain its empty administrative
-`alembic_version` table.
+protection, scope changes, reading perspectives, shared metadata constraints,
+cross-library physical relationships, contributor normalization, preservation
+of pre-Phase-4A books, and each incremental rollback. It then downgrades
+disposable `bookpile_test` until no BOOKPILE application tables remain.
+Alembic may retain its empty administrative `alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and
 staging environments must obtain unique secrets from deployment configuration.
