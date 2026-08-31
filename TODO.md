@@ -388,9 +388,12 @@ protects the completed catalogue.
 - [x] Add optional free-text language.
 - [ ] **Local v1 and Server:** distinguish an original-language edition from a
   translation and store ordered structured contributors with roles including
-  author, translator, illustrator, editor, photographer, and other. Introduce
-  it through safe edition-specific additive migrations and include it in
-  details, editing, search, import/export, and ISBN candidate review.
+  author, scriptwriter, translator, illustrator, penciller, inker, colorist,
+  letterer, cover artist, editor, coordinator, compiler, photographer, adapter,
+  and other. Keep the controlled role vocabulary additively extensible without
+  invalidating existing records. Introduce it through safe edition-specific
+  migrations and include it in details, editing, search, import/export, and
+  ISBN candidate review.
 - [ ] **Local and Server experimental:** add optional measured dimensions in
   integer millimetres for physical book copies, furniture, and usable shelf
   interiors, while retaining percentage layout and page-based fallbacks.

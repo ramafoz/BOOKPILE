@@ -160,15 +160,35 @@ Book contributor
 Initial controlled roles:
 
 - `AUTHOR`
+- `SCRIPTWRITER`
 - `TRANSLATOR`
 - `ILLUSTRATOR`
+- `PENCILLER`
+- `INKER`
+- `COLORIST`
+- `LETTERER`
+- `COVER_ARTIST`
 - `EDITOR`
+- `COORDINATOR`
+- `COMPILER`
 - `PHOTOGRAPHER`
+- `ADAPTER`
 - `OTHER`
 
-`AUTHOR` covers an author or scriptwriter credited as responsible for the
-written work. `ILLUSTRATOR` lets graphic novels distinguish script and art.
-The role list may grow additively without creating one table per profession.
+`AUTHOR` remains the general written-work credit. `SCRIPTWRITER` can preserve
+a more specific comic, graphic-novel, theatre, or screenplay credit when the
+source edition makes that distinction. Comic credits can separately represent
+pencils, inks, colour, lettering, illustration, and cover art. `COORDINATOR`
+and `COMPILER` cover collective works without pretending that coordination is
+authorship.
+
+Roles form a controlled but extensible vocabulary. They should use stable text
+codes referenced through a small role-definition table, not a rigid
+PostgreSQL native enum or a destructive table constraint. Adding a future role
+such as cartographer or researcher then requires an additive role definition
+and application support, not rewriting contributor records or invalidating
+old backups. A role code already used by a book is never deleted; it may later
+be marked inactive for new selection while remaining displayable.
 
 Rules:
 
@@ -449,9 +469,21 @@ when the batch ends unless a later per-user preference is explicitly designed.
 
 ### Local
 
-- The published v1.0.0 tag/release remains immutable.
-- Future features use a separate branch/worktree and an additive Local schema
-  migration after backup, rehearsal, and explicit approval.
+- The published v1.0.0 tag and release artefacts remain immutable. This means
+  the distributed historical release is reproducible; it does not prohibit a
+  later Local v1.1 or an explicitly approved upgrade of the owner's live app.
+- `C:\Users\Russula\.code\_PERSONAL_LIBRARY_MANAGER` remains the usable live
+  personal library. Development and migration rehearsals must not use its
+  database as a test target.
+- Future Local features use a separate branch and worktree, with its own data
+  directory. Realistic acceptance data is introduced by creating a validated
+  full ZIP from the live app and restoring that ZIP into the isolated test
+  worktree. The live data directory is never copied opportunistically while
+  BOOKPILE is running.
+- An additive Local schema migration is rehearsed against that disposable
+  restored copy. Updating the live installation happens only after explicit
+  approval, a new verified backup, successful rehearsal, and acceptance of
+  the new Local version.
 - Existing ZIPs remain restorable by compatible Local versions and importable
   by Server adapters.
 
