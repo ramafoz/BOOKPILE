@@ -36,6 +36,17 @@ This roadmap separates future work by its effect on the current data model.
   notes.
 - [ ] Add multilingual Local and Server interfaces after v1.0; keep the first
   Local release and its documentation English-only.
+- [ ] Backport validated Server visual-layout parity improvements to a future
+  BOOKPILE Local release, using a separate branch/worktree, a verified backup,
+  and isolated acceptance data rather than modifying the populated Local
+  installation directly:
+  - Expose each ROW's `LEFT`/`RIGHT` growth anchor in Edit Layout.
+  - Expose explicit PILE support on either the shelf or a non-empty ROW in the
+    same shelf and visual layer.
+  - Explain unsupported/floating piles clearly and reject invalid geometry
+    before saving.
+  - Continue recording any further reusable Server improvements here before a
+    controlled Local backport is planned.
 
 ## Implemented foundation
 
@@ -630,6 +641,18 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
+  - [x] Shared catalogue and private cover flows.
+  - [x] Physical hierarchy, precise visual-layout validation, responsive map,
+    page-proportional rendering, camera gestures, and book/container
+    inspection.
+  - [ ] Show physical location in Server catalogue rows and edit placement from
+    each book, matching Local's established interaction; then remove the
+    temporary global `Position books` form from Customize Layout.
+  - [ ] Port the complete Local-style visual `Reorganize books` workflow into
+    Server Library Map.
+  - [ ] Integrate floating layout editing and direct map manipulation after the
+    physical-dimension policy is defined.
+  - [ ] Backup, restore, export, and Local ZIP import remain pending.
 - [ ] Implement perspective-aware catalogue states, statistics, map colouring,
   suggestions, and personal reading/rereading sessions.
 - [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase

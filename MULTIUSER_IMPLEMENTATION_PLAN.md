@@ -884,6 +884,25 @@ compatible meanings and explicit import rules.
   delivery.
 - [ ] Phase 4D: port physical hierarchy and map services with scope-safe
   projections and layout validation.
+  - [x] Implement Owner-only hierarchy maintenance, safe placement writes,
+    precise revisioned visual geometry, explicit ROW anchors and PILE support,
+    and tenant-safe validation.
+  - [x] Implement the responsive read-only Server Library Map with
+    page-proportional SVG rendering, mouse/touch camera navigation,
+    pinch-to-zoom, separate book/container inspection modes, complete book
+    information, and Viewer scope enforcement.
+  - [x] Move libraries, reading perspective, members, and invitations into
+    compact top-level panels so the map can use one viewport; retain one
+    integrated members-and-invitations panel.
+  - [ ] Reuse Local's catalogue-row location presentation and per-book
+    placement editor; remove the temporary global `Position books` form from
+    Customize Layout once its replacement is available.
+  - [ ] Port `Reorganize books` into Library Map, including atomic preview,
+    collision handling, proportional container resizing, and scope-safe
+    PostgreSQL transactions.
+  - [ ] Integrate the precise layout editor into Library Map as a floating,
+    minimizable panel and add direct manipulation only after physical-dimension
+    semantics are approved.
 - [ ] Phase 4E: implement Local ZIP validation adapters and dry-run reports.
 
 Phase 4A passed its schema gate on 2026-08-31. Migration

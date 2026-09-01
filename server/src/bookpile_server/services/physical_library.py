@@ -1,6 +1,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
+import json
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +16,12 @@ from ..schemas import (
     ContainerWrite,
     ShelfUpdate,
     ShelfWrite,
+    VisualBookcaseLayoutWrite,
+    VisualContainerLayoutWrite,
+    VisualLayoutResponse,
+    VisualLayoutWrite,
+    VisualOutsideAreaWrite,
+    VisualShelfLayoutWrite,
 )
 
 
@@ -36,6 +44,7 @@ class PhysicalHierarchy:
     containers: list[Container]
     book_counts: dict[UUID, int]
     books: list[Book]
+    layout: VisualLayoutResponse
 
 
 class PhysicalLibraryService:
@@ -43,13 +52,286 @@ class PhysicalLibraryService:
         self._repository = repository
 
     def hierarchy(self, library_id: UUID) -> PhysicalHierarchy:
+        bookcases = self._repository.list_bookcases(library_id)
+        shelves = self._repository.list_shelves(library_id)
+        containers = self._repository.list_containers(library_id)
+        book_counts = self._repository.book_counts(library_id)
         return PhysicalHierarchy(
-            bookcases=self._repository.list_bookcases(library_id),
-            shelves=self._repository.list_shelves(library_id),
-            containers=self._repository.list_containers(library_id),
-            book_counts=self._repository.book_counts(library_id),
+            bookcases=bookcases,
+            shelves=shelves,
+            containers=containers,
+            book_counts=book_counts,
             books=self._repository.list_books(library_id),
+            layout=self._project_layout(
+                library_id=library_id,
+                bookcases=bookcases,
+                shelves=shelves,
+                containers=containers,
+            ),
         )
+
+    def update_visual_layout(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        payload: VisualLayoutWrite,
+    ) -> None:
+        if self._repository.lock_library(library_id) is None:
+            raise PhysicalLibraryNotFoundError("Library not found.")
+        current = self.hierarchy(library_id)
+        if payload.revision != current.layout.revision:
+            raise PhysicalLibraryConflictError(
+                "The layout changed after you opened the editor. Reload it before saving."
+            )
+        self._validate_layout(current, payload)
+        self._repository.upsert_visual_layout(
+            library_id=library_id,
+            bookcases=[item.model_dump() for item in payload.bookcases],
+            shelves=[item.model_dump() for item in payload.shelves],
+            containers=[item.model_dump() for item in payload.containers],
+            outside_areas=[item.model_dump() for item in payload.outside_areas],
+        )
+        self._repository.audit(
+            library_id=library_id,
+            actor_user_id=actor_user_id,
+            event_type="visual_layout_updated",
+            details={
+                "previous_revision": current.layout.revision,
+                "bookcase_count": len(payload.bookcases),
+                "shelf_count": len(payload.shelves),
+                "container_count": len(payload.containers),
+            },
+        )
+        self._commit("The visual layout could not be saved.")
+        self._repository.expire_all()
+
+    def _project_layout(
+        self,
+        *,
+        library_id: UUID,
+        bookcases: list[Bookcase],
+        shelves: list[Shelf],
+        containers: list[Container],
+    ) -> VisualLayoutResponse:
+        stored_bookcases = {
+            item.bookcase_id: item
+            for item in self._repository.list_bookcase_layouts(library_id)
+        }
+        stored_shelves = {
+            item.shelf_id: item
+            for item in self._repository.list_shelf_layouts(library_id)
+        }
+        stored_containers = {
+            item.container_id: item
+            for item in self._repository.list_container_layouts(library_id)
+        }
+        stored_outside = {
+            item.area_kind: item
+            for item in self._repository.list_outside_areas(library_id)
+        }
+
+        bookcase_layouts = []
+        for index, item in enumerate(bookcases):
+            stored = stored_bookcases.get(item.id)
+            bookcase_layouts.append(
+                VisualBookcaseLayoutWrite(
+                    bookcase_id=item.id,
+                    x=float(stored.x) if stored else index * 30.0,
+                    y=float(stored.y) if stored else 10.0,
+                    width=float(stored.width) if stored else 25.0,
+                    height=float(stored.height) if stored else 80.0,
+                )
+            )
+
+        shelf_layouts = [
+            VisualShelfLayoutWrite(
+                shelf_id=item.id,
+                height_weight=(float(stored_shelves[item.id].height_weight)
+                               if item.id in stored_shelves else 1.0),
+            )
+            for item in shelves
+        ]
+
+        grouped: dict[tuple[UUID, str], list[Container]] = {}
+        for item in containers:
+            grouped.setdefault((item.shelf_id, item.layer), []).append(item)
+        defaults: dict[UUID, tuple[float, float, float, float]] = {}
+        for (_shelf_id, layer), items in grouped.items():
+            gap = 2.0
+            width = (100.0 - gap * (len(items) - 1)) / len(items)
+            for index, item in enumerate(items):
+                defaults[item.id] = (
+                    (width + gap) * index,
+                    0.0 if layer == "BACKGROUND" else 50.0,
+                    width,
+                    100.0 if layer == "BACKGROUND" else 50.0,
+                )
+        container_layouts = []
+        for item in containers:
+            stored = stored_containers.get(item.id)
+            default = defaults[item.id]
+            container_layouts.append(
+                VisualContainerLayoutWrite(
+                    container_id=item.id,
+                    x=float(stored.x) if stored else default[0],
+                    y=float(stored.y) if stored else default[1],
+                    width=float(stored.width) if stored else default[2],
+                    height=float(stored.height) if stored else default[3],
+                    row_anchor=stored.row_anchor if stored else "LEFT",
+                    pile_support_kind=(
+                        stored.pile_support_kind
+                        if stored else ("SHELF" if item.container_type == "PILE" else None)
+                    ),
+                    pile_support_container_id=(
+                        stored.pile_support_container_id if stored else None
+                    ),
+                )
+            )
+
+        outside_defaults = {
+            "READING": (35.0, 75.0, 20.0, 20.0),
+            "LOANED": (60.0, 75.0, 20.0, 20.0),
+        }
+        outside_layouts = []
+        for kind in ("READING", "LOANED"):
+            stored = stored_outside.get(kind)
+            default = outside_defaults[kind]
+            outside_layouts.append(
+                VisualOutsideAreaWrite(
+                    area_kind=kind,
+                    x=float(stored.x) if stored else default[0],
+                    y=float(stored.y) if stored else default[1],
+                    width=float(stored.width) if stored else default[2],
+                    height=float(stored.height) if stored else default[3],
+                )
+            )
+        revision = self._layout_revision(
+            bookcase_layouts, shelf_layouts, container_layouts, outside_layouts
+        )
+        return VisualLayoutResponse(
+            revision=revision,
+            bookcases=bookcase_layouts,
+            shelves=shelf_layouts,
+            containers=container_layouts,
+            outside_areas=outside_layouts,
+        )
+
+    @staticmethod
+    def _layout_revision(
+        bookcases: list[VisualBookcaseLayoutWrite],
+        shelves: list[VisualShelfLayoutWrite],
+        containers: list[VisualContainerLayoutWrite],
+        outside_areas: list[VisualOutsideAreaWrite],
+    ) -> str:
+        canonical = {
+            "bookcases": [item.model_dump(mode="json") for item in bookcases],
+            "shelves": [item.model_dump(mode="json") for item in shelves],
+            "containers": [item.model_dump(mode="json") for item in containers],
+            "outside_areas": [item.model_dump(mode="json") for item in outside_areas],
+        }
+        return sha256(
+            json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    def _validate_layout(
+        self, hierarchy: PhysicalHierarchy, payload: VisualLayoutWrite
+    ) -> None:
+        def require_complete(label: str, supplied: list[UUID], expected: set[UUID]) -> None:
+            if len(supplied) != len(set(supplied)) or set(supplied) != expected:
+                raise PhysicalLibraryValidationError(
+                    f"The {label} layout is incomplete or contains duplicates."
+                )
+
+        require_complete(
+            "bookcase",
+            [item.bookcase_id for item in payload.bookcases],
+            {item.id for item in hierarchy.bookcases},
+        )
+        require_complete(
+            "shelf",
+            [item.shelf_id for item in payload.shelves],
+            {item.id for item in hierarchy.shelves},
+        )
+        require_complete(
+            "container",
+            [item.container_id for item in payload.containers],
+            {item.id for item in hierarchy.containers},
+        )
+        outside_kinds = [item.area_kind for item in payload.outside_areas]
+        if len(outside_kinds) != 2 or set(outside_kinds) != {"READING", "LOANED"}:
+            raise PhysicalLibraryValidationError(
+                "The Reading and On-loan areas must both be present exactly once."
+            )
+
+        contexts = {item.id: item for item in hierarchy.containers}
+        layouts = {item.container_id: item for item in payload.containers}
+        tolerance = 0.1
+
+        for item in payload.containers:
+            container = contexts[item.container_id]
+            if container.container_type == "ROW":
+                if item.pile_support_kind is not None or item.pile_support_container_id is not None:
+                    raise PhysicalLibraryValidationError("Rows cannot have pile support.")
+                continue
+            if item.pile_support_kind == "SHELF":
+                if item.pile_support_container_id is not None:
+                    raise PhysicalLibraryValidationError(
+                        "A shelf-supported pile cannot reference a row."
+                    )
+                if abs(item.y + item.height - 100.0) > tolerance:
+                    raise PhysicalLibraryValidationError(
+                        "A shelf-supported pile must rest on the shelf bottom."
+                    )
+                continue
+            if item.pile_support_kind != "ROW" or item.pile_support_container_id is None:
+                raise PhysicalLibraryValidationError(
+                    "Every pile must rest on the shelf or on a row."
+                )
+            support = contexts.get(item.pile_support_container_id)
+            support_layout = layouts.get(item.pile_support_container_id)
+            if (
+                support is None
+                or support_layout is None
+                or support.container_type != "ROW"
+                or support.shelf_id != container.shelf_id
+                or support.layer != container.layer
+                or hierarchy.book_counts.get(support.id, 0) < 1
+            ):
+                raise PhysicalLibraryValidationError(
+                    "A pile must use a non-empty supporting row in the same shelf and layer."
+                )
+            horizontal_overlap = min(
+                item.x + item.width, support_layout.x + support_layout.width
+            ) - max(item.x, support_layout.x)
+            if (
+                horizontal_overlap <= tolerance
+                or abs(item.y + item.height - support_layout.y) > tolerance
+            ):
+                raise PhysicalLibraryValidationError(
+                    "The pile geometry must visibly rest on its selected supporting row."
+                )
+
+        values = list(payload.containers)
+        for index, first in enumerate(values):
+            for second in values[index + 1:]:
+                first_context = contexts[first.container_id]
+                second_context = contexts[second.container_id]
+                if first_context.shelf_id != second_context.shelf_id:
+                    continue
+                overlap_width = min(first.x + first.width, second.x + second.width) - max(first.x, second.x)
+                overlap_height = min(first.y + first.height, second.y + second.height) - max(first.y, second.y)
+                if overlap_width <= tolerance or overlap_height <= tolerance:
+                    continue
+                if first_context.layer == second_context.layer:
+                    raise PhysicalLibraryValidationError(
+                        "Containers in the same shelf layer cannot overlap."
+                    )
+                background = first if first_context.layer == "BACKGROUND" else second
+                if overlap_height / background.height > 0.8:
+                    raise PhysicalLibraryValidationError(
+                        "Foreground containers may cover at most 80% of a background container's height."
+                    )
 
     def place_book(
         self,

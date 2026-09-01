@@ -413,3 +413,83 @@ def test_book_placement_squeezes_destination_and_compacts_source(
         )
     )
     assert len(events) == 5
+
+
+def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "layout_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Visual room")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+    row = create_container(client, library, shelf["id"], 1)
+    pile = create_container(client, library, shelf["id"], 1, kind="PILE")
+    session.add(
+        Book(
+            library_id=library.id,
+            title="Supporting book",
+            author="Author",
+            container_id=UUID(row["id"]),
+            position=1,
+        )
+    )
+    session.commit()
+
+    initial = client.get(base(library))
+    assert initial.status_code == 200, initial.text
+    layout = initial.json()["layout"]
+    assert len(layout["bookcases"]) == 1
+    assert len(layout["shelves"]) == 1
+    pile_layout = next(
+        item for item in layout["containers"] if item["container_id"] == pile["id"]
+    )
+    assert pile_layout["pile_support_kind"] == "SHELF"
+
+    row_layout = next(
+        item for item in layout["containers"] if item["container_id"] == row["id"]
+    )
+    row_layout.update({"x": 0, "y": 70, "width": 100, "height": 30, "row_anchor": "RIGHT"})
+    pile_layout.update(
+        {
+            "x": 0,
+            "y": 20,
+            "width": 50,
+            "height": 50,
+            "pile_support_kind": "ROW",
+            "pile_support_container_id": row["id"],
+        }
+    )
+    saved = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
+    assert saved.status_code == 200, saved.text
+    saved_layout = saved.json()["layout"]
+    saved_row = next(
+        item for item in saved_layout["containers"] if item["container_id"] == row["id"]
+    )
+    saved_pile = next(
+        item for item in saved_layout["containers"] if item["container_id"] == pile["id"]
+    )
+    assert saved_row["row_anchor"] == "RIGHT"
+    assert saved_pile["pile_support_kind"] == "ROW"
+    assert saved_pile["pile_support_container_id"] == row["id"]
+
+    stale = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
+    assert stale.status_code == 409
+    assert "changed after you opened" in stale.json()["detail"]
+
+    invalid = saved_layout
+    invalid_pile = next(
+        item for item in invalid["containers"] if item["container_id"] == pile["id"]
+    )
+    invalid_pile["pile_support_container_id"] = str(uuid4())
+    rejected = client.put(f"{base(library)}/layout", json=invalid, headers=csrf())
+    assert rejected.status_code == 422
+    assert "same shelf and layer" in rejected.json()["detail"]
+
+    event = session.scalar(
+        select(LibraryAuditEvent).where(
+            LibraryAuditEvent.library_id == library.id,
+            LibraryAuditEvent.event_type == "visual_layout_updated",
+        )
+    )
+    assert event is not None

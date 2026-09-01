@@ -140,4 +140,47 @@ describe("Physical library requests", () => {
       position: 2,
     });
   });
+
+  it("sends the complete revisioned visual layout with CSRF protection", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=layout-token" });
+    const layout = {
+      revision: "a".repeat(64),
+      bookcases: [{ bookcase_id: "case-1", x: -10, y: 0, width: 25, height: 80 }],
+      shelves: [{ shelf_id: "shelf-1", height_weight: 1 }],
+      containers: [{
+        container_id: "container-1",
+        x: 0,
+        y: 50,
+        width: 100,
+        height: 50,
+        row_anchor: "RIGHT" as const,
+        pile_support_kind: null,
+        pile_support_container_id: null,
+      }],
+      outside_areas: [
+        { area_kind: "READING" as const, x: 30, y: 70, width: 20, height: 20 },
+        { area_kind: "LOANED" as const, x: 60, y: 70, width: 20, height: 20 },
+      ],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        library_id: "library-1",
+        role: "OWNER",
+        can_edit: true,
+        bookcases: [],
+        books: [],
+        layout,
+      }), { status: 200 }),
+    );
+
+    await serverApi.updateVisualLayout("library-1", layout);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/libraries/library-1/physical-library/layout",
+    );
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("PUT");
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("layout-token");
+    expect(JSON.parse(String(options.body))).toEqual(layout);
+  });
 });

@@ -171,8 +171,49 @@ export interface PhysicalBook {
   id: string;
   title: string;
   author: string;
+  page_count: number | null;
   container_id: string | null;
   position: number | null;
+}
+
+export interface VisualBookcaseLayout {
+  bookcase_id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface VisualShelfLayout {
+  shelf_id: string;
+  height_weight: number;
+}
+
+export interface VisualContainerLayout {
+  container_id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  row_anchor: "LEFT" | "RIGHT";
+  pile_support_kind: "SHELF" | "ROW" | null;
+  pile_support_container_id: string | null;
+}
+
+export interface VisualOutsideArea {
+  area_kind: "READING" | "LOANED";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface VisualLayout {
+  revision: string;
+  bookcases: VisualBookcaseLayout[];
+  shelves: VisualShelfLayout[];
+  containers: VisualContainerLayout[];
+  outside_areas: VisualOutsideArea[];
 }
 
 export interface PhysicalLibrary {
@@ -181,6 +222,7 @@ export interface PhysicalLibrary {
   can_edit: boolean;
   bookcases: PhysicalBookcase[];
   books: PhysicalBook[];
+  layout: VisualLayout;
 }
 
 export interface BookcaseWrite {
@@ -463,6 +505,12 @@ export const serverApi = {
     },
     true,
   ),
+  updateVisualLayout: (libraryId: string, layout: VisualLayout) =>
+    request<PhysicalLibrary>(
+      `/libraries/${libraryId}/physical-library/layout`,
+      { method: "PUT", body: JSON.stringify(layout) },
+      true,
+    ),
   createBookcase: (libraryId: string, payload: BookcaseWrite) =>
     request<PhysicalLibrary>(
       `/libraries/${libraryId}/physical-library/bookcases`,

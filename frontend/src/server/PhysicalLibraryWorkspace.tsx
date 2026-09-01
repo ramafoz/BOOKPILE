@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookOpen, Boxes, Layers3, MapPin, Pencil, Plus, Ruler, Trash2 } from "lucide-react";
+import { BookOpen, Boxes, Layers3, MapPin, Pencil, Plus, Ruler, Settings2, Trash2 } from "lucide-react";
 
 import {
   PhysicalBookcase,
@@ -7,6 +7,7 @@ import {
   PhysicalLibrary,
   PhysicalShelf,
   ServerApiError,
+  VisualLayout,
   serverApi,
 } from "./serverApi";
 
@@ -120,6 +121,106 @@ function EditDialog({
   </section></div>;
 }
 
+function GeometryDialog({
+  libraryId,
+  data,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  libraryId: string;
+  data: PhysicalLibrary;
+  onClose: () => void;
+  onSaved: (value: PhysicalLibrary) => void;
+  onError: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState<VisualLayout>(() => structuredClone(data.layout));
+  const [bookcaseId, setBookcaseId] = useState(data.bookcases[0]?.id ?? "");
+  const [shelfId, setShelfId] = useState(data.bookcases.flatMap((item) => item.shelves)[0]?.id ?? "");
+  const allContainers = data.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => ({ bookcase, shelf, container }))));
+  const [containerId, setContainerId] = useState(allContainers[0]?.container.id ?? "");
+  const [outsideKind, setOutsideKind] = useState<"READING" | "LOANED">("READING");
+  const [saving, setSaving] = useState(false);
+  const selectedBookcase = draft.bookcases.find((item) => item.bookcase_id === bookcaseId);
+  const selectedShelf = draft.shelves.find((item) => item.shelf_id === shelfId);
+  const selectedContainer = draft.containers.find((item) => item.container_id === containerId);
+  const selectedContainerContext = allContainers.find((item) => item.container.id === containerId);
+  const selectedOutside = draft.outside_areas.find((item) => item.area_kind === outsideKind);
+  const supportRows = selectedContainerContext
+    ? allContainers.filter(({ shelf, container }) => (
+      shelf.id === selectedContainerContext.shelf.id &&
+      container.layer === selectedContainerContext.container.layer &&
+      container.container_type === "ROW" &&
+      container.book_count > 0
+    ))
+    : [];
+
+  function updateBookcase(field: "x" | "y" | "width" | "height", value: number) {
+    setDraft((current) => ({ ...current, bookcases: current.bookcases.map((item) => item.bookcase_id === bookcaseId ? { ...item, [field]: value } : item) }));
+  }
+
+  function updateContainer(changes: Partial<NonNullable<typeof selectedContainer>>) {
+    setDraft((current) => ({ ...current, containers: current.containers.map((item) => item.container_id === containerId ? { ...item, ...changes } : item) }));
+  }
+
+  function choosePileSupport(value: string) {
+    if (!selectedContainer) return;
+    if (value === "SHELF") {
+      updateContainer({ pile_support_kind: "SHELF", pile_support_container_id: null, y: 100 - selectedContainer.height });
+      return;
+    }
+    const support = draft.containers.find((item) => item.container_id === value);
+    if (!support) return;
+    const width = Math.min(selectedContainer.width, 100 - support.x);
+    updateContainer({
+      pile_support_kind: "ROW",
+      pile_support_container_id: value,
+      y: Math.max(0, support.y - selectedContainer.height),
+      x: support.x,
+      width,
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      onSaved(await serverApi.updateVisualLayout(libraryId, draft));
+    } catch (caught) {
+      onError(errorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const numberField = (
+    label: string,
+    value: number,
+    onChange: (value: number) => void,
+    options: { min?: number; max?: number; step?: number } = {},
+  ) => <label>{label}<input type="number" min={options.min} max={options.max} step={options.step ?? 0.1} value={value} onChange={(event) => onChange(Number(event.target.value))} required /></label>;
+
+  return <div className="server-modal-backdrop"><section className="server-physical-dialog server-geometry-dialog" role="dialog" aria-modal="true">
+    <p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2>
+    <p className="server-field-help">Precise controls are implemented first. Direct dragging and the visual map will reuse the proven Local camera and geometry in the next increment.</p>
+    <div className="server-geometry-sections">
+      <fieldset><legend>Furniture</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x, (value) => updateBookcase("x", value))}{numberField("Vertical", selectedBookcase.y, (value) => updateBookcase("y", value))}{numberField("Width", selectedBookcase.width, (value) => updateBookcase("width", value), { min: 0.1 })}{numberField("Height", selectedBookcase.height, (value) => updateBookcase("height", value), { min: 0.1 })}</div>}</fieldset>
+      <fieldset><legend>Shelf proportions</legend><label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>{selectedShelf && numberField("Relative height", selectedShelf.height_weight, (value) => setDraft((current) => ({ ...current, shelves: current.shelves.map((item) => item.shelf_id === shelfId ? { ...item, height_weight: value } : item) })), { min: 0.25, max: 8, step: 0.25 })}</fieldset>
+      <fieldset><legend>Container geometry and support</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField("Start", selectedContainer.x, (value) => updateContainer({ x: value }), { min: 0, max: 100 })}{numberField("Vertical", selectedContainer.y, (value) => updateContainer({ y: value }), { min: 0, max: 100 })}{numberField("Width", selectedContainer.width, (value) => updateContainer({ width: value }), { min: 0.1, max: 100 })}{numberField("Height", selectedContainer.height, (value) => updateContainer({ height: value }), { min: 0.1, max: 100 })}</div>{selectedContainerContext.container.container_type === "ROW" ? <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label> : <label>Pile rests on<select value={selectedContainer.pile_support_kind === "ROW" ? selectedContainer.pile_support_container_id ?? "" : "SHELF"} onChange={(event) => choosePileSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportRows.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} Row {container.container_number}</option>)}</select><small>Only non-empty rows in this shelf and layer can support a pile.</small></label>}</>}</fieldset>
+      <fieldset>
+        <legend>Outside-library areas</legend>
+        <label>Area<select value={outsideKind} onChange={(event) => setOutsideKind(event.target.value as "READING" | "LOANED")}><option value="READING">Reading</option><option value="LOANED">On loan</option></select></label>
+        {selectedOutside && <div className="server-dimension-grid">
+          {numberField("Horizontal", selectedOutside.x, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, x: value } : item) })))}
+          {numberField("Vertical", selectedOutside.y, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, y: value } : item) })))}
+          {numberField("Width", selectedOutside.width, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, width: value } : item) })), { min: 0.1 })}
+          {numberField("Height", selectedOutside.height, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, height: value } : item) })), { min: 0.1 })}
+        </div>}
+      </fieldset>
+    </div>
+    <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="server-primary-action" type="button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save visual layout"}</button></div>
+  </section></div>;
+}
+
 export default function PhysicalLibraryWorkspace({
   libraryId,
 }: {
@@ -130,6 +231,7 @@ export default function PhysicalLibraryWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditTarget | null>(null);
+  const [layoutEditing, setLayoutEditing] = useState(false);
   const [bookcaseName, setBookcaseName] = useState("");
   const [shelfBookcase, setShelfBookcase] = useState("");
   const [shelfNumber, setShelfNumber] = useState("1");
@@ -237,7 +339,7 @@ export default function PhysicalLibraryWorkspace({
   if (!data) return <section className="server-dashboard-panel"><h3>Library layout</h3><p>{busy ? "Loading physical library…" : error ?? "Physical library unavailable."}</p></section>;
 
   return <section className="server-physical-workspace">
-    <header><div><p className="server-card-eyebrow">Shared physical structure</p><h3>Library layout</h3><p>{data.can_edit ? "Build and maintain furniture, shelves, rows and piles. Layout geometry comes in the next increment." : "Read-only physical hierarchy. Your Viewer access includes the Library Map."}</p></div><Ruler size={30} /></header>
+    <header><div><p className="server-card-eyebrow">Shared physical structure</p><h3>Library layout</h3><p>{data.can_edit ? "Build and maintain furniture, shelves, rows and piles, then define their visual geometry and support." : "Read-only physical hierarchy. Your Viewer access includes the Library Map."}</p></div><div className="server-physical-heading-actions">{data.can_edit && <button type="button" onClick={() => setLayoutEditing(true)}><Settings2 size={17} /> Visual layout</button>}<Ruler size={30} /></div></header>
     {error && <div className="server-message error">{error}</div>}
     {notice && <div className="server-message success">{notice}</div>}
 
@@ -276,5 +378,6 @@ export default function PhysicalLibraryWorkspace({
     </article>)}{!data.bookcases.length && <div className="server-empty-catalogue"><Boxes size={38} /><h4>No physical structure yet</h4><p>{data.can_edit ? "Add the first bookcase above." : "The Owners have not configured the Library Map yet."}</p></div>}</div>
 
     {editing && <EditDialog libraryId={libraryId} target={editing} busy={busy} onClose={() => setEditing(null)} onSaved={(value) => accept(value, "Physical library updated.")} onError={setError} />}
+    {layoutEditing && <GeometryDialog libraryId={libraryId} data={data} onClose={() => setLayoutEditing(false)} onSaved={(value) => { accept(value, "Visual layout saved."); setLayoutEditing(false); }} onError={(value) => { setError(value); setLayoutEditing(false); }} />}
   </section>;
 }

@@ -26,6 +26,7 @@ import {
 } from "./serverApi";
 import CatalogueWorkspace from "./CatalogueWorkspace";
 import PhysicalLibraryWorkspace from "./PhysicalLibraryWorkspace";
+import ServerLibraryMap from "./ServerLibraryMap";
 
 type Route =
   | "login"
@@ -431,7 +432,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [dataBusy, setDataBusy] = useState(false);
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
-  const [workspace, setWorkspace] = useState<"CATALOGUE" | "LAYOUT">("CATALOGUE");
+  const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "LAYOUT">("CATALOGUE");
+  const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "PERSPECTIVE" | "MEMBERS" | null>(null);
 
   const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
 
@@ -624,7 +626,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   }
 
   return (
-    <main className="server-account-shell">
+    <main className={`server-account-shell ${workspace === "MAP" ? "map-active" : ""}`}>
       <header className="server-account-header">
         <a className="server-brand" href="/">
           <span className="server-brand-mark"><LibraryBig size={24} /></span>
@@ -640,15 +642,20 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div><p className="server-card-eyebrow">Private library workspace</p><h1>Welcome, {user.username}.</h1></div>
           <div className="server-account-status"><ShieldCheck size={20} /><span><b>Session protected</b><small>Membership checked per request</small></span></div>
         </div>
+        <nav className="server-dashboard-controlbar" aria-label="Account and library controls">
+          <button type="button" title="Your libraries" className={controlsPanel === "LIBRARIES" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "LIBRARIES" ? null : "LIBRARIES")}><LibraryBig size={17} /> Your libraries</button>
+          {selected && <button type="button" title="Reading perspective" className={controlsPanel === "PERSPECTIVE" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "PERSPECTIVE" ? null : "PERSPECTIVE")}><BookOpen size={17} /> Reading perspective</button>}
+          {selected?.role === "OWNER" && <button type="button" title="Members and invitations" className={controlsPanel === "MEMBERS" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "MEMBERS" ? null : "MEMBERS")}><Users size={17} /> Members & invitations</button>}
+        </nav>
         {error && <Message kind="error">{error}</Message>}
         {notice && <Message kind="success">{notice}</Message>}
 
         <div className="server-dashboard-grid">
-          <aside className="server-library-sidebar">
-            <h2>Your libraries</h2>
+          <aside className={`server-library-sidebar ${controlsPanel === "LIBRARIES" ? "open" : ""}`}>
+            <header><h2>Your libraries</h2><button type="button" onClick={() => setControlsPanel(null)} aria-label="Close libraries panel">×</button></header>
             <div className="server-library-list">
               {libraries.map((library) => (
-                <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => { setSelectedId(library.library_id); setWorkspace("CATALOGUE"); }}>
+                <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => { setSelectedId(library.library_id); setWorkspace("CATALOGUE"); setControlsPanel(null); }}>
                   <LibraryBig size={18} /><span><b>{library.name}</b><small>{library.role === "OWNER" ? "Owner" : library.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue"}</small></span>
                 </button>
               ))}
@@ -669,12 +676,16 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
               <div className="server-library-heading"><div><p className="server-card-eyebrow">{selected.role}</p><h2>{selected.name}</h2></div><span>{selected.can_view_map ? <><Map size={17} /> Catalogue and map</> : "Catalogue only"}</span></div>
               <nav className="server-workspace-tabs" aria-label="Library workspace">
                 <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => setWorkspace("CATALOGUE")}><BookOpen size={17} /> Catalogue</button>
-                {selected.can_view_map && <button type="button" className={workspace === "LAYOUT" ? "active" : ""} onClick={() => setWorkspace("LAYOUT")}><Layers3 size={17} /> Library layout</button>}
+                {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => setWorkspace("MAP")}><Map size={17} /> Library Map</button>}
+                {selected.role === "OWNER" && <button type="button" className={workspace === "LAYOUT" ? "active" : ""} onClick={() => setWorkspace("LAYOUT")}><Layers3 size={17} /> Customize layout</button>}
               </nav>
-              {workspace === "LAYOUT" && selected.can_view_map
-                ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
-                : <CatalogueWorkspace library={selected} />}
-              <section className="server-dashboard-panel">
+              {workspace === "MAP" && selected.can_view_map
+                ? <ServerLibraryMap libraryId={selected.library_id} />
+                : workspace === "LAYOUT" && selected.role === "OWNER"
+                  ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
+                  : <CatalogueWorkspace library={selected} />}
+              <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "PERSPECTIVE" ? "open" : ""}`}>
+                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close reading perspective panel">×</button>
                 <h3>Reading perspective</h3>
                 <p>Reading data will be personal in Phase 5. This selection already remembers whose future history you are viewing.</p>
                 <select value={perspectives.find((item) => item.selected)?.user_id ?? ""} onChange={(event) => void selectPerspective(event.target.value)} disabled={dataBusy}>
@@ -682,12 +693,13 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                 </select>
               </section>
 
-              {selected.role === "OWNER" && <>
-                <section className="server-dashboard-panel">
+              {selected.role === "OWNER" && <div className={`server-members-control-stack ${controlsPanel === "MEMBERS" ? "open" : ""}`}>
+                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close members and invitations panel">×</button>
+                <section className="server-dashboard-panel server-members-panel">
                   <h3>Members</h3>
                   <div className="server-member-list">{members.map((member) => <div key={member.user_id}><span><b>{member.username}</b><small>{member.role === "OWNER" ? "Equal co-Owner" : member.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue only"}</small></span><span className="server-member-actions">{member.role === "VIEWER" ? <><button type="button" onClick={() => requestMemberChange(member, "CHANGE_VIEWER_SCOPE")}>{member.viewer_scope === "CATALOG_ONLY" ? "Give map access" : "Remove map access"}</button><button type="button" onClick={() => requestMemberChange(member, "PROMOTE_TO_OWNER")}>Make co-Owner</button></> : member.user_id !== user.user_id && <button type="button" onClick={() => requestMemberChange(member, "DOWNGRADE_TO_VIEWER")}>Make Viewer</button>}<button type="button" onClick={() => requestMemberChange(member, "REMOVE")}>Remove</button></span></div>)}</div>
                 </section>
-                <section className="server-dashboard-panel">
+                <section className="server-dashboard-panel server-invite-panel">
                   <h3>Invite a member</h3>
                   <form className="server-invite-form" onSubmit={createInvitation}>
                     <label>Role<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value as "OWNER" | "VIEWER"); setOwnerWarning(false); }}><option value="VIEWER">Viewer</option><option value="OWNER">Equal co-Owner</option></select></label>
@@ -700,7 +712,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                     <label>Token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Invitation token")}>Copy token</button></span></label>
                   </div>}
                 </section>
-              </>}
+              </div>}
             </> : <div className="server-empty-library"><LibraryBig size={48} /><h2>Create or join a library</h2><p>Accounts and libraries are separate: an account may own or view several libraries.</p></div>}
           </div>
         </div>

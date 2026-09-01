@@ -410,6 +410,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 physical_response = client.get(
                     f"/api/v1/libraries/{first.id}/physical-library"
                 )
+                postgresql_layout = physical_response.json()["layout"]
+                postgresql_layout["containers"][0]["row_anchor"] = "RIGHT"
+                layout_response = client.put(
+                    f"/api/v1/libraries/{first.id}/physical-library/layout",
+                    headers={"X-CSRF-Token": "postgres-test-csrf"},
+                    json=postgresql_layout,
+                )
                 created_bookcase_response = client.post(
                     f"/api/v1/libraries/{first.id}/physical-library/bookcases",
                     headers={"X-CSRF-Token": "postgres-test-csrf"},
@@ -448,6 +455,10 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert physical_response.status_code == 200, physical_response.text
             assert physical_response.json()["bookcases"][0]["book_count"] == 2
+            assert layout_response.status_code == 200, layout_response.text
+            assert layout_response.json()["layout"]["containers"][0][
+                "row_anchor"
+            ] == "RIGHT"
             assert created_bookcase_response.status_code == 201, (
                 created_bookcase_response.text
             )

@@ -15,6 +15,7 @@ from ...schemas import (
     ShelfResponse,
     ShelfUpdate,
     ShelfWrite,
+    VisualLayoutWrite,
 )
 from ...services.library_access import (
     LibraryAccess,
@@ -122,11 +123,13 @@ def physical_response(
                 id=item.id,
                 title=item.title,
                 author=item.author,
+                page_count=item.page_count,
                 container_id=item.container_id,
                 position=item.position,
             )
             for item in hierarchy.books
         ],
+        layout=hierarchy.layout,
     )
 
 
@@ -171,6 +174,35 @@ def update_book_placement(
         service.place_book(
             library_id=library_id,
             book_id=book_id,
+            actor_user_id=context.user_id,
+            payload=payload,
+        )
+        return refreshed(library_id, access, service)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+    ) as exc:
+        raise physical_error(exc) from exc
+
+
+@router.put("/layout", response_model=PhysicalLibraryResponse)
+def update_visual_layout(
+    library_id: UUID,
+    payload: VisualLayoutWrite,
+    service: PhysicalLibraryServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> PhysicalLibraryResponse:
+    try:
+        access = access_service.require_owner(
+            library_id=library_id, user_id=context.user_id
+        )
+        service.update_visual_layout(
+            library_id=library_id,
             actor_user_id=context.user_id,
             payload=payload,
         )

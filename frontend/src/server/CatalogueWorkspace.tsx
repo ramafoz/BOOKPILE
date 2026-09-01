@@ -121,7 +121,7 @@ function CoverImage({ libraryId, book }: { libraryId: string; book: ServerBookSu
     : <span className="server-book-placeholder"><BookOpen size={20} /></span>;
 }
 
-function BookDetails({ libraryId, book, onClose, onEdit }: {
+export function BookDetails({ libraryId, book, onClose, onEdit }: {
   libraryId: string;
   book: ServerBook;
   onClose: () => void;

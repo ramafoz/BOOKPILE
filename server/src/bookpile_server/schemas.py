@@ -166,8 +166,73 @@ class PhysicalBookResponse(BaseModel):
     id: UUID
     title: str
     author: str
+    page_count: int | None
     container_id: UUID | None
     position: int | None
+
+
+class VisualBookcaseLayoutWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    bookcase_id: UUID
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
+class VisualShelfLayoutWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    shelf_id: UUID
+    height_weight: float = Field(ge=0.25, le=8)
+
+
+class VisualContainerLayoutWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    container_id: UUID
+    x: float = Field(ge=0, le=100)
+    y: float = Field(ge=0, le=100)
+    width: float = Field(gt=0, le=100)
+    height: float = Field(gt=0, le=100)
+    row_anchor: Literal["LEFT", "RIGHT"] = "LEFT"
+    pile_support_kind: Literal["SHELF", "ROW"] | None = None
+    pile_support_container_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "VisualContainerLayoutWrite":
+        if self.x + self.width > 100 or self.y + self.height > 100:
+            raise ValueError("Container geometry must remain inside its shelf")
+        return self
+
+
+class VisualOutsideAreaWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    area_kind: Literal["READING", "LOANED"]
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
+class VisualLayoutWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revision: str = Field(min_length=64, max_length=64)
+    bookcases: list[VisualBookcaseLayoutWrite]
+    shelves: list[VisualShelfLayoutWrite]
+    containers: list[VisualContainerLayoutWrite]
+    outside_areas: list[VisualOutsideAreaWrite]
+
+
+class VisualLayoutResponse(BaseModel):
+    revision: str
+    bookcases: list[VisualBookcaseLayoutWrite]
+    shelves: list[VisualShelfLayoutWrite]
+    containers: list[VisualContainerLayoutWrite]
+    outside_areas: list[VisualOutsideAreaWrite]
 
 
 class ContainerResponse(BaseModel):
@@ -213,6 +278,7 @@ class PhysicalLibraryResponse(BaseModel):
     can_edit: bool
     bookcases: list[BookcaseResponse]
     books: list[PhysicalBookResponse]
+    layout: VisualLayoutResponse
 
 
 class BookWrite(BaseModel):

@@ -8,9 +8,13 @@ from ..models import (
     Book,
     Bookcase,
     Container,
+    Library,
     LibraryAuditEvent,
     Shelf,
+    VisualBookcaseLayout,
     VisualContainerLayout,
+    VisualOutsideArea,
+    VisualShelfLayout,
 )
 
 
@@ -67,6 +71,75 @@ class PhysicalLibraryRepository:
                 .order_by(func.lower(Book.title), func.lower(Book.author), Book.id)
             )
         )
+
+    def list_bookcase_layouts(self, library_id: UUID) -> list[VisualBookcaseLayout]:
+        return list(
+            self._session.scalars(
+                select(VisualBookcaseLayout)
+                .where(VisualBookcaseLayout.library_id == library_id)
+                .order_by(VisualBookcaseLayout.bookcase_id)
+            )
+        )
+
+    def list_shelf_layouts(self, library_id: UUID) -> list[VisualShelfLayout]:
+        return list(
+            self._session.scalars(
+                select(VisualShelfLayout)
+                .where(VisualShelfLayout.library_id == library_id)
+                .order_by(VisualShelfLayout.shelf_id)
+            )
+        )
+
+    def list_container_layouts(self, library_id: UUID) -> list[VisualContainerLayout]:
+        return list(
+            self._session.scalars(
+                select(VisualContainerLayout)
+                .where(VisualContainerLayout.library_id == library_id)
+                .order_by(VisualContainerLayout.container_id)
+            )
+        )
+
+    def list_outside_areas(self, library_id: UUID) -> list[VisualOutsideArea]:
+        return list(
+            self._session.scalars(
+                select(VisualOutsideArea)
+                .where(VisualOutsideArea.library_id == library_id)
+                .order_by(VisualOutsideArea.area_kind)
+            )
+        )
+
+    def lock_library(self, library_id: UUID) -> Library | None:
+        return self._session.scalar(
+            select(Library).where(Library.id == library_id).with_for_update()
+        )
+
+    def upsert_visual_layout(
+        self,
+        *,
+        library_id: UUID,
+        bookcases: list[dict[str, object]],
+        shelves: list[dict[str, object]],
+        containers: list[dict[str, object]],
+        outside_areas: list[dict[str, object]],
+    ) -> None:
+        groups: tuple[tuple[list[object], list[dict[str, object]], str, type], ...] = (
+            (list(self.list_bookcase_layouts(library_id)), bookcases, "bookcase_id", VisualBookcaseLayout),
+            (list(self.list_shelf_layouts(library_id)), shelves, "shelf_id", VisualShelfLayout),
+            (list(self.list_container_layouts(library_id)), containers, "container_id", VisualContainerLayout),
+            (list(self.list_outside_areas(library_id)), outside_areas, "area_kind", VisualOutsideArea),
+        )
+        for existing, values, key, model in groups:
+            indexed = {getattr(item, key): item for item in existing}
+            for payload in values:
+                identity = payload[key]
+                item = indexed.get(identity)
+                if item is None:
+                    item = model(library_id=library_id, **payload)
+                    self._session.add(item)
+                else:
+                    for field, value in payload.items():
+                        if field != key:
+                            setattr(item, field, value)
 
     def find_book(self, library_id: UUID, book_id: UUID) -> Book | None:
         return self._session.scalar(
