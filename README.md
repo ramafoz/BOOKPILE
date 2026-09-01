@@ -376,6 +376,9 @@ third-party services.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
+- `PHYSICAL_GEOMETRY_PLAN.md` defines the approved single-geometry model for
+  manual and millimetre-driven layouts, accordion containers, supports,
+  physical warnings, Server implementation, and later controlled Local work.
 - `docs/adr/` records architectural decisions that must remain traceable as
   BOOKPILE Server evolves.
 - `server/README.md` documents the isolated Server foundation and its test
@@ -437,8 +440,9 @@ edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
-The isolated Server edition has completed its Phase 3 membership foundation
-and Phase 4A–4C shared catalogue foundation. Secure accounts can create and
+The isolated Server edition has completed its Phase 3 membership foundation,
+Phase 4A–4C shared catalogue foundation, and the accepted read/navigation
+portion of Phase 4D. Secure accounts can create and
 join libraries as equal co-Owners or scoped read-only Viewers. PostgreSQL has
 library-safe metadata, contributor, hierarchy, dimension, and layout
 structures; the responsive Server catalogue now supports scoped reads,
@@ -448,9 +452,13 @@ replace, and remove covers; Viewers can see them only while signed in as
 members. Uploads are size- and pixel-limited, decoded as real images, stripped
 of metadata, resized, and re-encoded as private WebP objects. Their originals
 are not retained and their storage keys are never exposed as public URLs.
-This does not alter or replace the Local v1 application. Map APIs, personal
-readings, loans, backups, and Local ZIP import remain intentionally pending
-for later Server phases.
+Server now also provides Owner-maintained physical hierarchy, revisioned layout
+geometry, scoped map access, responsive mouse/touch camera navigation,
+page-proportional rendering, and book/container inspection. Phase 4D remains
+open for catalogue-row placement, visual rearrangement, floating/direct layout
+editing, and the approved physical-dimension geometry engine. This does not
+alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
+import remain pending for later Server phases.
 
 ## Licence
 

@@ -74,8 +74,13 @@ increments:
 1. Restore Local's established location UX in Server catalogue rows and
    per-book editing, replacing the temporary global `Position books` form.
 2. Port visual rearrangement and then integrate floating/direct layout editing
-   after the physical-dimension policy is approved.
+   through the approved physical-dimension model in
+   `../PHYSICAL_GEOMETRY_PLAN.md`.
 
 Rearrangement will reuse Local's movement and geometry algorithms inside
 library-scoped PostgreSQL locks and atomic transactions; it must not copy
 SQLite-global assumptions.
+
+The physical model is Server-first. Its reusable pure geometry rules and UI
+improvements are candidates for a later controlled Local backport, but neither
+Phase 4D nor its tests may write to the populated Local worktree.

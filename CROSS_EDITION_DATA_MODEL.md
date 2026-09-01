@@ -266,21 +266,21 @@ objects, so containers do not receive arbitrary measured dimensions in the
 baseline. Their occupied size is derived from their books, shelf limits,
 orientation, and layout rules.
 
-Map consequences:
+Map consequences are now specified normatively in
+`PHYSICAL_GEOMETRY_PLAN.md`. In summary:
 
 - A row uses book thickness along its stacking axis and book height on its
   vertical axis.
 - A pile uses thickness vertically and cover width horizontally.
 - Furniture and shelves can use measured aspect ratios where enough data is
   present.
-- Existing percentage-based layout remains necessary for placement, gaps,
-  overlap, and manual artistic correction. Measurements enrich it; they do
-  not erase it.
+- There is one canonical geometry with shared `MANUAL` and `PHYSICAL` modes,
+  not two competing layouts. Percentage container placement remains useful;
+  physical mode recalculates those same values from measurements and fallbacks.
 - When a measurement is absent, the current page-count, catalogue-mean, and
   fixed-fallback hierarchy remains available.
-- A later experimental UI must identify measured versus estimated geometry
-  and must never resize persisted layout merely because one metadata field was
-  edited without explicit confirmation.
+- Server implements this model first. A later Local release may backport it
+  only through isolated acceptance data and a rehearsed additive migration.
 
 Exact plausibility ranges and mixed measured/estimated calibration must be
 validated with real data before implementation. They are not silently fixed by
@@ -303,6 +303,10 @@ Library → Bookcase → Shelf → Container → Positioned book copy
 - Catalogue-only responses omit this hierarchy and derived location labels.
 - Measured dimensions never replace collision, support, or containment
   validation.
+- Physical mode uses an unbounded millimetre world with furniture `x` and
+  `floor_y`; container dimensions are derived from books and shelf interiors.
+  Physical violations are derived diagnostics and do not silently discard
+  truthful metadata.
 
 ## 6. Readings and custody
 

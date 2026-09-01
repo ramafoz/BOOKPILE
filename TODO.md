@@ -45,6 +45,13 @@ This roadmap separates future work by its effect on the current data model.
     same shelf and visual layer.
   - Explain unsupported/floating piles clearly and reject invalid geometry
     before saving.
+  - Consider the validated Server `MANUAL`/`PHYSICAL` geometry mode,
+    millimetre-driven proportions, physical-warning overlays, accordion
+    containers, generic supports, and PILE alignment as one coherent backport;
+    do not copy only half of its persistence rules.
+  - Restore each test ZIP only into an isolated Local worktree and rehearse
+    every SQLite migration before proposing an update to the live personal
+    installation.
   - Continue recording any further reusable Server improvements here before a
     controlled Local backport is planned.
 
@@ -405,11 +412,18 @@ protects the completed catalogue.
   invalidating existing records. Introduce it through safe edition-specific
   migrations and include it in details, editing, search, import/export, and
   ISBN candidate review.
-- [ ] **Local and Server experimental:** add optional measured dimensions in
-  integer millimetres for physical book copies, furniture, and usable shelf
-  interiors, while retaining percentage layout and page-based fallbacks.
-  Prototype measured/estimated map calibration before allowing dimensions to
-  rewrite persisted geometry.
+- [ ] **Server first; later controlled Local backport:** implement the approved
+  single canonical geometry model in `PHYSICAL_GEOMETRY_PLAN.md`. Support
+  Owner-selected `MANUAL`/`PHYSICAL` modes, integer millimetres, per-axis book
+  fallbacks, furniture/shelf calibration, accordion containers, structured
+  physical warnings, generic supports, and PILE alignment without maintaining
+  two divergent layouts.
+- [ ] **Future Local:** backport validated physical-geometry behaviour only in
+  an isolated branch/worktree with a verified ZIP and rehearsed additive SQLite
+  migration; never use the populated live Local database as a test target.
+- [ ] **Later map refinement:** calculate a supported PILE's realistic tilt
+  from two contact points on the books below, including rotated rendering,
+  hitboxes, and collision rules.
 - [x] Add an optional positive edition number.
 - [x] Add optional series name and free-text series volume.
 - [x] Add a controlled binding classification independently from publication
@@ -650,8 +664,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     temporary global `Position books` form from Customize Layout.
   - [ ] Port the complete Local-style visual `Reorganize books` workflow into
     Server Library Map.
-  - [ ] Integrate floating layout editing and direct map manipulation after the
-    physical-dimension policy is defined.
+  - [ ] Implement the Server physical-geometry migration and engine specified
+    in `PHYSICAL_GEOMETRY_PLAN.md`.
+  - [ ] Integrate floating/minimizable layout editing and direct map
+    manipulation over that same geometry service.
   - [ ] Backup, restore, export, and Local ZIP import remain pending.
 - [ ] Implement perspective-aware catalogue states, statistics, map colouring,
   suggestions, and personal reading/rereading sessions.

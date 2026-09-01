@@ -900,9 +900,13 @@ compatible meanings and explicit import rules.
   - [ ] Port `Reorganize books` into Library Map, including atomic preview,
     collision handling, proportional container resizing, and scope-safe
     PostgreSQL transactions.
+  - [ ] Implement the approved single-geometry physical-dimension model in
+    `PHYSICAL_GEOMETRY_PLAN.md`: millimetre world coordinates, shared
+    `MANUAL`/`PHYSICAL` modes, per-axis fallbacks, accordion movement, generic
+    supports, PILE alignment, and derived physical warnings.
   - [ ] Integrate the precise layout editor into Library Map as a floating,
-    minimizable panel and add direct manipulation only after physical-dimension
-    semantics are approved.
+    minimizable panel and add direct manipulation over the same geometry
+    service.
 - [ ] Phase 4E: implement Local ZIP validation adapters and dry-run reports.
 
 Phase 4A passed its schema gate on 2026-08-31. Migration
@@ -933,6 +937,14 @@ their exact storage size, and denies cross-library access. Desktop and mobile
 acceptance covered catalogue thumbnails, complete details, replacement,
 removal, HEIC input, invalid-file rejection, Viewer read-only access, and
 cross-library denial. See ADR 0010.
+
+The read/navigation increment of Phase 4D passed automated and manual desktop
+and mobile acceptance on 2026-09-01. Hierarchy maintenance, revisioned precise
+layout writes, ROW anchors, PILE supports, scoped map projections, responsive
+camera gestures, page-proportional rendering, inspection modes, and complete
+book information are operational. Phase 4D is intentionally still open for
+per-book placement UX, visual rearrangement, the approved physical-geometry
+engine, and floating/direct layout editing.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
@@ -1004,6 +1016,27 @@ recovery, and cost checks.
 - Public catalogues/covers only after a separate moderation and privacy plan.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
+
+### Progress snapshot — 2026-09-01
+
+Phases 0, 1, 2, 3, and 3.5 are complete. Phase 4A–4C are complete; Phase 4D
+has passed its hierarchy, precise-layout, responsive-map, gesture, inspection,
+and Viewer-scope gates but still requires placement UX, rearrangement,
+physical geometry, and integrated editing. Phase 4E and Phases 5–10 remain
+pending.
+
+Because phases differ greatly in size, progress is reported as a range rather
+than a false exact measurement:
+
+- current shared-catalogue/physical-map foundation (through Phase 4): about
+  **70% complete**;
+- complete invitation-only hosted beta roadmap (Phases 0–10): about
+  **45–50% complete**.
+
+The second figure includes unfinished personal readings, loans, quota and
+deletion, ZIP import/export, production operations, privacy/help material, and
+beta acceptance. Percentages must be recalculated at major phase gates rather
+than inferred from commit count or elapsed days.
 
 ## 18. Acceptance criteria that apply to every phase
 

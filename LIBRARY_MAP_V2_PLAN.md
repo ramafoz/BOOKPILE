@@ -530,3 +530,24 @@ geometry before any schema or live-layout write is enabled.
    and backup validation before touching the live database.
 6. Render page-proportional books using the migrated layout, then obtain
    desktop and mobile validation before reconnecting rearrangement writes.
+
+## 14. Post-v1 physical-geometry evolution
+
+This document remains the accepted contract for BOOKPILE Local v1's visual
+map and page-proportional rearrangement. It must not be retroactively read as
+if v1.0.0 already used measured millimetres.
+
+BOOKPILE Server will first implement the successor model defined in
+`PHYSICAL_GEOMETRY_PLAN.md`: one canonical geometry with shared manual and
+physical modes, millimetre furniture coordinates, measured book thickness,
+accordion container behaviour, generic supports, and visible physical
+diagnostics. The Server implementation should reuse the pure camera,
+inspection, proportionality, and rearrangement rules documented here while
+adding tenancy, authorization, PostgreSQL locking, and atomic revisions.
+
+Only after Server behaviour is validated may the reusable parts be proposed
+for a future Local release. That work requires a separate Local branch and
+worktree, a verified ZIP restored into isolated acceptance data, an additive
+SQLite migration, and explicit approval before updating the live personal
+installation. Stable Local v1.0.0 artefacts and older ZIP compatibility remain
+unchanged.
