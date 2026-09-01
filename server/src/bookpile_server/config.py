@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
+    private_object_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "private-objects"
+    cover_max_upload_bytes: int = 12 * 1024 * 1024
+    cover_max_pixels: int = 40_000_000
+    cover_max_width: int = 900
+    cover_max_height: int = 1400
+    cover_webp_quality: int = 82
+    cover_upload_attempts_per_hour: int = 30
 
     @model_validator(mode="after")
     def require_production_security_settings(self) -> "Settings":

@@ -8,6 +8,7 @@ from ..email_delivery import EmailSender, SmtpEmailSender
 from ..repositories.account_actions import AccountActionRepository
 from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
+from ..repositories.covers import CoverRepository
 from ..repositories.libraries import LibraryRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
@@ -22,6 +23,8 @@ from ..services.auth import (
     InvalidSessionError,
 )
 from ..services.catalogue import CatalogueService
+from ..services.covers import CoverService
+from ..cover_storage import FilesystemCoverStorage
 from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
 
@@ -36,6 +39,19 @@ def get_catalogue_service(session: SessionDependency) -> CatalogueService:
 CatalogueServiceDependency = Annotated[
     CatalogueService, Depends(get_catalogue_service)
 ]
+
+
+def get_cover_service(session: SessionDependency) -> CoverService:
+    settings = get_settings()
+    return CoverService(
+        CoverRepository(session),
+        BookRepository(session),
+        FilesystemCoverStorage(settings.private_object_root),
+        settings,
+    )
+
+
+CoverServiceDependency = Annotated[CoverService, Depends(get_cover_service)]
 
 
 def get_library_access_service(

@@ -53,12 +53,16 @@ must not be used for Server migrations or test databases.
   shared metadata, ordered contributors, strict validation, simple and
   advanced search, metadata options, sorting, pagination, read-only details,
   Owner-only writes, CSRF, explicit deletion confirmation, and audit events.
+- Phase 4C authenticated private covers: Owner-only upload, replacement, and
+  removal; Owner/Viewer reads; safe image validation and WebP re-encoding;
+  opaque filesystem objects; no-store delivery; rate limiting; and audit.
 
 The authentication and library-membership foundations are complete through
-Phase 3, and the shared catalogue foundation is complete through Phase 4B.
+Phase 3, and the shared catalogue foundation is complete through Phase 4C.
 Catalogue access requires an authenticated membership; a library ID is never
-authorization. The Server branch is still not deployable because private
-covers, the visual-map API, personal reading data, loans, backup/restore,
+authorization. The Server branch is still not deployable because the
+production private-object adapter, visual-map API, personal reading data,
+loans, backup/restore,
 storage quota, and production infrastructure have not yet been ported.
 
 ## Development setup
@@ -150,16 +154,21 @@ CSRF token.
 - `POST /api/v1/libraries/{library_id}/catalogue`
 - `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}`
 - `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}`
+- `GET /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
+- `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
+- `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
 
 Updates are complete replacements rather than partial patches. The client
 must send the complete editable bibliographic record and contributor order.
-Delete requests must repeat the exact current title. Covers, physical
-positions, readings, and loans are intentionally not part of these payloads.
+Delete requests must repeat the exact current title. Covers use independent
+multipart endpoints so a failed optional image cannot invalidate a saved book.
+Physical positions, readings, and loans are intentionally not part of these
+payloads.
 
 ## Safety status
 
 The migration and isolation gate now upgrades through Phase 4A migration
-`0007_shared_catalogue_schema` against PostgreSQL 17. It checks catalogue and
+`0008_private_book_covers` against PostgreSQL 17. It checks catalogue and
 membership isolation, identity/session/account-invitation/library-invitation
 records, concurrent invitation consumption, atomic rate limiting, final-Owner
 protection, scope changes, reading perspectives, shared metadata constraints,

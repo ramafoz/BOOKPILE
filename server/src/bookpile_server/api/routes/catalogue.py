@@ -1,7 +1,9 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from datetime import timedelta
+
+from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile, status
 
 from ...schemas import (
     BookResponse,
@@ -11,6 +13,7 @@ from ...schemas import (
     CatalogueResponse,
     ContributorResponse,
     ContributorRoleResponse,
+    CoverMetadataResponse,
     DeleteBookRequest,
 )
 from ...services.catalogue import (
@@ -19,15 +22,21 @@ from ...services.catalogue import (
     CatalogueNotFoundError,
     CatalogueValidationError,
 )
+from ...cover_images import InvalidCoverImage, process_cover_image
+from ...config import get_settings
+from ...services.covers import CoverNotFoundError, CoverStorageError
+from ...services.rate_limits import RateLimitExceededError, RateLimitPolicy
 from ...services.library_access import (
     LibraryNotFoundError,
     LibraryOwnerRequiredError,
 )
 from ..dependencies import (
     CatalogueServiceDependency,
+    CoverServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
     LibraryAccessServiceDependency,
+    RateLimiterDependency,
 )
 
 
@@ -75,6 +84,12 @@ def book_response(record: BookRecord, *, detail: bool) -> BookResponse | BookSum
         "series_name": book.series_name,
         "series_volume": book.series_volume,
         "contributors": contributors,
+        "cover": CoverMetadataResponse(
+            width_px=book.cover.width_px,
+            height_px=book.cover.height_px,
+            byte_size=book.cover.byte_size,
+            updated_at=book.cover.updated_at,
+        ) if book.cover else None,
         "created_at": book.created_at,
         "updated_at": book.updated_at,
     }
@@ -96,6 +111,18 @@ def book_response(record: BookRecord, *, detail: bool) -> BookResponse | BookSum
         width_mm=book.width_mm,
         thickness_mm=book.thickness_mm,
     )
+
+
+def cover_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, (CatalogueNotFoundError, CoverNotFoundError, LibraryNotFoundError, LibraryOwnerRequiredError)):
+        return HTTPException(status_code=404, detail="Cover not found")
+    if isinstance(exc, InvalidCoverImage):
+        return HTTPException(status_code=422, detail=str(exc))
+    if isinstance(exc, CoverStorageError):
+        return HTTPException(status_code=503, detail=str(exc))
+    if isinstance(exc, CatalogueConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
+    raise exc
 
 
 @router.get("", response_model=CatalogueResponse)
@@ -282,18 +309,21 @@ def delete_book(
     book_id: UUID,
     payload: DeleteBookRequest,
     service: CatalogueServiceDependency,
+    cover_service: CoverServiceDependency,
     access_service: LibraryAccessServiceDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> Response:
     try:
         access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        cover_key = cover_service.object_key(library_id, book_id)
         service.delete_book(
             library_id=library_id,
             book_id=book_id,
             actor_user_id=context.user_id,
             confirmation_title=payload.confirmation_title,
         )
+        cover_service.delete_object_after_book(cover_key)
     except (
         LibraryNotFoundError,
         LibraryOwnerRequiredError,
@@ -302,4 +332,93 @@ def delete_book(
         CatalogueConflictError,
     ) as exc:
         raise catalogue_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{book_id}/cover")
+def get_book_cover(
+    library_id: UUID,
+    book_id: UUID,
+    cover_service: CoverServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+) -> Response:
+    try:
+        access_service.require_catalogue(library_id=library_id, user_id=context.user_id)
+        stored = cover_service.get(library_id, book_id)
+        return Response(
+            content=stored.content,
+            media_type="image/webp",
+            headers={
+                "Cache-Control": "no-store, private",
+                "Content-Disposition": "inline",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except (LibraryNotFoundError, CatalogueNotFoundError, CoverNotFoundError, CoverStorageError) as exc:
+        raise cover_error(exc) from exc
+
+
+@router.put("/{book_id}/cover", response_model=CoverMetadataResponse)
+async def put_book_cover(
+    library_id: UUID,
+    book_id: UUID,
+    request: Request,
+    cover_service: CoverServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    limiter: RateLimiterDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+    cover: UploadFile = File(...),
+) -> CoverMetadataResponse:
+    settings = get_settings()
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        limiter.enforce(
+            RateLimitPolicy("cover_upload", settings.cover_upload_attempts_per_hour, timedelta(hours=1)),
+            key=str(context.user_id),
+            ip_address=request.client.host if request.client else None,
+        )
+        content = await cover.read(settings.cover_max_upload_bytes + 1)
+        processed = process_cover_image(content, settings)
+        saved = cover_service.replace(
+            library_id=library_id,
+            book_id=book_id,
+            actor_user_id=context.user_id,
+            image=processed,
+        )
+        return CoverMetadataResponse(
+            width_px=saved.width_px,
+            height_px=saved.height_px,
+            byte_size=saved.byte_size,
+            updated_at=saved.updated_at,
+        )
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many cover uploads. Please try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (LibraryNotFoundError, LibraryOwnerRequiredError, CatalogueNotFoundError, InvalidCoverImage, CoverStorageError, CatalogueConflictError) as exc:
+        raise cover_error(exc) from exc
+    finally:
+        await cover.close()
+
+
+@router.delete("/{book_id}/cover", status_code=status.HTTP_204_NO_CONTENT)
+def delete_book_cover(
+    library_id: UUID,
+    book_id: UUID,
+    cover_service: CoverServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> Response:
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        cover_service.remove(
+            library_id=library_id, book_id=book_id, actor_user_id=context.user_id
+        )
+    except (LibraryNotFoundError, LibraryOwnerRequiredError, CatalogueNotFoundError, CoverNotFoundError, CoverStorageError) as exc:
+        raise cover_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

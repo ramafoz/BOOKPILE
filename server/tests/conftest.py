@@ -7,10 +7,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from bookpile_server.database import get_session
-from bookpile_server.api.dependencies import get_email_sender
+from bookpile_server.api.dependencies import get_cover_service, get_email_sender
+from bookpile_server.config import get_settings
+from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.email_delivery import OutgoingEmail
 from bookpile_server.main import create_app
 from bookpile_server.models import Base
+from bookpile_server.repositories.books import BookRepository
+from bookpile_server.repositories.covers import CoverRepository
+from bookpile_server.services.covers import CoverService
 
 
 class RecordingEmailSender:
@@ -45,7 +50,7 @@ def session() -> Generator[Session, None, None]:
 
 @pytest.fixture
 def client(
-    session: Session, email_sender: RecordingEmailSender
+    session: Session, email_sender: RecordingEmailSender, tmp_path
 ) -> Generator[TestClient, None, None]:
     app = create_app()
 
@@ -54,6 +59,12 @@ def client(
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_email_sender] = lambda: email_sender
+    app.dependency_overrides[get_cover_service] = lambda: CoverService(
+        CoverRepository(session),
+        BookRepository(session),
+        FilesystemCoverStorage(tmp_path / "private-objects"),
+        get_settings(),
+    )
     with TestClient(app) as test_client:
         yield test_client
 

@@ -527,6 +527,49 @@ class Book(Base):
     )
 
     library: Mapped[Library] = relationship(back_populates="books")
+    cover: Mapped["BookCover | None"] = relationship(
+        back_populates="book", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+
+
+class BookCover(Base):
+    __tablename__ = "book_covers"
+    __table_args__ = (
+        CheckConstraint("media_type = 'image/webp'", name="ck_book_covers_media_type"),
+        CheckConstraint("byte_size > 0", name="ck_book_covers_byte_size"),
+        CheckConstraint("width_px > 0", name="ck_book_covers_width_px"),
+        CheckConstraint("height_px > 0", name="ck_book_covers_height_px"),
+        CheckConstraint("length(sha256) = 64", name="ck_book_covers_sha256"),
+        ForeignKeyConstraint(
+            ["library_id", "book_id"], ["books.library_id", "books.id"],
+            name="fk_book_covers_library_book", ondelete="CASCADE",
+        ),
+        UniqueConstraint("book_id", name="uq_book_covers_book_id"),
+        Index("ix_book_covers_library_id", "library_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    book_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    object_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    media_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="image/webp", server_default="image/webp"
+    )
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    width_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    height_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    uploaded_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    book: Mapped[Book] = relationship(back_populates="cover")
 
 
 class ContributorRole(Base):

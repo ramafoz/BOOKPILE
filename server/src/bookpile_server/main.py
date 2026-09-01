@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
-        if request.url.path.startswith("/api/v1/auth"):
+        if request.url.path.startswith("/api/v1/auth") or request.url.path.endswith("/cover"):
             response.headers["Cache-Control"] = "no-store"
         return response
 

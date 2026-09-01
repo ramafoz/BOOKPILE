@@ -79,6 +79,13 @@ class ContributorRoleResponse(BaseModel):
     sort_order: int
 
 
+class CoverMetadataResponse(BaseModel):
+    width_px: int
+    height_px: int
+    byte_size: int
+    updated_at: datetime
+
+
 class BookWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -203,6 +210,7 @@ class BookSummary(BaseModel):
     series_name: str | None
     series_volume: str | None
     contributors: list[ContributorResponse]
+    cover: CoverMetadataResponse | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -438,14 +438,19 @@ quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
 The isolated Server edition has completed its Phase 3 membership foundation
-and Phase 4A–4B shared catalogue foundation. Secure accounts can create and
+and Phase 4A–4C shared catalogue foundation. Secure accounts can create and
 join libraries as equal co-Owners or scoped read-only Viewers. PostgreSQL has
 library-safe metadata, contributor, hierarchy, dimension, and layout
 structures; the responsive Server catalogue now supports scoped reads,
 Owner-only writes, complete metadata, ordered contributors, search, filters,
-sorting, and pagination. This does not alter or replace the Local v1
-application. Private covers, map APIs, personal readings, loans, backups, and
-Local ZIP import remain intentionally pending for later Server phases.
+sorting, pagination, and authenticated private cover images. Owners can add,
+replace, and remove covers; Viewers can see them only while signed in as
+members. Uploads are size- and pixel-limited, decoded as real images, stripped
+of metadata, resized, and re-encoded as private WebP objects. Their originals
+are not retained and their storage keys are never exposed as public URLs.
+This does not alter or replace the Local v1 application. Map APIs, personal
+readings, loans, backups, and Local ZIP import remain intentionally pending
+for later Server phases.
 
 ## Licence
 

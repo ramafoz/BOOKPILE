@@ -285,6 +285,7 @@ button { cursor: pointer; }
 .server-book-list.loading { opacity: .5; pointer-events: none; }
 .server-book-list article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px 3px; border-bottom: 1px solid #e9dfd2; }
 .server-book-placeholder { width: 38px; height: 50px; display: grid; place-items: center; border: 1px solid #b8c9c1; border-radius: 3px; color: #315f54; background: #e7f0eb; }
+.server-book-cover { width: 38px; height: 52px; object-fit: cover; border: 1px solid #b7aa98; border-radius: 3px; box-shadow: 0 3px 8px #273b3426; }
 .server-book-list h4 { margin: 0; font: 700 18px/1.15 Georgia, "Times New Roman", serif; }
 .server-book-list p { margin: 4px 0; color: #526a63; }
 .server-book-list small { color: #87624e; }
@@ -303,6 +304,10 @@ button { cursor: pointer; }
 .server-catalogue-dialog h2 { max-width: calc(100% - 44px); margin: 0; font: 700 clamp(31px, 5vw, 48px)/1.05 Georgia, "Times New Roman", serif; }
 .server-dialog-close { position: absolute; top: 18px; right: 18px; }
 .server-book-author { margin: 9px 0 22px; color: #5d716a; font-size: 17px; }
+.server-book-details-heading { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 17px; margin: 7px 0 20px; }
+.server-book-details-heading .server-book-cover { width: 86px; height: 122px; }
+.server-book-details-heading .server-book-placeholder { width: 86px; height: 122px; }
+.server-book-details-heading .server-book-author { margin-bottom: 0; }
 .server-catalogue-dialog section { margin: 17px 0; padding: 16px; border: 1px solid #e1d5c5; border-radius: 9px; background: #fffdf8; }
 .server-catalogue-dialog section h3 { margin: 0 0 10px; font: 700 20px Georgia, "Times New Roman", serif; }
 .server-contributor-credits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -322,6 +327,16 @@ button { cursor: pointer; }
 .server-contributor-editor { display: grid; gap: 7px; margin-bottom: 10px; }
 .server-contributor-editor > div { display: grid; grid-template-columns: 150px minmax(150px, 1fr) repeat(3, 36px); gap: 6px; }
 .server-book-form fieldset > button { border: 1px solid #9db6ab; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; color: #24574b; background: #f5faf7; font-weight: 700; }
+.server-cover-editor { display: grid; grid-template-columns: 105px minmax(0, 1fr); align-items: center; gap: 15px; }
+.server-cover-editor > img, .server-cover-existing, .server-cover-empty { width: 100px; height: 140px; object-fit: cover; border: 1px solid #cbbda9; border-radius: 6px; }
+.server-cover-existing, .server-cover-empty { display: grid; place-content: center; justify-items: center; gap: 8px; padding: 8px; color: #587068; background: #edf3ef; text-align: center; font-size: 11px; }
+.server-cover-empty { color: #817567; background: #f3eee6; }
+.server-cover-editor > div { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.server-cover-picker, .server-cover-editor button { min-height: 41px; border: 1px solid #9db6ab; border-radius: 7px; display: inline-flex !important; align-items: center; padding: 8px 11px; color: #24574b !important; background: #f5faf7; font-weight: 700 !important; cursor: pointer; }
+.server-cover-picker input { position: absolute; width: 1px; height: 1px; min-height: 1px; opacity: 0; pointer-events: none; }
+.server-cover-editor .server-cover-remove { border-color: #d4a28f; color: #9a472e !important; background: #fff7f3; }
+.server-save-progress { display: grid; gap: 4px; padding: 11px 13px; border: 1px solid #b8cec4; border-radius: 8px; color: #285c50; background: #eaf3ee; font-weight: 750; }
+.server-save-progress small { color: #657a73; font-weight: 500; }
 
 @media (max-width: 850px) {
   .server-shell { display: block; }
@@ -372,6 +387,8 @@ button { cursor: pointer; }
   .server-book-row-actions { grid-column: 2; }
   .server-contributor-editor > div { grid-template-columns: 1fr repeat(3, 36px); }
   .server-contributor-editor select, .server-contributor-editor input { grid-column: 1 / -1; }
+  .server-cover-editor { grid-template-columns: 84px minmax(0, 1fr); }
+  .server-cover-editor > img, .server-cover-existing, .server-cover-empty { width: 80px; height: 112px; }
   .server-modal-backdrop { padding: 7px; }
   .server-catalogue-dialog { max-height: calc(100vh - 14px); padding: 25px 18px; border-radius: 11px; }
 }

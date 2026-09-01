@@ -61,6 +61,13 @@ export interface ContributorRole {
   sort_order: number;
 }
 
+export interface CoverMetadata {
+  width_px: number;
+  height_px: number;
+  byte_size: number;
+  updated_at: string;
+}
+
 export interface ServerBookSummary {
   id: string;
   title: string;
@@ -78,6 +85,7 @@ export interface ServerBookSummary {
   series_name: string | null;
   series_volume: string | null;
   contributors: Contributor[];
+  cover: CoverMetadata | null;
   created_at: string;
   updated_at: string;
 }
@@ -100,7 +108,7 @@ export interface ServerBook extends ServerBookSummary {
 
 export type ServerBookWrite = Omit<
   ServerBook,
-  "id" | "library_id" | "display_author" | "created_at" | "updated_at"
+  "id" | "library_id" | "display_author" | "cover" | "created_at" | "updated_at"
 > & { contributors: Array<{ role_code: string; name: string }> };
 
 export interface CataloguePage {
@@ -174,7 +182,9 @@ async function request<T>(
   csrf = false,
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  if (options.body) headers.set("Content-Type", "application/json");
+  if (options.body && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (csrf) {
     const token = cookieValue(document.cookie, "bookpile_csrf");
     if (token) headers.set("X-CSRF-Token", token);
@@ -345,4 +355,20 @@ export const serverApi = {
       { method: "DELETE", body: JSON.stringify({ confirmation_title: title }) },
       true,
     ),
+  coverUrl: (libraryId: string, bookId: string, version?: string) =>
+    `${API_URL}/libraries/${libraryId}/catalogue/${bookId}/cover${version ? `?v=${encodeURIComponent(version)}` : ""}`,
+  uploadCover: (libraryId: string, bookId: string, cover: File) => {
+    const body = new FormData();
+    body.append("cover", cover);
+    return request<CoverMetadata>(
+      `/libraries/${libraryId}/catalogue/${bookId}/cover`,
+      { method: "PUT", body },
+      true,
+    );
+  },
+  deleteCover: (libraryId: string, bookId: string) => request<void>(
+    `/libraries/${libraryId}/catalogue/${bookId}/cover`,
+    { method: "DELETE" },
+    true,
+  ),
 };

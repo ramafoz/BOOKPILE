@@ -115,7 +115,14 @@ function MultiSelect({ label, values, selected, onChange }: {
   )}>{values.map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>;
 }
 
-function BookDetails({ book, onClose, onEdit }: {
+function CoverImage({ libraryId, book }: { libraryId: string; book: ServerBookSummary }) {
+  return book.cover
+    ? <img className="server-book-cover" src={serverApi.coverUrl(libraryId, book.id, book.cover.updated_at)} alt={`Cover of ${book.title}`} />
+    : <span className="server-book-placeholder"><BookOpen size={20} /></span>;
+}
+
+function BookDetails({ libraryId, book, onClose, onEdit }: {
+  libraryId: string;
   book: ServerBook;
   onClose: () => void;
   onEdit: (() => void) | null;
@@ -137,37 +144,50 @@ function BookDetails({ book, onClose, onEdit }: {
   ];
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog details" role="dialog" aria-modal="true">
     <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close"><X /></button>
-    <p className="server-card-eyebrow">Read-only catalogue record</p><h2>{book.title}</h2><p className="server-book-author">{book.display_author}</p>
+    <p className="server-card-eyebrow">Read-only catalogue record</p>
+    <div className="server-book-details-heading"><CoverImage libraryId={libraryId} book={book} /><div><h2>{book.title}</h2><p className="server-book-author">{book.display_author}</p></div></div>
     {!!book.contributors.length && <section><h3>Contributors</h3><div className="server-contributor-credits">{book.contributors.map((item) => <span key={item.id}><b>{item.role_label}</b>{item.name}</span>)}</div></section>}
     <dl className="server-book-metadata">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value === null || value === "" ? "Not recorded" : String(value).replaceAll("_", " ")}</dd></div>)}</dl>
     <div className="server-dialog-actions"><button type="button" onClick={onClose}>Close</button>{onEdit && <button className="confirm" type="button" onClick={onEdit}><Pencil size={16} /> Edit book</button>}</div>
   </section></div>;
 }
 
-function BookEditor({ initial, roles, options, onClose, onSave }: {
+function BookEditor({ initial, initialCover, roles, options, onClose, onSave }: {
   initial: ServerBookWrite;
+  initialCover: ServerBook["cover"];
   roles: CatalogueMetadataOptions["contributor_roles"];
   options: CatalogueMetadataOptions;
   onClose: () => void;
-  onSave: (book: ServerBookWrite) => Promise<void>;
+  onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, reportProgress: (message: string) => void) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ServerBookWrite>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [removeCover, setRemoveCover] = useState(false);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!coverFile) { setCoverPreview(null); return; }
+    const url = URL.createObjectURL(coverFile);
+    setCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverFile]);
   const text = (field: keyof ServerBookWrite, value: string) => setDraft({ ...draft, [field]: value || null });
   function setContributors(contributors: Array<{ role_code: string; name: string }>) {
-    const authorCount = contributors.filter((item) => item.role_code === "AUTHOR").length;
+    const authors = contributors.filter((item) => item.role_code === "AUTHOR");
     let author = draft.author;
-    if (authorCount >= 2) author = "Multiple authors";
-    else if (author === "Multiple authors") author = contributors.find((item) => item.role_code === "AUTHOR")?.name ?? "";
+    if (authors.length >= 2) author = "Multiple authors";
+    else if (authors.length === 1) author = authors[0].name;
+    else if (author === "Multiple authors") author = "";
     setDraft({ ...draft, contributors, author });
   }
   async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError("");
-    try { await onSave(draft); } catch (caught) { setError(message(caught)); setBusy(false); }
+    event.preventDefault(); setBusy(true); setError(""); setProgress("Saving book…");
+    try { await onSave(draft, coverFile, removeCover, setProgress); } catch (caught) { setError(message(caught)); setBusy(false); setProgress(""); }
   }
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog editor" role="dialog" aria-modal="true">
-    <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close"><X /></button>
+    <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close" disabled={busy}><X /></button>
     <p className="server-card-eyebrow">Shared catalogue record</p><h2>{initial.title ? "Edit book" : "Add a book"}</h2>
     {error && <div className="server-message error">{error}</div>}
     <form onSubmit={submit} className="server-book-form">
@@ -175,6 +195,19 @@ function BookEditor({ initial, roles, options, onClose, onSave }: {
         <label>Title *<input required maxLength={500} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label>Author display *<input required maxLength={500} value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })} readOnly={draft.contributors.filter((item) => item.role_code === "AUTHOR").length >= 2} /></label>
       </div></fieldset>
+      <fieldset><legend>Private cover image</legend>
+        <p className="server-field-help">Visible only to signed-in members of this library. BOOKPILE discards the original after removing metadata and creating a private WebP copy.</p>
+        <div className="server-cover-editor">
+          {coverPreview && !removeCover
+            ? <img src={coverPreview} alt="Selected cover preview" />
+            : initialCover && !removeCover
+              ? <span className="server-cover-existing"><BookOpen size={28} /> Stored private cover</span>
+              : <span className="server-cover-empty"><BookOpen size={28} /> No cover selected</span>}
+          <div><label className="server-cover-picker">Take or choose cover<input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={(event) => { setCoverFile(event.target.files?.[0] ?? null); setRemoveCover(false); }} /></label>
+          {(initialCover || coverFile) && !removeCover && <button type="button" className="server-cover-remove" onClick={() => { setCoverFile(null); setRemoveCover(true); }}>Remove cover</button>}
+          {removeCover && initialCover && <button type="button" onClick={() => setRemoveCover(false)}>Keep existing cover</button>}</div>
+        </div>
+      </fieldset>
       <fieldset><legend>Contributors</legend><p className="server-field-help">Add authors, translators, illustrators and other credited roles in display order.</p>
         <div className="server-contributor-editor">{draft.contributors.map((item, index) => <div key={`${index}-${item.role_code}`}>
           <select value={item.role_code} onChange={(event) => setContributors(draft.contributors.map((entry, position) => position === index ? { ...entry, role_code: event.target.value } : entry))}>{roles.map((role) => <option key={role.code} value={role.code}>{role.label}</option>)}</select>
@@ -207,7 +240,7 @@ function BookEditor({ initial, roles, options, onClose, onSave }: {
       </div></fieldset>
       <fieldset><legend>Copy details</legend><div className="server-form-grid">
         <label>Binding<select value={draft.binding ?? ""} onChange={(e) => setDraft({ ...draft, binding: e.target.value || null })}><option value="">Not recorded</option>{["HARDCOVER", "PAPERBACK", "FLEXIBOUND", "SPIRAL", "STAPLED", "OTHER"].map((value) => <option key={value}>{value}</option>)}</select></label>
-        <label>Publication type<select value={draft.publication_type ?? ""} onChange={(e) => setDraft({ ...draft, publication_type: e.target.value || null })}><option value="">Not recorded</option>{["CONVENTIONAL_BOOK", "COMIC_GRAPHIC_NOVEL", "ATLAS", "REFERENCE", "ART_PHOTOGRAPHY_ILLUSTRATED", "MAGAZINE_PERIODICAL", "OTHER"].map((value) => <option key={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
+        <label>Publication type<select value={draft.publication_type ?? ""} onChange={(e) => setDraft({ ...draft, publication_type: e.target.value || null })}><option value="">Not recorded</option>{["CONVENTIONAL_BOOK", "COMIC_GRAPHIC_NOVEL", "ATLAS", "REFERENCE", "ART_PHOTOGRAPHY_ILLUSTRATED", "MAGAZINE_PERIODICAL", "OTHER"].map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
         <label>Acquisition date<input type="date" value={draft.acquisition_date ?? ""} disabled={draft.is_original_collection} onChange={(e) => text("acquisition_date", e.target.value)} /></label>
         <label className="server-inline-check"><input type="checkbox" checked={draft.is_original_collection} onChange={(e) => setDraft({ ...draft, is_original_collection: e.target.checked, acquisition_date: e.target.checked ? null : draft.acquisition_date })} /> Original collection</label>
         <label>Height (mm)<input type="number" min="1" max="10000" value={draft.height_mm ?? ""} onChange={(e) => setDraft({ ...draft, height_mm: numberValue(e.target.value) })} /></label><label>Width (mm)<input type="number" min="1" max="10000" value={draft.width_mm ?? ""} onChange={(e) => setDraft({ ...draft, width_mm: numberValue(e.target.value) })} /></label><label>Thickness (mm)<input type="number" min="1" max="10000" value={draft.thickness_mm ?? ""} onChange={(e) => setDraft({ ...draft, thickness_mm: numberValue(e.target.value) })} /></label>
@@ -216,7 +249,8 @@ function BookEditor({ initial, roles, options, onClose, onSave }: {
         <label className="wide">Notes<textarea rows={4} maxLength={4000} value={draft.notes ?? ""} onChange={(e) => text("notes", e.target.value)} /></label>
       </div></fieldset>
       <datalist id="server-publishers">{options.publishers.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-genres">{options.genres.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-series">{options.series_names.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-languages">{options.languages.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-original-languages">{options.original_languages.map((v) => <option key={v} value={v} />)}</datalist>
-      <div className="server-dialog-actions"><button type="button" onClick={onClose}>Cancel</button><button className="confirm" disabled={busy} type="submit">{busy ? "Saving…" : "Save book"}</button></div>
+      {progress && <div className="server-save-progress" role="status">{progress}<small>{progress.startsWith("Processing") ? "Large phone photos can take several seconds. Please keep this window open." : ""}</small></div>}
+      <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button className="confirm" disabled={busy} type="submit">{busy ? "Please wait…" : "Save book"}</button></div>
     </form>
   </section></div>;
 }
@@ -232,7 +266,7 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState<ServerBook | null>(null);
-  const [editing, setEditing] = useState<{ id: string | null; book: ServerBookWrite } | null>(null);
+  const [editing, setEditing] = useState<{ id: string | null; book: ServerBookWrite; cover: ServerBook["cover"] } | null>(null);
 
   const load = useCallback(async (next: CatalogueQuery) => {
     setBusy(true); setError("");
@@ -259,14 +293,35 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
   }
   async function add() {
     setError("");
-    try { await requireOptions(); setEditing({ id: null, book: { ...EMPTY_BOOK, contributors: [] } }); }
+    try { await requireOptions(); setEditing({ id: null, book: { ...EMPTY_BOOK, contributors: [] }, cover: null }); }
     catch (caught) { setError(message(caught)); }
   }
   function apply(event?: FormEvent) { event?.preventDefault(); const next = { ...draftQuery, limit: PAGE_SIZE, offset: 0 }; setQuery(next); void load(next); }
   function page(offset: number) { const next = { ...query, offset }; setQuery(next); setDraftQuery(next); void load(next); }
   async function openDetails(bookId: string) { setBusy(true); try { setDetails(await serverApi.book(library.library_id, bookId)); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
-  async function edit(bookId: string) { setBusy(true); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book) }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
-  async function save(book: ServerBookWrite) { if (editing?.id) await serverApi.updateBook(library.library_id, editing.id, book); else await serverApi.createBook(library.library_id, book); setEditing(null); setNotice(editing?.id ? "Book updated." : "Book added."); await Promise.all([load(query), serverApi.catalogueOptions(library.library_id).then(setOptions)]); }
+  async function edit(bookId: string) { setBusy(true); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book), cover: book.cover }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
+  async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, reportProgress: (message: string) => void) {
+    const wasNew = !editing?.id;
+    const saved = editing?.id
+      ? await serverApi.updateBook(library.library_id, editing.id, book)
+      : await serverApi.createBook(library.library_id, book);
+    if (wasNew) setEditing({ id: saved.id, book: writeFromBook(saved), cover: saved.cover });
+    try {
+      if (coverFile) {
+        reportProgress("Processing private cover…");
+        await serverApi.uploadCover(library.library_id, saved.id, coverFile);
+      } else if (removeCover && saved.cover) {
+        reportProgress("Removing private cover…");
+        await serverApi.deleteCover(library.library_id, saved.id);
+      }
+    } catch (caught) {
+      if (wasNew) throw new Error(`Book added, but its cover was not saved. ${message(caught)} You can retry without creating the book again.`);
+      throw caught;
+    }
+    setEditing(null);
+    setNotice(wasNew ? "Book and private cover saved." : "Book updated.");
+    await Promise.all([load(query), serverApi.catalogueOptions(library.library_id).then(setOptions)]);
+  }
   async function remove(book: ServerBookSummary) { if (!window.confirm(`Permanently delete “${book.title}”? This cannot be undone.`)) return; try { await serverApi.deleteBook(library.library_id, book.id, book.title); setNotice("Book permanently deleted."); await load(query); } catch (caught) { setError(message(caught)); } }
 
   return <section className="server-catalogue-workspace">
@@ -283,8 +338,8 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
       <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
       <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; setDraftQuery(clear); setQuery(clear); void load(clear); }}>Clear</button><button className="confirm" type="submit">Apply filters</button></div>
     </form>}
-    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => <article key={book.id}><span className="server-book-placeholder"><BookOpen size={20} /></span><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div><div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>)}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
+    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => <article key={book.id}><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div><div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>)}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
     {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
-    {details && <BookDetails book={details} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor initial={editing.book} roles={options.contributor_roles} options={options} onClose={() => setEditing(null)} onSave={save} />}
+    {details && <BookDetails libraryId={library.library_id} book={details} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} onClose={() => setEditing(null)} onSave={save} />}
   </section>;
 }

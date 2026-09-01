@@ -612,6 +612,20 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     complete-information views, and structured audit events.
   - [x] Pass isolated backend/frontend gates and the reversible PostgreSQL
     integration test without modifying BOOKPILE Local or development data.
+- [x] Complete Server Phase 4C private cover storage and delivery:
+  - [x] Add reversible migration `0008` with library-scoped cover metadata,
+    exact object byte counts, dimensions, hashes, and opaque object keys.
+  - [x] Keep originals and object keys private; validate, orient, strip,
+    flatten, resize, and re-encode supported uploads as controlled WebP files.
+  - [x] Allow Owner upload/replace/removal and authenticated Owner/Viewer
+    reads, with CSRF, rate limiting, no-store responses, audit events, and
+    cross-library isolation.
+  - [x] Integrate responsive catalogue thumbnails, complete-information
+    covers, and safe partial-success handling when a new book saves before a
+    failed cover upload.
+  - [x] Complete Owner and Viewer acceptance testing on desktop and mobile:
+    add, display, replace, remove, HEIC upload, invalid-file rejection,
+    Viewer read-only access, and cross-library denial all passed.
 - [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
   and assign its implicit reading history to a selected Owner.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
