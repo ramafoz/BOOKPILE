@@ -880,7 +880,7 @@ compatible meanings and explicit import rules.
   hierarchy, and visual-layout storage with cross-library foreign-key guards.
 - [x] Phase 4B: port catalogue reads/writes, metadata validation, contributors,
   search, filters, and Owner/Viewer projections.
-- [ ] Phase 4C: implement the private image pipeline and authenticated cover
+- [x] Phase 4C: implement the private image pipeline and authenticated cover
   delivery.
 - [ ] Phase 4D: port physical hierarchy and map services with scope-safe
   projections and layout validation.
@@ -904,6 +904,16 @@ are covered by isolated and PostgreSQL integration tests. The responsive
 Server catalogue is now available inside the selected-library dashboard.
 Private covers, physical hierarchy/map APIs, personal readings, loans, and ZIP
 conversion remain deliberately outside this slice. See ADR 0009.
+
+Phase 4C passed its automated and manual acceptance gates on 2026-09-01.
+Owners can upload, replace, and remove strictly validated private covers;
+Owners and Viewers can retrieve them only through authenticated, no-store
+responses scoped to their library membership. The service discards originals,
+strips metadata, re-encodes accepted images as bounded WebP objects, records
+their exact storage size, and denies cross-library access. Desktop and mobile
+acceptance covered catalogue thumbnails, complete details, replacement,
+removal, HEIC input, invalid-file rejection, Viewer read-only access, and
+cross-library denial. See ADR 0010.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
