@@ -10,6 +10,7 @@ from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
 from ..repositories.covers import CoverRepository
 from ..repositories.libraries import LibraryRepository
+from ..repositories.physical_library import PhysicalLibraryRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
 from ..services.account_invitations import AccountInvitationService
@@ -27,6 +28,7 @@ from ..services.covers import CoverService
 from ..cover_storage import FilesystemCoverStorage
 from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
+from ..services.physical_library import PhysicalLibraryService
 
 
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -71,6 +73,17 @@ def get_library_service(session: SessionDependency) -> LibraryService:
 
 LibraryServiceDependency = Annotated[
     LibraryService, Depends(get_library_service)
+]
+
+
+def get_physical_library_service(
+    session: SessionDependency,
+) -> PhysicalLibraryService:
+    return PhysicalLibraryService(PhysicalLibraryRepository(session))
+
+
+PhysicalLibraryServiceDependency = Annotated[
+    PhysicalLibraryService, Depends(get_physical_library_service)
 ]
 
 

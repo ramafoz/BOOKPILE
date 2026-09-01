@@ -130,6 +130,82 @@ export interface CatalogueMetadataOptions {
   contributor_roles: ContributorRole[];
 }
 
+export interface PhysicalContainer {
+  id: string;
+  shelf_id: string;
+  container_type: "ROW" | "PILE";
+  layer: "BACKGROUND" | "FOREGROUND";
+  container_number: number;
+  book_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhysicalShelf {
+  id: string;
+  bookcase_id: string;
+  shelf_number: number;
+  usable_height_mm: number | null;
+  usable_width_mm: number | null;
+  usable_depth_mm: number | null;
+  book_count: number;
+  containers: PhysicalContainer[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhysicalBookcase {
+  id: string;
+  name: string;
+  description: string | null;
+  height_mm: number | null;
+  width_mm: number | null;
+  depth_mm: number | null;
+  book_count: number;
+  shelves: PhysicalShelf[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhysicalBook {
+  id: string;
+  title: string;
+  author: string;
+  container_id: string | null;
+  position: number | null;
+}
+
+export interface PhysicalLibrary {
+  library_id: string;
+  role: "OWNER" | "VIEWER";
+  can_edit: boolean;
+  bookcases: PhysicalBookcase[];
+  books: PhysicalBook[];
+}
+
+export interface BookcaseWrite {
+  name: string;
+  description: string | null;
+  height_mm: number | null;
+  width_mm: number | null;
+  depth_mm: number | null;
+}
+
+export interface ShelfWrite {
+  bookcase_id: string;
+  shelf_number: number;
+  usable_height_mm: number | null;
+  usable_width_mm: number | null;
+  usable_depth_mm: number | null;
+}
+
+export interface ContainerWrite {
+  shelf_id: string;
+  container_type: "ROW" | "PILE";
+  layer: "BACKGROUND" | "FOREGROUND";
+  container_number: number;
+}
+
 export interface CatalogueQuery {
   search?: string;
   isbn?: string;
@@ -369,6 +445,75 @@ export const serverApi = {
   deleteCover: (libraryId: string, bookId: string) => request<void>(
     `/libraries/${libraryId}/catalogue/${bookId}/cover`,
     { method: "DELETE" },
+    true,
+  ),
+  physicalLibrary: (libraryId: string) => request<PhysicalLibrary>(
+    `/libraries/${libraryId}/physical-library`,
+  ),
+  updateBookPlacement: (
+    libraryId: string,
+    bookId: string,
+    containerId: string | null,
+    position: number | null,
+  ) => request<PhysicalLibrary>(
+    `/libraries/${libraryId}/physical-library/books/${bookId}/placement`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ container_id: containerId, position }),
+    },
+    true,
+  ),
+  createBookcase: (libraryId: string, payload: BookcaseWrite) =>
+    request<PhysicalLibrary>(
+      `/libraries/${libraryId}/physical-library/bookcases`,
+      { method: "POST", body: JSON.stringify(payload) },
+      true,
+    ),
+  updateBookcase: (libraryId: string, bookcaseId: string, payload: BookcaseWrite) =>
+    request<PhysicalLibrary>(
+      `/libraries/${libraryId}/physical-library/bookcases/${bookcaseId}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+      true,
+    ),
+  deleteBookcase: (libraryId: string, bookcaseId: string) => request<void>(
+    `/libraries/${libraryId}/physical-library/bookcases/${bookcaseId}`,
+    { method: "DELETE", body: JSON.stringify({ confirmed: true }) },
+    true,
+  ),
+  createShelf: (libraryId: string, payload: ShelfWrite) => request<PhysicalLibrary>(
+    `/libraries/${libraryId}/physical-library/shelves`,
+    { method: "POST", body: JSON.stringify(payload) },
+    true,
+  ),
+  updateShelf: (
+    libraryId: string,
+    shelfId: string,
+    payload: Omit<ShelfWrite, "bookcase_id">,
+  ) => request<PhysicalLibrary>(
+    `/libraries/${libraryId}/physical-library/shelves/${shelfId}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+    true,
+  ),
+  deleteShelf: (libraryId: string, shelfId: string) => request<void>(
+    `/libraries/${libraryId}/physical-library/shelves/${shelfId}`,
+    { method: "DELETE", body: JSON.stringify({ confirmed: true }) },
+    true,
+  ),
+  createContainer: (libraryId: string, payload: ContainerWrite) =>
+    request<PhysicalLibrary>(
+      `/libraries/${libraryId}/physical-library/containers`,
+      { method: "POST", body: JSON.stringify(payload) },
+      true,
+    ),
+  updateContainer: (libraryId: string, containerId: string, containerNumber: number) =>
+    request<PhysicalLibrary>(
+      `/libraries/${libraryId}/physical-library/containers/${containerId}`,
+      { method: "PUT", body: JSON.stringify({ container_number: containerNumber }) },
+      true,
+    ),
+  deleteContainer: (libraryId: string, containerId: string) => request<void>(
+    `/libraries/${libraryId}/physical-library/containers/${containerId}`,
+    { method: "DELETE", body: JSON.stringify({ confirmed: true }) },
     true,
   ),
 };

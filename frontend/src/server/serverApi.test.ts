@@ -89,3 +89,55 @@ describe("Server catalogue requests", () => {
       .rejects.toThrow("ISBN-13 checksum is invalid");
   });
 });
+
+describe("Physical library requests", () => {
+  it("keeps physical writes library-scoped and CSRF protected", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=layout-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        library_id: "library-1", role: "OWNER", can_edit: true, bookcases: [], books: [],
+      }), { status: 201 }),
+    );
+
+    await serverApi.createContainer("library-1", {
+      shelf_id: "shelf-1",
+      container_type: "PILE",
+      layer: "FOREGROUND",
+      container_number: 2,
+    });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/libraries/library-1/physical-library/containers",
+    );
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("POST");
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("layout-token");
+    expect(JSON.parse(String(options.body))).toEqual({
+      shelf_id: "shelf-1",
+      container_type: "PILE",
+      layer: "FOREGROUND",
+      container_number: 2,
+    });
+  });
+
+  it("updates a book placement through the map-scoped endpoint", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=layout-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        library_id: "library-1", role: "OWNER", can_edit: true, bookcases: [], books: [],
+      }), { status: 200 }),
+    );
+
+    await serverApi.updateBookPlacement("library-1", "book-1", "container-1", 2);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/libraries/library-1/physical-library/books/book-1/placement",
+    );
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("PUT");
+    expect(JSON.parse(String(options.body))).toEqual({
+      container_id: "container-1",
+      position: 2,
+    });
+  });
+});

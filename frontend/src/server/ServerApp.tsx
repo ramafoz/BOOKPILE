@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   KeyRound,
+  Layers3,
   LibraryBig,
   LoaderCircle,
   LockKeyhole,
@@ -24,6 +25,7 @@ import {
   serverApi,
 } from "./serverApi";
 import CatalogueWorkspace from "./CatalogueWorkspace";
+import PhysicalLibraryWorkspace from "./PhysicalLibraryWorkspace";
 
 type Route =
   | "login"
@@ -429,6 +431,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [dataBusy, setDataBusy] = useState(false);
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
+  const [workspace, setWorkspace] = useState<"CATALOGUE" | "LAYOUT">("CATALOGUE");
 
   const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
 
@@ -645,7 +648,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
             <h2>Your libraries</h2>
             <div className="server-library-list">
               {libraries.map((library) => (
-                <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => setSelectedId(library.library_id)}>
+                <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => { setSelectedId(library.library_id); setWorkspace("CATALOGUE"); }}>
                   <LibraryBig size={18} /><span><b>{library.name}</b><small>{library.role === "OWNER" ? "Owner" : library.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue"}</small></span>
                 </button>
               ))}
@@ -664,7 +667,13 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div className="server-library-main">
             {selected ? <>
               <div className="server-library-heading"><div><p className="server-card-eyebrow">{selected.role}</p><h2>{selected.name}</h2></div><span>{selected.can_view_map ? <><Map size={17} /> Catalogue and map</> : "Catalogue only"}</span></div>
-              <CatalogueWorkspace library={selected} />
+              <nav className="server-workspace-tabs" aria-label="Library workspace">
+                <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => setWorkspace("CATALOGUE")}><BookOpen size={17} /> Catalogue</button>
+                {selected.can_view_map && <button type="button" className={workspace === "LAYOUT" ? "active" : ""} onClick={() => setWorkspace("LAYOUT")}><Layers3 size={17} /> Library layout</button>}
+              </nav>
+              {workspace === "LAYOUT" && selected.can_view_map
+                ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
+                : <CatalogueWorkspace library={selected} />}
               <section className="server-dashboard-panel">
                 <h3>Reading perspective</h3>
                 <p>Reading data will be personal in Phase 5. This selection already remembers whose future history you are viewing.</p>

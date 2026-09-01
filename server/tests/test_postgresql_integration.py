@@ -398,8 +398,25 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                         ],
                     },
                 )
+                placement_response = client.put(
+                    f"/api/v1/libraries/{first.id}/physical-library/books/"
+                    f"{created_response.json()['id']}/placement",
+                    headers={"X-CSRF-Token": "postgres-test-csrf"},
+                    json={"container_id": str(first_container.id), "position": 1},
+                )
                 options_response = client.get(
                     f"/api/v1/libraries/{first.id}/catalogue/metadata-options"
+                )
+                physical_response = client.get(
+                    f"/api/v1/libraries/{first.id}/physical-library"
+                )
+                created_bookcase_response = client.post(
+                    f"/api/v1/libraries/{first.id}/physical-library/bookcases",
+                    headers={"X-CSRF-Token": "postgres-test-csrf"},
+                    json={"name": "PostgreSQL physical service"},
+                )
+                inaccessible_physical_response = client.get(
+                    f"/api/v1/libraries/{second.id}/physical-library"
                 )
             assert response.status_code == 200
             assert response.json()["total"] == 1
@@ -414,6 +431,12 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             assert created_response.json()["genre_text"] == (
                 "Science Fiction, Testing"
             )
+            assert placement_response.status_code == 200, placement_response.text
+            placed_books = {
+                item["id"]: item for item in placement_response.json()["books"]
+            }
+            assert placed_books[str(created_response.json()["id"])]["position"] == 1
+            assert placed_books[str(first_book_id)]["position"] == 2
             assert options_response.status_code == 200, options_response.text
             assert options_response.json()["languages"] == ["English", "Galician"]
             assert options_response.json()["genres"] == [
@@ -423,6 +446,16 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             assert options_response.json()["contributor_roles"][0]["code"] == (
                 "AUTHOR"
             )
+            assert physical_response.status_code == 200, physical_response.text
+            assert physical_response.json()["bookcases"][0]["book_count"] == 2
+            assert created_bookcase_response.status_code == 201, (
+                created_bookcase_response.text
+            )
+            assert {
+                item["name"]
+                for item in created_bookcase_response.json()["bookcases"]
+            } == {"First bookcase", "PostgreSQL physical service"}
+            assert inaccessible_physical_response.status_code == 404
 
             locked_action = AccountActionRepository(session).get_token_for_update(
                 token_hash="d" * 64,

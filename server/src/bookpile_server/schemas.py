@@ -86,6 +86,135 @@ class CoverMetadataResponse(BaseModel):
     updated_at: datetime
 
 
+class BookcaseWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = Field(default=None, max_length=500)
+    height_mm: int | None = Field(default=None, gt=0, le=100000)
+    width_mm: int | None = Field(default=None, gt=0, le=100000)
+    depth_mm: int | None = Field(default=None, gt=0, le=100000)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Bookcase name is required")
+        return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def normalize_description(cls, value: str | None) -> str | None:
+        return optional_text(value)
+
+
+class ShelfWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bookcase_id: UUID
+    shelf_number: int = Field(gt=0)
+    usable_height_mm: int | None = Field(default=None, gt=0, le=100000)
+    usable_width_mm: int | None = Field(default=None, gt=0, le=100000)
+    usable_depth_mm: int | None = Field(default=None, gt=0, le=100000)
+
+
+class ShelfUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shelf_number: int = Field(gt=0)
+    usable_height_mm: int | None = Field(default=None, gt=0, le=100000)
+    usable_width_mm: int | None = Field(default=None, gt=0, le=100000)
+    usable_depth_mm: int | None = Field(default=None, gt=0, le=100000)
+
+
+class ContainerWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    shelf_id: UUID
+    container_type: Literal["ROW", "PILE"]
+    layer: Literal["BACKGROUND", "FOREGROUND"]
+    container_number: int = Field(gt=0)
+
+
+class ContainerUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    container_number: int = Field(gt=0)
+
+
+class PhysicalDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmed: Literal[True]
+
+
+class BookPlacementWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    container_id: UUID | None = None
+    position: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_pair(self) -> "BookPlacementWrite":
+        if (self.container_id is None) != (self.position is None):
+            raise ValueError("Container and position must be provided together")
+        return self
+
+
+class PhysicalBookResponse(BaseModel):
+    id: UUID
+    title: str
+    author: str
+    container_id: UUID | None
+    position: int | None
+
+
+class ContainerResponse(BaseModel):
+    id: UUID
+    shelf_id: UUID
+    container_type: Literal["ROW", "PILE"]
+    layer: Literal["BACKGROUND", "FOREGROUND"]
+    container_number: int
+    book_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ShelfResponse(BaseModel):
+    id: UUID
+    bookcase_id: UUID
+    shelf_number: int
+    usable_height_mm: int | None
+    usable_width_mm: int | None
+    usable_depth_mm: int | None
+    book_count: int
+    containers: list[ContainerResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class BookcaseResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str | None
+    height_mm: int | None
+    width_mm: int | None
+    depth_mm: int | None
+    book_count: int
+    shelves: list[ShelfResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class PhysicalLibraryResponse(BaseModel):
+    library_id: UUID
+    role: Literal["OWNER", "VIEWER"]
+    can_edit: bool
+    bookcases: list[BookcaseResponse]
+    books: list[PhysicalBookResponse]
+
+
 class BookWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
