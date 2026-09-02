@@ -28,6 +28,12 @@ export interface BookSegment extends WorldRect {
   book: PhysicalBook;
 }
 
+export interface RearrangementSlot extends WorldRect {
+  position: number;
+  book: PhysicalBook | null;
+  isEndTarget: boolean;
+}
+
 export function cataloguePageMean(books: PhysicalBook[]): number {
   const known = books.map((book) => book.page_count)
     .filter((pages): pages is number => typeof pages === "number" && pages > 0);
@@ -115,6 +121,56 @@ export function proportionalBookSegments(
     offset += thickness;
     return { ...segment, book };
   });
+}
+
+export function proportionalRearrangementSlots(
+  rect: MapContainerRect,
+  books: PhysicalBook[],
+  gapPositions: number[],
+  movingBook: PhysicalBook | null,
+  catalogueMean: number,
+): RearrangementSlot[] {
+  const byPosition = new Map(
+    books
+      .filter((book) => book.position !== null)
+      .map((book) => [book.position as number, book]),
+  );
+  const gaps = new Set(gapPositions);
+  const lastPosition = Math.max(0, ...byPosition.keys(), ...gaps);
+  const movingPages = movingBook?.page_count && movingBook.page_count > 0
+    ? movingBook.page_count
+    : catalogueMean;
+  const items = Array.from({ length: lastPosition }, (_, index) => {
+    const position = index + 1;
+    const item = byPosition.get(position) ?? null;
+    const pages = item?.page_count && item.page_count > 0 ? item.page_count : movingPages;
+    return { position, book: item, pages };
+  });
+  const totalPages = items.reduce((sum, item) => sum + item.pages, 0) || movingPages;
+  const span = rect.type === "ROW" ? rect.width : rect.height;
+  let offset = 0;
+  const slots = items.map((item, index): RearrangementSlot => {
+    const thickness = index === items.length - 1
+      ? span - offset
+      : span * item.pages / totalPages;
+    const geometry = rect.type === "ROW"
+      ? { x: rect.x + offset, y: rect.y, width: thickness, height: rect.height }
+      : { x: rect.x, y: rect.y + offset, width: rect.width, height: thickness };
+    offset += thickness;
+    return { ...geometry, position: item.position, book: item.book, isEndTarget: false };
+  });
+  const endThickness = items.length
+    ? Math.max(span * movingPages / totalPages, span * 0.035)
+    : span;
+  slots.push({
+    ...(rect.type === "ROW"
+      ? { x: rect.x + rect.width, y: rect.y, width: endThickness, height: rect.height }
+      : { x: rect.x, y: rect.y + rect.height, width: rect.width, height: endThickness }),
+    position: lastPosition + 1,
+    book: null,
+    isEndTarget: true,
+  });
+  return slots;
 }
 
 export function boundsForRects(rects: WorldRect[]): WorldRect {

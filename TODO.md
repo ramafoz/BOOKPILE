@@ -659,16 +659,39 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Physical hierarchy, precise visual-layout validation, responsive map,
     page-proportional rendering, camera gestures, and book/container
     inspection.
-  - [ ] Show physical location in Server catalogue rows and edit placement from
-    each book, matching Local's established interaction; then remove the
-    temporary global `Position books` form from Customize Layout.
-  - [ ] Port the complete Local-style visual `Reorganize books` workflow into
-    Server Library Map.
+  - [x] Show physical location in Server catalogue rows and provide safe
+    per-book placement; the temporary global `Position books` form has been
+    removed from Customize Layout.
+  - [ ] Move that placement editor inside the normal Edit Book dialog instead
+    of keeping a separate catalogue-row action.
+  - [ ] Let Owners assign a physical position while creating a single book.
+  - [ ] Port Server Batch Add, retaining the selected destination between
+    consecutive books and supporting the same safe insertion rules.
+  - [x] Port the Local-style visual `Reorganize books` workflow into Server
+    Library Map: Collapse/Leave gap, Squeeze/Swap/Continue, chained drafts,
+    visible retained/end targets, a collapsible responsive draft, proportional
+    container previews, undo, atomic Apply, stale-revision rejection, and
+    structured audit passed desktop/mobile acceptance on 2026-09-02.
   - [ ] Implement the Server physical-geometry migration and engine specified
     in `PHYSICAL_GEOMETRY_PLAN.md`.
   - [ ] Integrate floating/minimizable layout editing and direct map
     manipulation over that same geometry service.
   - [ ] Backup, restore, export, and Local ZIP import remain pending.
+- [ ] Compact the Server workspace header and catalogue presentation:
+  - Replace the large welcome/library heading with top controls for selected
+    library, combined catalogue/map plus reading perspective, signed-in user
+    and protected-session indicator, and Settings.
+  - Show the selected library name and Owner/Viewer indication in its selector;
+    do not repeat them as a large heading.
+  - Put members/invitations, Customize Layout, and future controls in Settings.
+  - Label an unshared library `Private catalogue`; otherwise use `Shared
+    catalogue` with a compact member-status viewer beside it.
+  - Align the open-book icon with the catalogue eyebrow, title, and count. Use
+    `Your books` for an Owner's own perspective and the visible username for a
+    different Owner's or a Viewer's perspective.
+  - Say only the total book count when no search or filter is active; reserve
+    `match` wording for filtered results.
+  - Implement according to `SERVER_FRONTEND_UX_PLAN.md`.
 - [ ] Implement perspective-aware catalogue states, statistics, map colouring,
   suggestions, and personal reading/rereading sessions.
 - [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase

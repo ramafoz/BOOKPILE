@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookOpen, Boxes, Layers3, MapPin, Pencil, Plus, Ruler, Settings2, Trash2 } from "lucide-react";
+import { Boxes, Layers3, Pencil, Plus, Ruler, Settings2, Trash2 } from "lucide-react";
 
 import {
   PhysicalBookcase,
@@ -239,25 +239,11 @@ export default function PhysicalLibraryWorkspace({
   const [containerNumber, setContainerNumber] = useState("1");
   const [containerType, setContainerType] = useState<"ROW" | "PILE">("ROW");
   const [containerLayer, setContainerLayer] = useState<"BACKGROUND" | "FOREGROUND">("BACKGROUND");
-  const [placementBook, setPlacementBook] = useState("");
-  const [placementContainer, setPlacementContainer] = useState("");
-  const [placementPosition, setPlacementPosition] = useState("");
 
   const shelves = useMemo(
     () => data?.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => ({ bookcase, shelf }))) ?? [],
     [data],
   );
-  const containers = useMemo(
-    () => shelves.flatMap(({ bookcase, shelf }) => shelf.containers.map((container) => ({
-      container,
-      label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${container.layer === "BACKGROUND" ? "Background" : "Foreground"} ${container.container_type === "ROW" ? "Row" : "Pile"} ${container.container_number}`,
-    }))),
-    [shelves],
-  );
-  const selectedPlacementBook = data?.books.find((book) => book.id === placementBook);
-  const selectedLocation = selectedPlacementBook?.container_id
-    ? containers.find(({ container }) => container.id === selectedPlacementBook.container_id)?.label
-    : null;
 
   useEffect(() => {
     setBusy(true);
@@ -268,10 +254,6 @@ export default function PhysicalLibraryWorkspace({
         setShelfBookcase(value.bookcases[0]?.id ?? "");
         const firstShelf = value.bookcases.flatMap((item) => item.shelves)[0];
         setContainerShelf(firstShelf?.id ?? "");
-        const firstBook = value.books[0];
-        setPlacementBook(firstBook?.id ?? "");
-        setPlacementContainer(firstBook?.container_id ?? "");
-        setPlacementPosition(firstBook?.position?.toString() ?? "");
       })
       .catch((caught) => setError(errorMessage(caught)))
       .finally(() => setBusy(false));
@@ -313,29 +295,6 @@ export default function PhysicalLibraryWorkspace({
     }
   }
 
-  function choosePlacementBook(bookId: string) {
-    setPlacementBook(bookId);
-    const book = data?.books.find((item) => item.id === bookId);
-    setPlacementContainer(book?.container_id ?? "");
-    setPlacementPosition(book?.position?.toString() ?? "");
-  }
-
-  async function savePlacement(event: FormEvent) {
-    event.preventDefault();
-    if (!placementBook) return;
-    const containerId = placementContainer || null;
-    const position = containerId ? Number.parseInt(placementPosition, 10) : null;
-    await mutate(
-      () => serverApi.updateBookPlacement(
-        libraryId,
-        placementBook,
-        containerId,
-        position,
-      ),
-      containerId ? "Book placed. Positions were renumbered safely." : "Book removed from its physical location. The former container was compacted.",
-    );
-  }
-
   if (!data) return <section className="server-dashboard-panel"><h3>Library layout</h3><p>{busy ? "Loading physical library…" : error ?? "Physical library unavailable."}</p></section>;
 
   return <section className="server-physical-workspace">
@@ -354,18 +313,6 @@ export default function PhysicalLibraryWorkspace({
         <span>3</span><h4>Add container</h4><label>Shelf *<select required value={containerShelf} onChange={(event) => setContainerShelf(event.target.value)}><option value="">Choose shelf</option>{shelves.map(({ bookcase, shelf }) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>)}</select></label><div className="server-inline-fields"><label>Type<select value={containerType} onChange={(event) => setContainerType(event.target.value as "ROW" | "PILE")}><option value="ROW">Row</option><option value="PILE">Pile</option></select></label><label>Layer<select value={containerLayer} onChange={(event) => setContainerLayer(event.target.value as "BACKGROUND" | "FOREGROUND")}><option value="BACKGROUND">Background</option><option value="FOREGROUND">Foreground</option></select></label><label>Number<input type="number" min="1" required value={containerNumber} onChange={(event) => setContainerNumber(event.target.value)} /></label></div><button type="submit" disabled={busy || !containerShelf}><Plus size={16} /> Add container</button>
       </form>
     </div>}
-
-    {data.can_edit && <form className="server-book-placement" onSubmit={(event) => void savePlacement(event)}>
-      <header><div><BookOpen size={20} /><span><b>Position books</b><small>Insert a book safely, move it, or remove its physical location.</small></span></div><MapPin size={22} /></header>
-      <div className="server-placement-grid">
-        <label>Book *<select required value={placementBook} onChange={(event) => choosePlacementBook(event.target.value)}><option value="">Choose book</option>{data.books.map((book) => <option key={book.id} value={book.id}>{book.title} — {book.author}</option>)}</select></label>
-        <label>Destination container<select value={placementContainer} onChange={(event) => { const value = event.target.value; setPlacementContainer(value); if (!value) setPlacementPosition(""); else if (!placementPosition) { const occupied = data.books.filter((book) => book.container_id === value && book.id !== placementBook).length; setPlacementPosition(String(occupied + 1)); } }}><option value="">No physical location</option>{containers.map(({ container, label }) => <option key={container.id} value={container.id}>{label}</option>)}</select></label>
-        <label>Position *<input type="number" min="1" required={Boolean(placementContainer)} disabled={!placementContainer} value={placementPosition} onChange={(event) => setPlacementPosition(event.target.value)} /></label>
-        <button type="submit" disabled={busy || !placementBook || (Boolean(placementContainer) && !placementPosition)}><MapPin size={16} /> Save position</button>
-      </div>
-      <p><b>Current position:</b> {selectedLocation ? `${selectedLocation} · Position ${selectedPlacementBook?.position}` : "Not stored in the physical library"}</p>
-      <small>Choosing an occupied position makes room automatically. The old container is always compacted, so persistent gaps cannot be created.</small>
-    </form>}
 
     <div className="server-physical-tree">{data.bookcases.map((bookcase) => <article key={bookcase.id}>
       <header><div><Boxes size={21} /><span><b>{bookcase.name}</b><small>{bookcase.book_count} {bookcase.book_count === 1 ? "book" : "books"} · {bookcase.shelves.length} {bookcase.shelves.length === 1 ? "shelf" : "shelves"}</small></span></div>{data.can_edit && <div><button title="Edit bookcase" type="button" onClick={() => setEditing({ kind: "BOOKCASE", item: bookcase })}><Pencil size={16} /></button><button title="Delete bookcase" type="button" onClick={() => void remove("BOOKCASE", bookcase.id, bookcase.name)}><Trash2 size={16} /></button></div>}</header>

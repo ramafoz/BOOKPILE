@@ -162,6 +162,44 @@ class BookPlacementWrite(BaseModel):
         return self
 
 
+class RearrangementStepWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    container_id: UUID
+    position: int = Field(gt=0)
+    new_position_mode: Literal["SQUEEZE", "SWAP", "CONTINUE"] = "SQUEEZE"
+
+
+class RearrangementOperationWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    book_id: UUID
+    old_position_mode: Literal["COLLAPSE", "LEAVE_GAP"] = "COLLAPSE"
+    release_shelf_space: bool = False
+    steps: list[RearrangementStepWrite] = Field(default_factory=list, max_length=100)
+
+
+class RearrangementRequest(RearrangementOperationWrite):
+    completed_operations: list[RearrangementOperationWrite] = Field(
+        default_factory=list, max_length=100
+    )
+
+
+class RearrangementApplyRequest(RearrangementRequest):
+    revision: str = Field(min_length=64, max_length=64)
+
+
+class RearrangementPlacementResponse(BaseModel):
+    book_id: UUID
+    container_id: UUID | None
+    position: int | None
+
+
+class RearrangementGapResponse(BaseModel):
+    container_id: UUID
+    positions: list[int]
+
+
 class PhysicalBookResponse(BaseModel):
     id: UUID
     title: str
@@ -205,6 +243,21 @@ class VisualContainerLayoutWrite(BaseModel):
         if self.x + self.width > 100 or self.y + self.height > 100:
             raise ValueError("Container geometry must remain inside its shelf")
         return self
+
+
+class RearrangementResultResponse(BaseModel):
+    revision: str
+    valid_to_apply: bool
+    complete: bool
+    effective_old_position_mode: Literal["COLLAPSE", "LEAVE_GAP"]
+    next_active_book_id: UUID | None = None
+    placements: list[RearrangementPlacementResponse]
+    gaps: list[RearrangementGapResponse]
+    movement_log: list[str]
+    movement_groups: list[list[str]]
+    warnings: list[str]
+    geometry_errors: list[str]
+    container_layouts: list[VisualContainerLayoutWrite]
 
 
 class VisualOutsideAreaWrite(BaseModel):

@@ -894,12 +894,17 @@ compatible meanings and explicit import rules.
   - [x] Move libraries, reading perspective, members, and invitations into
     compact top-level panels so the map can use one viewport; retain one
     integrated members-and-invitations panel.
-  - [ ] Reuse Local's catalogue-row location presentation and per-book
-    placement editor; remove the temporary global `Position books` form from
-    Customize Layout once its replacement is available.
-  - [ ] Port `Reorganize books` into Library Map, including atomic preview,
-    collision handling, proportional container resizing, and scope-safe
-    PostgreSQL transactions.
+  - [x] Reuse Local's catalogue-row location presentation and safe per-book
+    placement; remove the temporary global `Position books` form from
+    Customize Layout.
+  - [ ] Integrate placement into Edit Book, allow position during single-book
+    creation, and port Batch Add with a retained destination.
+  - [x] Port `Reorganize books` into Library Map, including atomic read-only
+    preview, Collapse/Leave gap, Squeeze/Swap/Continue, multiple movement
+    chains, retained and end-position targets, proportional container resizing,
+    stale-revision rejection, a collapsible responsive draft, audit, and
+    scope-safe PostgreSQL transactions. Automated and manual acceptance passed
+    on 2026-09-02.
   - [ ] Implement the approved single-geometry physical-dimension model in
     `PHYSICAL_GEOMETRY_PLAN.md`: millimetre world coordinates, shared
     `MANUAL`/`PHYSICAL` modes, per-axis fallbacks, accordion movement, generic
@@ -942,9 +947,12 @@ The read/navigation increment of Phase 4D passed automated and manual desktop
 and mobile acceptance on 2026-09-01. Hierarchy maintenance, revisioned precise
 layout writes, ROW anchors, PILE supports, scoped map projections, responsive
 camera gestures, page-proportional rendering, inspection modes, and complete
-book information are operational. Phase 4D is intentionally still open for
-per-book placement UX, visual rearrangement, the approved physical-geometry
-engine, and floating/direct layout editing.
+book information are operational. Catalogue-row locations and per-book
+placement are now available, and the visual rearrangement engine has passed
+desktop and responsive acceptance, including its compact panel and explicit
+retained/end targets. Phase 4D remains open for
+integrating placement into book creation/editing, Server Batch Add, the
+approved physical-geometry engine, and floating/direct layout editing.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
@@ -1017,12 +1025,13 @@ recovery, and cost checks.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
 
-### Progress snapshot — 2026-09-01
+### Progress snapshot — 2026-09-02
 
 Phases 0, 1, 2, 3, and 3.5 are complete. Phase 4A–4C are complete; Phase 4D
 has passed its hierarchy, precise-layout, responsive-map, gesture, inspection,
-and Viewer-scope gates but still requires placement UX, rearrangement,
-physical geometry, and integrated editing. Phase 4E and Phases 5–10 remain
+Viewer-scope, catalogue-location, placement, and rearrangement gates. Its
+remaining work is integrated create/edit placement, Batch Add, physical
+geometry, and integrated layout editing. Phase 4E and Phases 5–10 remain
 pending.
 
 Because phases differ greatly in size, progress is reported as a range rather

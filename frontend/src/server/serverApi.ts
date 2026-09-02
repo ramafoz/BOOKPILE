@@ -225,6 +225,38 @@ export interface PhysicalLibrary {
   layout: VisualLayout;
 }
 
+export interface RearrangementStep {
+  container_id: string;
+  position: number;
+  new_position_mode: "SQUEEZE" | "SWAP" | "CONTINUE";
+}
+
+export interface RearrangementOperation {
+  book_id: string;
+  old_position_mode: "COLLAPSE" | "LEAVE_GAP";
+  release_shelf_space: boolean;
+  steps: RearrangementStep[];
+}
+
+export interface RearrangementRequest extends RearrangementOperation {
+  completed_operations: RearrangementOperation[];
+}
+
+export interface RearrangementResult {
+  revision: string;
+  valid_to_apply: boolean;
+  complete: boolean;
+  effective_old_position_mode: "COLLAPSE" | "LEAVE_GAP";
+  next_active_book_id: string | null;
+  placements: Array<{ book_id: string; container_id: string | null; position: number | null }>;
+  gaps: Array<{ container_id: string; positions: number[] }>;
+  movement_log: string[];
+  movement_groups: string[][];
+  warnings: string[];
+  geometry_errors: string[];
+  container_layouts: VisualContainerLayout[];
+}
+
 export interface BookcaseWrite {
   name: string;
   description: string | null;
@@ -505,6 +537,17 @@ export const serverApi = {
     },
     true,
   ),
+  previewRearrangement: (libraryId: string, payload: RearrangementRequest) =>
+    request<RearrangementResult>(
+      `/libraries/${libraryId}/physical-library/rearrangements/preview`,
+      { method: "POST", body: JSON.stringify(payload) },
+    ),
+  applyRearrangement: (libraryId: string, payload: RearrangementRequest, revision: string) =>
+    request<RearrangementResult>(
+      `/libraries/${libraryId}/physical-library/rearrangements/apply`,
+      { method: "POST", body: JSON.stringify({ ...payload, revision }) },
+      true,
+    ),
   updateVisualLayout: (libraryId: string, layout: VisualLayout) =>
     request<PhysicalLibrary>(
       `/libraries/${libraryId}/physical-library/layout`,

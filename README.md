@@ -441,8 +441,7 @@ quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
 The isolated Server edition has completed its Phase 3 membership foundation,
-Phase 4A–4C shared catalogue foundation, and the accepted read/navigation
-portion of Phase 4D. Secure accounts can create and
+Phase 4A–4C shared catalogue foundation, and most of Phase 4D. Secure accounts can create and
 join libraries as equal co-Owners or scoped read-only Viewers. PostgreSQL has
 library-safe metadata, contributor, hierarchy, dimension, and layout
 structures; the responsive Server catalogue now supports scoped reads,
@@ -454,11 +453,20 @@ of metadata, resized, and re-encoded as private WebP objects. Their originals
 are not retained and their storage keys are never exposed as public URLs.
 Server now also provides Owner-maintained physical hierarchy, revisioned layout
 geometry, scoped map access, responsive mouse/touch camera navigation,
-page-proportional rendering, and book/container inspection. Phase 4D remains
-open for catalogue-row placement, visual rearrangement, floating/direct layout
-editing, and the approved physical-dimension geometry engine. This does not
+page-proportional rendering, book/container inspection, catalogue-row physical
+locations, per-book placement, and transactional visual rearrangement. The
+rearrangement draft supports Collapse/Leave gap and Squeeze/Swap/Continue,
+multiple completed movement chains, proportional geometry previews, undo,
+explicit Apply, concurrency revision checks, and audit. Phase 4D remains open
+for floating/direct layout editing and the approved physical-dimension geometry
+engine. This does not
 alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
 import remain pending for later Server phases.
+
+The next approved Server interface increment—compact navigation, accurate
+private/shared catalogue presentation, integrated physical placement, and
+Batch Add—is specified in
+[SERVER_FRONTEND_UX_PLAN.md](SERVER_FRONTEND_UX_PLAN.md).
 
 ## Licence
 

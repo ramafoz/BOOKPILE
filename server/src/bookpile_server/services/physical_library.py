@@ -12,6 +12,9 @@ from ..repositories.physical_library import PhysicalLibraryRepository
 from ..schemas import (
     BookcaseWrite,
     BookPlacementWrite,
+    RearrangementApplyRequest,
+    RearrangementRequest,
+    RearrangementResultResponse,
     ContainerUpdate,
     ContainerWrite,
     ShelfUpdate,
@@ -22,6 +25,14 @@ from ..schemas import (
     VisualLayoutWrite,
     VisualOutsideAreaWrite,
     VisualShelfLayoutWrite,
+)
+from .rearrangement import (
+    PlannedBook,
+    PlannedContainer,
+    PlannedDraft,
+    RearrangementPlanError,
+    plan as plan_rearrangement,
+    revision as rearrangement_revision,
 )
 
 
@@ -407,6 +418,172 @@ class PhysicalLibraryService:
         # positions can be vacated before they are reassigned. Refresh the
         # identity map before building the response in the same request.
         self._repository.expire_all()
+
+    @staticmethod
+    def _rearrangement_state(
+        hierarchy: PhysicalHierarchy,
+    ) -> tuple[dict[UUID, PlannedBook], dict[UUID, PlannedContainer]]:
+        shelves = {item.id: item for item in hierarchy.shelves}
+        bookcases = {item.id: item for item in hierarchy.bookcases}
+        layouts = {item.container_id: item for item in hierarchy.layout.containers}
+        books = {
+            item.id: PlannedBook(
+                id=item.id,
+                title=item.title,
+                author=item.author,
+                page_count=item.page_count,
+                container_id=item.container_id,
+                position=item.position,
+            )
+            for item in hierarchy.books
+        }
+        containers: dict[UUID, PlannedContainer] = {}
+        for item in hierarchy.containers:
+            shelf = shelves[item.shelf_id]
+            bookcase = bookcases[shelf.bookcase_id]
+            layout = layouts[item.id]
+            containers[item.id] = PlannedContainer(
+                id=item.id,
+                shelf_id=item.shelf_id,
+                label=(
+                    f"{bookcase.name} · Shelf {shelf.shelf_number} · "
+                    f"{item.layer.title()} "
+                    f"{'Row' if item.container_type == 'ROW' else 'Pile'} "
+                    f"{item.container_number}"
+                ),
+                kind=item.container_type,
+                layer=item.layer,
+                x=layout.x,
+                y=layout.y,
+                width=layout.width,
+                height=layout.height,
+                row_anchor=layout.row_anchor,
+                pile_support_kind=layout.pile_support_kind,
+                pile_support_container_id=layout.pile_support_container_id,
+            )
+        return books, containers
+
+    @staticmethod
+    def _projected_layout(
+        hierarchy: PhysicalHierarchy, draft: PlannedDraft
+    ) -> VisualLayoutWrite:
+        projected = draft.containers
+        return VisualLayoutWrite(
+            revision=hierarchy.layout.revision,
+            bookcases=hierarchy.layout.bookcases,
+            shelves=hierarchy.layout.shelves,
+            containers=[
+                VisualContainerLayoutWrite(
+                    container_id=item.container_id,
+                    x=projected[item.container_id].x,
+                    y=projected[item.container_id].y,
+                    width=projected[item.container_id].width,
+                    height=projected[item.container_id].height,
+                    row_anchor=projected[item.container_id].row_anchor,
+                    pile_support_kind=projected[item.container_id].pile_support_kind,
+                    pile_support_container_id=projected[item.container_id].pile_support_container_id,
+                )
+                for item in hierarchy.layout.containers
+            ],
+            outside_areas=hierarchy.layout.outside_areas,
+        )
+
+    def _plan_rearrangement(
+        self, *, library_id: UUID, payload: RearrangementRequest
+    ) -> tuple[PhysicalHierarchy, PlannedDraft]:
+        hierarchy = self.hierarchy(library_id)
+        books, containers = self._rearrangement_state(hierarchy)
+        try:
+            draft = plan_rearrangement(books, containers, payload)
+        except RearrangementPlanError as exc:
+            raise PhysicalLibraryValidationError(str(exc)) from exc
+        try:
+            self._validate_layout(hierarchy, self._projected_layout(hierarchy, draft))
+        except PhysicalLibraryValidationError as exc:
+            errors = list(draft.payload["geometry_errors"])
+            errors.append(str(exc))
+            draft.payload["geometry_errors"] = list(dict.fromkeys(errors))
+            draft.payload["warnings"] = list(dict.fromkeys([
+                *draft.payload["warnings"], str(exc)
+            ]))
+            draft.payload["valid_to_apply"] = False
+        return hierarchy, draft
+
+    def preview_rearrangement(
+        self, *, library_id: UUID, payload: RearrangementRequest
+    ) -> RearrangementResultResponse:
+        _hierarchy, draft = self._plan_rearrangement(
+            library_id=library_id, payload=payload
+        )
+        return RearrangementResultResponse.model_validate(draft.payload)
+
+    def apply_rearrangement(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        payload: RearrangementApplyRequest,
+    ) -> RearrangementResultResponse:
+        if self._repository.lock_library(library_id) is None:
+            raise PhysicalLibraryNotFoundError("Library not found.")
+        hierarchy, draft = self._plan_rearrangement(
+            library_id=library_id,
+            payload=RearrangementRequest.model_validate(payload.model_dump(exclude={"revision"})),
+        )
+        original_books, original_containers = self._rearrangement_state(hierarchy)
+        current_revision = rearrangement_revision(original_books, original_containers)
+        if payload.revision != current_revision:
+            raise PhysicalLibraryConflictError(
+                "The books or layout changed after this draft was opened. Reload before applying it."
+            )
+        result = RearrangementResultResponse.model_validate(draft.payload)
+        if not result.valid_to_apply:
+            raise PhysicalLibraryValidationError(
+                "Complete the chain and resolve every gap or geometry conflict before applying it."
+            )
+        affected = {
+            container_id
+            for book_id, book in draft.books.items()
+            for container_id in (original_books[book_id].container_id, book.container_id)
+            if container_id is not None
+            and (original_books[book_id].container_id, original_books[book_id].position)
+            != (book.container_id, book.position)
+        }
+        placements = {
+            book_id: (book.container_id, book.position)
+            for book_id, book in draft.books.items()
+            if original_books[book_id].container_id in affected
+            or book.container_id in affected
+            or (book.container_id, book.position)
+            != (original_books[book_id].container_id, original_books[book_id].position)
+        }
+        layout = self._projected_layout(hierarchy, draft)
+        self._repository.replace_placements(
+            library_id=library_id,
+            affected_containers=affected,
+            placements=placements,
+        )
+        self._repository.upsert_visual_layout(
+            library_id=library_id,
+            bookcases=[item.model_dump() for item in layout.bookcases],
+            shelves=[item.model_dump() for item in layout.shelves],
+            containers=[item.model_dump() for item in layout.containers],
+            outside_areas=[item.model_dump() for item in layout.outside_areas],
+        )
+        self._repository.audit(
+            library_id=library_id,
+            actor_user_id=actor_user_id,
+            event_type="books_rearranged",
+            details={
+                "revision": current_revision,
+                "movement_groups": result.movement_groups,
+                "changed_book_count": len(result.placements),
+                "changed_container_count": len(result.container_layouts),
+            },
+        )
+        self._commit("The rearrangement could not be applied.")
+        self._repository.expire_all()
+        return result
 
     def create_bookcase(
         self, *, library_id: UUID, actor_user_id: UUID, payload: BookcaseWrite

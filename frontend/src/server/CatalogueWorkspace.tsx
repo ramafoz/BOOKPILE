@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  MapPin,
   Pencil,
   Plus,
   Search,
@@ -17,6 +18,7 @@ import {
   type CatalogueMetadataOptions,
   type CatalogueQuery,
   type LibrarySummary,
+  type PhysicalLibrary,
   type ServerBook,
   type ServerBookSummary,
   type ServerBookWrite,
@@ -121,9 +123,77 @@ function CoverImage({ libraryId, book }: { libraryId: string; book: ServerBookSu
     : <span className="server-book-placeholder"><BookOpen size={20} /></span>;
 }
 
-export function BookDetails({ libraryId, book, onClose, onEdit }: {
+function physicalLocations(data: PhysicalLibrary | null) {
+  return data?.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => ({
+    bookcase,
+    shelf,
+    container,
+    label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${container.layer === "BACKGROUND" ? "Background" : "Foreground"} ${container.container_type === "ROW" ? "Row" : "Pile"} ${container.container_number}`,
+  })))) ?? [];
+}
+
+function locationLabel(data: PhysicalLibrary | null, bookId: string): string | null {
+  const book = data?.books.find((item) => item.id === bookId);
+  if (!book?.container_id || !book.position) return null;
+  const location = physicalLocations(data).find(({ container }) => container.id === book.container_id);
+  return location ? `${location.label} · Position ${book.position}` : null;
+}
+
+function PlacementDialog({ libraryId, data, book, onClose, onSaved }: {
+  libraryId: string;
+  data: PhysicalLibrary;
+  book: ServerBookSummary;
+  onClose: () => void;
+  onSaved: (data: PhysicalLibrary) => void;
+}) {
+  const placed = data.books.find((item) => item.id === book.id);
+  const locations = physicalLocations(data);
+  const current = locations.find(({ container }) => container.id === placed?.container_id);
+  const [bookcaseId, setBookcaseId] = useState(current?.bookcase.id ?? "");
+  const [shelfId, setShelfId] = useState(current?.shelf.id ?? "");
+  const [containerId, setContainerId] = useState(placed?.container_id ?? "");
+  const [position, setPosition] = useState(placed?.position?.toString() ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const shelves = data.bookcases.find((item) => item.id === bookcaseId)?.shelves ?? [];
+  const containers = shelves.find((item) => item.id === shelfId)?.containers ?? [];
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const next = await serverApi.updateBookPlacement(
+        libraryId,
+        book.id,
+        containerId || null,
+        containerId ? Number.parseInt(position, 10) : null,
+      );
+      onSaved(next);
+    } catch (caught) {
+      setError(message(caught)); setBusy(false);
+    }
+  }
+
+  return <div className="server-modal-backdrop"><section className="server-catalogue-dialog placement" role="dialog" aria-modal="true">
+    <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close"><X /></button>
+    <p className="server-card-eyebrow">Physical copy</p><h2>Position book</h2>
+    <p><b>{book.title}</b><br /><span className="server-book-author">{book.display_author}</span></p>
+    {error && <div className="server-message error">{error}</div>}
+    <form className="server-placement-editor" onSubmit={submit}>
+      <label>Bookcase<select value={bookcaseId} onChange={(event) => { const value = event.target.value; setBookcaseId(value); const firstShelf = data.bookcases.find((item) => item.id === value)?.shelves[0]; const firstContainer = firstShelf?.containers[0]; setShelfId(firstShelf?.id ?? ""); setContainerId(firstContainer?.id ?? ""); setPosition(firstContainer ? String(firstContainer.book_count + 1) : ""); }}><option value="">No physical location</option>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Shelf<select disabled={!bookcaseId} value={shelfId} onChange={(event) => { const value = event.target.value; setShelfId(value); const first = shelves.find((item) => item.id === value)?.containers[0]; setContainerId(first?.id ?? ""); setPosition(first ? String(first.book_count + 1) : ""); }}><option value="">Choose shelf</option>{shelves.map((item) => <option key={item.id} value={item.id}>Shelf {item.shelf_number}</option>)}</select></label>
+      <label>Container<select disabled={!shelfId} value={containerId} onChange={(event) => { const value = event.target.value; setContainerId(value); const selected = containers.find((item) => item.id === value); setPosition(selected ? String(selected.book_count + (selected.id === placed?.container_id ? 0 : 1)) : ""); }}><option value="">Choose container</option>{containers.map((item) => <option key={item.id} value={item.id}>{item.layer === "BACKGROUND" ? "Background" : "Foreground"} {item.container_type === "ROW" ? "Row" : "Pile"} {item.container_number}</option>)}</select></label>
+      <label>Position<input type="number" min="1" required={Boolean(containerId)} disabled={!containerId} value={position} onChange={(event) => setPosition(event.target.value)} /></label>
+      <p className="server-field-help">An occupied destination makes room automatically. Removing or moving the book compacts its former container.</p>
+      <div className="server-dialog-actions"><button type="button" onClick={onClose}>Cancel</button><button className="confirm" disabled={busy || (Boolean(bookcaseId) && (!containerId || !position))} type="submit">{busy ? "Saving…" : "Save position"}</button></div>
+    </form>
+  </section></div>;
+}
+
+export function BookDetails({ libraryId, book, location, onClose, onEdit }: {
   libraryId: string;
   book: ServerBook;
+  location?: string | null;
   onClose: () => void;
   onEdit: (() => void) | null;
 }) {
@@ -141,6 +211,7 @@ export function BookDetails({ libraryId, book, onClose, onEdit }: {
     ["Width", book.width_mm ? `${book.width_mm} mm` : null],
     ["Thickness", book.thickness_mm ? `${book.thickness_mm} mm` : null],
     ["Notes", book.notes],
+    ["Physical location", location ?? null],
   ];
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog details" role="dialog" aria-modal="true">
     <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close"><X /></button>
@@ -267,6 +338,8 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState<ServerBook | null>(null);
   const [editing, setEditing] = useState<{ id: string | null; book: ServerBookWrite; cover: ServerBook["cover"] } | null>(null);
+  const [physical, setPhysical] = useState<PhysicalLibrary | null>(null);
+  const [placing, setPlacing] = useState<ServerBookSummary | null>(null);
 
   const load = useCallback(async (next: CatalogueQuery) => {
     setBusy(true); setError("");
@@ -279,8 +352,10 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
     const initial = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const };
     setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null);
     void load(initial);
+    if (library.can_view_map) void serverApi.physicalLibrary(library.library_id).then(setPhysical).catch((caught) => setError(message(caught)));
+    else setPhysical(null);
     void serverApi.catalogueOptions(library.library_id).then(setOptions).catch((caught) => setError(message(caught)));
-  }, [library.library_id, load]);
+  }, [library.library_id, library.can_view_map, load]);
 
   async function requireOptions(): Promise<CatalogueMetadataOptions> {
     if (options.contributor_roles.length) return options;
@@ -322,7 +397,7 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
     setNotice(wasNew ? "Book and private cover saved." : "Book updated.");
     await Promise.all([load(query), serverApi.catalogueOptions(library.library_id).then(setOptions)]);
   }
-  async function remove(book: ServerBookSummary) { if (!window.confirm(`Permanently delete “${book.title}”? This cannot be undone.`)) return; try { await serverApi.deleteBook(library.library_id, book.id, book.title); setNotice("Book permanently deleted."); await load(query); } catch (caught) { setError(message(caught)); } }
+  async function remove(book: ServerBookSummary) { if (!window.confirm(`Permanently delete “${book.title}”? This cannot be undone.`)) return; try { await serverApi.deleteBook(library.library_id, book.id, book.title); setNotice("Book permanently deleted."); await load(query); if (library.can_view_map) setPhysical(await serverApi.physicalLibrary(library.library_id)); } catch (caught) { setError(message(caught)); } }
 
   return <section className="server-catalogue-workspace">
     <header><div><p className="server-card-eyebrow">Shared catalogue</p><h3>Your books</h3><small>{total} {total === 1 ? "book" : "books"} match</small></div>{library.role === "OWNER" && <button className="server-primary-action" type="button" onClick={() => void add()}><Plus size={17} /> Add book</button>}</header>
@@ -338,8 +413,9 @@ export default function CatalogueWorkspace({ library }: { library: LibrarySummar
       <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
       <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; setDraftQuery(clear); setQuery(clear); void load(clear); }}>Clear</button><button className="confirm" type="submit">Apply filters</button></div>
     </form>}
-    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => <article key={book.id}><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div><div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>)}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
+    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); return <article key={book.id}><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map && <div className="server-book-location"><MapPin size={16} /><span>{location ?? "No physical location"}</span></div>}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{library.role === "OWNER" && <><button type="button" onClick={() => setPlacing(book)} title="Edit physical position"><MapPin size={17} /></button><button type="button" onClick={() => void edit(book.id)} title="Edit"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
     {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
-    {details && <BookDetails libraryId={library.library_id} book={details} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} onClose={() => setEditing(null)} onSave={save} />}
+    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} onClose={() => setEditing(null)} onSave={save} />}
+    {placing && physical && <PlacementDialog libraryId={library.library_id} data={physical} book={placing} onClose={() => setPlacing(null)} onSaved={(value) => { setPhysical(value); setPlacing(null); setNotice("Physical position saved. Affected positions were renumbered safely."); }} />}
   </section>;
 }

@@ -12,6 +12,9 @@ from ...schemas import (
     PhysicalDeleteRequest,
     PhysicalBookResponse,
     PhysicalLibraryResponse,
+    RearrangementApplyRequest,
+    RearrangementRequest,
+    RearrangementResultResponse,
     ShelfResponse,
     ShelfUpdate,
     ShelfWrite,
@@ -178,6 +181,53 @@ def update_book_placement(
             payload=payload,
         )
         return refreshed(library_id, access, service)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+    ) as exc:
+        raise physical_error(exc) from exc
+
+
+@router.post("/rearrangements/preview", response_model=RearrangementResultResponse)
+def preview_rearrangement(
+    library_id: UUID,
+    payload: RearrangementRequest,
+    service: PhysicalLibraryServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+) -> RearrangementResultResponse:
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        return service.preview_rearrangement(library_id=library_id, payload=payload)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+    ) as exc:
+        raise physical_error(exc) from exc
+
+
+@router.post("/rearrangements/apply", response_model=RearrangementResultResponse)
+def apply_rearrangement(
+    library_id: UUID,
+    payload: RearrangementApplyRequest,
+    service: PhysicalLibraryServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> RearrangementResultResponse:
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        return service.apply_rearrangement(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            payload=payload,
+        )
     except (
         LibraryNotFoundError,
         LibraryOwnerRequiredError,

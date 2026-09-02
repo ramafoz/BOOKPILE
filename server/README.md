@@ -56,14 +56,19 @@ must not be used for Server migrations or test databases.
 - Phase 4C authenticated private covers: Owner-only upload, replacement, and
   removal; Owner/Viewer reads; safe image validation and WebP re-encoding;
   opaque filesystem objects; no-store delivery; rate limiting; and audit.
+- Phase 4D physical-library slice: Owner-maintained hierarchy and layout,
+  scoped map reads, responsive camera and inspection, catalogue-row locations,
+  per-book placement, and transactional visual rearrangement with read-only
+  previews, stale-revision protection, proportional geometry, and audit.
 
 The authentication and library-membership foundations are complete through
-Phase 3, and the shared catalogue foundation is complete through Phase 4C.
-Catalogue access requires an authenticated membership; a library ID is never
+Phase 3, the shared catalogue foundation is complete through Phase 4C, and the
+Server physical-library work is implemented through the rearrangement slice of
+Phase 4D. Catalogue access requires an authenticated membership; a library ID is never
 authorization. The Server branch is still not deployable because the
-production private-object adapter, visual-map API, personal reading data,
-loans, backup/restore,
-storage quota, and production infrastructure have not yet been ported.
+production private-object adapter, full physical-dimension geometry and direct
+layout manipulation, personal reading data, loans, backup/restore, storage
+quota, and production infrastructure have not yet been ported.
 
 ## Development setup
 

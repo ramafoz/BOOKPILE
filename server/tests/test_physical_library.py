@@ -415,6 +415,71 @@ def test_book_placement_squeezes_destination_and_compacts_source(
     assert len(events) == 5
 
 
+def test_rearrangement_preview_is_read_only_and_apply_checks_revision(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "rearrangement_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Rearrangement room")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+    row = create_container(client, library, shelf["id"], 1)
+    books = [
+        Book(
+            library_id=library.id,
+            title=f"Move {number}",
+            author="Author",
+            container_id=UUID(row["id"]),
+            position=number,
+        )
+        for number in range(1, 4)
+    ]
+    session.add_all(books)
+    session.commit()
+    request = {
+        "book_id": str(books[0].id),
+        "old_position_mode": "COLLAPSE",
+        "release_shelf_space": False,
+        "steps": [{
+            "container_id": row["id"],
+            "position": 3,
+            "new_position_mode": "SQUEEZE",
+        }],
+        "completed_operations": [],
+    }
+
+    preview = client.post(
+        f"{base(library)}/rearrangements/preview", json=request
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["valid_to_apply"] is True
+    session.expire_all()
+    assert [session.get(Book, item.id).position for item in books] == [1, 2, 3]
+
+    stale = client.post(
+        f"{base(library)}/rearrangements/apply",
+        json={**request, "revision": "0" * 64},
+        headers=csrf(),
+    )
+    assert stale.status_code == 409
+
+    applied = client.post(
+        f"{base(library)}/rearrangements/apply",
+        json={**request, "revision": preview.json()["revision"]},
+        headers=csrf(),
+    )
+    assert applied.status_code == 200, applied.text
+    session.expire_all()
+    assert [session.get(Book, item.id).position for item in books] == [3, 1, 2]
+    event = session.scalar(
+        select(LibraryAuditEvent).where(
+            LibraryAuditEvent.library_id == library.id,
+            LibraryAuditEvent.event_type == "books_rearranged",
+        )
+    )
+    assert event is not None
+
+
 def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     client: TestClient, session: Session
 ) -> None:

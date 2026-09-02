@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhysicalLibrary } from "./serverApi";
-import { cataloguePageMean, physicalMapGeometry, proportionalBookSegments } from "./serverMapGeometry";
+import { cataloguePageMean, physicalMapGeometry, proportionalBookSegments, proportionalRearrangementSlots } from "./serverMapGeometry";
 
 const data = {
   library_id: "library",
@@ -34,5 +34,18 @@ describe("Server Library Map geometry", () => {
     const segments = proportionalBookSegments(geometry.containers[0], data.books, mean);
     expect(mean).toBe(200);
     expect(segments[1].width).toBeCloseTo(segments[0].width * 3);
+  });
+
+  it("keeps internal gaps visible and adds a selectable end target", () => {
+    const geometry = physicalMapGeometry(data);
+    const books = [{ ...data.books[1], position: 2 }];
+    const slots = proportionalRearrangementSlots(geometry.containers[0], books, [1], data.books[0], 200);
+    expect(slots.map((slot) => [slot.position, slot.book?.id ?? null, slot.isEndTarget])).toEqual([
+      [1, null, false],
+      [2, "thick", false],
+      [3, null, true],
+    ]);
+    expect(slots[0].width).toBeGreaterThan(0);
+    expect(slots[2].x).toBeCloseTo(geometry.containers[0].x + geometry.containers[0].width);
   });
 });

@@ -68,18 +68,29 @@ Before Phase 4D can close, Server must provide:
 
 The hierarchy, precise editor, responsive camera, proportional renderer,
 desktop/mobile navigation, pinch gesture, and book/container inspection gates
-were accepted on 2026-09-01. Phase 4D remains open for two deliberate parity
-increments:
+were accepted on 2026-09-01. The next parity increment now also implements:
 
-1. Restore Local's established location UX in Server catalogue rows and
-   per-book editing, replacing the temporary global `Position books` form.
-2. Port visual rearrangement and then integrate floating/direct layout editing
-   through the approved physical-dimension model in
-   `../PHYSICAL_GEOMETRY_PLAN.md`.
+1. Local's established location UX in Server catalogue rows and per-book
+   editing, replacing the temporary global `Position books` form.
+2. Visual rearrangement with movement modes selected before the first move,
+   multi-step Continue chains, multiple completed operations in one draft,
+   retained-gap validation, proportional container resizing, undo, and an
+   explicit atomic Apply.
+3. Owner-only preview/apply APIs scoped to one library. Preview is read-only;
+   Apply locks the library, repeats validation, rejects stale revisions, writes
+   positions and visual geometry in one transaction, and records an audit
+   event.
 
-Rearrangement will reuse Local's movement and geometry algorithms inside
-library-scoped PostgreSQL locks and atomic transactions; it must not copy
-SQLite-global assumptions.
+The placement and rearrangement increment passed desktop and responsive manual
+acceptance on 2026-09-02, including same/cross-container moves, all movement
+modes, multi-operation drafts, undo, persistent-gap rejection, proportional
+geometry, selectable retained and end positions, and the collapsible draft
+panel.
+
+The remaining Phase 4D work is floating/direct layout editing through the full
+physical-dimension model in `../PHYSICAL_GEOMETRY_PLAN.md`. Automated gates now
+cover the pure movement engine, read-only preview, stale-revision rejection,
+atomic application, authorization, and existing geometry rules.
 
 The physical model is Server-first. Its reusable pure geometry rules and UI
 improvements are candidates for a later controlled Local backport, but neither
