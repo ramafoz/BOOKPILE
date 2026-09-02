@@ -88,7 +88,8 @@ class PhysicalLibraryService:
         actor_user_id: UUID,
         payload: VisualLayoutWrite,
     ) -> None:
-        if self._repository.lock_library(library_id) is None:
+        library = self._repository.lock_library(library_id)
+        if library is None:
             raise PhysicalLibraryNotFoundError("Library not found.")
         current = self.hierarchy(library_id)
         if payload.revision != current.layout.revision:
@@ -96,6 +97,7 @@ class PhysicalLibraryService:
                 "The layout changed after you opened the editor. Reload it before saving."
             )
         self._validate_layout(current, payload)
+        library.geometry_mode = payload.geometry_mode
         self._repository.upsert_visual_layout(
             library_id=library_id,
             bookcases=[item.model_dump() for item in payload.bookcases],
@@ -141,6 +143,9 @@ class PhysicalLibraryService:
             item.area_kind: item
             for item in self._repository.list_outside_areas(library_id)
         }
+        library = self._repository.find_library(library_id)
+        if library is None:
+            raise PhysicalLibraryNotFoundError("Library not found.")
 
         bookcase_layouts = []
         for index, item in enumerate(bookcases):
@@ -148,10 +153,10 @@ class PhysicalLibraryService:
             bookcase_layouts.append(
                 VisualBookcaseLayoutWrite(
                     bookcase_id=item.id,
-                    x=float(stored.x) if stored else index * 30.0,
-                    y=float(stored.y) if stored else 10.0,
-                    width=float(stored.width) if stored else 25.0,
-                    height=float(stored.height) if stored else 80.0,
+                    x_mm=float(stored.x_mm) if stored else index * 600.0,
+                    floor_y_mm=float(stored.floor_y_mm) if stored else 1800.0,
+                    width_mm=float(stored.width_mm) if stored else 500.0,
+                    height_mm=float(stored.height_mm) if stored else 1600.0,
                 )
             )
 
@@ -190,19 +195,15 @@ class PhysicalLibraryService:
                     width=float(stored.width) if stored else default[2],
                     height=float(stored.height) if stored else default[3],
                     row_anchor=stored.row_anchor if stored else "LEFT",
-                    pile_support_kind=(
-                        stored.pile_support_kind
-                        if stored else ("SHELF" if item.container_type == "PILE" else None)
-                    ),
-                    pile_support_container_id=(
-                        stored.pile_support_container_id if stored else None
-                    ),
+                    support_kind=stored.support_kind if stored else "SHELF",
+                    support_container_id=(stored.support_container_id if stored else None),
+                    pile_alignment=stored.pile_alignment if stored else "RIGHT",
                 )
             )
 
         outside_defaults = {
-            "READING": (35.0, 75.0, 20.0, 20.0),
-            "LOANED": (60.0, 75.0, 20.0, 20.0),
+            "READING": (700.0, 1500.0, 400.0, 400.0),
+            "LOANED": (1200.0, 1500.0, 400.0, 400.0),
         }
         outside_layouts = []
         for kind in ("READING", "LOANED"):
@@ -211,10 +212,10 @@ class PhysicalLibraryService:
             outside_layouts.append(
                 VisualOutsideAreaWrite(
                     area_kind=kind,
-                    x=float(stored.x) if stored else default[0],
-                    y=float(stored.y) if stored else default[1],
-                    width=float(stored.width) if stored else default[2],
-                    height=float(stored.height) if stored else default[3],
+                    x_mm=float(stored.x_mm) if stored else default[0],
+                    y_mm=float(stored.y_mm) if stored else default[1],
+                    width_mm=float(stored.width_mm) if stored else default[2],
+                    height_mm=float(stored.height_mm) if stored else default[3],
                 )
             )
         revision = self._layout_revision(
@@ -222,6 +223,8 @@ class PhysicalLibraryService:
         )
         return VisualLayoutResponse(
             revision=revision,
+            geometry_mode=library.geometry_mode,
+            coordinate_system_version=library.coordinate_system_version,
             bookcases=bookcase_layouts,
             shelves=shelf_layouts,
             containers=container_layouts,
@@ -281,36 +284,35 @@ class PhysicalLibraryService:
 
         for item in payload.containers:
             container = contexts[item.container_id]
-            if container.container_type == "ROW":
-                if item.pile_support_kind is not None or item.pile_support_container_id is not None:
-                    raise PhysicalLibraryValidationError("Rows cannot have pile support.")
-                continue
-            if item.pile_support_kind == "SHELF":
-                if item.pile_support_container_id is not None:
+            if item.support_kind == "SHELF":
+                if item.support_container_id is not None:
                     raise PhysicalLibraryValidationError(
-                        "A shelf-supported pile cannot reference a row."
+                        "A shelf-supported container cannot reference another container."
                     )
-                if abs(item.y + item.height - 100.0) > tolerance:
+                if (
+                    container.layer != "BACKGROUND"
+                    and abs(item.y + item.height - 100.0) > tolerance
+                ):
                     raise PhysicalLibraryValidationError(
-                        "A shelf-supported pile must rest on the shelf bottom."
+                        "A shelf-supported container must rest on the shelf bottom."
                     )
                 continue
-            if item.pile_support_kind != "ROW" or item.pile_support_container_id is None:
+            if item.support_kind != "CONTAINER" or item.support_container_id is None:
                 raise PhysicalLibraryValidationError(
-                    "Every pile must rest on the shelf or on a row."
+                    "Every container must rest on the shelf or on another container."
                 )
-            support = contexts.get(item.pile_support_container_id)
-            support_layout = layouts.get(item.pile_support_container_id)
+            support = contexts.get(item.support_container_id)
+            support_layout = layouts.get(item.support_container_id)
             if (
                 support is None
                 or support_layout is None
-                or support.container_type != "ROW"
+                or support.container_type == container.container_type
                 or support.shelf_id != container.shelf_id
                 or support.layer != container.layer
                 or hierarchy.book_counts.get(support.id, 0) < 1
             ):
                 raise PhysicalLibraryValidationError(
-                    "A pile must use a non-empty supporting row in the same shelf and layer."
+                    "A container must use a non-empty opposite-type support in the same shelf and layer."
                 )
             horizontal_overlap = min(
                 item.x + item.width, support_layout.x + support_layout.width
@@ -320,8 +322,19 @@ class PhysicalLibraryService:
                 or abs(item.y + item.height - support_layout.y) > tolerance
             ):
                 raise PhysicalLibraryValidationError(
-                    "The pile geometry must visibly rest on its selected supporting row."
+                    "The container geometry must visibly rest on its selected support."
                 )
+
+        for item in payload.containers:
+            seen: set[UUID] = set()
+            current = item
+            while current.support_container_id is not None:
+                if current.container_id in seen:
+                    raise PhysicalLibraryValidationError(
+                        "Container supports cannot form a cycle."
+                    )
+                seen.add(current.container_id)
+                current = layouts[current.support_container_id]
 
         values = list(payload.containers)
         for index, first in enumerate(values):
@@ -458,8 +471,9 @@ class PhysicalLibraryService:
                 width=layout.width,
                 height=layout.height,
                 row_anchor=layout.row_anchor,
-                pile_support_kind=layout.pile_support_kind,
-                pile_support_container_id=layout.pile_support_container_id,
+                support_kind=layout.support_kind,
+                support_container_id=layout.support_container_id,
+                pile_alignment=layout.pile_alignment,
             )
         return books, containers
 
@@ -470,6 +484,8 @@ class PhysicalLibraryService:
         projected = draft.containers
         return VisualLayoutWrite(
             revision=hierarchy.layout.revision,
+            geometry_mode=hierarchy.layout.geometry_mode,
+            coordinate_system_version=hierarchy.layout.coordinate_system_version,
             bookcases=hierarchy.layout.bookcases,
             shelves=hierarchy.layout.shelves,
             containers=[
@@ -480,8 +496,9 @@ class PhysicalLibraryService:
                     width=projected[item.container_id].width,
                     height=projected[item.container_id].height,
                     row_anchor=projected[item.container_id].row_anchor,
-                    pile_support_kind=projected[item.container_id].pile_support_kind,
-                    pile_support_container_id=projected[item.container_id].pile_support_container_id,
+                    support_kind=projected[item.container_id].support_kind,
+                    support_container_id=projected[item.container_id].support_container_id,
+                    pile_alignment=projected[item.container_id].pile_alignment,
                 )
                 for item in hierarchy.layout.containers
             ],

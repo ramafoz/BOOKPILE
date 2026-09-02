@@ -127,6 +127,9 @@ def physical_response(
                 title=item.title,
                 author=item.author,
                 page_count=item.page_count,
+                height_mm=item.height_mm,
+                width_mm=item.width_mm,
+                thickness_mm=item.thickness_mm,
                 container_id=item.container_id,
                 position=item.position,
             )

@@ -128,10 +128,10 @@ def test_shared_catalogue_accepts_metadata_contributors_and_layout(
             VisualBookcaseLayout(
                 library_id=library.id,
                 bookcase_id=bookcase.id,
-                x=Decimal("-25.5000"),
-                y=Decimal("4.0000"),
-                width=Decimal("22.0000"),
-                height=Decimal("75.0000"),
+                x_mm=Decimal("-510.0000"),
+                floor_y_mm=Decimal("1580.0000"),
+                width_mm=Decimal("440.0000"),
+                height_mm=Decimal("1500.0000"),
             ),
             VisualShelfLayout(
                 library_id=library.id,
@@ -150,10 +150,10 @@ def test_shared_catalogue_accepts_metadata_contributors_and_layout(
             VisualOutsideArea(
                 library_id=library.id,
                 area_kind="READING",
-                x=Decimal("45"),
-                y=Decimal("70"),
-                width=Decimal("20"),
-                height=Decimal("18"),
+                x_mm=Decimal("900"),
+                y_mm=Decimal("1400"),
+                width_mm=Decimal("400"),
+                height_mm=Decimal("360"),
             ),
         ]
     )
@@ -300,8 +300,9 @@ def test_database_rejects_cross_library_pile_support(session: Session) -> None:
             width=Decimal("30"),
             height=Decimal("40"),
             row_anchor="LEFT",
-            pile_support_kind="ROW",
-            pile_support_container_id=second_row.id,
+            support_kind="CONTAINER",
+            support_container_id=second_row.id,
+            pile_alignment="RIGHT",
         )
     )
 

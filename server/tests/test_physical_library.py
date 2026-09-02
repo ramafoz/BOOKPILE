@@ -569,20 +569,22 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     pile_layout = next(
         item for item in layout["containers"] if item["container_id"] == pile["id"]
     )
-    assert pile_layout["pile_support_kind"] == "SHELF"
+    assert pile_layout["support_kind"] == "SHELF"
 
     row_layout = next(
         item for item in layout["containers"] if item["container_id"] == row["id"]
     )
-    row_layout.update({"x": 0, "y": 70, "width": 100, "height": 30, "row_anchor": "RIGHT"})
+    # Background containers may be offset from the shelf bottom to create the
+    # established visual depth effect.
+    row_layout.update({"x": 0, "y": 60, "width": 100, "height": 30, "row_anchor": "RIGHT"})
     pile_layout.update(
         {
             "x": 0,
-            "y": 20,
+            "y": 10,
             "width": 50,
             "height": 50,
-            "pile_support_kind": "ROW",
-            "pile_support_container_id": row["id"],
+            "support_kind": "CONTAINER",
+            "support_container_id": row["id"],
         }
     )
     saved = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
@@ -595,8 +597,8 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
         item for item in saved_layout["containers"] if item["container_id"] == pile["id"]
     )
     assert saved_row["row_anchor"] == "RIGHT"
-    assert saved_pile["pile_support_kind"] == "ROW"
-    assert saved_pile["pile_support_container_id"] == row["id"]
+    assert saved_pile["support_kind"] == "CONTAINER"
+    assert saved_pile["support_container_id"] == row["id"]
 
     stale = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
     assert stale.status_code == 409
@@ -606,7 +608,7 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     invalid_pile = next(
         item for item in invalid["containers"] if item["container_id"] == pile["id"]
     )
-    invalid_pile["pile_support_container_id"] = str(uuid4())
+    invalid_pile["support_container_id"] = str(uuid4())
     rejected = client.put(f"{base(library)}/layout", json=invalid, headers=csrf())
     assert rejected.status_code == 422
     assert "same shelf and layer" in rejected.json()["detail"]

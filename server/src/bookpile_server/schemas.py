@@ -205,6 +205,9 @@ class PhysicalBookResponse(BaseModel):
     title: str
     author: str
     page_count: int | None
+    height_mm: int | None
+    width_mm: int | None
+    thickness_mm: int | None
     container_id: UUID | None
     position: int | None
 
@@ -213,10 +216,10 @@ class VisualBookcaseLayoutWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     bookcase_id: UUID
-    x: float
-    y: float
-    width: float = Field(gt=0)
-    height: float = Field(gt=0)
+    x_mm: float
+    floor_y_mm: float
+    width_mm: float = Field(gt=0)
+    height_mm: float = Field(gt=0)
 
 
 class VisualShelfLayoutWrite(BaseModel):
@@ -235,8 +238,9 @@ class VisualContainerLayoutWrite(BaseModel):
     width: float = Field(gt=0, le=100)
     height: float = Field(gt=0, le=100)
     row_anchor: Literal["LEFT", "RIGHT"] = "LEFT"
-    pile_support_kind: Literal["SHELF", "ROW"] | None = None
-    pile_support_container_id: UUID | None = None
+    support_kind: Literal["SHELF", "CONTAINER"] = "SHELF"
+    support_container_id: UUID | None = None
+    pile_alignment: Literal["LEFT", "CENTER", "RIGHT"] = "RIGHT"
 
     @model_validator(mode="after")
     def validate_bounds(self) -> "VisualContainerLayoutWrite":
@@ -264,16 +268,18 @@ class VisualOutsideAreaWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     area_kind: Literal["READING", "LOANED"]
-    x: float
-    y: float
-    width: float = Field(gt=0)
-    height: float = Field(gt=0)
+    x_mm: float
+    y_mm: float
+    width_mm: float = Field(gt=0)
+    height_mm: float = Field(gt=0)
 
 
 class VisualLayoutWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     revision: str = Field(min_length=64, max_length=64)
+    geometry_mode: Literal["MANUAL", "PHYSICAL"]
+    coordinate_system_version: Literal[2]
     bookcases: list[VisualBookcaseLayoutWrite]
     shelves: list[VisualShelfLayoutWrite]
     containers: list[VisualContainerLayoutWrite]
@@ -282,6 +288,8 @@ class VisualLayoutWrite(BaseModel):
 
 class VisualLayoutResponse(BaseModel):
     revision: str
+    geometry_mode: Literal["MANUAL", "PHYSICAL"]
+    coordinate_system_version: int
     bookcases: list[VisualBookcaseLayoutWrite]
     shelves: list[VisualShelfLayoutWrite]
     containers: list[VisualContainerLayoutWrite]

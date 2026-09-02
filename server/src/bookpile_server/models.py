@@ -239,6 +239,14 @@ class Library(Base):
             "state IN ('active', 'pending_deletion', 'deleted')",
             name="ck_libraries_state",
         ),
+        CheckConstraint(
+            "geometry_mode IN ('MANUAL', 'PHYSICAL')",
+            name="ck_libraries_geometry_mode",
+        ),
+        CheckConstraint(
+            "coordinate_system_version >= 2",
+            name="ck_libraries_coordinate_system_version",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -249,6 +257,12 @@ class Library(Base):
     )
     state: Mapped[str] = mapped_column(
         String(32), nullable=False, default="active", server_default="active"
+    )
+    geometry_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="MANUAL", server_default="MANUAL"
+    )
+    coordinate_system_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default="2"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -753,8 +767,8 @@ class BookContributor(Base):
 class VisualBookcaseLayout(Base):
     __tablename__ = "visual_bookcase_layouts"
     __table_args__ = (
-        CheckConstraint("width > 0", name="ck_visual_bookcase_width"),
-        CheckConstraint("height > 0", name="ck_visual_bookcase_height"),
+        CheckConstraint("width_mm > 0", name="ck_visual_bookcase_width"),
+        CheckConstraint("height_mm > 0", name="ck_visual_bookcase_height"),
         ForeignKeyConstraint(
             ["library_id", "bookcase_id"],
             ["bookcases.library_id", "bookcases.id"],
@@ -765,10 +779,10 @@ class VisualBookcaseLayout(Base):
 
     library_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     bookcase_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
-    x: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    y: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    width: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    height: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    x_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    floor_y_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    width_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    height_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
 
 
 class VisualShelfLayout(Base):
@@ -805,22 +819,21 @@ class VisualContainerLayout(Base):
             "row_anchor IN ('LEFT', 'RIGHT')", name="ck_visual_container_anchor"
         ),
         CheckConstraint(
-            "pile_support_kind IS NULL OR "
-            "pile_support_kind IN ('SHELF', 'ROW')",
+            "support_kind IN ('SHELF', 'CONTAINER')",
             name="ck_visual_container_support_kind",
         ),
         CheckConstraint(
-            "(pile_support_kind IS NULL AND pile_support_container_id IS NULL) OR "
-            "(pile_support_kind = 'SHELF' AND "
-            "pile_support_container_id IS NULL) OR "
-            "(pile_support_kind = 'ROW' AND "
-            "pile_support_container_id IS NOT NULL)",
+            "(support_kind = 'SHELF' AND support_container_id IS NULL) OR "
+            "(support_kind = 'CONTAINER' AND support_container_id IS NOT NULL)",
             name="ck_visual_container_support_pair",
         ),
         CheckConstraint(
-            "pile_support_container_id IS NULL OR "
-            "pile_support_container_id <> container_id",
+            "support_container_id IS NULL OR support_container_id <> container_id",
             name="ck_visual_container_not_self_supported",
+        ),
+        CheckConstraint(
+            "pile_alignment IN ('LEFT', 'CENTER', 'RIGHT')",
+            name="ck_visual_container_pile_alignment",
         ),
         ForeignKeyConstraint(
             ["library_id", "container_id"],
@@ -829,7 +842,7 @@ class VisualContainerLayout(Base):
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["library_id", "pile_support_container_id"],
+            ["library_id", "support_container_id"],
             ["containers.library_id", "containers.id"],
             name="fk_visual_container_library_support",
             ondelete="RESTRICT",
@@ -845,8 +858,13 @@ class VisualContainerLayout(Base):
     row_anchor: Mapped[str] = mapped_column(
         String(8), nullable=False, default="LEFT", server_default="LEFT"
     )
-    pile_support_kind: Mapped[str | None] = mapped_column(String(8))
-    pile_support_container_id: Mapped[UUID | None] = mapped_column(Uuid)
+    support_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="SHELF", server_default="SHELF"
+    )
+    support_container_id: Mapped[UUID | None] = mapped_column(Uuid)
+    pile_alignment: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="RIGHT", server_default="RIGHT"
+    )
 
 
 class VisualOutsideArea(Base):
@@ -855,8 +873,8 @@ class VisualOutsideArea(Base):
         CheckConstraint(
             "area_kind IN ('READING', 'LOANED')", name="ck_visual_outside_kind"
         ),
-        CheckConstraint("width > 0", name="ck_visual_outside_width"),
-        CheckConstraint("height > 0", name="ck_visual_outside_height"),
+        CheckConstraint("width_mm > 0", name="ck_visual_outside_width"),
+        CheckConstraint("height_mm > 0", name="ck_visual_outside_height"),
         ForeignKeyConstraint(
             ["library_id"], ["libraries.id"], ondelete="CASCADE"
         ),
@@ -864,8 +882,8 @@ class VisualOutsideArea(Base):
 
     library_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     area_kind: Mapped[str] = mapped_column(String(16), primary_key=True)
-    x: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    y: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    width: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    height: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    x_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    y_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    width_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    height_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
 

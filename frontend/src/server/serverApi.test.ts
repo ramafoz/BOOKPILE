@@ -145,7 +145,9 @@ describe("Physical library requests", () => {
     vi.stubGlobal("document", { cookie: "bookpile_csrf=layout-token" });
     const layout = {
       revision: "a".repeat(64),
-      bookcases: [{ bookcase_id: "case-1", x: -10, y: 0, width: 25, height: 80 }],
+      geometry_mode: "MANUAL" as const,
+      coordinate_system_version: 2,
+      bookcases: [{ bookcase_id: "case-1", x_mm: -200, floor_y_mm: 1600, width_mm: 500, height_mm: 1600 }],
       shelves: [{ shelf_id: "shelf-1", height_weight: 1 }],
       containers: [{
         container_id: "container-1",
@@ -154,12 +156,13 @@ describe("Physical library requests", () => {
         width: 100,
         height: 50,
         row_anchor: "RIGHT" as const,
-        pile_support_kind: null,
-        pile_support_container_id: null,
+        support_kind: "SHELF" as const,
+        support_container_id: null,
+        pile_alignment: "RIGHT" as const,
       }],
       outside_areas: [
-        { area_kind: "READING" as const, x: 30, y: 70, width: 20, height: 20 },
-        { area_kind: "LOANED" as const, x: 60, y: 70, width: 20, height: 20 },
+        { area_kind: "READING" as const, x_mm: 600, y_mm: 1400, width_mm: 400, height_mm: 400 },
+        { area_kind: "LOANED" as const, x_mm: 1200, y_mm: 1400, width_mm: 400, height_mm: 400 },
       ],
     };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

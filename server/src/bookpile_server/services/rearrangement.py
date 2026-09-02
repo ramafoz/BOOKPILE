@@ -38,8 +38,9 @@ class PlannedContainer:
     width: float
     height: float
     row_anchor: str
-    pile_support_kind: str | None
-    pile_support_container_id: UUID | None
+    support_kind: str
+    support_container_id: UUID | None
+    pile_alignment: str
 
 
 @dataclass(frozen=True)
@@ -61,8 +62,9 @@ def revision(
         "containers": [
             [
                 str(item.id), item.x, item.y, item.width, item.height,
-                item.row_anchor, item.pile_support_kind,
-                str(item.pile_support_container_id) if item.pile_support_container_id else None,
+                item.row_anchor, item.support_kind,
+                str(item.support_container_id) if item.support_container_id else None,
+                item.pile_alignment,
             ]
             for item in sorted(containers.values(), key=lambda value: str(value.id))
         ],
@@ -380,8 +382,9 @@ def plan(
             "container_id": item.id, "x": item.x, "y": item.y,
             "width": item.width, "height": item.height,
             "row_anchor": item.row_anchor,
-            "pile_support_kind": item.pile_support_kind,
-            "pile_support_container_id": item.pile_support_container_id,
+            "support_kind": item.support_kind,
+            "support_container_id": item.support_container_id,
+            "pile_alignment": item.pile_alignment,
         }
         for item in projected.values() if item != containers[item.id]
     ]

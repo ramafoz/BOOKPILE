@@ -5,6 +5,7 @@ import { serverApi, type PhysicalBook, type PhysicalLibrary, type RearrangementO
 import {
   boundsForRects,
   cataloguePageMean,
+  catalogueBookVisualDefaults,
   physicalMapGeometry,
   proportionalBookSegments,
   proportionalRearrangementSlots,
@@ -38,7 +39,7 @@ function fitCamera(bounds: WorldRect, aspect: number): Camera {
 }
 
 function zoomCamera(camera: Camera, factor: number, anchorX?: number, anchorY?: number): Camera {
-  const nextWidth = Math.min(1000, Math.max(.5, camera.width * factor));
+  const nextWidth = Math.max(.5, camera.width * factor);
   const nextHeight = nextWidth * camera.height / camera.width;
   const xRatio = anchorX === undefined ? .5 : (anchorX - camera.x) / camera.width;
   const yRatio = anchorY === undefined ? .5 : (anchorY - camera.y) / camera.height;
@@ -119,8 +120,9 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   }, [data, rearrangement]);
   const geometry = useMemo(() => displayData ? physicalMapGeometry(displayData) : null, [displayData]);
   const meanPages = useMemo(() => data ? cataloguePageMean(data.books) : 200, [data]);
+  const visualDefaults = useMemo(() => data ? catalogueBookVisualDefaults(data.books) : { thicknessMm: 20, heightMm: 220, thicknessPerPage: null }, [data]);
   const worldBounds = useMemo(
-    () => boundsForRects([...(geometry?.bookcases ?? []), ...(data?.layout.outside_areas ?? [])]),
+    () => boundsForRects([...(geometry?.bookcases ?? []), ...((data?.layout.outside_areas ?? []).map((area) => ({ x: area.x_mm, y: area.y_mm, width: area.width_mm, height: area.height_mm })))]),
     [data, geometry],
   );
 
@@ -346,11 +348,16 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         {[...geometry.containers].sort((a, b) => a.layer.localeCompare(b.layer)).map((container) => {
           const selected = selection?.kind === "CONTAINER" && selection.containerId === container.containerId;
           const containerBooks = booksByContainer.get(container.containerId) ?? [];
-          const segments = proportionalBookSegments(container, containerBooks, meanPages);
+          const segments = proportionalBookSegments(
+            container,
+            containerBooks,
+            visualDefaults,
+            data.layout.geometry_mode === "PHYSICAL",
+          );
           const gapPositions = rearrangement?.gaps.find((gap) => gap.container_id === container.containerId)?.positions ?? [];
           const activeBook = mapData.books.find((book) => book.id === (rearrangement?.next_active_book_id ?? moveBookId)) ?? null;
           const rearrangementSlots = rearranging && moveBookId
-            ? proportionalRearrangementSlots(container, containerBooks, gapPositions, activeBook, meanPages)
+            ? proportionalRearrangementSlots(container, containerBooks, gapPositions, activeBook, visualDefaults)
             : [];
           return <g key={container.containerId} className={`server-map-container ${selected ? "selected" : ""} ${rearranging ? "rearranging" : ""}`} onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (rearranging && moveBookId && (!rearrangement || !rearrangement.complete)) { const count = (booksByContainer.get(container.containerId) ?? []).length; void previewDestination(container.containerId, String(count + 1)); } else if (!rearranging && inspectionMode === "CONTAINER") setSelection({ kind: "CONTAINER", containerId: container.containerId }); }}>
             <rect x={container.x} y={container.y} width={container.width} height={container.height} rx=".2" />
@@ -369,8 +376,8 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
           </g>;
         })}
         {data.layout.outside_areas.map((area) => <g key={area.area_kind} className={`server-map-outside ${area.area_kind.toLowerCase()}`}>
-          <rect x={area.x} y={area.y} width={area.width} height={area.height} rx="2" />
-          <text x={area.x + area.width / 2} y={area.y + area.height / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
+          <rect x={area.x_mm} y={area.y_mm} width={area.width_mm} height={area.height_mm} rx="2" />
+          <text x={area.x_mm + area.width_mm / 2} y={area.y_mm + area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
         </g>)}
       </svg>
       <div className="server-map-controls" aria-label="Map camera controls">

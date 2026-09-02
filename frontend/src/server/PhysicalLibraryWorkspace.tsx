@@ -12,6 +12,7 @@ import {
 } from "./serverApi";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
+import { physicalMapGeometry } from "./serverMapGeometry";
 
 
 type EditTarget =
@@ -148,16 +149,28 @@ function GeometryDialog({
   const selectedContainer = draft.containers.find((item) => item.container_id === containerId);
   const selectedContainerContext = allContainers.find((item) => item.container.id === containerId);
   const selectedOutside = draft.outside_areas.find((item) => item.area_kind === outsideKind);
-  const supportRows = selectedContainerContext
+  const draftGeometry = physicalMapGeometry({ ...data, layout: draft });
+  const selectedShelfRect = draftGeometry.shelves.find((item) => item.shelfId === shelfId);
+  const selectedContainerShelfRect = draftGeometry.shelves.find((item) => item.shelfId === selectedContainerContext?.shelf.id);
+  const containerShelfWidthMm = selectedContainerContext?.shelf.usable_width_mm ?? selectedContainerShelfRect?.width ?? 1;
+  const containerShelfHeightMm = selectedContainerContext?.shelf.usable_height_mm ?? selectedContainerShelfRect?.height ?? 1;
+  const selectedSupportLayout = selectedContainer?.support_container_id
+    ? draft.containers.find((item) => item.container_id === selectedContainer.support_container_id)
+    : null;
+  const supportTopPercent = selectedSupportLayout?.y ?? 100;
+  const supportClearanceMm = selectedContainer
+    ? (supportTopPercent - selectedContainer.y - selectedContainer.height) / 100 * containerShelfHeightMm
+    : 0;
+  const supportContainers = selectedContainerContext
     ? allContainers.filter(({ shelf, container }) => (
       shelf.id === selectedContainerContext.shelf.id &&
       container.layer === selectedContainerContext.container.layer &&
-      container.container_type === "ROW" &&
+      container.container_type !== selectedContainerContext.container.container_type &&
       container.book_count > 0
     ))
     : [];
 
-  function updateBookcase(field: "x" | "y" | "width" | "height", value: number) {
+  function updateBookcase(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm", value: number) {
     setDraft((current) => ({ ...current, bookcases: current.bookcases.map((item) => item.bookcase_id === bookcaseId ? { ...item, [field]: value } : item) }));
   }
 
@@ -165,22 +178,83 @@ function GeometryDialog({
     setDraft((current) => ({ ...current, containers: current.containers.map((item) => item.container_id === containerId ? { ...item, ...changes } : item) }));
   }
 
-  function choosePileSupport(value: string) {
+  function chooseSupport(value: string) {
     if (!selectedContainer) return;
     if (value === "SHELF") {
-      updateContainer({ pile_support_kind: "SHELF", pile_support_container_id: null, y: 100 - selectedContainer.height });
+      updateContainer({ support_kind: "SHELF", support_container_id: null, y: 100 - selectedContainer.height });
       return;
     }
     const support = draft.containers.find((item) => item.container_id === value);
     if (!support) return;
     const width = Math.min(selectedContainer.width, 100 - support.x);
     updateContainer({
-      pile_support_kind: "ROW",
-      pile_support_container_id: value,
+      support_kind: "CONTAINER",
+      support_container_id: value,
       y: Math.max(0, support.y - selectedContainer.height),
       x: support.x,
       width,
     });
+  }
+
+  function updateShelfMapHeight(value: number) {
+    if (!selectedShelf || !selectedShelfRect) return;
+    const context = data.bookcases.find((bookcase) => bookcase.shelves.some((shelf) => shelf.id === shelfId));
+    if (!context || context.shelves.length < 2) return;
+    const siblingLayouts = context.shelves
+      .map((shelf) => draft.shelves.find((item) => item.shelf_id === shelf.id))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const totalWeight = siblingLayouts.reduce((sum, item) => sum + item.height_weight, 0);
+    const otherWeight = totalWeight - selectedShelf.height_weight;
+    const totalHeight = context.shelves.reduce((sum, shelf) => sum + (draftGeometry.shelves.find((item) => item.shelfId === shelf.id)?.height ?? 0), 0);
+    const bounded = Math.min(Math.max(value, 1), Math.max(1, totalHeight - 1));
+    const heightWeight = bounded * otherWeight / (totalHeight - bounded);
+    setDraft((current) => ({
+      ...current,
+      shelves: current.shelves.map((item) => item.shelf_id === shelfId ? { ...item, height_weight: heightWeight } : item),
+    }));
+  }
+
+  function updateContainerMillimetres(field: "start" | "bottom" | "width" | "height", value: number) {
+    if (!selectedContainer) return;
+    const height = selectedContainer.height;
+    const width = selectedContainer.width;
+    const clearance = supportTopPercent - selectedContainer.y - height;
+    const horizontal = value / containerShelfWidthMm * 100;
+    const alignment = selectedContainerContext?.container.container_type === "ROW"
+      ? selectedContainer.row_anchor
+      : selectedContainer.pile_alignment;
+    if (field === "start") {
+      if (alignment === "RIGHT") updateContainer({ x: horizontal - width });
+      else if (alignment === "CENTER") updateContainer({ x: horizontal - width / 2 });
+      else updateContainer({ x: horizontal });
+    }
+    else if (field === "bottom") updateContainer({ y: supportTopPercent - height - value / containerShelfHeightMm * 100 });
+    else if (field === "width") {
+      const nextWidth = value / containerShelfWidthMm * 100;
+      if (alignment === "RIGHT") updateContainer({ width: nextWidth, x: selectedContainer.x + width - nextWidth });
+      else if (alignment === "CENTER") updateContainer({ width: nextWidth, x: selectedContainer.x + width / 2 - nextWidth / 2 });
+      else updateContainer({ width: nextWidth });
+    }
+    else {
+      const nextHeight = value / containerShelfHeightMm * 100;
+      updateContainer({ height: nextHeight, y: supportTopPercent - clearance - nextHeight });
+    }
+  }
+
+  function displayedContainerStartMm(): number {
+    if (!selectedContainer || !selectedContainerContext) return 0;
+    if (selectedContainerContext.container.container_type === "ROW") {
+      return (selectedContainer.row_anchor === "RIGHT"
+        ? selectedContainer.x + selectedContainer.width
+        : selectedContainer.x) / 100 * containerShelfWidthMm;
+    }
+    if (selectedContainer.pile_alignment === "RIGHT") {
+      return (selectedContainer.x + selectedContainer.width) / 100 * containerShelfWidthMm;
+    }
+    if (selectedContainer.pile_alignment === "CENTER") {
+      return (selectedContainer.x + selectedContainer.width / 2) / 100 * containerShelfWidthMm;
+    }
+    return selectedContainer.x / 100 * containerShelfWidthMm;
   }
 
   async function save() {
@@ -198,24 +272,24 @@ function GeometryDialog({
     label: string,
     value: number,
     onChange: (value: number) => void,
-    options: { min?: number; max?: number; step?: number } = {},
-  ) => <label>{label}<input type="number" min={options.min} max={options.max} step={options.step ?? 0.1} value={value} onChange={(event) => onChange(Number(event.target.value))} required /></label>;
+    options: { min?: number; max?: number; step?: number; disabled?: boolean } = {},
+  ) => <label>{label}<input type="number" min={options.min} max={options.max} step={options.step ?? 0.1} value={Number(value.toFixed(2))} onChange={(event) => onChange(Number(event.target.value))} required disabled={options.disabled} /></label>;
 
   return <div className="server-modal-backdrop"><section className="server-physical-dialog server-geometry-dialog" role="dialog" aria-modal="true">
     <p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2>
     <p className="server-field-help">Precise controls are implemented first. Direct dragging and the visual map will reuse the proven Local camera and geometry in the next increment.</p>
     <div className="server-geometry-sections">
-      <fieldset><legend>Furniture</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x, (value) => updateBookcase("x", value))}{numberField("Vertical", selectedBookcase.y, (value) => updateBookcase("y", value))}{numberField("Width", selectedBookcase.width, (value) => updateBookcase("width", value), { min: 0.1 })}{numberField("Height", selectedBookcase.height, (value) => updateBookcase("height", value), { min: 0.1 })}</div>}</fieldset>
-      <fieldset><legend>Shelf proportions</legend><label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>{selectedShelf && numberField("Relative height", selectedShelf.height_weight, (value) => setDraft((current) => ({ ...current, shelves: current.shelves.map((item) => item.shelf_id === shelfId ? { ...item, height_weight: value } : item) })), { min: 0.25, max: 8, step: 0.25 })}</fieldset>
-      <fieldset><legend>Container geometry and support</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField("Start", selectedContainer.x, (value) => updateContainer({ x: value }), { min: 0, max: 100 })}{numberField("Vertical", selectedContainer.y, (value) => updateContainer({ y: value }), { min: 0, max: 100 })}{numberField("Width", selectedContainer.width, (value) => updateContainer({ width: value }), { min: 0.1, max: 100 })}{numberField("Height", selectedContainer.height, (value) => updateContainer({ height: value }), { min: 0.1, max: 100 })}</div>{selectedContainerContext.container.container_type === "ROW" ? <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label> : <label>Pile rests on<select value={selectedContainer.pile_support_kind === "ROW" ? selectedContainer.pile_support_container_id ?? "" : "SHELF"} onChange={(event) => choosePileSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportRows.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} Row {container.container_number}</option>)}</select><small>Only non-empty rows in this shelf and layer can support a pile.</small></label>}</>}</fieldset>
+      <fieldset><legend>Furniture geometry (mm)</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}{numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}{numberField("Width", selectedBookcase.width_mm, (value) => updateBookcase("width_mm", value), { min: 1, step: 1 })}{numberField("Height", selectedBookcase.height_mm, (value) => updateBookcase("height_mm", value), { min: 1, step: 1 })}</div>}</fieldset>
+      <fieldset><legend>Shelf map size (mm)</legend><label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>{selectedShelf && selectedShelfRect && <>{numberField("Displayed height (mm)", selectedShelfRect.height, updateShelfMapHeight, { min: 1, step: 1 })}{data.bookcases.find((bookcase) => bookcase.shelves.some((shelf) => shelf.id === shelfId))?.shelves.length === 1 && <small>A single shelf fills the bookcase's available map height.</small>}</>}</fieldset>
+      <fieldset><legend>Container geometry and support (mm)</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField(selectedContainerContext.container.container_type === "ROW" ? "Anchor position (mm)" : "Alignment position (mm)", displayedContainerStartMm(), (value) => updateContainerMillimetres("start", value), { min: 0, max: containerShelfWidthMm, step: 1 })}{numberField("Bottom clearance (mm)", supportClearanceMm, (value) => updateContainerMillimetres("bottom", value), { min: 0, max: containerShelfHeightMm, step: 1, disabled: selectedContainer.support_kind === "CONTAINER" || selectedContainerContext.container.layer === "FOREGROUND" })}{numberField("Width (mm)", selectedContainer.width / 100 * containerShelfWidthMm, (value) => updateContainerMillimetres("width", value), { min: 1, max: containerShelfWidthMm, step: 1 })}{numberField("Height (mm)", selectedContainer.height / 100 * containerShelfHeightMm, (value) => updateContainerMillimetres("height", value), { min: 1, max: containerShelfHeightMm, step: 1 })}</div><small>Anchor/alignment positions are coordinates measured from the shelf's left edge. Bottom clearance is relative to the immediate support: 0 mm means direct contact with the shelf or supporting container. Only shelf-supported background containers may use a visual depth offset.</small>{selectedContainerContext.container.container_type === "ROW" && <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label>}<label>Rests on<select value={selectedContainer.support_kind === "CONTAINER" ? selectedContainer.support_container_id ?? "" : "SHELF"} onChange={(event) => chooseSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select><small>Only a non-empty opposite-type container in this shelf and layer can be used.</small></label>{selectedContainerContext.container.container_type === "PILE" && <label>Pile alignment<select value={selectedContainer.pile_alignment} onChange={(event) => updateContainer({ pile_alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>}</>}</fieldset>
       <fieldset>
         <legend>Outside-library areas</legend>
         <label>Area<select value={outsideKind} onChange={(event) => setOutsideKind(event.target.value as "READING" | "LOANED")}><option value="READING">Reading</option><option value="LOANED">On loan</option></select></label>
         {selectedOutside && <div className="server-dimension-grid">
-          {numberField("Horizontal", selectedOutside.x, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, x: value } : item) })))}
-          {numberField("Vertical", selectedOutside.y, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, y: value } : item) })))}
-          {numberField("Width", selectedOutside.width, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, width: value } : item) })), { min: 0.1 })}
-          {numberField("Height", selectedOutside.height, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, height: value } : item) })), { min: 0.1 })}
+          {numberField("Horizontal (mm)", selectedOutside.x_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, x_mm: value } : item) })), { step: 1 })}
+          {numberField("Vertical (mm)", selectedOutside.y_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, y_mm: value } : item) })), { step: 1 })}
+          {numberField("Width (mm)", selectedOutside.width_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, width_mm: value } : item) })), { min: 1, step: 1 })}
+          {numberField("Height (mm)", selectedOutside.height_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, height_mm: value } : item) })), { min: 1, step: 1 })}
         </div>}
       </fieldset>
     </div>

@@ -87,8 +87,11 @@ modes, multi-operation drafts, undo, persistent-gap rejection, proportional
 geometry, selectable retained and end positions, and the collapsible draft
 panel.
 
-The remaining Phase 4D work is floating/direct layout editing through the full
-physical-dimension model in `../PHYSICAL_GEOMETRY_PLAN.md`. Automated gates now
+The schema-v9 physical-geometry foundation, generic support rules, per-axis
+fallback engine, millimetre-only precise editor, and strict manual/physical
+rendering boundary were accepted on 2026-09-02. The remaining Phase 4D work is
+complete physical projection, accordion/warning behaviour, and floating/direct
+layout editing through the full model in `../PHYSICAL_GEOMETRY_PLAN.md`. Automated gates now
 cover the pure movement engine, read-only preview, stale-revision rejection,
 atomic application, authorization, and existing geometry rules.
 

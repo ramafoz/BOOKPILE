@@ -1,6 +1,6 @@
 # BOOKPILE physical-geometry implementation plan
 
-Status: approved design for the remaining BOOKPILE Server Phase 4D work.
+Status: implementation in progress on `feature/server-physical-geometry`.
 
 This document is the canonical specification for combining measured physical
 dimensions with BOOKPILE's editable visual layout. Implementation begins in
@@ -188,6 +188,33 @@ on Apply, and fully rolled back on failure.
 5. Integrate the precise editor as a floating/minimizable map panel.
 6. Add direct layout manipulation over the same service.
 7. Validate desktop, phone, and tablet behaviour before closing Phase 4D.
+
+### Implementation record
+
+Accepted on 2026-09-02:
+
+- A verified PostgreSQL and private-object backup preceded the reversible
+  schema-v9 rehearsal and live migration.
+- Schema v9 stores `MANUAL`/`PHYSICAL`, coordinate-system version 2,
+  millimetre furniture/outside-area geometry, generic acyclic supports, row
+  anchors, and PILE alignment. Existing catalogue and layout records were
+  preserved.
+- The editor exposes millimetres only. Container positions are internally
+  converted to compatible canonical percentages: anchor/alignment position is
+  measured from the shelf's left edge, while bottom clearance is relative to
+  the immediate support and zero means physical contact.
+- Background containers resting on a shelf may retain a visual depth offset;
+  foreground or container-supported geometry cannot float.
+- Per-axis book fallbacks are implemented and tested: measured value,
+  page-derived thickness where possible, catalogue median, then 20/220/150 mm
+  defaults.
+- `MANUAL` rendering remains isolated from physical projection, preventing
+  partial physical data from changing an existing manual map. Wheel zoom no
+  longer has a fixed world-width ceiling.
+
+Still required before Phase 4D closes: complete physical-mode projection,
+accordion movement, structured warning overlays, floating/direct layout
+editing, and final cross-device acceptance.
 
 ## 10. Edition boundary and future Local work
 

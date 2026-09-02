@@ -179,16 +179,19 @@ export interface PhysicalBook {
   title: string;
   author: string;
   page_count: number | null;
+  height_mm: number | null;
+  width_mm: number | null;
+  thickness_mm: number | null;
   container_id: string | null;
   position: number | null;
 }
 
 export interface VisualBookcaseLayout {
   bookcase_id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x_mm: number;
+  floor_y_mm: number;
+  width_mm: number;
+  height_mm: number;
 }
 
 export interface VisualShelfLayout {
@@ -203,20 +206,23 @@ export interface VisualContainerLayout {
   width: number;
   height: number;
   row_anchor: "LEFT" | "RIGHT";
-  pile_support_kind: "SHELF" | "ROW" | null;
-  pile_support_container_id: string | null;
+  support_kind: "SHELF" | "CONTAINER";
+  support_container_id: string | null;
+  pile_alignment: "LEFT" | "CENTER" | "RIGHT";
 }
 
 export interface VisualOutsideArea {
   area_kind: "READING" | "LOANED";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x_mm: number;
+  y_mm: number;
+  width_mm: number;
+  height_mm: number;
 }
 
 export interface VisualLayout {
   revision: string;
+  geometry_mode: "MANUAL" | "PHYSICAL";
+  coordinate_system_version: number;
   bookcases: VisualBookcaseLayout[];
   shelves: VisualShelfLayout[];
   containers: VisualContainerLayout[];

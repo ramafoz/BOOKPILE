@@ -113,6 +113,9 @@ class PhysicalLibraryRepository:
             select(Library).where(Library.id == library_id).with_for_update()
         )
 
+    def find_library(self, library_id: UUID) -> Library | None:
+        return self._session.get(Library, library_id)
+
     def upsert_visual_layout(
         self,
         *,
@@ -292,7 +295,7 @@ class PhysicalLibraryRepository:
         return self._session.scalar(
             select(func.count(VisualContainerLayout.container_id)).where(
                 VisualContainerLayout.library_id == library_id,
-                VisualContainerLayout.pile_support_container_id == container_id,
+                VisualContainerLayout.support_container_id == container_id,
             )
         ) or 0
 

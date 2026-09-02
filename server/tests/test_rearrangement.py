@@ -20,8 +20,9 @@ def container(*, x: float, width: float, label: str) -> PlannedContainer:
         width=width,
         height=50,
         row_anchor="LEFT",
-        pile_support_kind=None,
-        pile_support_container_id=None,
+        support_kind="SHELF",
+        support_container_id=None,
+        pile_alignment="RIGHT",
     )
 
 

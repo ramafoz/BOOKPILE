@@ -430,6 +430,14 @@ in place:
     row-supported piles. The map renders book thickness proportionally to page
     count within each container; missing values use the complete catalogue's
     arithmetic mean, falling back to 200 only when no page data exists.
+12. Server schema v9 establishes the physical-geometry foundation without
+    changing Local v1: versioned manual/physical modes, millimetre world
+    coordinates, generic acyclic container supports, row anchors, and PILE
+    alignment. The migration was backed up, rehearsed forwards and backwards,
+    and applied with existing Server data preserved. The precise editor now
+    presents millimetres only, including support-relative bottom clearance and
+    shelf-relative anchor/alignment coordinates. Manual rendering remains
+    isolated until physical projection and accordion behaviour are complete.
 
 Later database phases include structured subjects and genres, ratings and
 tags.
@@ -458,8 +466,10 @@ locations, per-book placement, and transactional visual rearrangement. The
 rearrangement draft supports Collapse/Leave gap and Squeeze/Swap/Continue,
 multiple completed movement chains, proportional geometry previews, undo,
 explicit Apply, concurrency revision checks, and audit. Phase 4D remains open
-for floating/direct layout editing and the approved physical-dimension geometry
-engine. This does not
+for complete physical-mode projection, accordion and warning behaviour, and
+floating/direct layout editing. Its schema-v9 foundation, per-axis dimension
+fallbacks, millimetre editor, generic support validation, and manual/physical
+rendering boundary are implemented and accepted. This does not
 alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
 import remain pending for later Server phases.
 

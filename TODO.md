@@ -418,6 +418,19 @@ protects the completed catalogue.
   fallbacks, furniture/shelf calibration, accordion containers, structured
   physical warnings, generic supports, and PILE alignment without maintaining
   two divergent layouts.
+  - [x] Back up, rehearse, and apply Server schema v9 with coordinate version,
+    geometry mode, millimetre top-level geometry, generic supports, and PILE
+    alignment while preserving existing data.
+  - [x] Implement tested per-axis book-dimension fallbacks and keep `MANUAL`
+    rendering isolated from incomplete physical projection.
+  - [x] Present precise layout controls only in millimetres, with
+    shelf-relative anchor/alignment coordinates and support-relative bottom
+    clearance (`0 mm` means direct contact).
+  - [ ] Complete `PHYSICAL` projection, accordion displacement, and immediate
+    structured warning overlays.
+  - [ ] Integrate floating/minimizable and direct map layout editing over the
+    same canonical validation service.
+  - [ ] Complete desktop, phone, and tablet acceptance before closing Phase 4D.
 - [ ] **Future Local:** backport validated physical-geometry behaviour only in
   an isolated branch/worktree with a verified ZIP and rehearsed additive SQLite
   migration; never use the populated live Local database as a test target.

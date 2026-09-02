@@ -258,10 +258,10 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     VisualBookcaseLayout(
                         library_id=first.id,
                         bookcase_id=first_bookcase.id,
-                        x=Decimal("-20"),
-                        y=Decimal("5"),
-                        width=Decimal("25"),
-                        height=Decimal("80"),
+                        x_mm=Decimal("-400"),
+                        floor_y_mm=Decimal("1700"),
+                        width_mm=Decimal("500"),
+                        height_mm=Decimal("1600"),
                     ),
                     VisualShelfLayout(
                         library_id=first.id,
@@ -280,10 +280,10 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     VisualOutsideArea(
                         library_id=first.id,
                         area_kind="READING",
-                        x=Decimal("50"),
-                        y=Decimal("70"),
-                        width=Decimal("20"),
-                        height=Decimal("18"),
+                        x_mm=Decimal("1000"),
+                        y_mm=Decimal("1400"),
+                        width_mm=Decimal("400"),
+                        height_mm=Decimal("360"),
                     ),
                 ]
             )

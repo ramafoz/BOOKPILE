@@ -22,6 +22,10 @@ export interface MapContainerRect extends WorldRect {
   type: "ROW" | "PILE";
   layer: "BACKGROUND" | "FOREGROUND";
   layout: VisualContainerLayout;
+  shelfWorldWidth: number;
+  shelfWorldHeight: number;
+  shelfUsableWidthMm: number | null;
+  shelfUsableHeightMm: number | null;
 }
 
 export interface BookSegment extends WorldRect {
@@ -32,6 +36,38 @@ export interface RearrangementSlot extends WorldRect {
   position: number;
   book: PhysicalBook | null;
   isEndTarget: boolean;
+}
+
+export interface BookVisualDefaults {
+  thicknessMm: number;
+  heightMm: number;
+  thicknessPerPage: number | null;
+}
+
+function median(values: number[], fallback: number): number {
+  if (!values.length) return fallback;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+export function catalogueBookVisualDefaults(books: PhysicalBook[]): BookVisualDefaults {
+  const measured = books.map((book) => book.thickness_mm).filter((value): value is number => Boolean(value && value > 0));
+  const heights = books.map((book) => book.height_mm).filter((value): value is number => Boolean(value && value > 0));
+  const ratios = books
+    .filter((book) => Boolean(book.thickness_mm && book.page_count && book.thickness_mm > 0 && book.page_count > 0))
+    .map((book) => book.thickness_mm! / book.page_count!);
+  return { thicknessMm: median(measured, 20), heightMm: median(heights, 220), thicknessPerPage: ratios.length ? median(ratios, 0) : null };
+}
+
+function resolvedThickness(book: PhysicalBook, defaults: BookVisualDefaults): number {
+  if (book.thickness_mm && book.thickness_mm > 0) return book.thickness_mm;
+  if (book.page_count && book.page_count > 0 && defaults.thicknessPerPage) return book.page_count * defaults.thicknessPerPage;
+  return defaults.thicknessMm;
+}
+
+function resolvedHeight(book: PhysicalBook, defaults: BookVisualDefaults): number {
+  return book.height_mm && book.height_mm > 0 ? book.height_mm : defaults.heightMm;
 }
 
 export function cataloguePageMean(books: PhysicalBook[]): number {
@@ -57,14 +93,15 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
   data.bookcases.forEach((bookcase) => {
     const layout = bookcaseLayouts.get(bookcase.id);
     if (!layout) return;
-    bookcases.push({ bookcaseId: bookcase.id, ...layout });
-    const insetX = layout.width * 0.025;
-    const insetY = layout.height * 0.025;
+    const top = layout.floor_y_mm - layout.height_mm;
+    bookcases.push({ bookcaseId: bookcase.id, x: layout.x_mm, y: top, width: layout.width_mm, height: layout.height_mm });
+    const insetX = layout.width_mm * 0.025;
+    const insetY = layout.height_mm * 0.025;
     const inner = {
-      x: layout.x + insetX,
-      y: layout.y + insetY,
-      width: layout.width - insetX * 2,
-      height: layout.height - insetY * 2,
+      x: layout.x_mm + insetX,
+      y: top + insetY,
+      width: layout.width_mm - insetX * 2,
+      height: layout.height_mm - insetY * 2,
     };
     const totalWeight = bookcase.shelves.reduce(
       (total, shelf) => total + (shelfLayouts.get(shelf.id)?.height_weight ?? 1),
@@ -91,6 +128,10 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
           type: container.container_type,
           layer: container.layer,
           layout: containerLayout,
+          shelfWorldWidth: shelfRect.width,
+          shelfWorldHeight: shelfRect.height,
+          shelfUsableWidthMm: shelf.usable_width_mm,
+          shelfUsableHeightMm: shelf.usable_height_mm,
           x: shelfRect.x + shelfRect.width * containerLayout.x / 100,
           y: shelfRect.y + shelfRect.height * containerLayout.y / 100,
           width: shelfRect.width * containerLayout.width / 100,
@@ -106,18 +147,47 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
 export function proportionalBookSegments(
   rect: MapContainerRect,
   books: PhysicalBook[],
-  catalogueMean: number,
+  defaults: BookVisualDefaults = catalogueBookVisualDefaults(books),
+  physical = false,
 ): BookSegment[] {
   const ordered = [...books].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  const pages = ordered.map((book) => book.page_count && book.page_count > 0 ? book.page_count : catalogueMean);
+  const pages = ordered.map((book) => resolvedThickness(book, defaults));
   const total = pages.reduce((sum, value) => sum + value, 0) || 1;
-  let offset = 0;
-  return ordered.map((book, index) => {
+  if (!physical) {
     const span = rect.type === "ROW" ? rect.width : rect.height;
-    const thickness = index === ordered.length - 1 ? span - offset : span * pages[index] / total;
+    let offset = 0;
+    return ordered.map((book, index) => {
+      const thickness = index === ordered.length - 1 ? span - offset : span * pages[index] / total;
+      const segment = rect.type === "ROW"
+        ? { x: rect.x + offset, y: rect.y, width: thickness, height: rect.height }
+        : { x: rect.x, y: rect.y + offset, width: rect.width, height: thickness };
+      offset += thickness;
+      return { ...segment, book };
+    });
+  }
+  const physicalThicknessScale = rect.type === "ROW"
+    ? (rect.shelfUsableWidthMm ? rect.shelfWorldWidth / rect.shelfUsableWidthMm : null)
+    : (rect.shelfUsableHeightMm ? rect.shelfWorldHeight / rect.shelfUsableHeightMm : null);
+  const thicknesses = pages.map((value) => physicalThicknessScale ? value * physicalThicknessScale : (rect.type === "ROW" ? rect.width : rect.height) * value / total);
+  const occupiedSpan = thicknesses.reduce((sum, value) => sum + value, 0);
+  let offset = rect.type === "ROW" && rect.layout.row_anchor === "RIGHT"
+    ? rect.width - occupiedSpan
+    : rect.type === "PILE" ? rect.height - occupiedSpan : 0;
+  return ordered.map((book, index) => {
+    const thickness = thicknesses[index];
+    const physicalLength = rect.shelfUsableHeightMm && rect.type === "ROW"
+      ? resolvedHeight(book, defaults) * rect.shelfWorldHeight / rect.shelfUsableHeightMm
+      : rect.shelfUsableWidthMm && rect.type === "PILE"
+        ? resolvedHeight(book, defaults) * rect.shelfWorldWidth / rect.shelfUsableWidthMm
+        : rect.type === "ROW" ? rect.height : rect.width;
+    const pileX = rect.layout.pile_alignment === "LEFT"
+      ? rect.x
+      : rect.layout.pile_alignment === "CENTER"
+        ? rect.x + (rect.width - physicalLength) / 2
+        : rect.x + rect.width - physicalLength;
     const segment = rect.type === "ROW"
-      ? { x: rect.x + offset, y: rect.y, width: thickness, height: rect.height }
-      : { x: rect.x, y: rect.y + offset, width: rect.width, height: thickness };
+      ? { x: rect.x + offset, y: rect.y + rect.height - physicalLength, width: thickness, height: physicalLength }
+      : { x: pileX, y: rect.y + offset, width: physicalLength, height: thickness };
     offset += thickness;
     return { ...segment, book };
   });
@@ -128,7 +198,7 @@ export function proportionalRearrangementSlots(
   books: PhysicalBook[],
   gapPositions: number[],
   movingBook: PhysicalBook | null,
-  catalogueMean: number,
+  defaults: BookVisualDefaults = catalogueBookVisualDefaults(books),
 ): RearrangementSlot[] {
   const byPosition = new Map(
     books
@@ -137,13 +207,11 @@ export function proportionalRearrangementSlots(
   );
   const gaps = new Set(gapPositions);
   const lastPosition = Math.max(0, ...byPosition.keys(), ...gaps);
-  const movingPages = movingBook?.page_count && movingBook.page_count > 0
-    ? movingBook.page_count
-    : catalogueMean;
+  const movingPages = movingBook ? resolvedThickness(movingBook, defaults) : defaults.thicknessMm;
   const items = Array.from({ length: lastPosition }, (_, index) => {
     const position = index + 1;
     const item = byPosition.get(position) ?? null;
-    const pages = item?.page_count && item.page_count > 0 ? item.page_count : movingPages;
+    const pages = item ? resolvedThickness(item, defaults) : movingPages;
     return { position, book: item, pages };
   });
   const totalPages = items.reduce((sum, item) => sum + item.pages, 0) || movingPages;
