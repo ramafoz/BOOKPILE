@@ -164,6 +164,7 @@ describe("Physical library requests", () => {
         { area_kind: "READING" as const, x_mm: 600, y_mm: 1400, width_mm: 400, height_mm: 400 },
         { area_kind: "LOANED" as const, x_mm: 1200, y_mm: 1400, width_mm: 400, height_mm: 400 },
       ],
+      diagnostics: [],
     };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({

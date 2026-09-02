@@ -226,28 +226,21 @@ class VisualShelfLayoutWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     shelf_id: UUID
-    height_weight: float = Field(ge=0.25, le=8)
+    height_weight: float = Field(gt=0)
 
 
 class VisualContainerLayoutWrite(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     container_id: UUID
-    x: float = Field(ge=0, le=100)
-    y: float = Field(ge=0, le=100)
-    width: float = Field(gt=0, le=100)
-    height: float = Field(gt=0, le=100)
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
     row_anchor: Literal["LEFT", "RIGHT"] = "LEFT"
     support_kind: Literal["SHELF", "CONTAINER"] = "SHELF"
     support_container_id: UUID | None = None
     pile_alignment: Literal["LEFT", "CENTER", "RIGHT"] = "RIGHT"
-
-    @model_validator(mode="after")
-    def validate_bounds(self) -> "VisualContainerLayoutWrite":
-        if self.x + self.width > 100 or self.y + self.height > 100:
-            raise ValueError("Container geometry must remain inside its shelf")
-        return self
-
 
 class RearrangementResultResponse(BaseModel):
     revision: str
@@ -284,6 +277,7 @@ class VisualLayoutWrite(BaseModel):
     shelves: list[VisualShelfLayoutWrite]
     containers: list[VisualContainerLayoutWrite]
     outside_areas: list[VisualOutsideAreaWrite]
+    diagnostics: list["GeometryDiagnosticResponse"] = Field(default_factory=list)
 
 
 class VisualLayoutResponse(BaseModel):
@@ -294,6 +288,15 @@ class VisualLayoutResponse(BaseModel):
     shelves: list[VisualShelfLayoutWrite]
     containers: list[VisualContainerLayoutWrite]
     outside_areas: list[VisualOutsideAreaWrite]
+    diagnostics: list["GeometryDiagnosticResponse"] = Field(default_factory=list)
+
+
+class GeometryDiagnosticResponse(BaseModel):
+    entity_kind: Literal["LIBRARY", "BOOKCASE", "SHELF", "CONTAINER", "BOOK"]
+    entity_id: UUID | None
+    severity: Literal["INFO", "WARNING", "ERROR"]
+    code: str
+    message: str
 
 
 class ContainerResponse(BaseModel):

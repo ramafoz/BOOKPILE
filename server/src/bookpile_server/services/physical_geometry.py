@@ -62,6 +62,141 @@ class GeometryDiagnostic:
     message: str
 
 
+@dataclass(frozen=True)
+class ContainerProjectionInput:
+    id: UUID
+    shelf_id: UUID
+    kind: Literal["ROW", "PILE"]
+    layer: Literal["BACKGROUND", "FOREGROUND"]
+    x: float
+    y: float
+    width: float
+    height: float
+    row_anchor: Literal["LEFT", "RIGHT"]
+    support_container_id: UUID | None
+    pile_alignment: Literal["LEFT", "CENTER", "RIGHT"]
+    shelf_width_mm: float
+    shelf_height_mm: float
+    books: tuple[ResolvedBookMeasurement, ...]
+
+
+@dataclass
+class ProjectedContainer:
+    id: UUID
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+def _anchored_x(item: ContainerProjectionInput, width: float) -> float:
+    if item.kind == "ROW":
+        return item.x if item.row_anchor == "LEFT" else item.x + item.width - width
+    if item.pile_alignment == "LEFT":
+        return item.x
+    if item.pile_alignment == "CENTER":
+        return item.x + item.width / 2 - width / 2
+    return item.x + item.width - width
+
+
+def project_containers(
+    inputs: Iterable[ContainerProjectionInput],
+) -> tuple[dict[UUID, ProjectedContainer], list[GeometryDiagnostic]]:
+    """Project truthful occupied sizes and make a best-effort accordion pass."""
+
+    items = list(inputs)
+    by_id = {item.id: item for item in items}
+    projected: dict[UUID, ProjectedContainer] = {}
+    diagnostics: list[GeometryDiagnostic] = []
+    for item in items:
+        size = occupied_size(item.kind, item.books)
+        width = size.width_mm / item.shelf_width_mm * 100 if item.books else item.width
+        height = size.height_mm / item.shelf_height_mm * 100 if item.books else item.height
+        clearance = 100 - item.y - item.height
+        projected[item.id] = ProjectedContainer(
+            item.id,
+            _anchored_x(item, width),
+            100 - clearance - height if item.layer == "BACKGROUND" else 100 - height,
+            width,
+            height,
+        )
+
+    # Roots can accordion within their own shelf/layer. Dependants are placed
+    # against their support afterwards and therefore travel with it.
+    roots = [item for item in items if item.support_container_id is None]
+    groups: dict[tuple[UUID, str], list[ContainerProjectionInput]] = {}
+    for item in roots:
+        groups.setdefault((item.shelf_id, item.layer), []).append(item)
+    for group in groups.values():
+        ordered = sorted(group, key=lambda item: (projected[item.id].x, str(item.id)))
+        for _ in range(len(ordered) * 2):
+            changed = False
+            for left_item, right_item in zip(ordered, ordered[1:]):
+                left = projected[left_item.id]
+                right = projected[right_item.id]
+                vertical = min(left.y + left.height, right.y + right.height) - max(left.y, right.y)
+                overlap = left.x + left.width - right.x
+                if vertical <= 0.1 or overlap <= 0.1:
+                    continue
+                if right.x + right.width + overlap <= 100.0:
+                    right.x += overlap
+                    changed = True
+                elif left.x - overlap >= 0.0:
+                    left.x -= overlap
+                    changed = True
+            if not changed:
+                break
+
+    unresolved = set(projected)
+    while unresolved:
+        progressed = False
+        for container_id in list(unresolved):
+            item = by_id[container_id]
+            if item.support_container_id is None:
+                unresolved.remove(container_id)
+                progressed = True
+                continue
+            if item.support_container_id in unresolved:
+                continue
+            support = projected[item.support_container_id]
+            current = projected[container_id]
+            if item.kind == "ROW":
+                current.x = support.x if item.row_anchor == "LEFT" else support.x + support.width - current.width
+            elif item.pile_alignment == "LEFT":
+                current.x = support.x
+            elif item.pile_alignment == "CENTER":
+                current.x = support.x + support.width / 2 - current.width / 2
+            else:
+                current.x = support.x + support.width - current.width
+            current.y = support.y - current.height
+            unresolved.remove(container_id)
+            progressed = True
+        if not progressed:
+            break
+
+    for item in items:
+        rect = projected[item.id]
+        if rect.x < -0.1 or rect.y < -0.1 or rect.x + rect.width > 100.1 or rect.y + rect.height > 100.1:
+            diagnostics.append(GeometryDiagnostic(
+                "CONTAINER", item.id, "WARNING", "OUTSIDE_SHELF",
+                "The measured books extend beyond the usable shelf area.",
+            ))
+    for index, first_item in enumerate(items):
+        first = projected[first_item.id]
+        for second_item in items[index + 1:]:
+            if first_item.shelf_id != second_item.shelf_id or first_item.layer != second_item.layer:
+                continue
+            second = projected[second_item.id]
+            overlap_w = min(first.x + first.width, second.x + second.width) - max(first.x, second.x)
+            overlap_h = min(first.y + first.height, second.y + second.height) - max(first.y, second.y)
+            if overlap_w > 0.1 and overlap_h > 0.1:
+                diagnostics.append(GeometryDiagnostic(
+                    "CONTAINER", second_item.id, "WARNING", "SAME_LAYER_COLLISION",
+                    "Measured container geometry collides with another container in this layer.",
+                ))
+    return projected, diagnostics
+
+
 def _known(values: Iterable[int | None]) -> list[float]:
     return [float(value) for value in values if value is not None and value > 0]
 

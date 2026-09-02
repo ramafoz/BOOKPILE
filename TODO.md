@@ -426,8 +426,11 @@ protects the completed catalogue.
   - [x] Present precise layout controls only in millimetres, with
     shelf-relative anchor/alignment coordinates and support-relative bottom
     clearance (`0 mm` means direct contact).
-  - [ ] Complete `PHYSICAL` projection, accordion displacement, and immediate
-    structured warning overlays.
+  - [x] Complete the first `PHYSICAL` projection and accordion pass: derive
+    occupied ROW/PILE geometry from measured or fallback book dimensions,
+    preserve anchors/supports, allow truthful out-of-bounds persistence, and
+    show immediate structured collision/overflow warning overlays. Further
+    direct manipulation continues in the next increment.
   - [ ] Integrate floating/minimizable and direct map layout editing over the
     same canonical validation service.
   - [ ] Complete desktop, phone, and tablet acceptance before closing Phase 4D.

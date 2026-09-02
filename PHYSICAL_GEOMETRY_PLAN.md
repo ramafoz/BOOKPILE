@@ -211,10 +211,26 @@ Accepted on 2026-09-02:
 - `MANUAL` rendering remains isolated from physical projection, preventing
   partial physical data from changing an existing manual map. Wheel zoom no
   longer has a fixed world-width ceiling.
+- Physical projection is implemented for non-empty ROW/PILE containers. Their
+  occupied width and height are derived from per-axis book measurements and
+  documented fallbacks; the precise editor therefore locks those two derived
+  fields in `PHYSICAL` mode while retaining editable anchors, alignment and
+  support. Empty containers retain editable provisional geometry.
+- Schema v10 removes obsolete `0–100` persistence bounds and widens the four
+  container geometry numerics. This allows truthful physical overflow while
+  retaining positive width/height constraints and immediate red diagnostic
+  overlays. The migration was backed up and rehearsed upgrade/downgrade/upgrade
+  against disposable PostgreSQL before application.
+- Top-level vertical coordinates now consistently use a mathematical axis:
+  `floor_y=0` is below `floor_y=1800`. Furniture, Reading and On-loan areas all
+  use left edge, floor baseline, width and height semantics.
+- Newly created unmeasured furniture keeps null physical metadata, receives a
+  distinct persisted fallback map rectangle, and accepts negative horizontal
+  world coordinates without transient number-input correction.
 
-Still required before Phase 4D closes: complete physical-mode projection,
-accordion movement, structured warning overlays, floating/direct layout
-editing, and final cross-device acceptance.
+Still required before Phase 4D closes: floating/minimizable and direct map
+layout editing, deeper accordion edge-case refinement, and final cross-device
+acceptance.
 
 ## 10. Edition boundary and future Local work
 

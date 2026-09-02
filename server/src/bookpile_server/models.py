@@ -805,16 +805,8 @@ class VisualShelfLayout(Base):
 class VisualContainerLayout(Base):
     __tablename__ = "visual_container_layouts"
     __table_args__ = (
-        CheckConstraint("x >= 0 AND x <= 100", name="ck_visual_container_x"),
-        CheckConstraint("y >= 0 AND y <= 100", name="ck_visual_container_y"),
-        CheckConstraint(
-            "width > 0 AND width <= 100 AND x + width <= 100",
-            name="ck_visual_container_width",
-        ),
-        CheckConstraint(
-            "height > 0 AND height <= 100 AND y + height <= 100",
-            name="ck_visual_container_height",
-        ),
+        CheckConstraint("width > 0", name="ck_visual_container_width_positive"),
+        CheckConstraint("height > 0", name="ck_visual_container_height_positive"),
         CheckConstraint(
             "row_anchor IN ('LEFT', 'RIGHT')", name="ck_visual_container_anchor"
         ),
@@ -851,10 +843,10 @@ class VisualContainerLayout(Base):
 
     library_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     container_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
-    x: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
-    y: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
-    width: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
-    height: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False)
+    x: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    y: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    width: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    height: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     row_anchor: Mapped[str] = mapped_column(
         String(8), nullable=False, default="LEFT", server_default="LEFT"
     )

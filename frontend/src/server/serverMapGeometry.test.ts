@@ -19,13 +19,14 @@ const data = {
     shelves: [{ shelf_id: "shelf", height_weight: 1 }],
     containers: [{ container_id: "row", x: 0, y: 0, width: 100, height: 100, row_anchor: "LEFT", support_kind: "SHELF", support_container_id: null, pile_alignment: "RIGHT" }],
     outside_areas: [{ area_kind: "READING", x_mm: 1200, y_mm: 1400, width_mm: 200, height_mm: 400 }, { area_kind: "LOANED", x_mm: 1500, y_mm: 1400, width_mm: 200, height_mm: 400 }],
+    diagnostics: [],
   },
 } satisfies PhysicalLibrary;
 
 describe("Server Library Map geometry", () => {
   it("projects shelf-local geometry into world coordinates", () => {
     const geometry = physicalMapGeometry(data);
-    expect(geometry.bookcases[0]).toMatchObject({ x: 200, y: 400, width: 800, height: 1200 });
+    expect(geometry.bookcases[0]).toMatchObject({ x: 200, y: -2800, width: 800, height: 1200 });
     expect(geometry.containers[0].width).toBeCloseTo(760);
     expect(geometry.containers[0].height).toBeCloseTo(1140);
   });

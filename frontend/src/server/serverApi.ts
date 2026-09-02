@@ -227,6 +227,15 @@ export interface VisualLayout {
   shelves: VisualShelfLayout[];
   containers: VisualContainerLayout[];
   outside_areas: VisualOutsideArea[];
+  diagnostics: GeometryDiagnostic[];
+}
+
+export interface GeometryDiagnostic {
+  entity_kind: "LIBRARY" | "BOOKCASE" | "SHELF" | "CONTAINER" | "BOOK";
+  entity_id: string | null;
+  severity: "INFO" | "WARNING" | "ERROR";
+  code: string;
+  message: string;
 }
 
 export interface PhysicalLibrary {

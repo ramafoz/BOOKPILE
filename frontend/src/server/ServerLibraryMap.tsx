@@ -121,8 +121,13 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   const geometry = useMemo(() => displayData ? physicalMapGeometry(displayData) : null, [displayData]);
   const meanPages = useMemo(() => data ? cataloguePageMean(data.books) : 200, [data]);
   const visualDefaults = useMemo(() => data ? catalogueBookVisualDefaults(data.books) : { thicknessMm: 20, heightMm: 220, thicknessPerPage: null }, [data]);
+  const geometryWarnings = useMemo(() => new Map(
+    (data?.layout.diagnostics ?? [])
+      .filter((item) => item.entity_id)
+      .map((item) => [item.entity_id as string, item.message]),
+  ), [data]);
   const worldBounds = useMemo(
-    () => boundsForRects([...(geometry?.bookcases ?? []), ...((data?.layout.outside_areas ?? []).map((area) => ({ x: area.x_mm, y: area.y_mm, width: area.width_mm, height: area.height_mm })))]),
+    () => boundsForRects([...(geometry?.bookcases ?? []), ...((data?.layout.outside_areas ?? []).map((area) => ({ x: area.x_mm, y: -area.y_mm - area.height_mm, width: area.width_mm, height: area.height_mm })))]),
     [data, geometry],
   );
 
@@ -359,7 +364,9 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
           const rearrangementSlots = rearranging && moveBookId
             ? proportionalRearrangementSlots(container, containerBooks, gapPositions, activeBook, visualDefaults)
             : [];
-          return <g key={container.containerId} className={`server-map-container ${selected ? "selected" : ""} ${rearranging ? "rearranging" : ""}`} onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (rearranging && moveBookId && (!rearrangement || !rearrangement.complete)) { const count = (booksByContainer.get(container.containerId) ?? []).length; void previewDestination(container.containerId, String(count + 1)); } else if (!rearranging && inspectionMode === "CONTAINER") setSelection({ kind: "CONTAINER", containerId: container.containerId }); }}>
+          const warning = geometryWarnings.get(container.containerId);
+          return <g key={container.containerId} className={`server-map-container ${selected ? "selected" : ""} ${rearranging ? "rearranging" : ""} ${warning ? "geometry-warning" : ""}`} onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (rearranging && moveBookId && (!rearrangement || !rearrangement.complete)) { const count = (booksByContainer.get(container.containerId) ?? []).length; void previewDestination(container.containerId, String(count + 1)); } else if (!rearranging && inspectionMode === "CONTAINER") setSelection({ kind: "CONTAINER", containerId: container.containerId }); }}>
+            {warning && <title>{warning}</title>}
             <rect x={container.x} y={container.y} width={container.width} height={container.height} rx=".2" />
             {(rearranging && moveBookId ? rearrangementSlots.filter((slot) => slot.book).map((slot) => ({ ...slot, book: slot.book! })) : segments).map((segment) => <rect
               key={segment.book.id}
@@ -373,11 +380,12 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
               x={slot.x} y={slot.y} width={slot.width} height={slot.height}
               onClick={(event) => { event.stopPropagation(); if (!rearrangement?.complete) void previewDestination(container.containerId, String(slot.position)); }}
             ><title>{slot.isEndTarget ? `New end position ${slot.position}` : `Empty position ${slot.position}`}</title></rect>)}
+            {warning && <rect className="server-map-geometry-warning-overlay" x={container.x} y={container.y} width={container.width} height={container.height} rx=".2"><title>{warning}</title></rect>}
           </g>;
         })}
         {data.layout.outside_areas.map((area) => <g key={area.area_kind} className={`server-map-outside ${area.area_kind.toLowerCase()}`}>
-          <rect x={area.x_mm} y={area.y_mm} width={area.width_mm} height={area.height_mm} rx="2" />
-          <text x={area.x_mm + area.width_mm / 2} y={area.y_mm + area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
+          <rect x={area.x_mm} y={-area.y_mm - area.height_mm} width={area.width_mm} height={area.height_mm} rx="2" />
+          <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
         </g>)}
       </svg>
       <div className="server-map-controls" aria-label="Map camera controls">

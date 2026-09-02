@@ -466,7 +466,7 @@ locations, per-book placement, and transactional visual rearrangement. The
 rearrangement draft supports Collapse/Leave gap and Squeeze/Swap/Continue,
 multiple completed movement chains, proportional geometry previews, undo,
 explicit Apply, concurrency revision checks, and audit. Phase 4D remains open
-for complete physical-mode projection, accordion and warning behaviour, and
+for direct map layout editing, accordion edge-case refinement, and
 floating/direct layout editing. Its schema-v9 foundation, per-axis dimension
 fallbacks, millimetre editor, generic support validation, and manual/physical
 rendering boundary are implemented and accepted. This does not

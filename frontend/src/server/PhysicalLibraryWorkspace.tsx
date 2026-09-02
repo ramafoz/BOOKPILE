@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Layers3, Pencil, Plus, Ruler, Settings2, Trash2 } from "lucide-react";
 
 import {
@@ -40,6 +40,50 @@ function optionalNumber(value: string): number | null {
 function dimensions(values: Array<number | null>, labels: string[]): string {
   const recorded = values.map((value, index) => value ? `${labels[index]} ${value} mm` : null).filter(Boolean);
   return recorded.length ? recorded.join(" · ") : "Dimensions not recorded";
+}
+
+function NumericField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 0.1,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [text, setText] = useState(String(Number(value.toFixed(2))));
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setText(String(Number(value.toFixed(2))));
+    }
+  }, [value]);
+  return <label>{label}<input
+    ref={inputRef}
+    type="number"
+    min={min}
+    max={max}
+    step={step}
+    value={text}
+    disabled={disabled}
+    required
+    onChange={(event) => {
+      const next = event.target.value;
+      setText(next);
+      if (next.trim() === "" || next === "-" || next === "." || next === "-.") return;
+      const parsed = Number(next);
+      if (Number.isFinite(parsed)) onChange(parsed);
+    }}
+    onBlur={() => setText(String(Number(value.toFixed(2))))}
+  /></label>;
 }
 
 function EditDialog({
@@ -145,6 +189,7 @@ function GeometryDialog({
   const [outsideKind, setOutsideKind] = useState<"READING" | "LOANED">("READING");
   const [saving, setSaving] = useState(false);
   const selectedBookcase = draft.bookcases.find((item) => item.bookcase_id === bookcaseId);
+  const selectedBookcaseRecord = data.bookcases.find((item) => item.id === bookcaseId);
   const selectedShelf = draft.shelves.find((item) => item.shelf_id === shelfId);
   const selectedContainer = draft.containers.find((item) => item.container_id === containerId);
   const selectedContainerContext = allContainers.find((item) => item.container.id === containerId);
@@ -257,6 +302,19 @@ function GeometryDialog({
     return selectedContainer.x / 100 * containerShelfWidthMm;
   }
 
+  function updateOutside(field: "x" | "floor" | "width" | "height", value: number) {
+    setDraft((current) => ({
+      ...current,
+      outside_areas: current.outside_areas.map((item) => {
+        if (item.area_kind !== outsideKind) return item;
+        if (field === "x") return { ...item, x_mm: value };
+        if (field === "floor") return { ...item, y_mm: value };
+        if (field === "width") return { ...item, width_mm: value };
+        return { ...item, height_mm: value };
+      }),
+    }));
+  }
+
   async function save() {
     setSaving(true);
     try {
@@ -273,24 +331,25 @@ function GeometryDialog({
     value: number,
     onChange: (value: number) => void,
     options: { min?: number; max?: number; step?: number; disabled?: boolean } = {},
-  ) => <label>{label}<input type="number" min={options.min} max={options.max} step={options.step ?? 0.1} value={Number(value.toFixed(2))} onChange={(event) => onChange(Number(event.target.value))} required disabled={options.disabled} /></label>;
+  ) => <NumericField label={label} value={value} onChange={onChange} {...options} />;
 
   return <div className="server-modal-backdrop"><section className="server-physical-dialog server-geometry-dialog" role="dialog" aria-modal="true">
     <p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2>
     <p className="server-field-help">Precise controls are implemented first. Direct dragging and the visual map will reuse the proven Local camera and geometry in the next increment.</p>
     <div className="server-geometry-sections">
-      <fieldset><legend>Furniture geometry (mm)</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}{numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}{numberField("Width", selectedBookcase.width_mm, (value) => updateBookcase("width_mm", value), { min: 1, step: 1 })}{numberField("Height", selectedBookcase.height_mm, (value) => updateBookcase("height_mm", value), { min: 1, step: 1 })}</div>}</fieldset>
+      <fieldset><legend>Geometry mode</legend><label>Projection<select value={draft.geometry_mode} onChange={(event) => setDraft((current) => ({ ...current, geometry_mode: event.target.value as "MANUAL" | "PHYSICAL" }))}><option value="MANUAL">Manual proportions</option><option value="PHYSICAL">Physical dimensions</option></select></label><small>{draft.geometry_mode === "PHYSICAL" ? "Saving recalculates furniture, shelves and occupied containers from recorded millimetres. Missing axes use documented independent fallbacks; conflicts remain visible as warnings." : "Recorded dimensions are informative. The saved manual map geometry remains authoritative."}</small></fieldset>
+      <fieldset><legend>Furniture geometry (mm)</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <><div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}{numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}{numberField("Width", selectedBookcase.width_mm, (value) => updateBookcase("width_mm", value), { min: 1, step: 1 })}{numberField("Height", selectedBookcase.height_mm, (value) => updateBookcase("height_mm", value), { min: 1, step: 1 })}</div>{selectedBookcaseRecord && (!selectedBookcaseRecord.width_mm || !selectedBookcaseRecord.height_mm) && <small>Physical dimensions are not recorded. These editable map dimensions are independent fallback geometry, not inherited furniture measurements.</small>}</>}</fieldset>
       <fieldset><legend>Shelf map size (mm)</legend><label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>{selectedShelf && selectedShelfRect && <>{numberField("Displayed height (mm)", selectedShelfRect.height, updateShelfMapHeight, { min: 1, step: 1 })}{data.bookcases.find((bookcase) => bookcase.shelves.some((shelf) => shelf.id === shelfId))?.shelves.length === 1 && <small>A single shelf fills the bookcase's available map height.</small>}</>}</fieldset>
-      <fieldset><legend>Container geometry and support (mm)</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField(selectedContainerContext.container.container_type === "ROW" ? "Anchor position (mm)" : "Alignment position (mm)", displayedContainerStartMm(), (value) => updateContainerMillimetres("start", value), { min: 0, max: containerShelfWidthMm, step: 1 })}{numberField("Bottom clearance (mm)", supportClearanceMm, (value) => updateContainerMillimetres("bottom", value), { min: 0, max: containerShelfHeightMm, step: 1, disabled: selectedContainer.support_kind === "CONTAINER" || selectedContainerContext.container.layer === "FOREGROUND" })}{numberField("Width (mm)", selectedContainer.width / 100 * containerShelfWidthMm, (value) => updateContainerMillimetres("width", value), { min: 1, max: containerShelfWidthMm, step: 1 })}{numberField("Height (mm)", selectedContainer.height / 100 * containerShelfHeightMm, (value) => updateContainerMillimetres("height", value), { min: 1, max: containerShelfHeightMm, step: 1 })}</div><small>Anchor/alignment positions are coordinates measured from the shelf's left edge. Bottom clearance is relative to the immediate support: 0 mm means direct contact with the shelf or supporting container. Only shelf-supported background containers may use a visual depth offset.</small>{selectedContainerContext.container.container_type === "ROW" && <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label>}<label>Rests on<select value={selectedContainer.support_kind === "CONTAINER" ? selectedContainer.support_container_id ?? "" : "SHELF"} onChange={(event) => chooseSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select><small>Only a non-empty opposite-type container in this shelf and layer can be used.</small></label>{selectedContainerContext.container.container_type === "PILE" && <label>Pile alignment<select value={selectedContainer.pile_alignment} onChange={(event) => updateContainer({ pile_alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>}</>}</fieldset>
+      <fieldset><legend>Container geometry and support (mm)</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField(selectedContainerContext.container.container_type === "ROW" ? "Anchor position (mm)" : "Alignment position (mm)", displayedContainerStartMm(), (value) => updateContainerMillimetres("start", value), { min: 0, max: containerShelfWidthMm, step: 1 })}{numberField("Bottom clearance (mm)", supportClearanceMm, (value) => updateContainerMillimetres("bottom", value), { min: 0, max: containerShelfHeightMm, step: 1, disabled: selectedContainer.support_kind === "CONTAINER" || selectedContainerContext.container.layer === "FOREGROUND" })}{numberField("Width (mm)", selectedContainer.width / 100 * containerShelfWidthMm, (value) => updateContainerMillimetres("width", value), { min: 1, max: containerShelfWidthMm, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}{numberField("Height (mm)", selectedContainer.height / 100 * containerShelfHeightMm, (value) => updateContainerMillimetres("height", value), { min: 1, max: containerShelfHeightMm, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}</div><small>{draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 ? "Occupied width and height are derived from the books' physical dimensions and documented fallbacks. Change the anchor, alignment or support here; edit book measurements to change occupied size." : "Anchor/alignment positions are coordinates measured from the shelf's left edge. Bottom clearance is relative to the immediate support: 0 mm means direct contact with the shelf or supporting container."} Only shelf-supported background containers may use a visual depth offset.</small>{selectedContainerContext.container.container_type === "ROW" && <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label>}<label>Rests on<select value={selectedContainer.support_kind === "CONTAINER" ? selectedContainer.support_container_id ?? "" : "SHELF"} onChange={(event) => chooseSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select><small>Only a non-empty opposite-type container in this shelf and layer can be used.</small></label>{selectedContainerContext.container.container_type === "PILE" && <label>Pile alignment<select value={selectedContainer.pile_alignment} onChange={(event) => updateContainer({ pile_alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>}</>}</fieldset>
       <fieldset>
         <legend>Outside-library areas</legend>
         <label>Area<select value={outsideKind} onChange={(event) => setOutsideKind(event.target.value as "READING" | "LOANED")}><option value="READING">Reading</option><option value="LOANED">On loan</option></select></label>
-        {selectedOutside && <div className="server-dimension-grid">
-          {numberField("Horizontal (mm)", selectedOutside.x_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, x_mm: value } : item) })), { step: 1 })}
-          {numberField("Vertical (mm)", selectedOutside.y_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, y_mm: value } : item) })), { step: 1 })}
-          {numberField("Width (mm)", selectedOutside.width_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, width_mm: value } : item) })), { min: 1, step: 1 })}
-          {numberField("Height (mm)", selectedOutside.height_mm, (value) => setDraft((current) => ({ ...current, outside_areas: current.outside_areas.map((item) => item.area_kind === outsideKind ? { ...item, height_mm: value } : item) })), { min: 1, step: 1 })}
-        </div>}
+        {selectedOutside && <><div className="server-dimension-grid">
+          {numberField("Horizontal", selectedOutside.x_mm, (value) => updateOutside("x", value), { step: 1 })}
+          {numberField("Floor baseline", selectedOutside.y_mm, (value) => updateOutside("floor", value), { step: 1 })}
+          {numberField("Width", selectedOutside.width_mm, (value) => updateOutside("width", value), { min: 1, step: 1 })}
+          {numberField("Height", selectedOutside.height_mm, (value) => updateOutside("height", value), { min: 1, step: 1 })}
+        </div><small>Horizontal marks the left edge; Floor baseline marks the bottom edge. Width and Height extend right and upward from those coordinates.</small></>}
       </fieldset>
     </div>
     <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="server-primary-action" type="button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save visual layout"}</button></div>
@@ -400,6 +459,6 @@ export default function PhysicalLibraryWorkspace({
     </article>)}{!data.bookcases.length && <div className="server-empty-catalogue"><Boxes size={38} /><h4>No physical structure yet</h4><p>{data.can_edit ? "Add the first bookcase above." : "The Owners have not configured the Library Map yet."}</p></div>}</div>
 
     {editing && <EditDialog libraryId={libraryId} target={editing} busy={busy} onClose={() => setEditing(null)} onSaved={(value) => accept(value, "Physical library updated.")} onError={setError} />}
-    {layoutEditing && <GeometryDialog libraryId={libraryId} data={data} onClose={() => setLayoutEditing(false)} onSaved={(value) => { accept(value, "Visual layout saved."); setLayoutEditing(false); }} onError={(value) => { setError(value); setLayoutEditing(false); }} />}
+    {layoutEditing && <GeometryDialog libraryId={libraryId} data={data} onClose={() => setLayoutEditing(false)} onSaved={(value) => { accept(value, "Visual layout saved."); setLayoutEditing(false); }} onError={(value) => { setError(value); setLayoutEditing(false); void serverApi.physicalLibrary(libraryId).then(setData).catch(() => undefined); }} />}
   </section>;
 }

@@ -4,10 +4,12 @@ import pytest
 
 from bookpile_server.services.physical_geometry import (
     BookMeasurement,
+    ContainerProjectionInput,
     catalogue_dimension_defaults,
     measurement_diagnostics,
     occupied_percentages,
     occupied_size,
+    project_containers,
     resolve_book_measurement,
 )
 
@@ -71,3 +73,46 @@ def test_suspicious_measurements_create_derived_warnings_not_stored_state() -> N
         "OVERSIZED_MEASUREMENT",
         "LARGE_RELATIVE_THICKNESS",
     }
+
+
+def test_physical_projection_preserves_anchor_and_places_supported_pile() -> None:
+    row_id, pile_id, shelf_id = uuid4(), uuid4(), uuid4()
+    books = [BookMeasurement(uuid4(), 200, 240, 160, 20)]
+    resolved = tuple(resolve_book_measurement(item, catalogue_dimension_defaults(books)) for item in books)
+    projected, diagnostics = project_containers([
+        ContainerProjectionInput(row_id, shelf_id, "ROW", "BACKGROUND", 20, 40, 50, 60, "RIGHT", None, "RIGHT", 500, 300, resolved),
+        ContainerProjectionInput(pile_id, shelf_id, "PILE", "BACKGROUND", 50, 0, 20, 20, "LEFT", row_id, "RIGHT", 500, 300, resolved),
+    ])
+
+    assert projected[row_id].x + projected[row_id].width == pytest.approx(70)
+    assert projected[row_id].width == pytest.approx(4)
+    assert projected[row_id].height == pytest.approx(80)
+    assert projected[pile_id].y + projected[pile_id].height == pytest.approx(projected[row_id].y)
+    assert diagnostics == []
+
+
+def test_physical_projection_warns_when_truthful_size_cannot_fit() -> None:
+    container_id, shelf_id = uuid4(), uuid4()
+    book = BookMeasurement(uuid4(), 100, 400, 200, 600)
+    resolved = (resolve_book_measurement(book, catalogue_dimension_defaults([book])),)
+    projected, diagnostics = project_containers([
+        ContainerProjectionInput(container_id, shelf_id, "ROW", "BACKGROUND", 0, 0, 100, 100, "LEFT", None, "RIGHT", 500, 300, resolved),
+    ])
+
+    assert projected[container_id].width == pytest.approx(120)
+    assert {item.code for item in diagnostics} == {"OUTSIDE_SHELF"}
+
+
+def test_physical_projection_warns_when_alignment_places_a_pile_outside() -> None:
+    container_id, shelf_id = uuid4(), uuid4()
+    book = BookMeasurement(uuid4(), 100, 240, 160, 20)
+    resolved = (resolve_book_measurement(book, catalogue_dimension_defaults([book])),)
+    projected, diagnostics = project_containers([
+        ContainerProjectionInput(
+            container_id, shelf_id, "PILE", "FOREGROUND",
+            -24, 0, 48, 20, "LEFT", None, "CENTER", 500, 300, resolved,
+        ),
+    ])
+
+    assert projected[container_id].x < 0
+    assert {item.code for item in diagnostics} == {"OUTSIDE_SHELF"}

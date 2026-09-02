@@ -25,6 +25,14 @@ from ..schemas import (
     VisualLayoutWrite,
     VisualOutsideAreaWrite,
     VisualShelfLayoutWrite,
+    GeometryDiagnosticResponse,
+)
+from .physical_geometry import (
+    BookMeasurement,
+    ContainerProjectionInput,
+    catalogue_dimension_defaults,
+    project_containers,
+    resolve_book_measurement,
 )
 from .rearrangement import (
     PlannedBook,
@@ -67,17 +75,19 @@ class PhysicalLibraryService:
         shelves = self._repository.list_shelves(library_id)
         containers = self._repository.list_containers(library_id)
         book_counts = self._repository.book_counts(library_id)
+        books = self._repository.list_books(library_id)
         return PhysicalHierarchy(
             bookcases=bookcases,
             shelves=shelves,
             containers=containers,
             book_counts=book_counts,
-            books=self._repository.list_books(library_id),
+            books=books,
             layout=self._project_layout(
                 library_id=library_id,
                 bookcases=bookcases,
                 shelves=shelves,
                 containers=containers,
+                books=books,
             ),
         )
 
@@ -96,6 +106,8 @@ class PhysicalLibraryService:
             raise PhysicalLibraryConflictError(
                 "The layout changed after you opened the editor. Reload it before saving."
             )
+        if payload.geometry_mode == "PHYSICAL":
+            payload, _diagnostics = self._physical_projection(current, payload)
         self._validate_layout(current, payload)
         library.geometry_mode = payload.geometry_mode
         self._repository.upsert_visual_layout(
@@ -126,6 +138,7 @@ class PhysicalLibraryService:
         bookcases: list[Bookcase],
         shelves: list[Shelf],
         containers: list[Container],
+        books: list[Book],
     ) -> VisualLayoutResponse:
         stored_bookcases = {
             item.bookcase_id: item
@@ -148,15 +161,29 @@ class PhysicalLibraryService:
             raise PhysicalLibraryNotFoundError("Library not found.")
 
         bookcase_layouts = []
-        for index, item in enumerate(bookcases):
+        stored_right_edges = [
+            float(item.x_mm) + float(item.width_mm)
+            for item in stored_bookcases.values()
+        ]
+        next_unplaced_x = max(stored_right_edges) + 100.0 if stored_right_edges else 0.0
+        missing_positions: dict[UUID, float] = {}
+        for item in sorted(
+            (entry for entry in bookcases if entry.id not in stored_bookcases),
+            key=lambda entry: (entry.created_at, entry.id),
+        ):
+            missing_positions[item.id] = next_unplaced_x
+            next_unplaced_x += (float(item.width_mm) if item.width_mm else 500.0) + 100.0
+        for item in bookcases:
             stored = stored_bookcases.get(item.id)
+            fallback_width = float(item.width_mm) if item.width_mm else 500.0
+            fallback_height = float(item.height_mm) if item.height_mm else 1600.0
             bookcase_layouts.append(
                 VisualBookcaseLayoutWrite(
                     bookcase_id=item.id,
-                    x_mm=float(stored.x_mm) if stored else index * 600.0,
-                    floor_y_mm=float(stored.floor_y_mm) if stored else 1800.0,
-                    width_mm=float(stored.width_mm) if stored else 500.0,
-                    height_mm=float(stored.height_mm) if stored else 1600.0,
+                    x_mm=float(stored.x_mm) if stored else missing_positions[item.id],
+                    floor_y_mm=float(stored.floor_y_mm) if stored else fallback_height,
+                    width_mm=float(stored.width_mm) if stored else fallback_width,
+                    height_mm=float(stored.height_mm) if stored else fallback_height,
                 )
             )
 
@@ -218,6 +245,33 @@ class PhysicalLibraryService:
                     height_mm=float(stored.height_mm) if stored else default[3],
                 )
             )
+        response = VisualLayoutResponse(
+            revision="",
+            geometry_mode=library.geometry_mode,
+            coordinate_system_version=library.coordinate_system_version,
+            bookcases=bookcase_layouts,
+            shelves=shelf_layouts,
+            containers=container_layouts,
+            outside_areas=outside_layouts,
+        )
+        diagnostics: list[GeometryDiagnosticResponse] = []
+        if library.geometry_mode == "PHYSICAL":
+            provisional = PhysicalHierarchy(bookcases, shelves, containers, self._repository.book_counts(library_id), books, response)
+            projected, diagnostics = self._physical_projection(
+                provisional,
+                VisualLayoutWrite(
+                    revision="0" * 64,
+                    geometry_mode="PHYSICAL",
+                    coordinate_system_version=library.coordinate_system_version,
+                    bookcases=bookcase_layouts,
+                    shelves=shelf_layouts,
+                    containers=container_layouts,
+                    outside_areas=outside_layouts,
+                ),
+            )
+            bookcase_layouts = projected.bookcases
+            shelf_layouts = projected.shelves
+            container_layouts = projected.containers
         revision = self._layout_revision(
             bookcase_layouts, shelf_layouts, container_layouts, outside_layouts
         )
@@ -229,7 +283,74 @@ class PhysicalLibraryService:
             shelves=shelf_layouts,
             containers=container_layouts,
             outside_areas=outside_layouts,
+            diagnostics=diagnostics,
         )
+
+    def _physical_projection(
+        self, hierarchy: PhysicalHierarchy, payload: VisualLayoutWrite
+    ) -> tuple[VisualLayoutWrite, list[GeometryDiagnosticResponse]]:
+        bookcases = {item.id: item for item in hierarchy.bookcases}
+        shelves = {item.id: item for item in hierarchy.shelves}
+        containers = {item.id: item for item in hierarchy.containers}
+        bookcase_layouts = []
+        for item in payload.bookcases:
+            record = bookcases[item.bookcase_id]
+            bookcase_layouts.append(item.model_copy(update={
+                "width_mm": float(record.width_mm) if record.width_mm else item.width_mm,
+                "height_mm": float(record.height_mm) if record.height_mm else item.height_mm,
+            }))
+        bookcase_layout_map = {item.bookcase_id: item for item in bookcase_layouts}
+
+        shelf_layouts = list(payload.shelves)
+        for bookcase in hierarchy.bookcases:
+            children = [item for item in hierarchy.shelves if item.bookcase_id == bookcase.id]
+            if not children or not any(item.usable_height_mm for item in children):
+                continue
+            known = [float(item.usable_height_mm) for item in children if item.usable_height_mm]
+            fallback = sorted(known)[len(known) // 2]
+            weights = {
+                item.id: (float(item.usable_height_mm) if item.usable_height_mm else fallback) / fallback
+                for item in children
+            }
+            shelf_layouts = [item.model_copy(update={"height_weight": weights[item.shelf_id]}) if item.shelf_id in weights else item for item in shelf_layouts]
+        shelf_layout_map = {item.shelf_id: item for item in shelf_layouts}
+
+        measurements = [BookMeasurement(item.id, item.page_count, item.height_mm, item.width_mm, item.thickness_mm) for item in hierarchy.books]
+        defaults = catalogue_dimension_defaults(measurements)
+        resolved = {item.id: resolve_book_measurement(item, defaults) for item in measurements}
+        books_by_container: dict[UUID, list] = {}
+        for book in hierarchy.books:
+            if book.container_id is not None:
+                books_by_container.setdefault(book.container_id, []).append(resolved[book.id])
+        inputs = []
+        for item in payload.containers:
+            container = containers[item.container_id]
+            shelf = shelves[container.shelf_id]
+            bookcase_layout = bookcase_layout_map[shelf.bookcase_id]
+            sibling_shelves = [entry for entry in hierarchy.shelves if entry.bookcase_id == shelf.bookcase_id]
+            total_weight = sum(shelf_layout_map[entry.id].height_weight for entry in sibling_shelves) or 1
+            map_height = bookcase_layout.height_mm * .95 * shelf_layout_map[shelf.id].height_weight / total_weight
+            inputs.append(ContainerProjectionInput(
+                item.container_id, container.shelf_id, container.container_type,
+                container.layer, item.x, item.y, item.width, item.height,
+                item.row_anchor, item.support_container_id, item.pile_alignment,
+                float(shelf.usable_width_mm) if shelf.usable_width_mm else bookcase_layout.width_mm * .95,
+                float(shelf.usable_height_mm) if shelf.usable_height_mm else map_height,
+                tuple(books_by_container.get(item.container_id, [])),
+            ))
+        projected, raw_diagnostics = project_containers(inputs)
+        container_layouts = [item.model_copy(update={
+            "x": projected[item.container_id].x,
+            "y": projected[item.container_id].y,
+            "width": projected[item.container_id].width,
+            "height": projected[item.container_id].height,
+        }) for item in payload.containers]
+        diagnostics = [GeometryDiagnosticResponse(**item.__dict__) for item in raw_diagnostics]
+        return payload.model_copy(update={
+            "bookcases": bookcase_layouts,
+            "shelves": shelf_layouts,
+            "containers": container_layouts,
+        }), diagnostics
 
     @staticmethod
     def _layout_revision(
@@ -281,6 +402,13 @@ class PhysicalLibraryService:
         contexts = {item.id: item for item in hierarchy.containers}
         layouts = {item.container_id: item for item in payload.containers}
         tolerance = 0.1
+
+        if payload.geometry_mode == "MANUAL":
+            for item in payload.containers:
+                if item.x < 0 or item.y < 0 or item.x + item.width > 100 or item.y + item.height > 100:
+                    raise PhysicalLibraryValidationError(
+                        "Container geometry must remain inside its shelf."
+                    )
 
         for item in payload.containers:
             container = contexts[item.container_id]
@@ -347,12 +475,12 @@ class PhysicalLibraryService:
                 overlap_height = min(first.y + first.height, second.y + second.height) - max(first.y, second.y)
                 if overlap_width <= tolerance or overlap_height <= tolerance:
                     continue
-                if first_context.layer == second_context.layer:
+                if first_context.layer == second_context.layer and payload.geometry_mode == "MANUAL":
                     raise PhysicalLibraryValidationError(
                         "Containers in the same shelf layer cannot overlap."
                     )
                 background = first if first_context.layer == "BACKGROUND" else second
-                if overlap_height / background.height > 0.8:
+                if overlap_height / background.height > 0.8 and payload.geometry_mode == "MANUAL":
                     raise PhysicalLibraryValidationError(
                         "Foreground containers may cover at most 80% of a background container's height."
                     )
@@ -606,7 +734,7 @@ class PhysicalLibraryService:
         self, *, library_id: UUID, actor_user_id: UUID, payload: BookcaseWrite
     ) -> Bookcase:
         item = Bookcase(library_id=library_id, **payload.model_dump())
-        return self._save_created(
+        created = self._save_created(
             item,
             library_id=library_id,
             actor_user_id=actor_user_id,
@@ -614,6 +742,20 @@ class PhysicalLibraryService:
             details=lambda: {"bookcase_id": str(item.id), "name": item.name},
             conflict="A bookcase with this name already exists in the library.",
         )
+        # Persist the provisional visual rectangle immediately. Otherwise two
+        # unmeasured bookcases created within the same timestamp resolution can
+        # exchange fallback positions when the hierarchy is sorted again.
+        layout = self.hierarchy(library_id).layout
+        self._repository.upsert_visual_layout(
+            library_id=library_id,
+            bookcases=[entry.model_dump() for entry in layout.bookcases],
+            shelves=[entry.model_dump() for entry in layout.shelves],
+            containers=[entry.model_dump() for entry in layout.containers],
+            outside_areas=[entry.model_dump() for entry in layout.outside_areas],
+        )
+        self._commit("The new bookcase's visual position could not be saved.")
+        self._repository.expire_all()
+        return created
 
     def update_bookcase(
         self,

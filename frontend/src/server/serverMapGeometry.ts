@@ -93,7 +93,9 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
   data.bookcases.forEach((bookcase) => {
     const layout = bookcaseLayouts.get(bookcase.id);
     if (!layout) return;
-    const top = layout.floor_y_mm - layout.height_mm;
+    // Persisted floor coordinates use a mathematical Y axis: positive is up.
+    // SVG uses positive Y down, so both the baseline and the height are inverted.
+    const top = -layout.floor_y_mm - layout.height_mm;
     bookcases.push({ bookcaseId: bookcase.id, x: layout.x_mm, y: top, width: layout.width_mm, height: layout.height_mm });
     const insetX = layout.width_mm * 0.025;
     const insetY = layout.height_mm * 0.025;

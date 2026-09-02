@@ -466,6 +466,8 @@ button { cursor: pointer; }
 .server-map-shelf { fill: #f8f2e8; stroke: #806b50; stroke-width: .45; vector-effect: non-scaling-stroke; }
 .server-map-container > rect:first-child { fill: #d9d1c4; fill-opacity: .72; stroke: #9f927f; stroke-width: .3; vector-effect: non-scaling-stroke; cursor: pointer; }
 .server-map-container.selected > rect:first-child { stroke: #bd6a3f; stroke-width: 1.5; }
+.server-map-container.geometry-warning > rect:first-child { fill: #d96a5f; fill-opacity: .42; stroke: #a9332d; stroke-width: 1.2; }
+.server-map-container .server-map-geometry-warning-overlay { fill: #d96a5f; fill-opacity: .28; stroke: #a9332d; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .server-map-container.rearranging > rect:first-child { cursor: crosshair; }
 .server-map-book { fill: #4f8d7e; stroke: #2f5c51; stroke-width: .25; vector-effect: non-scaling-stroke; cursor: pointer; }
 .server-map-container:nth-of-type(3n) .server-map-book { fill: #dca445; }

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -613,6 +614,46 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     assert rejected.status_code == 422
     assert "same shelf and layer" in rejected.json()["detail"]
 
+
+def test_physical_mode_projects_measured_books_into_canonical_geometry(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "physical_projection_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Measured room")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+    updated_shelf = client.put(
+        f"{base(library)}/shelves/{shelf['id']}",
+        json={"shelf_number": 1, "usable_height_mm": 300, "usable_width_mm": 500, "usable_depth_mm": 250},
+        headers=csrf(),
+    )
+    assert updated_shelf.status_code == 200
+    row = create_container(client, library, shelf["id"], 1)
+    session.add(Book(
+        library_id=library.id,
+        title="Measured book",
+        author="Author",
+        page_count=200,
+        height_mm=240,
+        width_mm=160,
+        thickness_mm=20,
+        container_id=UUID(row["id"]),
+        position=1,
+    ))
+    session.commit()
+
+    layout = client.get(base(library)).json()["layout"]
+    layout["geometry_mode"] = "PHYSICAL"
+    saved = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
+    assert saved.status_code == 200, saved.text
+    projected = saved.json()["layout"]
+    row_layout = next(item for item in projected["containers"] if item["container_id"] == row["id"])
+    assert row_layout["width"] == pytest.approx(4)
+    assert row_layout["height"] == pytest.approx(80)
+    assert row_layout["y"] == pytest.approx(20)
+    assert projected["diagnostics"] == []
+
     event = session.scalar(
         select(LibraryAuditEvent).where(
             LibraryAuditEvent.library_id == library.id,
@@ -620,3 +661,47 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
         )
     )
     assert event is not None
+
+
+def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_positions(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "unmeasured_furniture_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    def create_unmeasured(name: str) -> dict:
+        created = client.post(
+            f"{base(library)}/bookcases",
+            json={
+                "name": name,
+                "description": None,
+                "height_mm": None,
+                "width_mm": None,
+                "depth_mm": None,
+            },
+            headers=csrf(),
+        )
+        assert created.status_code == 201, created.text
+        return next(
+            item for item in created.json()["bookcases"] if item["name"] == name
+        )
+
+    first = create_unmeasured("Zulu")
+    second = create_unmeasured("Alpha")
+
+    response = client.get(base(library))
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    records = {item["id"]: item for item in payload["bookcases"]}
+    layouts = {
+        item["bookcase_id"]: item for item in payload["layout"]["bookcases"]
+    }
+
+    assert records[first["id"]]["width_mm"] is None
+    assert records[first["id"]]["height_mm"] is None
+    assert records[second["id"]]["width_mm"] is None
+    assert records[second["id"]]["height_mm"] is None
+    assert layouts[first["id"]]["x_mm"] == 0
+    assert layouts[second["id"]]["x_mm"] == 600
+    assert layouts[first["id"]]["width_mm"] == 500
+    assert layouts[second["id"]]["width_mm"] == 500
