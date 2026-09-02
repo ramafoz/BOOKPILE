@@ -124,7 +124,31 @@ class LibraryService:
         self._access.require_owner(
             library_id=library_id, user_id=actor_user_id
         )
-        return self._repository.list_members_for_library(library_id)
+        memberships = self._repository.list_members_for_library(library_id)
+        return sorted(
+            memberships,
+            key=lambda item: (
+                item.role != "OWNER",
+                item.created_at,
+                str(item.id),
+            ),
+        )
+
+    def list_member_summaries(
+        self, *, library_id: UUID, actor_user_id: UUID
+    ) -> list[LibraryMembership]:
+        self._access.require_catalogue(
+            library_id=library_id, user_id=actor_user_id
+        )
+        memberships = self._repository.list_members_for_library(library_id)
+        return sorted(
+            memberships,
+            key=lambda item: (
+                item.role != "OWNER",
+                item.created_at,
+                str(item.id),
+            ),
+        )
 
     def create_invitation(
         self,

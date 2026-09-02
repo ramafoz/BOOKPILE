@@ -64,6 +64,10 @@ class CatalogueService:
     def __init__(self, books: BookRepository) -> None:
         self._books = books
 
+    def rollback(self) -> None:
+        """Abort a composed write coordinated by an API transaction boundary."""
+        self._books.rollback()
+
     def _validated_filters(self, filters: dict[str, object]) -> dict[str, object]:
         page_min = filters.get("page_min")
         page_max = filters.get("page_max")
@@ -139,7 +143,12 @@ class CatalogueService:
         )
 
     def create_book(
-        self, *, library_id: UUID, actor_user_id: UUID, payload: BookWrite
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        payload: BookWrite,
+        commit: bool = True,
     ) -> BookRecord:
         roles = self._validated_roles(payload)
         values = self._book_values(payload)
@@ -158,7 +167,8 @@ class CatalogueService:
                 event_type="book_created",
                 details={"book_id": str(book.id), "title": book.title},
             )
-            self._books.commit()
+            if commit:
+                self._books.commit()
         except IntegrityError as exc:
             self._books.rollback()
             raise CatalogueConflictError(
@@ -173,6 +183,7 @@ class CatalogueService:
         book_id: UUID,
         actor_user_id: UUID,
         payload: BookWrite,
+        commit: bool = True,
     ) -> BookRecord:
         book = self._books.find_for_library(library_id, book_id)
         if book is None:
@@ -199,7 +210,8 @@ class CatalogueService:
                     "previous_title": old_title,
                 },
             )
-            self._books.commit()
+            if commit:
+                self._books.commit()
         except IntegrityError as exc:
             self._books.rollback()
             raise CatalogueConflictError(

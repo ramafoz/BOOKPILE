@@ -1,6 +1,7 @@
 # BOOKPILE Server — compact workspace and catalogue workflow plan
 
-Status: approved direction; implementation has not started.
+Status: implemented and accepted on desktop and mobile on 2026-09-02 on
+`feature/server-compact-workspace`.
 
 ## 1. Objective
 
@@ -131,6 +132,8 @@ before using this response for `Private/Shared catalogue`.
 
 ### Increment A — safe presentation data
 
+Implementation status: complete.
+
 1. Add the membership-summary projection and authorization tests.
 2. Derive selected perspective labels and true query/filter-active state in
    pure helpers with frontend tests.
@@ -140,6 +143,8 @@ Acceptance: Owner and both Viewer scopes receive only permitted display data;
 outsiders receive no library existence signal.
 
 ### Increment B — compact shell
+
+Implementation status: complete and accepted on desktop and mobile.
 
 1. Replace the welcome block and three control buttons with the four compact
    controls: library, view/perspective, user/session, and Settings.
@@ -152,6 +157,8 @@ outside-click/Escape closure, and no inaccessible menu behind the map.
 
 ### Increment C — catalogue heading
 
+Implementation status: complete and accepted on desktop and mobile.
+
 1. Add the compact icon/eyebrow/title/count block.
 2. Add Private/Shared wording and the safe member summary.
 3. Add perspective-aware ownership wording and accurate filtered count text.
@@ -160,6 +167,9 @@ Acceptance: self, other-Owner perspective, catalogue-only Viewer, map Viewer,
 single-member library, shared library, and active/cleared filters.
 
 ### Increment D — create/edit placement
+
+Implementation status: complete. Add and Edit use composed atomic metadata and
+placement endpoints; the separate row action has been removed.
 
 1. Extract one reusable physical-location field group.
 2. Introduce the composed, atomic create/update placement service contract.
@@ -171,6 +181,10 @@ Acceptance: add directly into an empty, occupied, and final position; edit
 within and across containers; remove location; test on phone.
 
 ### Increment E — Batch Add
+
+Implementation status: complete and accepted. The iterative
+editor reports its saved count, retains the container, proposes the following
+position, and exposes `Finish batch` explicitly.
 
 1. Build the iterative dialog from the same Book Editor primitives.
 2. Retain destination, advance proposed position, and reset book-specific data.

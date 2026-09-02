@@ -159,6 +159,66 @@ def create_container(
     )
 
 
+def test_create_with_placement_is_atomic(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "atomic_placement_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Atomic room")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+    container = create_container(client, library, shelf["id"], 1)
+    payload = {
+        "book": {"title": "Atomic book", "author": "Careful Writer"},
+        "placement": {"container_id": container["id"], "position": 1},
+    }
+
+    created = client.post(
+        f"/api/v1/libraries/{library.id}/catalogue/with-placement",
+        json=payload,
+        headers=csrf(),
+    )
+
+    assert created.status_code == 201, created.text
+    book = session.get(Book, UUID(created.json()["id"]))
+    assert book is not None
+    assert str(book.container_id) == container["id"]
+    assert book.position == 1
+
+    invalid = client.post(
+        f"/api/v1/libraries/{library.id}/catalogue/with-placement",
+        json={
+            "book": {"title": "Must roll back", "author": "Careful Writer"},
+            "placement": {"container_id": str(uuid4()), "position": 1},
+        },
+        headers=csrf(),
+    )
+    assert invalid.status_code == 422
+    session.expire_all()
+    assert session.scalar(
+        select(Book).where(
+            Book.library_id == library.id,
+            Book.title == "Must roll back",
+        )
+    ) is None
+
+    invalid_update = client.put(
+        f"/api/v1/libraries/{library.id}/catalogue/{created.json()['id']}/with-placement",
+        json={
+            "book": {"title": "Changed but invalid", "author": "Careful Writer"},
+            "placement": {"container_id": str(uuid4()), "position": 1},
+        },
+        headers=csrf(),
+    )
+    assert invalid_update.status_code == 422
+    session.expire_all()
+    unchanged = session.get(Book, UUID(created.json()["id"]))
+    assert unchanged is not None
+    assert unchanged.title == "Atomic book"
+    assert str(unchanged.container_id) == container["id"]
+    assert unchanged.position == 1
+
+
 def test_owner_builds_and_renumbers_hierarchy_atomically(
     client: TestClient, session: Session
 ) -> None:

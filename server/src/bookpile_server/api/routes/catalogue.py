@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, Response, Up
 from ...schemas import (
     BookResponse,
     BookSummary,
+    BookWithPlacementWrite,
     BookWrite,
     CatalogueMetadataOptions,
     CatalogueResponse,
@@ -30,12 +31,18 @@ from ...services.library_access import (
     LibraryNotFoundError,
     LibraryOwnerRequiredError,
 )
+from ...services.physical_library import (
+    PhysicalLibraryConflictError,
+    PhysicalLibraryNotFoundError,
+    PhysicalLibraryValidationError,
+)
 from ..dependencies import (
     CatalogueServiceDependency,
     CoverServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
     LibraryAccessServiceDependency,
+    PhysicalLibraryServiceDependency,
     RateLimiterDependency,
 )
 
@@ -274,6 +281,53 @@ def create_book(
         raise catalogue_error(exc) from exc
 
 
+@router.post(
+    "/with-placement",
+    response_model=BookResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_book_with_placement(
+    library_id: UUID,
+    payload: BookWithPlacementWrite,
+    service: CatalogueServiceDependency,
+    physical_service: PhysicalLibraryServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> BookResponse:
+    """Create the catalogue record and its initial placement atomically."""
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        record = service.create_book(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            payload=payload.book,
+            commit=False,
+        )
+        physical_service.place_book(
+            library_id=library_id,
+            book_id=record.book.id,
+            actor_user_id=context.user_id,
+            payload=payload.placement,
+        )
+        return book_response(service.get_book(library_id, record.book.id), detail=True)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        CatalogueValidationError,
+        CatalogueConflictError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+    ) as exc:
+        service.rollback()
+        if isinstance(exc, (PhysicalLibraryNotFoundError, PhysicalLibraryValidationError)):
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if isinstance(exc, PhysicalLibraryConflictError):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise catalogue_error(exc) from exc
+
+
 @router.put("/{book_id}", response_model=BookResponse)
 def update_book(
     library_id: UUID,
@@ -300,6 +354,52 @@ def update_book(
         CatalogueValidationError,
         CatalogueConflictError,
     ) as exc:
+        raise catalogue_error(exc) from exc
+
+
+@router.put("/{book_id}/with-placement", response_model=BookResponse)
+def update_book_with_placement(
+    library_id: UUID,
+    book_id: UUID,
+    payload: BookWithPlacementWrite,
+    service: CatalogueServiceDependency,
+    physical_service: PhysicalLibraryServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> BookResponse:
+    """Update catalogue metadata and placement in one database transaction."""
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        service.update_book(
+            library_id=library_id,
+            book_id=book_id,
+            actor_user_id=context.user_id,
+            payload=payload.book,
+            commit=False,
+        )
+        physical_service.place_book(
+            library_id=library_id,
+            book_id=book_id,
+            actor_user_id=context.user_id,
+            payload=payload.placement,
+        )
+        return book_response(service.get_book(library_id, book_id), detail=True)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        CatalogueNotFoundError,
+        CatalogueValidationError,
+        CatalogueConflictError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+    ) as exc:
+        service.rollback()
+        if isinstance(exc, (PhysicalLibraryNotFoundError, PhysicalLibraryValidationError)):
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if isinstance(exc, PhysicalLibraryConflictError):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise catalogue_error(exc) from exc
 
 

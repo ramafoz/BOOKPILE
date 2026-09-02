@@ -662,10 +662,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Show physical location in Server catalogue rows and provide safe
     per-book placement; the temporary global `Position books` form has been
     removed from Customize Layout.
-  - [ ] Move that placement editor inside the normal Edit Book dialog instead
+  - [x] Move that placement editor inside the normal Edit Book dialog instead
     of keeping a separate catalogue-row action.
-  - [ ] Let Owners assign a physical position while creating a single book.
-  - [ ] Port Server Batch Add, retaining the selected destination between
+  - [x] Let Owners assign a physical position while creating a single book.
+  - [x] Port Server Batch Add, retaining the selected destination between
     consecutive books and supporting the same safe insertion rules.
   - [x] Port the Local-style visual `Reorganize books` workflow into Server
     Library Map: Collapse/Leave gap, Squeeze/Swap/Continue, chained drafts,
@@ -677,7 +677,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [ ] Integrate floating/minimizable layout editing and direct map
     manipulation over that same geometry service.
   - [ ] Backup, restore, export, and Local ZIP import remain pending.
-- [ ] Compact the Server workspace header and catalogue presentation:
+- [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user
     and protected-session indicator, and Settings.
@@ -692,6 +692,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Say only the total book count when no search or filter is active; reserve
     `match` wording for filtered results.
   - Implement according to `SERVER_FRONTEND_UX_PLAN.md`.
+  - Desktop and mobile acceptance completed on 2026-09-02, including anchored
+    menus, compact mobile map controls, aligned Viewer actions, and queued
+    self-expiring success notifications.
 - [ ] Implement perspective-aware catalogue states, statistics, map colouring,
   suggestions, and personal reading/rereading sessions.
 - [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase

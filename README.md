@@ -463,9 +463,12 @@ engine. This does not
 alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
 import remain pending for later Server phases.
 
-The next approved Server interface increment—compact navigation, accurate
-private/shared catalogue presentation, integrated physical placement, and
-Batch Add—is specified in
+The compact Server workspace increment is complete and accepted on desktop and
+mobile. It provides anchored top-bar menus, accurate private/shared and
+perspective-aware catalogue headings, atomic physical placement inside Add and
+Edit, iterative Batch Add with retained destination, compact mobile map
+controls, and queued self-expiring success notifications. Its design and
+acceptance record are in
 [SERVER_FRONTEND_UX_PLAN.md](SERVER_FRONTEND_UX_PLAN.md).
 
 ## Licence

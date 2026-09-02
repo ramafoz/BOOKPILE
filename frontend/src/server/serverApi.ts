@@ -130,6 +130,13 @@ export interface CatalogueMetadataOptions {
   contributor_roles: ContributorRole[];
 }
 
+export interface LibraryMemberSummary {
+  user_id: string;
+  username: string;
+  role: "OWNER" | "VIEWER";
+  viewer_scope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+}
+
 export interface PhysicalContainer {
   id: string;
   shelf_id: string;
@@ -421,6 +428,8 @@ export const serverApi = {
   ),
   libraryMembers: (libraryId: string) =>
     request<LibraryMember[]>(`/libraries/${libraryId}/members`),
+  libraryMemberSummary: (libraryId: string) =>
+    request<LibraryMemberSummary[]>(`/libraries/${libraryId}/member-summary`),
   createLibraryInvitation: (
     libraryId: string,
     role: "OWNER" | "VIEWER",
@@ -493,6 +502,16 @@ export const serverApi = {
       { method: "POST", body: JSON.stringify(book) },
       true,
     ),
+  createBookWithPlacement: (
+    libraryId: string,
+    book: ServerBookWrite,
+    containerId: string | null,
+    position: number | null,
+  ) => request<ServerBook>(
+    `/libraries/${libraryId}/catalogue/with-placement`,
+    { method: "POST", body: JSON.stringify({ book, placement: { container_id: containerId, position } }) },
+    true,
+  ),
   updateBook: (libraryId: string, bookId: string, book: ServerBookWrite) =>
     request<ServerBook>(
       `/libraries/${libraryId}/catalogue/${bookId}`,
@@ -548,6 +567,17 @@ export const serverApi = {
       { method: "POST", body: JSON.stringify({ ...payload, revision }) },
       true,
     ),
+  updateBookWithPlacement: (
+    libraryId: string,
+    bookId: string,
+    book: ServerBookWrite,
+    containerId: string | null,
+    position: number | null,
+  ) => request<ServerBook>(
+    `/libraries/${libraryId}/catalogue/${bookId}/with-placement`,
+    { method: "PUT", body: JSON.stringify({ book, placement: { container_id: containerId, position } }) },
+    true,
+  ),
   updateVisualLayout: (libraryId: string, layout: VisualLayout) =>
     request<PhysicalLibrary>(
       `/libraries/${libraryId}/physical-library/layout`,

@@ -10,6 +10,8 @@ import {
   VisualLayout,
   serverApi,
 } from "./serverApi";
+import TimedNoticeStack from "./TimedNoticeStack";
+import { useTimedNotices } from "./timedNotices";
 
 
 type EditTarget =
@@ -229,7 +231,7 @@ export default function PhysicalLibraryWorkspace({
   const [data, setData] = useState<PhysicalLibrary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const { notices, pushNotice, dismissNotice } = useTimedNotices();
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [layoutEditing, setLayoutEditing] = useState(false);
   const [bookcaseName, setBookcaseName] = useState("");
@@ -261,7 +263,7 @@ export default function PhysicalLibraryWorkspace({
 
   function accept(value: PhysicalLibrary, message: string) {
     setData(value);
-    setNotice(message);
+    pushNotice(message);
     setError(null);
     setEditing(null);
   }
@@ -269,7 +271,6 @@ export default function PhysicalLibraryWorkspace({
   async function mutate(action: () => Promise<PhysicalLibrary>, message: string) {
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       accept(await action(), message);
     } catch (caught) {
@@ -300,7 +301,7 @@ export default function PhysicalLibraryWorkspace({
   return <section className="server-physical-workspace">
     <header><div><p className="server-card-eyebrow">Shared physical structure</p><h3>Library layout</h3><p>{data.can_edit ? "Build and maintain furniture, shelves, rows and piles, then define their visual geometry and support." : "Read-only physical hierarchy. Your Viewer access includes the Library Map."}</p></div><div className="server-physical-heading-actions">{data.can_edit && <button type="button" onClick={() => setLayoutEditing(true)}><Settings2 size={17} /> Visual layout</button>}<Ruler size={30} /></div></header>
     {error && <div className="server-message error">{error}</div>}
-    {notice && <div className="server-message success">{notice}</div>}
+    <TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
 
     {data.can_edit && <div className="server-physical-builders">
       <form onSubmit={(event) => { event.preventDefault(); void mutate(() => serverApi.createBookcase(libraryId, { name: bookcaseName, description: null, height_mm: null, width_mm: null, depth_mm: null }), "Bookcase added.").then(() => setBookcaseName("")); }}>

@@ -439,6 +439,15 @@ class BookWrite(BaseModel):
         return self
 
 
+class BookWithPlacementWrite(BaseModel):
+    """One atomic catalogue-and-physical-copy write."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    book: BookWrite
+    placement: BookPlacementWrite
+
+
 class BookSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -569,6 +578,13 @@ class LibraryMemberResponse(BaseModel):
     viewer_scope: str | None
     selected_reading_user_id: UUID | None
     created_at: datetime
+
+
+class LibraryMemberSummaryResponse(BaseModel):
+    user_id: UUID
+    username: str
+    role: str
+    viewer_scope: str | None
 
 
 class CreateLibraryInvitationRequest(BaseModel):

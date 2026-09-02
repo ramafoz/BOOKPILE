@@ -1,8 +1,9 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   KeyRound,
   Layers3,
   LibraryBig,
@@ -12,6 +13,7 @@ import {
   Mail,
   Map,
   Plus,
+  Settings2,
   ShieldCheck,
   Users,
   UserRound,
@@ -19,6 +21,7 @@ import {
 import {
   type CurrentUser,
   type LibraryMember,
+  type LibraryMemberSummary,
   type LibrarySummary,
   type ReadingPerspective,
   ServerApiError,
@@ -27,6 +30,11 @@ import {
 import CatalogueWorkspace from "./CatalogueWorkspace";
 import PhysicalLibraryWorkspace from "./PhysicalLibraryWorkspace";
 import ServerLibraryMap from "./ServerLibraryMap";
+import {
+  workspacePerspectiveLabel,
+} from "./workspacePresentation";
+import TimedNoticeStack from "./TimedNoticeStack";
+import { useTimedNotices } from "./timedNotices";
 
 type Route =
   | "login"
@@ -42,6 +50,12 @@ interface PendingMemberChange {
   title: string;
   explanation: string;
   viewerScope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+}
+
+interface PanelAnchor {
+  left: number;
+  right: number;
+  top: number;
 }
 
 function routeFromPath(pathname: string): Route {
@@ -415,10 +429,11 @@ function TokenActionPage({
 function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: () => void }) {
   const [busy, setBusy] = useState<"logout" | "all" | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { notices, pushNotice, dismissNotice } = useTimedNotices();
   const [libraries, setLibraries] = useState<LibrarySummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [members, setMembers] = useState<LibraryMember[]>([]);
+  const [memberSummary, setMemberSummary] = useState<LibraryMemberSummary[]>([]);
   const [perspectives, setPerspectives] = useState<ReadingPerspective[]>([]);
   const [libraryName, setLibraryName] = useState("");
   const [invitationToken, setInvitationToken] = useState(
@@ -433,9 +448,32 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
   const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "LAYOUT">("CATALOGUE");
-  const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "PERSPECTIVE" | "MEMBERS" | null>(null);
+  const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "SETTINGS" | null>(null);
+  const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
 
   const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
+
+  function toggleControlsPanel(panel: NonNullable<typeof controlsPanel>, button: HTMLButtonElement) {
+    if (controlsPanel === panel) {
+      setControlsPanel(null);
+      return;
+    }
+    const bounds = button.getBoundingClientRect();
+    setPanelAnchor({ left: bounds.left, right: window.innerWidth - bounds.right, top: bounds.bottom + 8 });
+    setControlsPanel(panel);
+  }
+
+  function anchoredPanelStyle(preferredWidth: number, align: "left" | "right"): CSSProperties | undefined {
+    if (!panelAnchor) return undefined;
+    const viewportWidth = document.documentElement.clientWidth;
+    const width = Math.min(preferredWidth, viewportWidth - 16);
+    const candidate = align === "left" ? panelAnchor.left : viewportWidth - panelAnchor.right - width;
+    return {
+      top: panelAnchor.top,
+      left: Math.max(8, Math.min(candidate, viewportWidth - width - 8)),
+      width,
+    };
+  }
 
   const reloadLibraries = useCallback(async (preferredId?: string) => {
     const result = await serverApi.libraries();
@@ -455,18 +493,21 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   useEffect(() => {
     if (!selected) {
       setMembers([]);
+      setMemberSummary([]);
       setPerspectives([]);
       return;
     }
     let active = true;
     Promise.all([
       serverApi.readingPerspectives(selected.library_id),
+      serverApi.libraryMemberSummary(selected.library_id),
       selected.role === "OWNER"
         ? serverApi.libraryMembers(selected.library_id)
         : Promise.resolve([]),
-    ]).then(([nextPerspectives, nextMembers]) => {
+    ]).then(([nextPerspectives, nextMemberSummary, nextMembers]) => {
       if (active) {
         setPerspectives(nextPerspectives);
+        setMemberSummary(nextMemberSummary);
         setMembers(nextMembers);
       }
     }).catch((caught) => {
@@ -474,6 +515,25 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     });
     return () => { active = false; };
   }, [selected]);
+
+  useEffect(() => {
+    if (!controlsPanel) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setControlsPanel(null);
+    };
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest(".server-compact-navigation, .server-library-sidebar, .server-floating-control-panel, .server-members-control-stack")) {
+        setControlsPanel(null);
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("pointerdown", closeOutside);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("pointerdown", closeOutside);
+    };
+  }, [controlsPanel]);
 
   async function signOut(all: boolean) {
     setBusy(all ? "all" : "logout");
@@ -497,7 +557,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       const created = await serverApi.createLibrary(libraryName);
       setLibraryName("");
       await reloadLibraries(created.library_id);
-      setNotice(`“${created.name}” was created. You are its first Owner.`);
+      pushNotice(`“${created.name}” was created. You are its first Owner.`);
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -514,7 +574,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setInvitationToken("");
       window.history.replaceState({}, "", "/");
       await reloadLibraries(accepted.library_id);
-      setNotice(`You joined “${accepted.name}” as ${accepted.role === "OWNER" ? "an Owner" : "a Viewer"}.`);
+      pushNotice(`You joined “${accepted.name}” as ${accepted.role === "OWNER" ? "an Owner" : "a Viewer"}.`);
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -538,7 +598,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       url.searchParams.set("library-invite", result.invitation_token);
       setGeneratedLink(url.toString());
       setGeneratedToken(result.invitation_token);
-      setNotice("The single-use library invitation is ready. It expires in seven days.");
+      pushNotice("The single-use library invitation is ready. It expires in seven days.");
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -550,7 +610,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     try {
       await navigator.clipboard.writeText(value);
       setError("");
-      setNotice(`${label} copied to the clipboard.`);
+      pushNotice(`${label} copied to the clipboard.`);
     } catch {
       setError("BOOKPILE could not access the clipboard. Select and copy the visible value manually.");
     }
@@ -614,8 +674,9 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
         acknowledge_equal_owner_power: action === "PROMOTE_TO_OWNER",
       });
       setMembers(await serverApi.libraryMembers(selected.library_id));
+      setMemberSummary(await serverApi.libraryMemberSummary(selected.library_id));
       setPerspectives(await serverApi.readingPerspectives(selected.library_id));
-      setNotice(`${member.username}'s membership was updated.`);
+      pushNotice(`${member.username}'s membership was updated.`);
       setPendingMemberChange(null);
       setMemberChangePassword("");
     } catch (caught) {
@@ -632,26 +693,24 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <span className="server-brand-mark"><LibraryBig size={24} /></span>
           <span>BOOKPILE</span>
         </a>
-        <button type="button" onClick={() => void signOut(false)} disabled={busy !== null}>
-          <LogOut size={18} /> Sign out
-        </button>
+        <nav className="server-compact-navigation" aria-label="BOOKPILE workspace controls">
+          <button type="button" className={controlsPanel === "LIBRARIES" ? "active" : ""} onClick={(event) => toggleControlsPanel("LIBRARIES", event.currentTarget)}>
+            <LibraryBig size={17} /><span><b>{selected?.name ?? "Choose library"}</b>{selected && <small>{selected.role === "OWNER" ? "Owner" : "Viewer"}</small>}</span><ChevronDown size={15} />
+          </button>
+          {selected && <button type="button" className={controlsPanel === "VIEW" ? "active" : ""} onClick={(event) => toggleControlsPanel("VIEW", event.currentTarget)}>
+            {workspace === "MAP" ? <Map size={17} /> : workspace === "LAYOUT" ? <Layers3 size={17} /> : <BookOpen size={17} />}
+            <span><b>{workspace === "LAYOUT" ? "Customize layout" : workspacePerspectiveLabel(workspace, user.user_id, perspectives)}</b><small>{selected.can_view_map ? "Catalogue and map" : "Catalogue only"}</small></span><ChevronDown size={15} />
+          </button>}
+          <span className="server-compact-identity" title="Session protected; membership checked per request"><ShieldCheck size={18} /><span><b>{user.username}</b><small>Protected session</small></span></span>
+          <button type="button" className={`server-settings-trigger ${controlsPanel === "SETTINGS" ? "active" : ""}`} aria-label="Settings" title="Settings" onClick={(event) => toggleControlsPanel("SETTINGS", event.currentTarget)}><Settings2 size={19} /></button>
+        </nav>
       </header>
       <section className="server-library-dashboard">
-        <div className="server-dashboard-title">
-          <span className="server-account-icon"><BookOpen size={34} /></span>
-          <div><p className="server-card-eyebrow">Private library workspace</p><h1>Welcome, {user.username}.</h1></div>
-          <div className="server-account-status"><ShieldCheck size={20} /><span><b>Session protected</b><small>Membership checked per request</small></span></div>
-        </div>
-        <nav className="server-dashboard-controlbar" aria-label="Account and library controls">
-          <button type="button" title="Your libraries" className={controlsPanel === "LIBRARIES" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "LIBRARIES" ? null : "LIBRARIES")}><LibraryBig size={17} /> Your libraries</button>
-          {selected && <button type="button" title="Reading perspective" className={controlsPanel === "PERSPECTIVE" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "PERSPECTIVE" ? null : "PERSPECTIVE")}><BookOpen size={17} /> Reading perspective</button>}
-          {selected?.role === "OWNER" && <button type="button" title="Members and invitations" className={controlsPanel === "MEMBERS" ? "active" : ""} onClick={() => setControlsPanel(controlsPanel === "MEMBERS" ? null : "MEMBERS")}><Users size={17} /> Members & invitations</button>}
-        </nav>
         {error && <Message kind="error">{error}</Message>}
-        {notice && <Message kind="success">{notice}</Message>}
+        <TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
 
         <div className="server-dashboard-grid">
-          <aside className={`server-library-sidebar ${controlsPanel === "LIBRARIES" ? "open" : ""}`}>
+          <aside className={`server-library-sidebar ${controlsPanel === "LIBRARIES" ? "open" : ""}`} style={anchoredPanelStyle(360, "left")}>
             <header><h2>Your libraries</h2><button type="button" onClick={() => setControlsPanel(null)} aria-label="Close libraries panel">×</button></header>
             <div className="server-library-list">
               {libraries.map((library) => (
@@ -673,28 +732,33 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
 
           <div className="server-library-main">
             {selected ? <>
-              <div className="server-library-heading"><div><p className="server-card-eyebrow">{selected.role}</p><h2>{selected.name}</h2></div><span>{selected.can_view_map ? <><Map size={17} /> Catalogue and map</> : "Catalogue only"}</span></div>
-              <nav className="server-workspace-tabs" aria-label="Library workspace">
-                <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => setWorkspace("CATALOGUE")}><BookOpen size={17} /> Catalogue</button>
-                {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => setWorkspace("MAP")}><Map size={17} /> Library Map</button>}
-                {selected.role === "OWNER" && <button type="button" className={workspace === "LAYOUT" ? "active" : ""} onClick={() => setWorkspace("LAYOUT")}><Layers3 size={17} /> Customize layout</button>}
-              </nav>
               {workspace === "MAP" && selected.can_view_map
-                ? <ServerLibraryMap libraryId={selected.library_id} />
+                ? <ServerLibraryMap libraryId={selected.library_id} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "LAYOUT" && selected.role === "OWNER"
                   ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
-                  : <CatalogueWorkspace library={selected} />}
-              <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "PERSPECTIVE" ? "open" : ""}`}>
-                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close reading perspective panel">×</button>
-                <h3>Reading perspective</h3>
-                <p>Reading data will be personal in Phase 5. This selection already remembers whose future history you are viewing.</p>
+                  : <CatalogueWorkspace library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} />}
+              <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "VIEW" ? "open" : ""}`} style={anchoredPanelStyle(560, "right")}>
+                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close view and perspective panel">×</button>
+                <h3>View and reading perspective</h3>
+                <nav className="server-view-choices" aria-label="Library view">
+                  <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => { setWorkspace("CATALOGUE"); setControlsPanel(null); }}><BookOpen size={17} /> Catalogue</button>
+                  {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => { setWorkspace("MAP"); setControlsPanel(null); }}><Map size={17} /> Library Map</button>}
+                </nav>
+                <p>Choose whose personal reading data is represented. Other members' perspectives are read-only.</p>
                 <select value={perspectives.find((item) => item.selected)?.user_id ?? ""} onChange={(event) => void selectPerspective(event.target.value)} disabled={dataBusy}>
                   {perspectives.map((item) => <option key={item.user_id} value={item.user_id}>{item.username}{item.writable ? " · your editable perspective" : " · read only"}</option>)}
                 </select>
               </section>
 
-              {selected.role === "OWNER" && <div className={`server-members-control-stack ${controlsPanel === "MEMBERS" ? "open" : ""}`}>
-                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close members and invitations panel">×</button>
+              <div className={`server-members-control-stack ${controlsPanel === "SETTINGS" ? "open" : ""}`} style={anchoredPanelStyle(620, "right")}>
+                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close settings panel">×</button>
+                <section className="server-dashboard-panel server-settings-menu">
+                  <h3>Settings</h3>
+                  {selected.role === "OWNER" && <button type="button" onClick={() => { setWorkspace("LAYOUT"); setControlsPanel(null); }}><Layers3 size={17} /> Customize library layout</button>}
+                  <button type="button" onClick={() => void signOut(false)} disabled={busy !== null}><LogOut size={17} /> Sign out</button>
+                  <button type="button" onClick={() => void signOut(true)} disabled={busy !== null}><LogOut size={17} /> Sign out from every device</button>
+                </section>
+                {selected.role === "OWNER" && <>
                 <section className="server-dashboard-panel server-members-panel">
                   <h3>Members</h3>
                   <div className="server-member-list">{members.map((member) => <div key={member.user_id}><span><b>{member.username}</b><small>{member.role === "OWNER" ? "Equal co-Owner" : member.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue only"}</small></span><span className="server-member-actions">{member.role === "VIEWER" ? <><button type="button" onClick={() => requestMemberChange(member, "CHANGE_VIEWER_SCOPE")}>{member.viewer_scope === "CATALOG_ONLY" ? "Give map access" : "Remove map access"}</button><button type="button" onClick={() => requestMemberChange(member, "PROMOTE_TO_OWNER")}>Make co-Owner</button></> : member.user_id !== user.user_id && <button type="button" onClick={() => requestMemberChange(member, "DOWNGRADE_TO_VIEWER")}>Make Viewer</button>}<button type="button" onClick={() => requestMemberChange(member, "REMOVE")}>Remove</button></span></div>)}</div>
@@ -712,11 +776,11 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                     <label>Token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Invitation token")}>Copy token</button></span></label>
                   </div>}
                 </section>
-              </div>}
+                </>}
+              </div>
             </> : <div className="server-empty-library"><LibraryBig size={48} /><h2>Create or join a library</h2><p>Accounts and libraries are separate: an account may own or view several libraries.</p></div>}
           </div>
         </div>
-        <button className="server-danger-link" type="button" onClick={() => void signOut(true)} disabled={busy !== null}>Sign out from every device</button>
       </section>
       {pendingMemberChange && <div className="server-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !dataBusy) setPendingMemberChange(null); }}>
         <section className="server-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-dialog-title">

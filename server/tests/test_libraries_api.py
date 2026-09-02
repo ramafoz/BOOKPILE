@@ -109,6 +109,24 @@ def test_create_list_invite_and_accept_viewer_membership(
     assert client.get(
         f"/api/v1/libraries/{library['library_id']}/members"
     ).status_code == 404
+    summary = client.get(
+        f"/api/v1/libraries/{library['library_id']}/member-summary"
+    )
+    assert summary.status_code == 200
+    assert summary.json() == [
+        {
+            "user_id": str(owner.id),
+            "username": owner.username,
+            "role": "OWNER",
+            "viewer_scope": None,
+        },
+        {
+            "user_id": str(viewer.id),
+            "username": viewer.username,
+            "role": "VIEWER",
+            "viewer_scope": "CATALOG_ONLY",
+        },
+    ]
     assert client.post(
         f"/api/v1/libraries/{library['library_id']}/invitations",
         json={"role": "VIEWER", "viewer_scope": "CATALOG_ONLY"},
@@ -117,6 +135,9 @@ def test_create_list_invite_and_accept_viewer_membership(
 
     third_user = add_user(session, "third_user")
     authenticate(client, session, third_user)
+    assert client.get(
+        f"/api/v1/libraries/{library['library_id']}/member-summary"
+    ).status_code == 404
     reused = client.post(
         "/api/v1/library-invitations/accept",
         json={"invitation_token": raw_invitation},

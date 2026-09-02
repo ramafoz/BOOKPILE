@@ -10,6 +10,7 @@ from ...schemas import (
     CreateLibraryRequest,
     CreatedLibraryInvitationResponse,
     LibraryMemberResponse,
+    LibraryMemberSummaryResponse,
     LibrarySummaryResponse,
     ReadingPerspectiveResponse,
     SelectReadingPerspectiveRequest,
@@ -128,6 +129,32 @@ def list_members(
     except (LibraryNotFoundError, LibraryOwnerRequiredError) as exc:
         raise translate_library_error(exc) from exc
     return [member_response(item) for item in memberships]
+
+
+@router.get(
+    "/libraries/{library_id}/member-summary",
+    response_model=list[LibraryMemberSummaryResponse],
+)
+def list_member_summary(
+    library_id: UUID,
+    service: LibraryServiceDependency,
+    context: CurrentAuthDependency,
+) -> list[LibraryMemberSummaryResponse]:
+    try:
+        memberships = service.list_member_summaries(
+            library_id=library_id, actor_user_id=context.user_id
+        )
+    except LibraryNotFoundError as exc:
+        raise translate_library_error(exc) from exc
+    return [
+        LibraryMemberSummaryResponse(
+            user_id=item.user_id,
+            username=item.user.username,
+            role=item.role,
+            viewer_scope=item.viewer_scope,
+        )
+        for item in memberships
+    ]
 
 
 @router.post(

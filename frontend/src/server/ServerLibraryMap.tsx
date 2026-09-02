@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Undo2, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Undo2, X } from "lucide-react";
 import { BookDetails } from "./CatalogueWorkspace";
 import { serverApi, type PhysicalBook, type PhysicalLibrary, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook } from "./serverApi";
 import {
@@ -50,7 +50,7 @@ function zoomCamera(camera: Camera, factor: number, anchorX?: number, anchorY?: 
   };
 }
 
-export default function ServerLibraryMap({ libraryId }: { libraryId: string }) {
+export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: string; onBack: () => void }) {
   const [data, setData] = useState<PhysicalLibrary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
@@ -280,7 +280,7 @@ export default function ServerLibraryMap({ libraryId }: { libraryId: string }) {
   const selectedBooks = selectedContainer ? booksByContainer.get(selectedContainer.containerId) ?? [] : [];
 
   return <section className="server-library-map">
-    <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode">{data.can_edit && <button type="button" className={rearranging ? "active" : ""} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}<span>Choose inspection mode</span><button type="button" disabled={rearranging} className={inspectionMode === "BOOK" ? "active" : ""} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button type="button" disabled={rearranging} className={inspectionMode === "CONTAINER" ? "active" : ""} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button></div></header>
+    <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title="Back to catalogue" aria-label="Back to catalogue"><ArrowLeft size={16} /> <span>Catalogue</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}<span>Choose inspection mode</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={`Inspection mode: ${inspectionMode === "BOOK" ? "books" : "containers"}. Tap to switch.`}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {inspectionMode === "BOOK" ? "Books" : "Containers"}</button></div></header>
     {error && <div className="server-map-error">{error}</div>}
     <div className="server-map-stage">
       <svg
