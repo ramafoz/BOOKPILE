@@ -262,11 +262,18 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                         floor_y_mm=Decimal("1700"),
                         width_mm=Decimal("500"),
                         height_mm=Decimal("1600"),
+                        frame_left_mm=Decimal("12.5"), frame_right_mm=Decimal("12.5"),
+                        top_closure_mm=Decimal("40"), bottom_closure_mm=Decimal("40"),
+                        separator_thickness_mm=Decimal("12.5"),
                     ),
                     VisualShelfLayout(
                         library_id=first.id,
                         shelf_id=first_shelf.id,
                         height_weight=Decimal("1"),
+                        x_mm=Decimal("12.5"), floor_y_mm=Decimal("40"),
+                        width_mm=Decimal("475"), height_mm=Decimal("1520"),
+                        left_frame_mm=Decimal("12.5"), right_frame_mm=Decimal("12.5"),
+                        top_closure_mm=Decimal("40"), bottom_board_mm=Decimal("40"),
                     ),
                     VisualContainerLayout(
                         library_id=first.id,

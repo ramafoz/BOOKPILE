@@ -191,11 +191,17 @@ function GeometryDialog({
   const selectedBookcase = draft.bookcases.find((item) => item.bookcase_id === bookcaseId);
   const selectedBookcaseRecord = data.bookcases.find((item) => item.id === bookcaseId);
   const selectedShelf = draft.shelves.find((item) => item.shelf_id === shelfId);
+  const selectedShelfRecord = data.bookcases.flatMap((item) => item.shelves).find((item) => item.id === shelfId);
+  const selectedShelfBookcase = selectedShelfRecord
+    ? data.bookcases.find((item) => item.id === selectedShelfRecord.bookcase_id)
+    : undefined;
+  const selectedShelfFurniture = selectedShelfBookcase
+    ? draft.bookcases.find((item) => item.bookcase_id === selectedShelfBookcase.id)
+    : undefined;
   const selectedContainer = draft.containers.find((item) => item.container_id === containerId);
   const selectedContainerContext = allContainers.find((item) => item.container.id === containerId);
   const selectedOutside = draft.outside_areas.find((item) => item.area_kind === outsideKind);
   const draftGeometry = physicalMapGeometry({ ...data, layout: draft });
-  const selectedShelfRect = draftGeometry.shelves.find((item) => item.shelfId === shelfId);
   const selectedContainerShelfRect = draftGeometry.shelves.find((item) => item.shelfId === selectedContainerContext?.shelf.id);
   const containerShelfWidthMm = selectedContainerContext?.shelf.usable_width_mm ?? selectedContainerShelfRect?.width ?? 1;
   const containerShelfHeightMm = selectedContainerContext?.shelf.usable_height_mm ?? selectedContainerShelfRect?.height ?? 1;
@@ -215,8 +221,12 @@ function GeometryDialog({
     ))
     : [];
 
-  function updateBookcase(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm", value: number) {
+  function updateBookcase(field: keyof NonNullable<typeof selectedBookcase>, value: number | string | boolean) {
     setDraft((current) => ({ ...current, bookcases: current.bookcases.map((item) => item.bookcase_id === bookcaseId ? { ...item, [field]: value } : item) }));
+  }
+
+  function updateShelf(changes: Partial<NonNullable<typeof selectedShelf>>) {
+    setDraft((current) => ({ ...current, shelves: current.shelves.map((item) => item.shelf_id === shelfId ? { ...item, ...changes } : item) }));
   }
 
   function updateContainer(changes: Partial<NonNullable<typeof selectedContainer>>) {
@@ -241,22 +251,26 @@ function GeometryDialog({
     });
   }
 
-  function updateShelfMapHeight(value: number) {
-    if (!selectedShelf || !selectedShelfRect) return;
-    const context = data.bookcases.find((bookcase) => bookcase.shelves.some((shelf) => shelf.id === shelfId));
-    if (!context || context.shelves.length < 2) return;
-    const siblingLayouts = context.shelves
-      .map((shelf) => draft.shelves.find((item) => item.shelf_id === shelf.id))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-    const totalWeight = siblingLayouts.reduce((sum, item) => sum + item.height_weight, 0);
-    const otherWeight = totalWeight - selectedShelf.height_weight;
-    const totalHeight = context.shelves.reduce((sum, shelf) => sum + (draftGeometry.shelves.find((item) => item.shelfId === shelf.id)?.height ?? 0), 0);
-    const bounded = Math.min(Math.max(value, 1), Math.max(1, totalHeight - 1));
-    const heightWeight = bounded * otherWeight / (totalHeight - bounded);
-    setDraft((current) => ({
-      ...current,
-      shelves: current.shelves.map((item) => item.shelf_id === shelfId ? { ...item, height_weight: heightWeight } : item),
-    }));
+  function shelfDisplayValue(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm"): number {
+    if (!selectedShelf || !selectedShelfFurniture) return 0;
+    const denominator = field === "x_mm" || field === "width_mm"
+      ? selectedShelfFurniture.width_mm
+      : selectedShelfFurniture.height_mm;
+    return draft.geometry_mode === "MANUAL"
+      ? selectedShelf[field] / denominator * 100
+      : selectedShelf[field];
+  }
+
+  function updateShelfGeometry(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm", value: number) {
+    if (!selectedShelfFurniture) return;
+    const denominator = field === "x_mm" || field === "width_mm"
+      ? selectedShelfFurniture.width_mm
+      : selectedShelfFurniture.height_mm;
+    updateShelf({
+      [field]: draft.geometry_mode === "MANUAL" ? value / 100 * denominator : value,
+      ...(draft.geometry_mode === "MANUAL" && field === "width_mm" ? { width_source: "ENTERED" as const } : {}),
+      ...(draft.geometry_mode === "MANUAL" && field === "height_mm" ? { height_source: "ENTERED" as const } : {}),
+    });
   }
 
   function updateContainerMillimetres(field: "start" | "bottom" | "width" | "height", value: number) {
@@ -302,6 +316,26 @@ function GeometryDialog({
     return selectedContainer.x / 100 * containerShelfWidthMm;
   }
 
+  function containerDisplayValue(field: "start" | "bottom" | "width" | "height"): number {
+    if (!selectedContainer) return 0;
+    if (draft.geometry_mode === "PHYSICAL") {
+      if (field === "start") return displayedContainerStartMm();
+      if (field === "bottom") return supportClearanceMm;
+      if (field === "width") return selectedContainer.width / 100 * containerShelfWidthMm;
+      return selectedContainer.height / 100 * containerShelfHeightMm;
+    }
+    if (field === "start") return displayedContainerStartMm() / containerShelfWidthMm * 100;
+    if (field === "bottom") return supportTopPercent - selectedContainer.y - selectedContainer.height;
+    return field === "width" ? selectedContainer.width : selectedContainer.height;
+  }
+
+  function updateContainerDisplay(field: "start" | "bottom" | "width" | "height", value: number) {
+    const millimetres = draft.geometry_mode === "PHYSICAL"
+      ? value
+      : value / 100 * (field === "start" || field === "width" ? containerShelfWidthMm : containerShelfHeightMm);
+    updateContainerMillimetres(field, millimetres);
+  }
+
   function updateOutside(field: "x" | "floor" | "width" | "height", value: number) {
     setDraft((current) => ({
       ...current,
@@ -316,9 +350,20 @@ function GeometryDialog({
   }
 
   async function save() {
+    const modeChanged = draft.geometry_mode !== data.layout.geometry_mode;
+    const homogeneityChanged = draft.bookcases.some((item) => {
+      const previous = data.layout.bookcases.find((entry) => entry.bookcase_id === item.bookcase_id);
+      return previous && previous.homogeneous_structure !== item.homogeneous_structure;
+    });
+    if ((modeChanged || homogeneityChanged) && !window.confirm(
+      "This recalculates shared shelf geometry. Previewed values will replace the current derived layout only if every shelf fits. Continue?",
+    )) return;
     setSaving(true);
     try {
-      onSaved(await serverApi.updateVisualLayout(libraryId, draft));
+      onSaved(await serverApi.updateVisualLayout(libraryId, {
+        ...draft,
+        refresh_shelves_from_physical: draft.geometry_mode === "PHYSICAL" || Boolean(homogeneityChanged),
+      }));
     } catch (caught) {
       onError(errorMessage(caught));
     } finally {
@@ -337,10 +382,57 @@ function GeometryDialog({
     <p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2>
     <p className="server-field-help">Precise controls are implemented first. Direct dragging and the visual map will reuse the proven Local camera and geometry in the next increment.</p>
     <div className="server-geometry-sections">
-      <fieldset><legend>Geometry mode</legend><label>Projection<select value={draft.geometry_mode} onChange={(event) => setDraft((current) => ({ ...current, geometry_mode: event.target.value as "MANUAL" | "PHYSICAL" }))}><option value="MANUAL">Manual proportions</option><option value="PHYSICAL">Physical dimensions</option></select></label><small>{draft.geometry_mode === "PHYSICAL" ? "Saving recalculates furniture, shelves and occupied containers from recorded millimetres. Missing axes use documented independent fallbacks; conflicts remain visible as warnings." : "Recorded dimensions are informative. The saved manual map geometry remains authoritative."}</small></fieldset>
-      <fieldset><legend>Furniture geometry (mm)</legend><label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{selectedBookcase && <><div className="server-dimension-grid">{numberField("Horizontal", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}{numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}{numberField("Width", selectedBookcase.width_mm, (value) => updateBookcase("width_mm", value), { min: 1, step: 1 })}{numberField("Height", selectedBookcase.height_mm, (value) => updateBookcase("height_mm", value), { min: 1, step: 1 })}</div>{selectedBookcaseRecord && (!selectedBookcaseRecord.width_mm || !selectedBookcaseRecord.height_mm) && <small>Physical dimensions are not recorded. These editable map dimensions are independent fallback geometry, not inherited furniture measurements.</small>}</>}</fieldset>
-      <fieldset><legend>Shelf map size (mm)</legend><label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>{selectedShelf && selectedShelfRect && <>{numberField("Displayed height (mm)", selectedShelfRect.height, updateShelfMapHeight, { min: 1, step: 1 })}{data.bookcases.find((bookcase) => bookcase.shelves.some((shelf) => shelf.id === shelfId))?.shelves.length === 1 && <small>A single shelf fills the bookcase's available map height.</small>}</>}</fieldset>
-      <fieldset><legend>Container geometry and support (mm)</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField(selectedContainerContext.container.container_type === "ROW" ? "Anchor position (mm)" : "Alignment position (mm)", displayedContainerStartMm(), (value) => updateContainerMillimetres("start", value), { min: 0, max: containerShelfWidthMm, step: 1 })}{numberField("Bottom clearance (mm)", supportClearanceMm, (value) => updateContainerMillimetres("bottom", value), { min: 0, max: containerShelfHeightMm, step: 1, disabled: selectedContainer.support_kind === "CONTAINER" || selectedContainerContext.container.layer === "FOREGROUND" })}{numberField("Width (mm)", selectedContainer.width / 100 * containerShelfWidthMm, (value) => updateContainerMillimetres("width", value), { min: 1, max: containerShelfWidthMm, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}{numberField("Height (mm)", selectedContainer.height / 100 * containerShelfHeightMm, (value) => updateContainerMillimetres("height", value), { min: 1, max: containerShelfHeightMm, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}</div><small>{draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 ? "Occupied width and height are derived from the books' physical dimensions and documented fallbacks. Change the anchor, alignment or support here; edit book measurements to change occupied size." : "Anchor/alignment positions are coordinates measured from the shelf's left edge. Bottom clearance is relative to the immediate support: 0 mm means direct contact with the shelf or supporting container."} Only shelf-supported background containers may use a visual depth offset.</small>{selectedContainerContext.container.container_type === "ROW" && <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label>}<label>Rests on<select value={selectedContainer.support_kind === "CONTAINER" ? selectedContainer.support_container_id ?? "" : "SHELF"} onChange={(event) => chooseSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select><small>Only a non-empty opposite-type container in this shelf and layer can be used.</small></label>{selectedContainerContext.container.container_type === "PILE" && <label>Pile alignment<select value={selectedContainer.pile_alignment} onChange={(event) => updateContainer({ pile_alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>}</>}</fieldset>
+      <fieldset><legend>Geometry mode</legend>
+        <label>Projection<select value={draft.geometry_mode} onChange={(event) => setDraft((current) => ({ ...current, geometry_mode: event.target.value as "MANUAL" | "PHYSICAL" }))}><option value="MANUAL">Manual proportions</option><option value="PHYSICAL">Physical dimensions</option></select></label>
+        <small>{draft.geometry_mode === "PHYSICAL" ? "Entered exterior furniture and interior shelf measurements govern the projection. Missing axes use labelled fallbacks; invalid structures cannot be applied." : "Furniture uses millimetre-shaped map units. Shelf and container controls are percentages of their parent; physical metadata remains informative."}</small>
+      </fieldset>
+      <fieldset><legend>Furniture geometry (mm)</legend>
+        <label>Bookcase<select value={bookcaseId} onChange={(event) => setBookcaseId(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {selectedBookcase && <>
+          <div className="server-dimension-grid">
+            {numberField("Horizontal — left edge", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}
+            {numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}
+            {numberField("Exterior width", selectedBookcase.width_mm, (value) => updateBookcase("width_mm", value), { min: 5, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && Boolean(selectedBookcaseRecord?.width_mm) })}
+            {numberField("Exterior height", selectedBookcase.height_mm, (value) => updateBookcase("height_mm", value), { min: 5, step: 1, disabled: draft.geometry_mode === "PHYSICAL" && Boolean(selectedBookcaseRecord?.height_mm) })}
+          </div>
+          <label>Fixed shelf distribution<select value={selectedBookcase.shelf_direction} onChange={(event) => updateBookcase("shelf_direction", event.target.value)} disabled={Boolean(selectedBookcaseRecord?.shelves.length)}><option value="TOP_TO_BOTTOM">Top to bottom</option><option value="BOTTOM_TO_TOP">Bottom to top</option><option value="LEFT_TO_RIGHT">Left to right</option><option value="RIGHT_TO_LEFT">Right to left</option></select></label>
+          <label className="server-check"><input type="checkbox" checked={selectedBookcase.homogeneous_structure} onChange={(event) => updateBookcase("homogeneous_structure", event.target.checked)} /> Homogeneous structure</label>
+          <div className="server-dimension-grid">
+            {numberField("Left frame", selectedBookcase.frame_left_mm, (value) => updateBookcase("frame_left_mm", value), { min: 0, step: 1 })}
+            {numberField("Right frame", selectedBookcase.frame_right_mm, (value) => updateBookcase("frame_right_mm", value), { min: 0, step: 1 })}
+            {numberField("Upper closure", selectedBookcase.top_closure_mm, (value) => updateBookcase("top_closure_mm", value), { min: 0, step: 1 })}
+            {numberField("Lower closure / board", selectedBookcase.bottom_closure_mm, (value) => updateBookcase("bottom_closure_mm", value), { min: 5, step: 1 })}
+            {numberField("Separator thickness", selectedBookcase.separator_thickness_mm, (value) => updateBookcase("separator_thickness_mm", value), { min: 5, step: 1 })}
+          </div>
+          <small>{selectedBookcaseRecord && selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "Exterior dimensions are entered physical metadata." : "Missing exterior measurements use editable fallback map millimetres (2200 × 800 × 280 defaults)."}</small>
+        </>}
+      </fieldset>
+      <fieldset><legend>Shelf compartment {draft.geometry_mode === "PHYSICAL" ? "(mm)" : "(% of furniture)"}</legend>
+        <label>Shelf<select value={shelfId} onChange={(event) => setShelfId(event.target.value)}>{data.bookcases.flatMap((bookcase) => bookcase.shelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{bookcase.name} · Shelf {shelf.shelf_number}</option>))}</select></label>
+        {selectedShelf && selectedShelfFurniture && <>
+          <div className="server-dimension-grid">
+            {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived left edge (mm)" : "Left edge (%)", shelfDisplayValue("x_mm"), (value) => updateShelfGeometry("x_mm", value), { min: 0, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
+            {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived floor baseline (mm)" : "Floor baseline (%)", shelfDisplayValue("floor_y_mm"), (value) => updateShelfGeometry("floor_y_mm", value), { min: 0, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
+            {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior width (mm)" : "Width (%)", shelfDisplayValue("width_mm"), (value) => updateShelfGeometry("width_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
+            {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior height (mm)" : "Height (%)", shelfDisplayValue("height_mm"), (value) => updateShelfGeometry("height_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
+          </div>
+          <small>Width: {(selectedShelf.width_source ?? "derived").toLowerCase()} · Height: {(selectedShelf.height_source ?? "derived").toLowerCase()}. Entered physical dimensions are edited in Library layout, not overwritten here.</small>
+          <label>Horizontal alignment<select value={selectedShelf.alignment} onChange={(event) => updateShelf({ alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>
+          {numberField(draft.geometry_mode === "PHYSICAL" ? "Alignment offset (mm)" : "Alignment offset (%)", draft.geometry_mode === "PHYSICAL" ? selectedShelf.offset_mm : selectedShelf.offset_mm / selectedShelfFurniture.width_mm * 100, (value) => updateShelf({ offset_mm: draft.geometry_mode === "PHYSICAL" ? value : value / 100 * selectedShelfFurniture.width_mm }), { step: draft.geometry_mode === "PHYSICAL" ? 1 : .1 })}
+          <label className="server-check"><input type="checkbox" checked={selectedShelf.open_top} onChange={(event) => updateShelf({ open_top: event.target.checked })} disabled={Boolean(selectedShelfRecord?.usable_width_mm && selectedShelfRecord.usable_width_mm !== selectedShelfFurniture.width_mm)} /> Open top shelf</label>
+          {!selectedShelfFurniture.homogeneous_structure && <>
+            <div className="server-dimension-grid">
+              {numberField("Left frame (mm)", selectedShelf.left_frame_mm, (value) => updateShelf({ left_frame_mm: value }), { min: 0, step: 1 })}
+              {numberField("Right frame (mm)", selectedShelf.right_frame_mm, (value) => updateShelf({ right_frame_mm: value }), { min: 0, step: 1 })}
+              {numberField("Upper closure (mm)", selectedShelf.top_closure_mm, (value) => updateShelf({ top_closure_mm: value }), { min: 0, step: 1 })}
+              {numberField("Lower board (mm)", selectedShelf.bottom_board_mm, (value) => updateShelf({ bottom_board_mm: value }), { min: 0, step: 1 })}
+              {selectedShelf.separator_after_mm !== null && numberField("Following separator (mm)", selectedShelf.separator_after_mm, (value) => updateShelf({ separator_after_mm: value }), { min: 5, step: 1 })}
+            </div>
+            {selectedShelf.separator_after_mm !== null && <label>Separator anchor<select value={selectedShelf.separator_anchor} onChange={(event) => updateShelf({ separator_anchor: event.target.value as "TOP" | "BOTTOM" })}><option value="BOTTOM">Lower board</option><option value="TOP">Upper closure</option></select></label>}
+          </>}
+        </>}
+      </fieldset>
+      <fieldset><legend>Container geometry and support {draft.geometry_mode === "PHYSICAL" ? "(mm)" : "(% of shelf)"}</legend><label>Container<select value={containerId} onChange={(event) => setContainerId(event.target.value)}>{allContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · S{shelf.shelf_number} · {container.layer === "BACKGROUND" ? "BG" : "FG"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select></label>{selectedContainer && selectedContainerContext && <><div className="server-dimension-grid">{numberField(`${selectedContainerContext.container.container_type === "ROW" ? "Anchor" : "Alignment"} position (${draft.geometry_mode === "PHYSICAL" ? "mm" : "%"})`, containerDisplayValue("start"), (value) => updateContainerDisplay("start", value), { min: 0, max: draft.geometry_mode === "PHYSICAL" ? containerShelfWidthMm : 100, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1 })}{numberField(`Bottom clearance (${draft.geometry_mode === "PHYSICAL" ? "mm" : "%"})`, containerDisplayValue("bottom"), (value) => updateContainerDisplay("bottom", value), { min: 0, max: draft.geometry_mode === "PHYSICAL" ? containerShelfHeightMm : 100, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: selectedContainer.support_kind === "CONTAINER" || selectedContainerContext.container.layer === "FOREGROUND" })}{numberField(`Width (${draft.geometry_mode === "PHYSICAL" ? "mm" : "%"})`, containerDisplayValue("width"), (value) => updateContainerDisplay("width", value), { min: draft.geometry_mode === "PHYSICAL" ? 1 : .1, max: draft.geometry_mode === "PHYSICAL" ? containerShelfWidthMm : 100, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}{numberField(`Height (${draft.geometry_mode === "PHYSICAL" ? "mm" : "%"})`, containerDisplayValue("height"), (value) => updateContainerDisplay("height", value), { min: draft.geometry_mode === "PHYSICAL" ? 1 : .1, max: draft.geometry_mode === "PHYSICAL" ? containerShelfHeightMm : 100, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 })}</div><small>{draft.geometry_mode === "PHYSICAL" && selectedContainerContext.container.book_count > 0 ? "Occupied width and height are derived from the books' physical dimensions and documented fallbacks. Change the anchor, alignment or support here; edit book measurements to change occupied size." : "Manual values are percentages of the selected shelf. Bottom clearance is relative to the immediate support; zero means physical contact."} Only shelf-supported background containers may use a visual depth offset.</small>{selectedContainerContext.container.container_type === "ROW" && <label>Row growth anchor<select value={selectedContainer.row_anchor} onChange={(event) => updateContainer({ row_anchor: event.target.value as "LEFT" | "RIGHT" })}><option value="LEFT">Left edge fixed — grow right</option><option value="RIGHT">Right edge fixed — grow left</option></select></label>}<label>Rests on<select value={selectedContainer.support_kind === "CONTAINER" ? selectedContainer.support_container_id ?? "" : "SHELF"} onChange={(event) => chooseSupport(event.target.value)}><option value="SHELF">Shelf bottom</option>{supportContainers.map(({ bookcase, shelf, container }) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)}</select><small>Only a non-empty opposite-type container in this shelf and layer can be used.</small></label>{selectedContainerContext.container.container_type === "PILE" && <label>Pile alignment<select value={selectedContainer.pile_alignment} onChange={(event) => updateContainer({ pile_alignment: event.target.value as "LEFT" | "CENTER" | "RIGHT" })}><option value="LEFT">Left</option><option value="CENTER">Centre</option><option value="RIGHT">Right</option></select></label>}</>}</fieldset>
       <fieldset>
         <legend>Outside-library areas</legend>
         <label>Area<select value={outsideKind} onChange={(event) => setOutsideKind(event.target.value as "READING" | "LOANED")}><option value="READING">Reading</option><option value="LOANED">On loan</option></select></label>

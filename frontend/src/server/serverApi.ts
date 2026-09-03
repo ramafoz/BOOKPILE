@@ -192,11 +192,35 @@ export interface VisualBookcaseLayout {
   floor_y_mm: number;
   width_mm: number;
   height_mm: number;
+  shelf_direction: "TOP_TO_BOTTOM" | "BOTTOM_TO_TOP" | "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
+  homogeneous_structure: boolean;
+  frame_left_mm: number;
+  frame_right_mm: number;
+  top_closure_mm: number;
+  bottom_closure_mm: number;
+  separator_thickness_mm: number;
 }
 
 export interface VisualShelfLayout {
   shelf_id: string;
   height_weight: number;
+  x_mm: number;
+  floor_y_mm: number;
+  width_mm: number;
+  height_mm: number;
+  alignment: "LEFT" | "CENTER" | "RIGHT";
+  offset_mm: number;
+  width_source: "ENTERED" | "FALLBACK" | "DERIVED";
+  height_source: "ENTERED" | "FALLBACK" | "DERIVED";
+  open_top: boolean;
+  left_frame_mm: number;
+  right_frame_mm: number;
+  top_closure_mm: number;
+  bottom_board_mm: number;
+  separator_after_mm: number | null;
+  separator_anchor: "TOP" | "BOTTOM";
+  separator_height_mm: number | null;
+  separator_source: "ENTERED" | "FALLBACK" | "DERIVED" | null;
 }
 
 export interface VisualContainerLayout {
@@ -223,6 +247,7 @@ export interface VisualLayout {
   revision: string;
   geometry_mode: "MANUAL" | "PHYSICAL";
   coordinate_system_version: number;
+  refresh_shelves_from_physical?: boolean;
   bookcases: VisualBookcaseLayout[];
   shelves: VisualShelfLayout[];
   containers: VisualContainerLayout[];

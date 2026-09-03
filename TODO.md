@@ -431,6 +431,26 @@ protects the completed catalogue.
     preserve anchors/supports, allow truthful out-of-bounds persistence, and
     show immediate structured collision/overflow warning overlays. Further
     direct manipulation continues in the next increment.
+  - [ ] Replace provisional sibling-normalized shelf `height_weight` geometry
+    with the approved explicit shelf/frame/separator model in
+    `PHYSICAL_GEOMETRY_PLAN.md`: entered/fallback/derived measurement sources,
+    immutable furniture distribution direction, 2.5% default frames, 14%
+    preferred shelf spans, 5 mm minima, open top shelves, optional homogeneous
+    structure, atomic fitting, and hard no-overlap/no-escape validation.
+    MANUAL exposes parent-relative percentages; PHYSICAL exposes millimetres.
+    - [x] Back up, rehearse and apply schema v11; backfill explicit shelf
+      rectangles while preserving books, containers, covers and prior map
+      appearance.
+    - [x] Verify no-op saves, MANUAL/PHYSICAL projection, absolute measured
+      shelf height, derived locks, atomic fit rejection and fixed furniture
+      direction through Owner acceptance.
+    - [ ] Fix the structural-control UI: reveal independent per-shelf controls
+      when homogeneity is disabled, warn before re-homogenizing, compact the
+      oversized checkbox controls, and remove ambiguity between shelf offset
+      and frame-derived placement.
+    - [ ] Move furniture direction and suitable initial structural choices to
+      empty-furniture creation while keeping direction immutable after the
+      first shelf is added.
   - [ ] Integrate floating/minimizable and direct map layout editing over the
     same canonical validation service.
   - [ ] Complete desktop, phone, and tablet acceptance before closing Phase 4D.

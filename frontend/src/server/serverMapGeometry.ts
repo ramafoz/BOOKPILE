@@ -97,29 +97,46 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
     // SVG uses positive Y down, so both the baseline and the height are inverted.
     const top = -layout.floor_y_mm - layout.height_mm;
     bookcases.push({ bookcaseId: bookcase.id, x: layout.x_mm, y: top, width: layout.width_mm, height: layout.height_mm });
+    const explicitShelvesAvailable = bookcase.shelves.every((shelf) => {
+      const item = shelfLayouts.get(shelf.id);
+      return item && [item.x_mm, item.floor_y_mm, item.width_mm, item.height_mm]
+        .every((value) => Number.isFinite(value));
+    });
     const insetX = layout.width_mm * 0.025;
     const insetY = layout.height_mm * 0.025;
-    const inner = {
+    const legacyInner = {
       x: layout.x_mm + insetX,
       y: top + insetY,
       width: layout.width_mm - insetX * 2,
       height: layout.height_mm - insetY * 2,
     };
-    const totalWeight = bookcase.shelves.reduce(
+    const legacyTotalWeight = bookcase.shelves.reduce(
       (total, shelf) => total + (shelfLayouts.get(shelf.id)?.height_weight ?? 1),
       0,
     ) || 1;
-    let shelfY = inner.y;
+    let legacyShelfY = legacyInner.y;
     bookcase.shelves.forEach((shelf) => {
-      const height = inner.height * (shelfLayouts.get(shelf.id)?.height_weight ?? 1) / totalWeight;
-      const shelfRect: MapShelfRect = {
-        shelfId: shelf.id,
-        bookcaseId: bookcase.id,
-        x: inner.x,
-        y: shelfY,
-        width: inner.width,
-        height,
-      };
+      const shelfLayout = shelfLayouts.get(shelf.id);
+      if (!shelfLayout) return;
+      const legacyHeight = legacyInner.height * (shelfLayout.height_weight ?? 1) / legacyTotalWeight;
+      const shelfRect: MapShelfRect = explicitShelvesAvailable
+        ? {
+            shelfId: shelf.id,
+            bookcaseId: bookcase.id,
+            x: layout.x_mm + shelfLayout.x_mm,
+            y: -layout.floor_y_mm - shelfLayout.floor_y_mm - shelfLayout.height_mm,
+            width: shelfLayout.width_mm,
+            height: shelfLayout.height_mm,
+          }
+        : {
+            shelfId: shelf.id,
+            bookcaseId: bookcase.id,
+            x: legacyInner.x,
+            y: legacyShelfY,
+            width: legacyInner.width,
+            height: legacyHeight,
+          };
+      legacyShelfY += legacyHeight;
       shelves.push(shelfRect);
       shelf.containers.forEach((container) => {
         const containerLayout = containerLayouts.get(container.id);
@@ -140,7 +157,6 @@ export function physicalMapGeometry(data: PhysicalLibrary): {
           height: shelfRect.height * containerLayout.height / 100,
         });
       });
-      shelfY += height;
     });
   });
   return { bookcases, shelves, containers };

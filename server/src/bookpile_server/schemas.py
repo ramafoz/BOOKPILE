@@ -220,6 +220,13 @@ class VisualBookcaseLayoutWrite(BaseModel):
     floor_y_mm: float
     width_mm: float = Field(gt=0)
     height_mm: float = Field(gt=0)
+    shelf_direction: Literal["TOP_TO_BOTTOM", "BOTTOM_TO_TOP", "LEFT_TO_RIGHT", "RIGHT_TO_LEFT"] = "TOP_TO_BOTTOM"
+    homogeneous_structure: bool = True
+    frame_left_mm: float = Field(ge=0)
+    frame_right_mm: float = Field(ge=0)
+    top_closure_mm: float = Field(ge=0)
+    bottom_closure_mm: float = Field(ge=0)
+    separator_thickness_mm: float = Field(ge=5)
 
 
 class VisualShelfLayoutWrite(BaseModel):
@@ -227,6 +234,23 @@ class VisualShelfLayoutWrite(BaseModel):
 
     shelf_id: UUID
     height_weight: float = Field(gt=0)
+    x_mm: float
+    floor_y_mm: float
+    width_mm: float = Field(gt=0)
+    height_mm: float = Field(gt=0)
+    alignment: Literal["LEFT", "CENTER", "RIGHT"] = "CENTER"
+    offset_mm: float = 0
+    width_source: Literal["ENTERED", "FALLBACK", "DERIVED"] = "DERIVED"
+    height_source: Literal["ENTERED", "FALLBACK", "DERIVED"] = "DERIVED"
+    open_top: bool = False
+    left_frame_mm: float = Field(ge=0)
+    right_frame_mm: float = Field(ge=0)
+    top_closure_mm: float = Field(ge=0)
+    bottom_board_mm: float = Field(ge=0)
+    separator_after_mm: float | None = Field(default=None, ge=5)
+    separator_anchor: Literal["TOP", "BOTTOM"] = "BOTTOM"
+    separator_height_mm: float | None = Field(default=None, ge=5)
+    separator_source: Literal["ENTERED", "FALLBACK", "DERIVED"] | None = None
 
 
 class VisualContainerLayoutWrite(BaseModel):
@@ -273,6 +297,7 @@ class VisualLayoutWrite(BaseModel):
     revision: str = Field(min_length=64, max_length=64)
     geometry_mode: Literal["MANUAL", "PHYSICAL"]
     coordinate_system_version: Literal[2]
+    refresh_shelves_from_physical: bool = False
     bookcases: list[VisualBookcaseLayoutWrite]
     shelves: list[VisualShelfLayoutWrite]
     containers: list[VisualContainerLayoutWrite]

@@ -125,19 +125,26 @@ def test_shared_catalogue_accepts_metadata_contributors_and_layout(
                 position=1,
                 name="Example Inker",
             ),
-            VisualBookcaseLayout(
+                VisualBookcaseLayout(
                 library_id=library.id,
                 bookcase_id=bookcase.id,
                 x_mm=Decimal("-510.0000"),
                 floor_y_mm=Decimal("1580.0000"),
                 width_mm=Decimal("440.0000"),
-                height_mm=Decimal("1500.0000"),
-            ),
-            VisualShelfLayout(
+                    height_mm=Decimal("1500.0000"),
+                    frame_left_mm=Decimal("11"), frame_right_mm=Decimal("11"),
+                    top_closure_mm=Decimal("37.5"), bottom_closure_mm=Decimal("37.5"),
+                    separator_thickness_mm=Decimal("11"),
+                ),
+                VisualShelfLayout(
                 library_id=library.id,
                 shelf_id=shelf.id,
-                height_weight=Decimal("1.2500"),
-            ),
+                    height_weight=Decimal("1.2500"),
+                    x_mm=Decimal("11"), floor_y_mm=Decimal("37.5"),
+                    width_mm=Decimal("418"), height_mm=Decimal("1425"),
+                    left_frame_mm=Decimal("11"), right_frame_mm=Decimal("11"),
+                    top_closure_mm=Decimal("37.5"), bottom_board_mm=Decimal("37.5"),
+                ),
             VisualContainerLayout(
                 library_id=library.id,
                 container_id=container.id,

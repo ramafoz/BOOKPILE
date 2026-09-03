@@ -147,8 +147,8 @@ describe("Physical library requests", () => {
       revision: "a".repeat(64),
       geometry_mode: "MANUAL" as const,
       coordinate_system_version: 2,
-      bookcases: [{ bookcase_id: "case-1", x_mm: -200, floor_y_mm: 1600, width_mm: 500, height_mm: 1600 }],
-      shelves: [{ shelf_id: "shelf-1", height_weight: 1 }],
+      bookcases: [{ bookcase_id: "case-1", x_mm: -200, floor_y_mm: 1600, width_mm: 500, height_mm: 1600, shelf_direction: "TOP_TO_BOTTOM" as const, homogeneous_structure: true, frame_left_mm: 12.5, frame_right_mm: 12.5, top_closure_mm: 40, bottom_closure_mm: 40, separator_thickness_mm: 12.5 }],
+      shelves: [{ shelf_id: "shelf-1", height_weight: 1, x_mm: 12.5, floor_y_mm: 40, width_mm: 475, height_mm: 1520, alignment: "CENTER" as const, offset_mm: 0, width_source: "DERIVED" as const, height_source: "DERIVED" as const, open_top: false, left_frame_mm: 12.5, right_frame_mm: 12.5, top_closure_mm: 40, bottom_board_mm: 40, separator_after_mm: null, separator_anchor: "BOTTOM" as const, separator_height_mm: null, separator_source: null }],
       containers: [{
         container_id: "container-1",
         x: 0,

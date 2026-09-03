@@ -769,6 +769,16 @@ class VisualBookcaseLayout(Base):
     __table_args__ = (
         CheckConstraint("width_mm > 0", name="ck_visual_bookcase_width"),
         CheckConstraint("height_mm > 0", name="ck_visual_bookcase_height"),
+        CheckConstraint(
+            "shelf_direction IN ('TOP_TO_BOTTOM','BOTTOM_TO_TOP','LEFT_TO_RIGHT','RIGHT_TO_LEFT')",
+            name="ck_visual_bookcase_shelf_direction",
+        ),
+        CheckConstraint(
+            "frame_left_mm >= 0 AND frame_right_mm >= 0 AND "
+            "top_closure_mm >= 0 AND bottom_closure_mm >= 0 AND "
+            "separator_thickness_mm >= 5",
+            name="ck_visual_bookcase_structure_nonnegative",
+        ),
         ForeignKeyConstraint(
             ["library_id", "bookcase_id"],
             ["bookcases.library_id", "bookcases.id"],
@@ -783,12 +793,38 @@ class VisualBookcaseLayout(Base):
     floor_y_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     width_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     height_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    shelf_direction: Mapped[str] = mapped_column(String(24), nullable=False, default="TOP_TO_BOTTOM")
+    homogeneous_structure: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    frame_left_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    frame_right_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    top_closure_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    bottom_closure_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    separator_thickness_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
 
 
 class VisualShelfLayout(Base):
     __tablename__ = "visual_shelf_layouts"
     __table_args__ = (
         CheckConstraint("height_weight > 0", name="ck_visual_shelf_weight"),
+        CheckConstraint("width_mm > 0 AND height_mm > 0", name="ck_visual_shelf_size_positive"),
+        CheckConstraint(
+            "left_frame_mm >= 0 AND right_frame_mm >= 0 AND "
+            "top_closure_mm >= 0 AND bottom_board_mm >= 0",
+            name="ck_visual_shelf_frames_nonnegative",
+        ),
+        CheckConstraint("alignment IN ('LEFT','CENTER','RIGHT')", name="ck_visual_shelf_alignment"),
+        CheckConstraint(
+            "width_source IN ('ENTERED','FALLBACK','DERIVED') AND "
+            "height_source IN ('ENTERED','FALLBACK','DERIVED')",
+            name="ck_visual_shelf_sources",
+        ),
+        CheckConstraint(
+            "separator_anchor IN ('TOP','BOTTOM') AND "
+            "(separator_after_mm IS NULL OR separator_after_mm >= 5) AND "
+            "(separator_height_mm IS NULL OR separator_height_mm >= 5) AND "
+            "(separator_source IS NULL OR separator_source IN ('ENTERED','FALLBACK','DERIVED'))",
+            name="ck_visual_shelf_separator",
+        ),
         ForeignKeyConstraint(
             ["library_id", "shelf_id"],
             ["shelves.library_id", "shelves.id"],
@@ -800,6 +836,23 @@ class VisualShelfLayout(Base):
     library_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     shelf_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     height_weight: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
+    x_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    floor_y_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    width_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    height_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    alignment: Mapped[str] = mapped_column(String(8), nullable=False, default="CENTER")
+    offset_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False, default=0)
+    width_source: Mapped[str] = mapped_column(String(10), nullable=False, default="DERIVED")
+    height_source: Mapped[str] = mapped_column(String(10), nullable=False, default="DERIVED")
+    open_top: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    left_frame_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    right_frame_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    top_closure_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    bottom_board_mm: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    separator_after_mm: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    separator_anchor: Mapped[str] = mapped_column(String(8), nullable=False, default="BOTTOM")
+    separator_height_mm: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    separator_source: Mapped[str | None] = mapped_column(String(10))
 
 
 class VisualContainerLayout(Base):

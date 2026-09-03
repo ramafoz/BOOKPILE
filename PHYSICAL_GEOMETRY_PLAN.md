@@ -59,15 +59,110 @@ prevents later code from guessing which interpretation applies.
 - Mixed measured/unmeasured furniture is allowed. Unmeasured items preserve
   manual proportions and use the median scale of measured furniture when a
   world conversion is needed; they are marked as estimated.
-- Shelf `usable_width_mm` defines its internal horizontal scale.
-- Shelf `usable_height_mm` determines `height_weight` when sufficient
-  measurements exist. Remaining outer furniture space is distributed as
-  boards and frame. Missing values retain manual weights or use an even
-  fallback.
+- A shelf is an explicit rectangular usable compartment inside its furniture,
+  not a proportional share of the other shelves. Its canonical map geometry
+  therefore requires a furniture-relative horizontal coordinate, floor
+  baseline, width and height. In `PHYSICAL` mode, recorded
+  `usable_width_mm`/`usable_height_mm` determine that rectangle's size. For
+  example, a 200 mm shelf in 1000 mm furniture occupies exactly one fifth of
+  its height; unused space remains visibly solid furniture rather than being
+  redistributed among shelves.
+- Shelf horizontal alignment is `LEFT`, `CENTER` (default), or `RIGHT`, with a
+  signed millimetre offset from the selected alignment. Vertical coordinates
+  use the same positive-up floor-baseline convention as furniture.
+- Shelves are always fully contained by their furniture and never overlap.
+  These are hard relational invariants: a shelf edit or furniture resize that
+  violates them must be rejected rather than stored as a warning.
+- Furniture has a configurable default shelf-numbering/placement direction:
+  `TOP_TO_BOTTOM` (default), `BOTTOM_TO_TOP`, `LEFT_TO_RIGHT`, or
+  `RIGHT_TO_LEFT`. This supports both conventional tall bookcases and wide
+  furniture divided into vertical compartments. Shelf number remains an
+  identifier/order; explicit geometry becomes authoritative after placement.
+- `usable_depth_mm` remains metadata for capacity and future depth rendering;
+  it does not alter the initial front-view rectangle.
 - A sum of usable dimensions that exceeds the furniture is an immediate
-  physical warning, not an excuse to discard the measurements.
+  hard conflict when it causes shelf overlap or escape from the furniture.
 - Resizing furniture directly in `PHYSICAL` mode edits millimetres and shows
   the live mm value. In `MANUAL` mode it edits presentation geometry only.
+
+### Canonical shelf, frame, and separator model
+
+Furniture measurements are exterior dimensions. Their independent fallbacks
+are 2200 mm high, 800 mm wide, and 280 mm deep. Shelf measurements are the
+interior usable dimensions of a compartment. Every value exposed by the
+editor identifies both its unit and its source: `ENTERED`, `FALLBACK`, or
+`DERIVED`. Manual furniture geometry still uses millimetre-shaped world units,
+but labels them as fictitious unless recorded physical dimensions make them
+real. There is only one canonical map; no parallel manual and physical maps
+may drift apart.
+
+Each furniture item has an immutable distribution direction once physical
+structure exists: `TOP_TO_BOTTOM`, `BOTTOM_TO_TOP`, `LEFT_TO_RIGHT`, or
+`RIGHT_TO_LEFT`. The UI uses those full names. A direction change is allowed
+only before shelves and containers exist. Shelf numbering follows that
+direction, while every shelf has an explicit, furniture-relative rectangle.
+
+Fallback shelf dimensions are preferred dimensions, not sibling weights:
+
+- vertical distribution: 14% of furniture height, 95% of its width when the
+  default 2.5% frame is present on both sides, and
+  99.75% of its depth;
+- horizontal distribution: the height remaining after the upper closure and
+  lower board, 14% of its width, and
+  99.75% of its depth.
+
+If preferred fallback compartments do not fit, fallback-only dimensions are
+compressed equally and proportionally, never below 5 mm. Entered dimensions
+are never compressed. A structure that still cannot fit is rejected.
+
+For vertical furniture, each compartment may have its own left and right
+frame. The furniture also has upper and lower closures and horizontal
+separators between consecutive shelves. Residual space follows the numbering
+direction: it is absorbed by the lower closure for top-to-bottom furniture and
+by the upper closure for bottom-to-top furniture. For horizontal furniture,
+each compartment may have its own upper closure and lower board; vertical
+separators divide consecutive shelves. Residual width is shared equally by
+separators, or by the two outside frames when there are no separators. If one
+outside frame is zero, the other receives all residual space; if neither
+exists, the shelf spans the furniture.
+
+Every non-zero frame, closure, board, separator, or compartment dimension is
+at least 5 mm. Separators have no free offset: a partial separator touches its
+selected top or bottom anchor. In horizontal furniture, a zero upper closure
+causes homogeneous separators to use 50% height; otherwise they use full
+height.
+
+`Homogeneous structure` is enabled by default. In vertical furniture it keeps
+left/right frames equal and all separator thicknesses equal. In horizontal
+furniture it equalizes lower boards plus separator thickness, height, and
+bottom anchoring. Enabling it previews and confirms any destructive visual
+normalization; disabling it preserves the current values and permits
+per-shelf asymmetry, including zigzag/S-shaped compartments.
+
+Only the physically uppermost compartment may be marked `Open top shelf`.
+That removes its upper closure and side frames. It cannot be enabled when an
+entered shelf width is incompatible with the furniture width; an explicitly
+full-width top shelf is valid. Other shelves require their containing frame.
+
+Shelves never overlap or escape furniture. New shelves are placed atomically
+at the end of the numbering direction with their separator and preferred
+fallbacks; they are not created if no valid fit exists. Furniture resizing,
+mode changes, entered-dimension changes, and homogeneity changes use preview
+and confirmation whenever they displace geometry. Invalid previews cannot be
+applied. `PHYSICAL` to `MANUAL` freezes the calculated rectangles as editable
+percentages; `MANUAL` to `PHYSICAL` previews the entered/fallback physical
+projection before replacing derived geometry.
+
+Depth is stored and must not exceed furniture depth, but it does not yet alter
+the front-view renderer. In `MANUAL`, shelf and container controls use clearly
+labelled percentages relative to their parent. In `PHYSICAL`, they use clearly
+labelled millimetres and entered physical dimensions remain read-only wherever
+the visual value is derived from them.
+
+The current `height_weight` implementation is transitional. It must be
+replaced by an additive, backed-up migration to explicit shelf rectangles and
+structural settings, preserving the pre-migration appearance before physical
+projection is adopted.
 
 ## 4. Books and fallbacks
 
@@ -227,10 +322,36 @@ Accepted on 2026-09-02:
 - Newly created unmeasured furniture keeps null physical metadata, receives a
   distinct persisted fallback map rectangle, and accepts negative horizontal
   world coordinates without transient number-input correction.
+- Schema v11 adds explicit shelf rectangles plus furniture direction,
+  frame/closure/separator settings and per-shelf source, alignment, offset,
+  open-top and non-homogeneous structure fields. The PostgreSQL migration was
+  backed up, rehearsed through upgrade/downgrade/upgrade, then applied without
+  changing the 15 books, 2 shelves, 4 containers or private cover objects.
+- Existing shelf appearance is backfilled from the previous normalized
+  geometry. The renderer also retains a defensive legacy fallback so a rolling
+  frontend/backend restart cannot hide shelves or crash the editor.
+- Acceptance confirmed preservation, no-op saves, MANUAL percentage controls,
+  PHYSICAL recalculation, absolute shelf height, derived-field locking,
+  atomic rejection of a shelf that cannot fit, and immutable distribution
+  direction once a shelf exists.
 
-Still required before Phase 4D closes: floating/minimizable and direct map
-layout editing, deeper accordion edge-case refinement, and final cross-device
-acceptance.
+Known UI defects intentionally carried into the next checkpoint:
+
+- Toggling `Homogeneous structure` off does not yet reveal the independent
+  per-shelf structural controls, and toggling it back on does not yet show the
+  required destructive/recalculation warning.
+- The `Homogeneous structure` and `Open top shelf` checkbox presentation is
+  oversized and must be replaced with compact controls.
+- Shelf alignment offset overlaps conceptually with frame controls and needs a
+  single unambiguous placement model in the UI.
+- Furniture direction and appropriate initial structural parameters should be
+  chosen during empty-furniture creation, rather than discovered only in the
+  visual editor.
+
+Still required before Phase 4D closes: resolve the v11 UI defects above,
+complete the structural-control acceptance pass, add floating/minimizable and
+direct map layout editing, refine deeper accordion edge cases, and complete
+final cross-device acceptance.
 
 ## 10. Edition boundary and future Local work
 

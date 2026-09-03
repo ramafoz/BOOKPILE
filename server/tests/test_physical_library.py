@@ -702,6 +702,6 @@ def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_p
     assert records[second["id"]]["width_mm"] is None
     assert records[second["id"]]["height_mm"] is None
     assert layouts[first["id"]]["x_mm"] == 0
-    assert layouts[second["id"]]["x_mm"] == 600
-    assert layouts[first["id"]]["width_mm"] == 500
-    assert layouts[second["id"]]["width_mm"] == 500
+    assert layouts[second["id"]]["x_mm"] == 900
+    assert layouts[first["id"]]["width_mm"] == 800
+    assert layouts[second["id"]]["width_mm"] == 800
