@@ -264,6 +264,13 @@ or cross-Owner writes.
 alignment. Its precise controls will live in a floating, minimizable map panel;
 direct drag/resize is an additional interface over the same validation service.
 
+Direct manipulation is deliberately selection-first. The user first chooses
+exactly one furniture, shelf, or container; only that active object then shows
+its relevant move/resize handles and precise controls. Unselected objects never
+show handles. This keeps dense furniture legible on desktop and prevents small
+touch targets from covering shelves and books on mobile. Changing selection
+removes the previous handles before displaying the new set.
+
 `Reorganize books` moves physical copies between positions and containers. It
 must port Local's squeeze, swap, continue, collapse, leave-gap, preview,
 multi-move chain, and atomic Apply semantics into library-scoped PostgreSQL.
@@ -281,7 +288,8 @@ on Apply, and fully rolled back on failure.
 4. Implement and test the pure physical-geometry/accordion engine and its
    structured warnings.
 5. Integrate the precise editor as a floating/minimizable map panel.
-6. Add direct layout manipulation over the same service.
+6. Add selection-first direct layout manipulation over the same service: select
+   one object, then reveal handles only for that object.
 7. Validate desktop, phone, and tablet behaviour before closing Phase 4D.
 
 ### Implementation record
@@ -349,9 +357,39 @@ closures and exposes per-shelf side frames, while horizontal furniture shares
 side frames and exposes per-shelf upper/lower boards. Outside-library area
 controls are explicitly labelled in millimetres.
 
-Still required before Phase 4D closes: add floating/minimizable and direct map
-layout editing, refine deeper accordion edge cases, and complete final
-cross-device acceptance.
+### Final Phase 4D implementation checkpoint — accepted 2026-09-04
+
+The final branch increment required no schema migration and preserved the
+accepted precise editor and canonical backend validator:
+
+1. [x] Extract the existing precise controls into reusable panel content without
+   changing their payload or save semantics.
+2. [x] Open that content from Library Map as a floating overlay that can be
+   minimized to a compact header, restored, or cancelled. The panel is not a
+   second editor: it and the map share the same active draft.
+3. [x] Introduce an explicit layout-editing interaction state, separate from book
+   and container inspection and from `Reorganize books`.
+4. [x] Synchronize map and panel selection for one entity at a time. Selection
+   precedes manipulation; only the active entity receives handles.
+5. [x] Add manipulation incrementally: furniture position and eligible size,
+   shelf placement/eligible size, then container anchor/alignment and eligible
+   size. PHYSICAL measurements and occupied-container dimensions that are
+   already derived remain locked.
+6. [x] Convert pointer/touch screen coordinates through the existing camera
+   into world millimetres and keep all movement in a local revisioned draft.
+   Touch pointers receive slightly larger handles while preserving exact world
+   geometry.
+7. [x] Preserve atomic `Apply`, exact `Cancel`, stale-revision rejection,
+   library-scoped authorization, and Viewer read-only behavior.
+8. [x] Run backend and frontend regression coverage and complete desktop,
+   phone, and tablet acceptance. Final verification: 80 backend tests passed
+   with 1 skipped; 27 frontend tests passed; TypeScript/Vite build and ESLint
+   passed. Browser acceptance confirmed precise edits, selection-first direct
+   manipulation, minimization, Apply, Cancel, and responsive touch behavior.
+
+Phase 4D is closed. More elaborate support visualization, tilted PILE rendering,
+and any additional accordion refinements remain optional future map work rather
+than blockers for the shared physical-library foundation.
 
 ## 10. Edition boundary and future Local work
 

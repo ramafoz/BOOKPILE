@@ -429,9 +429,9 @@ protects the completed catalogue.
   - [x] Complete the first `PHYSICAL` projection and accordion pass: derive
     occupied ROW/PILE geometry from measured or fallback book dimensions,
     preserve anchors/supports, allow truthful out-of-bounds persistence, and
-    show immediate structured collision/overflow warning overlays. Further
-    direct manipulation continues in the next increment.
-  - [ ] Replace provisional sibling-normalized shelf `height_weight` geometry
+    show immediate structured collision/overflow warning overlays. Direct
+    manipulation is now integrated and accepted in the map editor.
+  - [x] Replace provisional sibling-normalized shelf `height_weight` geometry
     with the approved explicit shelf/frame/separator model in
     `PHYSICAL_GEOMETRY_PLAN.md`: entered/fallback/derived measurement sources,
     immutable furniture distribution direction, 2.5% default frames, 14%
@@ -454,9 +454,13 @@ protects the completed catalogue.
     - [x] Keep visual-editor selectors scoped in furniture → shelf → container
       order, expose only genuinely independent frame/closure controls for the
       selected distribution axis, and label outside-library geometry in mm.
-  - [ ] Integrate floating/minimizable and direct map layout editing over the
-    same canonical validation service.
-  - [ ] Complete desktop, phone, and tablet acceptance before closing Phase 4D.
+  - [x] Integrate floating/minimizable and direct map layout editing over the
+    same canonical validation service. Editing is selection-first, exposes
+    handles only on the active object, keeps one shared local draft, and uses
+    atomic Apply/exact Cancel semantics.
+  - [x] Complete desktop, phone, and tablet acceptance and close Phase 4D on
+    2026-09-04. Touch devices use slightly larger manipulation handles, and
+    entered physical dimensions are explicitly identified as locked sources.
 - [ ] **Future Local:** backport validated physical-geometry behaviour only in
   an isolated branch/worktree with a verified ZIP and rehearsed additive SQLite
   migration; never use the populated live Local database as a test target.
@@ -690,8 +694,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Complete Owner and Viewer acceptance testing on desktop and mobile:
     add, display, replace, remove, HEIC upload, invalid-file rejection,
     Viewer read-only access, and cross-library denial all passed.
-- [ ] Migrate the current Local-v1 ZIP safely into a selected Server library
-  and assign its implicit reading history to a selected Owner.
+- [ ] After Server personal readings and loans exist, migrate the current
+  Local-v1 ZIP safely into a selected Server library and assign its implicit
+  reading history to a selected Owner. The mapping contract exists, but full
+  implementation must not precede the Phase 5/6 destination models.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -711,11 +717,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     visible retained/end targets, a collapsible responsive draft, proportional
     container previews, undo, atomic Apply, stale-revision rejection, and
     structured audit passed desktop/mobile acceptance on 2026-09-02.
-  - [ ] Implement the Server physical-geometry migration and engine specified
-    in `PHYSICAL_GEOMETRY_PLAN.md`.
-  - [ ] Integrate floating/minimizable layout editing and direct map
-    manipulation over that same geometry service.
-  - [ ] Backup, restore, export, and Local ZIP import remain pending.
+  - [x] Complete the Server physical-geometry engine specified in
+    `PHYSICAL_GEOMETRY_PLAN.md`; schema v9–v11, projection, explicit shelves,
+    fallbacks, supports and structural controls are implemented and accepted.
+  - [x] Integrate floating/minimizable layout editing and direct map
+    manipulation over that same geometry service. Interaction is
+    selection-first: select one furniture, shelf, or container and show handles
+    only for that object.
+  - [ ] Backup, restore, export, and Local ZIP import remain pending for Phase
+    8, after personal reading and loan histories have canonical destinations.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user

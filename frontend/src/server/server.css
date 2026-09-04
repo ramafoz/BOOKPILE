@@ -447,6 +447,12 @@ button { cursor: pointer; }
 .server-physical-dialog legend { padding: 0 6px; font: 700 17px Georgia, "Times New Roman", serif; }
 .server-dimension-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .server-geometry-dialog { width: min(940px, 100%); }
+.server-geometry-panel { position: absolute; z-index: 7; top: 88px; right: 16px; width: min(760px, calc(100% - 32px)); max-height: calc(100% - 106px); padding: 17px; border-color: #9db5aa; border-radius: 11px; background: #fffaf2f5; box-shadow: 0 16px 48px #17382f4a; backdrop-filter: blur(10px); }
+.server-geometry-panel.collapsed { width: min(520px, calc(100% - 32px)); max-height: none; overflow: visible; }
+.server-geometry-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.server-geometry-panel-heading h2 { margin: 0; font-size: 24px; }
+.server-geometry-panel-heading > span { display: flex; gap: 7px; }
+.server-geometry-panel-heading button { min-height: 36px; border: 1px solid #9eb2a9; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; color: #28574c; background: #fffdf8; font-weight: 750; }
 .server-geometry-sections { display: grid; gap: 13px; }
 .server-geometry-sections fieldset { display: grid; gap: 11px; background: #fffdf8; }
 .server-geometry-sections .server-dimension-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -477,6 +483,10 @@ button { cursor: pointer; }
 .server-map-world { fill: transparent; }
 .server-map-bookcase { fill: #9a866d; stroke: #765f44; stroke-width: .35; vector-effect: non-scaling-stroke; filter: drop-shadow(.6px 1px 1px #3a2f2438); }
 .server-map-shelf { fill: #f8f2e8; stroke: #806b50; stroke-width: .45; vector-effect: non-scaling-stroke; }
+.server-map-bookcase.layout-selected, .server-map-shelf.layout-selected, .server-map-container.layout-selected > rect:first-child { stroke: #bd6a3f; stroke-width: 1.5; }
+.server-layout-selection-outline { fill: none; stroke: #bd6a3f; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.server-layout-handle { fill: #e5b65f; stroke: #174b40; stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: nwse-resize; touch-action: none; }
+.server-layout-handle.move { fill: #fffaf2; cursor: move; }
 .server-map-container > rect:first-child { fill: #d9d1c4; fill-opacity: .72; stroke: #9f927f; stroke-width: .3; vector-effect: non-scaling-stroke; cursor: pointer; }
 .server-map-container.selected > rect:first-child { stroke: #bd6a3f; stroke-width: 1.5; }
 .server-map-container.geometry-warning > rect:first-child { fill: #d96a5f; fill-opacity: .42; stroke: #a9332d; stroke-width: 1.2; }
@@ -555,6 +565,7 @@ button { cursor: pointer; }
   .server-physical-builders { grid-template-columns: 1fr; }
   .server-placement-grid { grid-template-columns: 1fr 1fr; }
   .server-geometry-sections .server-dimension-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .server-geometry-panel { top: 86px; right: 10px; width: min(680px, calc(100% - 20px)); max-height: calc(100% - 98px); }
   .server-map-stage { height: 65vh; min-height: 460px; }
   .server-rearrangement-destination { grid-template-columns: 1fr 1fr; }
   .server-library-sidebar { left: 14px; padding: 20px; border: 1px solid #cfc1ae; }
@@ -623,6 +634,9 @@ button { cursor: pointer; }
   .server-placement-editor { grid-template-columns: 1fr; }
   .server-placement-editor .server-field-help, .server-placement-editor .server-dialog-actions { grid-column: 1; }
   .server-rearrangement-panel { top: 114px; right: 7px; left: 7px; max-height: calc(100% - 124px); padding: 12px; }
+  .server-geometry-panel { top: 114px; right: 7px; width: calc(100% - 14px); max-height: calc(100% - 124px); padding: 12px; }
+  .server-geometry-panel.collapsed { right: 7px; width: calc(100% - 14px); }
+  .server-geometry-panel-heading button span { display: none; }
   .server-rearrangement-panel.collapsed { right: 7px; left: 7px; width: auto; }
   .server-rearrangement-modes, .server-rearrangement-destination { grid-template-columns: 1fr; }
   .server-rearrangement-panel:not(.collapsed) > header, .server-rearrangement-panel > footer { align-items: stretch; flex-direction: column; }

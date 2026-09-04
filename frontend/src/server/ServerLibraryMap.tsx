@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Undo2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Settings2, Undo2, X } from "lucide-react";
 import { BookDetails } from "./CatalogueWorkspace";
-import { serverApi, type PhysicalBook, type PhysicalLibrary, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook } from "./serverApi";
+import { GeometryDialog, type GeometrySelection } from "./PhysicalLibraryWorkspace";
+import { serverApi, type PhysicalBook, type PhysicalLibrary, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
 import {
   boundsForRects,
   cataloguePageMean,
@@ -23,6 +24,14 @@ type Selection =
   | { kind: "BOOK"; book: PhysicalBook }
   | { kind: "CONTAINER"; containerId: string }
   | null;
+
+type LayoutDrag = {
+  pointerId: number;
+  action: "MOVE" | "RESIZE";
+  selection: GeometrySelection;
+  start: { x: number; y: number };
+  draft: VisualLayout;
+};
 
 function fitCamera(bounds: WorldRect, aspect: number): Camera {
   const padding = Math.max(2, Math.max(bounds.width, bounds.height) * 0.06);
@@ -71,6 +80,11 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   const [rearrangementBusy, setRearrangementBusy] = useState(false);
   const [rearrangementError, setRearrangementError] = useState("");
   const [rearrangementPanelCollapsed, setRearrangementPanelCollapsed] = useState(false);
+  const [layoutEditing, setLayoutEditing] = useState(false);
+  const [layoutPanelCollapsed, setLayoutPanelCollapsed] = useState(false);
+  const [layoutSelection, setLayoutSelection] = useState<GeometrySelection | null>(null);
+  const [layoutDraft, setLayoutDraft] = useState<VisualLayout | null>(null);
+  const [layoutEditorEpoch, setLayoutEditorEpoch] = useState(0);
   const [camera, setCamera] = useState<Camera>({ x: 0, y: 0, width: 100, height: 100 });
   const [cameraReady, setCameraReady] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -83,11 +97,15 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
     anchor: { x: number; y: number };
   } | null>(null);
   const gestureMovedRef = useRef(false);
+  const layoutDragRef = useRef<LayoutDrag | null>(null);
 
   useEffect(() => {
     setData(null);
     setError(null);
     setSelection(null);
+    setLayoutEditing(false);
+    setLayoutSelection(null);
+    setLayoutDraft(null);
     cancelRearrangement();
     setCameraReady(false);
     void serverApi.physicalLibrary(libraryId)
@@ -118,7 +136,12 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
       layout: { ...data.layout, containers: data.layout.containers.map((item) => layouts.get(item.container_id) ?? item) },
     };
   }, [data, rearrangement]);
-  const geometry = useMemo(() => displayData ? physicalMapGeometry(displayData) : null, [displayData]);
+  const mapPresentationData = useMemo(() => (
+    displayData && layoutEditing && layoutDraft
+      ? { ...displayData, layout: layoutDraft }
+      : displayData
+  ), [displayData, layoutDraft, layoutEditing]);
+  const geometry = useMemo(() => mapPresentationData ? physicalMapGeometry(mapPresentationData) : null, [mapPresentationData]);
   const meanPages = useMemo(() => data ? cataloguePageMean(data.books) : 200, [data]);
   const visualDefaults = useMemo(() => data ? catalogueBookVisualDefaults(data.books) : { thicknessMm: 20, heightMm: 220, thicknessPerPage: null }, [data]);
   const geometryWarnings = useMemo(() => new Map(
@@ -158,6 +181,104 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
       x: value.x + (clientX - rect.left) / rect.width * value.width,
       y: value.y + (clientY - rect.top) / rect.height * value.height,
     };
+  }
+
+  function enterLayoutEditing() {
+    if (!data) return;
+    cancelRearrangement();
+    setSelection(null);
+    setLayoutDraft(structuredClone(data.layout));
+    setLayoutSelection(null);
+    setLayoutPanelCollapsed(false);
+    setLayoutEditorEpoch((value) => value + 1);
+    setLayoutEditing(true);
+  }
+
+  function cancelLayoutEditing() {
+    setLayoutEditing(false);
+    setLayoutSelection(null);
+    setLayoutDraft(null);
+    setLayoutPanelCollapsed(false);
+    layoutDragRef.current = null;
+  }
+
+  const acceptEditorDraft = useCallback((value: VisualLayout) => {
+    setLayoutDraft(structuredClone(value));
+  }, []);
+
+  function beginLayoutDrag(event: ReactPointerEvent<SVGElement>, action: "MOVE" | "RESIZE") {
+    if (!layoutDraft || !layoutSelection || event.button !== 0) return;
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    layoutDragRef.current = {
+      pointerId: event.pointerId,
+      action,
+      selection: layoutSelection,
+      start: pointInWorld(event.clientX, event.clientY),
+      draft: structuredClone(layoutDraft),
+    };
+    gestureMovedRef.current = true;
+  }
+
+  function updateLayoutDrag(event: ReactPointerEvent<SVGSVGElement>) {
+    const drag = layoutDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return false;
+    const point = pointInWorld(event.clientX, event.clientY);
+    const dx = point.x - drag.start.x;
+    const dy = point.y - drag.start.y;
+    const base = drag.draft;
+    const minimum = Math.max(1, camera.width / Math.max(1, svgRef.current?.clientWidth ?? 1) * 12);
+    if (drag.selection.kind === "BOOKCASE") {
+      const record = data?.bookcases.find((item) => item.id === drag.selection.id);
+      setLayoutDraft({
+        ...base,
+        bookcases: base.bookcases.map((item) => {
+          if (item.bookcase_id !== drag.selection.id) return item;
+          if (drag.action === "MOVE") return { ...item, x_mm: item.x_mm + dx, floor_y_mm: item.floor_y_mm - dy };
+          return {
+            ...item,
+            width_mm: base.geometry_mode === "PHYSICAL" && record?.width_mm ? item.width_mm : Math.max(minimum, item.width_mm + dx),
+            height_mm: base.geometry_mode === "PHYSICAL" && record?.height_mm ? item.height_mm : Math.max(minimum, item.height_mm - dy),
+          };
+        }),
+      });
+    } else if (drag.selection.kind === "SHELF") {
+      if (base.geometry_mode === "PHYSICAL") return true;
+      setLayoutDraft({
+        ...base,
+        shelves: base.shelves.map((item) => {
+          if (item.shelf_id !== drag.selection.id) return item;
+          if (drag.action === "MOVE") return { ...item, x_mm: item.x_mm + dx, floor_y_mm: item.floor_y_mm - dy };
+          return { ...item, width_mm: Math.max(minimum, item.width_mm + dx), height_mm: Math.max(minimum, item.height_mm - dy), width_source: "ENTERED", height_source: "ENTERED" };
+        }),
+      });
+    } else {
+      const context = geometry?.containers.find((item) => item.containerId === drag.selection.id);
+      if (!context) return true;
+      const physicalRecord = data?.bookcases.flatMap((item) => item.shelves).flatMap((item) => item.containers).find((item) => item.id === drag.selection.id);
+      const lockSize = base.geometry_mode === "PHYSICAL" && Boolean(physicalRecord?.book_count);
+      const dxPercent = dx / context.shelfWorldWidth * 100;
+      const dyPercent = dy / context.shelfWorldHeight * 100;
+      setLayoutDraft({
+        ...base,
+        containers: base.containers.map((item) => {
+          if (item.container_id !== drag.selection.id) return item;
+          if (drag.action === "MOVE") return { ...item, x: item.x + dxPercent, y: item.y + dyPercent };
+          if (lockSize) return item;
+          const nextHeight = Math.max(.1, item.height - dyPercent);
+          return { ...item, width: Math.max(.1, item.width + dxPercent), y: item.y + item.height - nextHeight, height: nextHeight };
+        }),
+      });
+    }
+    return true;
+  }
+
+  function finishLayoutDrag(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!layoutDragRef.current || layoutDragRef.current.pointerId !== event.pointerId) return false;
+    layoutDragRef.current = null;
+    setLayoutEditorEpoch((value) => value + 1);
+    window.setTimeout(() => { gestureMovedRef.current = false; }, 0);
+    return true;
   }
 
   function beginPinch() {
@@ -274,7 +395,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   }
 
   if (!data || !geometry) return <section className="server-map-loading"><p>{error ?? "Loading Library Map…"}</p></section>;
-  const mapData = displayData ?? data;
+  const mapData = mapPresentationData ?? data;
 
   const booksByContainer = new Map<string, PhysicalBook[]>();
   mapData.books.forEach((book) => {
@@ -285,9 +406,29 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
     ? geometry.containers.find((item) => item.containerId === selection.containerId)
     : null;
   const selectedBooks = selectedContainer ? booksByContainer.get(selectedContainer.containerId) ?? [] : [];
+  const layoutSelectionRect = layoutSelection?.kind === "BOOKCASE"
+    ? geometry.bookcases.find((item) => item.bookcaseId === layoutSelection.id)
+    : layoutSelection?.kind === "SHELF"
+      ? geometry.shelves.find((item) => item.shelfId === layoutSelection.id)
+      : layoutSelection?.kind === "CONTAINER"
+        ? geometry.containers.find((item) => item.containerId === layoutSelection.id)
+        : null;
+  const coarsePointer = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const handleSize = camera.width / Math.max(1, svgRef.current?.clientWidth ?? 1) * (coarsePointer ? 18 : 13);
+  const selectedLayoutContainer = layoutSelection?.kind === "CONTAINER"
+    ? data.bookcases.flatMap((item) => item.shelves).flatMap((item) => item.containers).find((item) => item.id === layoutSelection.id)
+    : null;
+  const layoutMoveAllowed = layoutSelection?.kind !== "SHELF" || layoutDraft?.geometry_mode === "MANUAL";
+  const layoutResizeAllowed = layoutSelection?.kind === "BOOKCASE"
+    ? true
+    : layoutSelection?.kind === "SHELF"
+      ? layoutDraft?.geometry_mode === "MANUAL"
+      : layoutSelection?.kind === "CONTAINER"
+        ? layoutDraft?.geometry_mode === "MANUAL" || !selectedLayoutContainer?.book_count
+        : false;
 
   return <section className="server-library-map">
-    <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title="Back to catalogue" aria-label="Back to catalogue"><ArrowLeft size={16} /> <span>Catalogue</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}<span>Choose inspection mode</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={`Inspection mode: ${inspectionMode === "BOOK" ? "books" : "containers"}. Tap to switch.`}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {inspectionMode === "BOOK" ? "Books" : "Containers"}</button></div></header>
+    <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title="Back to catalogue" aria-label="Back to catalogue"><ArrowLeft size={16} /> <span>Catalogue</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} disabled={layoutEditing} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}{data.can_edit && <button type="button" className={layoutEditing ? "active" : ""} disabled={rearranging} onClick={() => layoutEditing ? cancelLayoutEditing() : enterLayoutEditing()}><Settings2 size={16} /> Edit layout</button>}<span>Choose inspection mode</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={`Inspection mode: ${inspectionMode === "BOOK" ? "books" : "containers"}. Tap to switch.`}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {inspectionMode === "BOOK" ? "Books" : "Containers"}</button></div></header>
     {error && <div className="server-map-error">{error}</div>}
     <div className="server-map-stage">
       <svg
@@ -296,7 +437,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         preserveAspectRatio="xMidYMid meet"
         onPointerDown={(event) => {
           const target = event.target as SVGElement;
-          if (event.button !== 0 || (event.pointerType === "mouse" && target.closest(".server-map-container, .server-map-book"))) return;
+          if (event.button !== 0 || target.closest(".server-layout-handle") || (event.pointerType === "mouse" && target.closest(layoutEditing ? ".server-map-container, .server-map-book, .server-map-shelf, .server-map-bookcase" : ".server-map-container, .server-map-book"))) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
           gestureMovedRef.current = false;
@@ -304,6 +445,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
           else dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, camera };
         }}
         onPointerMove={(event) => {
+          if (updateLayoutDrag(event)) return;
           if (pointersRef.current.has(event.pointerId)) pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
           const pinch = pinchRef.current;
           const points = [...pointersRef.current.values()];
@@ -327,12 +469,14 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
           });
         }}
         onPointerUp={(event) => {
+          if (finishLayoutDrag(event)) return;
           pointersRef.current.delete(event.pointerId);
           pinchRef.current = null;
           dragRef.current = null;
           window.setTimeout(() => { gestureMovedRef.current = false; }, 0);
         }}
         onPointerCancel={(event) => {
+          if (finishLayoutDrag(event)) return;
           pointersRef.current.delete(event.pointerId);
           pinchRef.current = null;
           dragRef.current = null;
@@ -341,14 +485,17 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         onClick={(event) => {
           if (gestureMovedRef.current) return;
           const target = event.target as SVGElement;
-          if (!target.closest(".server-map-container, .server-map-book")) setSelection(null);
+          if (!target.closest(".server-map-container, .server-map-book, .server-map-shelf, .server-map-bookcase, .server-layout-handle")) {
+            if (layoutEditing) setLayoutSelection(null);
+            else setSelection(null);
+          }
         }}
       >
         <rect className="server-map-world" x={camera.x} y={camera.y} width={camera.width} height={camera.height} />
         {geometry.bookcases.map((bookcase) => <g key={bookcase.bookcaseId}>
-          <rect className="server-map-bookcase" x={bookcase.x} y={bookcase.y} width={bookcase.width} height={bookcase.height} rx=".5" />
+          <rect className={`server-map-bookcase ${layoutSelection?.kind === "BOOKCASE" && layoutSelection.id === bookcase.bookcaseId ? "layout-selected" : ""}`} x={bookcase.x} y={bookcase.y} width={bookcase.width} height={bookcase.height} rx=".5" onClick={(event) => { if (!layoutEditing) return; event.stopPropagation(); setLayoutSelection({ kind: "BOOKCASE", id: bookcase.bookcaseId }); }} />
           {geometry.shelves.filter((shelf) => shelf.bookcaseId === bookcase.bookcaseId).map((shelf) =>
-            <rect key={shelf.shelfId} className="server-map-shelf" x={shelf.x} y={shelf.y} width={shelf.width} height={shelf.height} />)}
+            <rect key={shelf.shelfId} className={`server-map-shelf ${layoutSelection?.kind === "SHELF" && layoutSelection.id === shelf.shelfId ? "layout-selected" : ""}`} x={shelf.x} y={shelf.y} width={shelf.width} height={shelf.height} onClick={(event) => { if (!layoutEditing) return; event.stopPropagation(); setLayoutSelection({ kind: "SHELF", id: shelf.shelfId }); }} />)}
         </g>)}
         {[...geometry.containers].sort((a, b) => a.layer.localeCompare(b.layer)).map((container) => {
           const selected = selection?.kind === "CONTAINER" && selection.containerId === container.containerId;
@@ -365,14 +512,14 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
             ? proportionalRearrangementSlots(container, containerBooks, gapPositions, activeBook, visualDefaults)
             : [];
           const warning = geometryWarnings.get(container.containerId);
-          return <g key={container.containerId} className={`server-map-container ${selected ? "selected" : ""} ${rearranging ? "rearranging" : ""} ${warning ? "geometry-warning" : ""}`} onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (rearranging && moveBookId && (!rearrangement || !rearrangement.complete)) { const count = (booksByContainer.get(container.containerId) ?? []).length; void previewDestination(container.containerId, String(count + 1)); } else if (!rearranging && inspectionMode === "CONTAINER") setSelection({ kind: "CONTAINER", containerId: container.containerId }); }}>
+          return <g key={container.containerId} className={`server-map-container ${selected ? "selected" : ""} ${layoutSelection?.kind === "CONTAINER" && layoutSelection.id === container.containerId ? "layout-selected" : ""} ${rearranging ? "rearranging" : ""} ${warning ? "geometry-warning" : ""}`} onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (layoutEditing) setLayoutSelection({ kind: "CONTAINER", id: container.containerId }); else if (rearranging && moveBookId && (!rearrangement || !rearrangement.complete)) { const count = (booksByContainer.get(container.containerId) ?? []).length; void previewDestination(container.containerId, String(count + 1)); } else if (!rearranging && inspectionMode === "CONTAINER") setSelection({ kind: "CONTAINER", containerId: container.containerId }); }}>
             {warning && <title>{warning}</title>}
             <rect x={container.x} y={container.y} width={container.width} height={container.height} rx=".2" />
             {(rearranging && moveBookId ? rearrangementSlots.filter((slot) => slot.book).map((slot) => ({ ...slot, book: slot.book! })) : segments).map((segment) => <rect
               key={segment.book.id}
               className={`server-map-book ${selection?.kind === "BOOK" && selection.book.id === segment.book.id ? "selected" : ""}`}
               x={segment.x} y={segment.y} width={segment.width} height={segment.height}
-              onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (rearranging) { if (!moveBookId) selectMoveBook(segment.book.id); else if (!rearrangement?.complete) void previewDestination(container.containerId, String(segment.book.position)); } else setSelection(inspectionMode === "BOOK" ? { kind: "BOOK", book: segment.book } : { kind: "CONTAINER", containerId: container.containerId }); }}
+              onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (layoutEditing) setLayoutSelection({ kind: "CONTAINER", id: container.containerId }); else if (rearranging) { if (!moveBookId) selectMoveBook(segment.book.id); else if (!rearrangement?.complete) void previewDestination(container.containerId, String(segment.book.position)); } else setSelection(inspectionMode === "BOOK" ? { kind: "BOOK", book: segment.book } : { kind: "CONTAINER", containerId: container.containerId }); }}
             ><title>{segment.book.title} — {segment.book.author}</title></rect>)}
             {rearrangementSlots.filter((slot) => !slot.book).map((slot) => <rect
               key={`${container.containerId}-target-${slot.position}`}
@@ -387,6 +534,11 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
           <rect x={area.x_mm} y={-area.y_mm - area.height_mm} width={area.width_mm} height={area.height_mm} rx="2" />
           <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
         </g>)}
+        {layoutEditing && layoutSelectionRect && <g className="server-layout-selection">
+          <rect className="server-layout-selection-outline" x={layoutSelectionRect.x} y={layoutSelectionRect.y} width={layoutSelectionRect.width} height={layoutSelectionRect.height} />
+          {layoutMoveAllowed && <circle className="server-layout-handle move" cx={layoutSelectionRect.x + layoutSelectionRect.width / 2} cy={layoutSelectionRect.y + layoutSelectionRect.height / 2} r={handleSize * .55} onPointerDown={(event) => beginLayoutDrag(event, "MOVE")}><title>Drag selected object</title></circle>}
+          {layoutResizeAllowed && <rect className="server-layout-handle resize" x={layoutSelectionRect.x + layoutSelectionRect.width - handleSize / 2} y={layoutSelectionRect.y - handleSize / 2} width={handleSize} height={handleSize} rx={handleSize * .18} onPointerDown={(event) => beginLayoutDrag(event, "RESIZE")}><title>Resize selected object</title></rect>}
+        </g>}
       </svg>
       <div className="server-map-controls" aria-label="Map camera controls">
         <button type="button" title="Reset view" onClick={reset}><RotateCcw size={17} /></button>
@@ -394,6 +546,26 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         <button type="button" title="Zoom out" onClick={() => setCamera((value) => zoomCamera(value, 1.25))}><Minus size={17} /></button>
       </div>
     </div>
+    {layoutEditing && layoutDraft && <GeometryDialog
+      key={layoutEditorEpoch}
+      libraryId={libraryId}
+      data={{ ...data, layout: layoutDraft }}
+      baselineLayout={data.layout}
+      presentation="PANEL"
+      collapsed={layoutPanelCollapsed}
+      onToggleCollapsed={() => setLayoutPanelCollapsed((value) => !value)}
+      initialSelection={layoutSelection}
+      onSelectionChange={setLayoutSelection}
+      onDraftChange={acceptEditorDraft}
+      onClose={cancelLayoutEditing}
+      onSaved={(value) => {
+        setData(value);
+        setError(null);
+        cancelLayoutEditing();
+        setCameraReady(false);
+      }}
+      onError={(value) => setError(value)}
+    />}
     {rearranging && <aside className={`server-rearrangement-panel ${rearrangementPanelCollapsed ? "collapsed" : ""}`}>
       <header><div><p className="server-card-eyebrow">Draft movement</p><h4>{moveBookId ? (mapData.books.find((book) => book.id === (rearrangement?.next_active_book_id ?? moveBookId))?.title ?? "Choose a book") : "Choose a book on the map"}</h4></div><span><button type="button" onClick={() => setRearrangementPanelCollapsed((value) => !value)} title={rearrangementPanelCollapsed ? "Expand draft" : "Collapse draft"}>{rearrangementPanelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />} {rearrangementPanelCollapsed ? "Expand" : "Collapse"}</button><button type="button" onClick={cancelRearrangement}><X size={17} /> Cancel draft</button></span></header>
       {!rearrangementPanelCollapsed && <>

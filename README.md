@@ -448,8 +448,8 @@ edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
 [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
 
-The isolated Server edition has completed its Phase 3 membership foundation,
-Phase 4A–4C shared catalogue foundation, and most of Phase 4D. Secure accounts can create and
+The isolated Server edition has completed its Phase 3 membership foundation
+and Phase 4A–4D shared catalogue and physical-library foundation. Secure accounts can create and
 join libraries as equal co-Owners or scoped read-only Viewers. PostgreSQL has
 library-safe metadata, contributor, hierarchy, dimension, and layout
 structures; the responsive Server catalogue now supports scoped reads,
@@ -465,13 +465,20 @@ page-proportional rendering, book/container inspection, catalogue-row physical
 locations, per-book placement, and transactional visual rearrangement. The
 rearrangement draft supports Collapse/Leave gap and Squeeze/Swap/Continue,
 multiple completed movement chains, proportional geometry previews, undo,
-explicit Apply, concurrency revision checks, and audit. Phase 4D remains open
-for direct map layout editing, accordion edge-case refinement, and
-floating/direct layout editing. Its schema-v9 foundation, per-axis dimension
-fallbacks, millimetre editor, generic support validation, and manual/physical
-rendering boundary are implemented and accepted. This does not
+explicit Apply, concurrency revision checks, and audit. Phase 4D is complete.
+Its
+schema-v9–v11 foundation, per-axis dimension fallbacks, physical projection,
+explicit shelf/frame/separator model, millimetre editor, generic support
+validation, and manual/physical rendering boundary are implemented and
+accepted. The precise layout editor is integrated as a floating, minimizable
+map panel. Direct editing is selection-first, exposing move/resize handles only
+for the active object and sharing one revisioned preview with the precise
+controls. Entered physical dimensions remain locked and clearly labelled;
+Apply is atomic and Cancel discards the draft. This does not
 alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
-import remain pending for later Server phases.
+import remain pending for later Server phases. Full Local ZIP import follows
+the Server reading and loan models so those histories are preserved rather
+than discarded or flattened.
 
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and

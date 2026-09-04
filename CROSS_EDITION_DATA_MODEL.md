@@ -526,14 +526,20 @@ Phase 4 should proceed in reviewable increments:
 2. **4B — catalogue services (completed):** port create/edit/search/filter
    behavior, complete replacement updates, ordered contributors, normalized
    shared metadata, and Owner-write versus Viewer-read authorization.
-3. **4C — private covers:** authenticated storage/delivery, strict image
+3. **4C — private covers (completed):** authenticated storage/delivery, strict image
    validation, non-public object identifiers, abuse limits, and isolation
    tests.
-4. **4D — physical hierarchy and map reads:** port layout data and provide
-   catalogue-only versus catalogue-and-map serialization tests.
-5. **4E — importer groundwork:** implement manifest validation, canonical
-   adapters, dry-run reports, and fixtures without importing the live personal
-   library yet.
+4. **4D — physical hierarchy and map (completed 2026-09-04):** ported scoped
+   layout data, catalogue-only versus catalogue-and-map projections, physical
+   geometry, rearrangement, and the floating selection-first direct layout
+   editor with atomic Apply.
+
+The ZIP contract, semantic mapping, and fixture strategy were completed as
+design groundwork in Phase 3.5. Executable Local ZIP adapters, dry-run reports,
+and atomic import now belong to Phase 8, after Phases 5 and 6 provide canonical
+Server destinations for reading/rereading and loan history. Building a full
+importer earlier would require discarding or temporarily misrepresenting data
+that already exists in Local archives.
 
 Personal readings, shared custody, loans, quotas, and production deployment
 continue in their already defined later phases.

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, Layers3, Pencil, Plus, Ruler, Settings2, Trash2 } from "lucide-react";
+import { Boxes, ChevronDown, ChevronUp, Layers3, Pencil, Plus, Ruler, Settings2, Trash2, X } from "lucide-react";
 
 import {
   PhysicalBookcase,
@@ -168,18 +168,37 @@ function EditDialog({
   </section></div>;
 }
 
-function GeometryDialog({
+export type GeometrySelection =
+  | { kind: "BOOKCASE"; id: string }
+  | { kind: "SHELF"; id: string }
+  | { kind: "CONTAINER"; id: string };
+
+export function GeometryDialog({
   libraryId,
   data,
   onClose,
   onSaved,
   onError,
+  presentation = "MODAL",
+  collapsed = false,
+  onToggleCollapsed,
+  initialSelection = null,
+  onDraftChange,
+  baselineLayout,
+  onSelectionChange,
 }: {
   libraryId: string;
   data: PhysicalLibrary;
   onClose: () => void;
   onSaved: (value: PhysicalLibrary) => void;
   onError: (value: string) => void;
+  presentation?: "MODAL" | "PANEL";
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  initialSelection?: GeometrySelection | null;
+  onDraftChange?: (value: VisualLayout) => void;
+  baselineLayout?: VisualLayout;
+  onSelectionChange?: (value: GeometrySelection) => void;
 }) {
   const [draft, setDraft] = useState<VisualLayout>(() => structuredClone(data.layout));
   const [bookcaseId, setBookcaseId] = useState(data.bookcases[0]?.id ?? "");
@@ -188,6 +207,36 @@ function GeometryDialog({
   const [containerId, setContainerId] = useState(allContainers[0]?.container.id ?? "");
   const [outsideKind, setOutsideKind] = useState<"READING" | "LOANED">("READING");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
+
+  useEffect(() => {
+    if (!initialSelection) return;
+    if (initialSelection.kind === "BOOKCASE") {
+      const bookcase = data.bookcases.find((item) => item.id === initialSelection.id);
+      const shelf = bookcase?.shelves[0];
+      setBookcaseId(initialSelection.id);
+      setShelfId(shelf?.id ?? "");
+      setContainerId(shelf?.containers[0]?.id ?? "");
+    }
+    else if (initialSelection.kind === "SHELF") {
+      const shelf = data.bookcases.flatMap((item) => item.shelves).find((item) => item.id === initialSelection.id);
+      if (shelf) {
+        setBookcaseId(shelf.bookcase_id);
+        setShelfId(shelf.id);
+        setContainerId(shelf.containers[0]?.id ?? "");
+      }
+    } else {
+      const context = data.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => ({ bookcase, shelf, container })))).find((item) => item.container.id === initialSelection.id);
+      if (context) {
+        setBookcaseId(context.bookcase.id);
+        setShelfId(context.shelf.id);
+        setContainerId(context.container.id);
+      }
+    }
+  }, [initialSelection, data]);
   const selectedBookcase = draft.bookcases.find((item) => item.bookcase_id === bookcaseId);
   const selectedBookcaseRecord = data.bookcases.find((item) => item.id === bookcaseId);
   const selectedShelf = draft.shelves.find((item) => item.shelf_id === shelfId);
@@ -232,12 +281,14 @@ function GeometryDialog({
     const nextShelf = nextBookcase?.shelves[0];
     setShelfId(nextShelf?.id ?? "");
     setContainerId(nextShelf?.containers[0]?.id ?? "");
+    onSelectionChange?.({ kind: "BOOKCASE", id: nextBookcaseId });
   }
 
   function selectShelf(nextShelfId: string) {
     setShelfId(nextShelfId);
     const nextShelf = data.bookcases.flatMap((item) => item.shelves).find((item) => item.id === nextShelfId);
     setContainerId(nextShelf?.containers[0]?.id ?? "");
+    onSelectionChange?.({ kind: "SHELF", id: nextShelfId });
   }
 
   function changeHomogeneity(checked: boolean) {
@@ -393,9 +444,10 @@ function GeometryDialog({
   }
 
   async function save() {
-    const modeChanged = draft.geometry_mode !== data.layout.geometry_mode;
+    const baseline = baselineLayout ?? data.layout;
+    const modeChanged = draft.geometry_mode !== baseline.geometry_mode;
     const homogeneityChanged = draft.bookcases.some((item) => {
-      const previous = data.layout.bookcases.find((entry) => entry.bookcase_id === item.bookcase_id);
+      const previous = baseline.bookcases.find((entry) => entry.bookcase_id === item.bookcase_id);
       return previous && previous.homogeneous_structure !== item.homogeneous_structure;
     });
     if (modeChanged && !window.confirm(
@@ -421,9 +473,10 @@ function GeometryDialog({
     options: { min?: number; max?: number; step?: number; disabled?: boolean } = {},
   ) => <NumericField label={label} value={value} onChange={onChange} {...options} />;
 
-  return <div className="server-modal-backdrop"><section className="server-physical-dialog server-geometry-dialog" role="dialog" aria-modal="true">
-    <p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2>
-    <p className="server-field-help">Precise controls are implemented first. Direct dragging and the visual map will reuse the proven Local camera and geometry in the next increment.</p>
+  const editor = <section className={`server-physical-dialog server-geometry-dialog ${presentation === "PANEL" ? "server-geometry-panel" : ""} ${collapsed ? "collapsed" : ""}`} role="dialog" aria-modal={presentation === "MODAL" ? "true" : undefined}>
+    <header className="server-geometry-panel-heading"><div><p className="server-card-eyebrow">Visual workspace</p><h2>Customize library map</h2></div>{presentation === "PANEL" && <span><button type="button" onClick={onToggleCollapsed} title={collapsed ? "Expand layout editor" : "Minimize layout editor"}>{collapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}<span>{collapsed ? "Expand" : "Minimize"}</span></button><button type="button" onClick={onClose} title="Cancel layout editing"><X size={17} /><span>Cancel</span></button></span>}</header>
+    {!collapsed && <>
+    <p className="server-field-help">Select one object on the map to reveal its move and resize handles, or use these precise controls. Changes remain a local preview until Apply.</p>
     <div className="server-geometry-sections">
       <fieldset><legend>Geometry mode</legend>
         <label>Projection<select value={draft.geometry_mode} onChange={(event) => setDraft((current) => ({ ...current, geometry_mode: event.target.value as "MANUAL" | "PHYSICAL" }))}><option value="MANUAL">Manual proportions</option><option value="PHYSICAL">Physical dimensions</option></select></label>
@@ -447,7 +500,7 @@ function GeometryDialog({
             {numberField("Lower closure / board", selectedBookcase.bottom_closure_mm, (value) => updateBookcase("bottom_closure_mm", value), { min: 5, step: 1 })}
             {numberField("Separator thickness", selectedBookcase.separator_thickness_mm, (value) => updateBookcase("separator_thickness_mm", value), { min: 5, step: 1 })}
           </div>
-          <small>{selectedBookcaseRecord && selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "Exterior dimensions are entered physical metadata." : "Missing exterior measurements use editable fallback map millimetres (2200 × 800 × 280 defaults)."}</small>
+          <small>{selectedBookcaseRecord && (selectedBookcaseRecord.width_mm || selectedBookcaseRecord.height_mm) ? "Dimensions entered by the user in the catalogue record are fixed here: their corresponding map sizes are derived and cannot be edited in Physical dimensions mode." : "Missing exterior measurements use editable fallback map millimetres (2200 × 800 × 280 defaults)."}</small>
         </>}
       </fieldset>
       <fieldset><legend>Shelf compartment {draft.geometry_mode === "PHYSICAL" ? "(mm)" : "(% of furniture)"}</legend>
@@ -459,7 +512,7 @@ function GeometryDialog({
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior width (mm)" : "Width (%)", shelfDisplayValue("width_mm"), (value) => updateShelfGeometry("width_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior height (mm)" : "Height (%)", shelfDisplayValue("height_mm"), (value) => updateShelfGeometry("height_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
           </div>
-          <small>Width: {(selectedShelf.width_source ?? "derived").toLowerCase()} · Height: {(selectedShelf.height_source ?? "derived").toLowerCase()}. Entered physical dimensions are edited in Library layout, not overwritten here.</small>
+          <small>Width: {(selectedShelf.width_source ?? "derived").toLowerCase()} · Height: {(selectedShelf.height_source ?? "derived").toLowerCase()}. Dimensions entered by the user in the shelf record fix the corresponding map size in Physical dimensions mode; edit those measurements in Library layout rather than overriding them here.</small>
           <label className="server-check server-compact-check"><input type="checkbox" checked={selectedShelf.open_top} onChange={(event) => updateShelf({ open_top: event.target.checked })} disabled={Boolean(selectedShelfRecord?.usable_width_mm && selectedShelfRecord.usable_width_mm !== selectedShelfFurniture.width_mm)} /> Open top shelf</label>
           {!selectedShelfFurniture.homogeneous_structure && <>
             <div className="server-geometry-subsection"><b>Independent shelf structure</b><small>Frames define this shelf's usable rectangle. Alignment adjustment is retained only for exceptional asymmetric measured shelves.</small></div>
@@ -490,8 +543,10 @@ function GeometryDialog({
         </div><small>Horizontal marks the left edge; Floor baseline marks the bottom edge. Width and Height extend right and upward from those coordinates.</small></>}
       </fieldset>
     </div>
-    <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="server-primary-action" type="button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save visual layout"}</button></div>
-  </section></div>;
+    <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="server-primary-action" type="button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Apply visual layout"}</button></div>
+    </>}
+  </section>;
+  return presentation === "MODAL" ? <div className="server-modal-backdrop">{editor}</div> : editor;
 }
 
 export default function PhysicalLibraryWorkspace({

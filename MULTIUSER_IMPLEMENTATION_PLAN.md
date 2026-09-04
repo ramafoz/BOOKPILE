@@ -882,7 +882,7 @@ compatible meanings and explicit import rules.
   search, filters, and Owner/Viewer projections.
 - [x] Phase 4C: implement the private image pipeline and authenticated cover
   delivery.
-- [ ] Phase 4D: port physical hierarchy and map services with scope-safe
+- [x] Phase 4D: port physical hierarchy and map services with scope-safe
   projections and layout validation.
   - [x] Implement Owner-only hierarchy maintenance, safe placement writes,
     precise revisioned visual geometry, explicit ROW anchors and PILE support,
@@ -897,7 +897,7 @@ compatible meanings and explicit import rules.
   - [x] Reuse Local's catalogue-row location presentation and safe per-book
     placement; remove the temporary global `Position books` form from
     Customize Layout.
-  - [ ] Integrate placement into Edit Book, allow position during single-book
+  - [x] Integrate placement into Edit Book, allow position during single-book
     creation, and port Batch Add with a retained destination.
   - [x] Port `Reorganize books` into Library Map, including atomic read-only
     preview, Collapse/Leave gap, Squeeze/Swap/Continue, multiple movement
@@ -905,14 +905,17 @@ compatible meanings and explicit import rules.
     stale-revision rejection, a collapsible responsive draft, audit, and
     scope-safe PostgreSQL transactions. Automated and manual acceptance passed
     on 2026-09-02.
-  - [ ] Implement the approved single-geometry physical-dimension model in
+  - [x] Complete the approved single-geometry physical-dimension model in
     `PHYSICAL_GEOMETRY_PLAN.md`: millimetre world coordinates, shared
     `MANUAL`/`PHYSICAL` modes, per-axis fallbacks, accordion movement, generic
     supports, PILE alignment, and derived physical warnings.
-  - [ ] Integrate the precise layout editor into Library Map as a floating,
-    minimizable panel and add direct manipulation over the same geometry
-    service.
-- [ ] Phase 4E: implement Local ZIP validation adapters and dry-run reports.
+    - [x] Apply and accept the reversible schema-v9 to schema-v11 foundation,
+      physical projection, explicit shelf/frame/separator model, structural
+      controls, fallbacks, support rules, and guarded diagnostics.
+    - [x] Finish direct-edit integration and accepted accordion behavior.
+  - [x] Integrate the precise layout editor into Library Map as a floating,
+    minimizable panel and add selection-first direct manipulation over the same
+    geometry service; handles appear only on the single selected object.
 
 Phase 4A passed its schema gate on 2026-08-31. Migration
 `0007_shared_catalogue_schema` preserves every pre-existing Server user,
@@ -947,12 +950,18 @@ The read/navigation increment of Phase 4D passed automated and manual desktop
 and mobile acceptance on 2026-09-01. Hierarchy maintenance, revisioned precise
 layout writes, ROW anchors, PILE supports, scoped map projections, responsive
 camera gestures, page-proportional rendering, inspection modes, and complete
-book information are operational. Catalogue-row locations and per-book
-placement are now available, and the visual rearrangement engine has passed
-desktop and responsive acceptance, including its compact panel and explicit
-retained/end targets. Phase 4D remains open for
-integrating placement into book creation/editing, Server Batch Add, the
-approved physical-geometry engine, and floating/direct layout editing.
+book information are operational. Catalogue-row locations, placement inside
+Add/Edit, retained-destination Batch Add, and the visual rearrangement engine
+have passed desktop and responsive acceptance, including the compact draft and
+explicit retained/end targets. Schema v9–v11, physical projection, explicit
+shelf geometry, fallbacks, support validation, and structural controls are
+also implemented and accepted. The final Phase 4D gate passed on 2026-09-04:
+the precise editor now lives in a floating/minimizable map panel, map and panel
+share one revisioned draft, and selection-first direct manipulation exposes
+move/resize handles only for the active furniture, shelf, or container. Entered
+physical dimensions stay locked and are identified as authoritative; touch
+handles are enlarged without changing world geometry. Apply remains atomic,
+Cancel restores the persisted layout, and Viewer access remains read-only.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
@@ -989,6 +998,10 @@ behavior reconcile charged bytes exactly once.
 
 ### Phase 8 — Local ZIP import and Server export/restore
 
+- Begin implementation only after Phases 5 and 6 provide canonical Server
+  destinations for personal reading/rereading sessions and loan history. The
+  Local ZIP contract and semantic mapping are already documented, but an
+  earlier full importer could only discard or misrepresent those domains.
 - Implement isolated conversion, validation reports, selected reading Owner,
 quota preflight, and atomic consolidation.
 - Define a Server-portable export that does not expose account credentials or
@@ -1025,22 +1038,24 @@ recovery, and cost checks.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
 
-### Progress snapshot — 2026-09-02
+### Progress snapshot — 2026-09-04
 
-Phases 0, 1, 2, 3, and 3.5 are complete. Phase 4A–4C are complete; Phase 4D
-has passed its hierarchy, precise-layout, responsive-map, gesture, inspection,
-Viewer-scope, catalogue-location, placement, and rearrangement gates. Its
-remaining work is integrated create/edit placement, Batch Add, physical
-geometry, and integrated layout editing. Phase 4E and Phases 5–10 remain
-pending.
+Phases 0, 1, 2, 3, 3.5, and 4A–4D are complete. Phase 4D passed its hierarchy,
+precise-layout, responsive-map, gesture, inspection, Viewer-scope,
+catalogue-location, placement, rearrangement, physical-projection, floating
+editor, selection-first manipulation, and cross-device acceptance gates.
+Schema v9–v11, explicit shelf geometry, fallbacks, support validation, and
+structural controls are implemented and accepted. Phases 5–10 remain pending;
+full Local ZIP import is intentionally gated on the reading and loan models in
+Phases 5 and 6.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:
 
-- current shared-catalogue/physical-map foundation (through Phase 4): about
-  **70% complete**;
+- current shared-catalogue/physical-map foundation (through Phase 4):
+  **complete**;
 - complete invitation-only hosted beta roadmap (Phases 0–10): about
-  **45–50% complete**.
+  **50–55% complete**.
 
 The second figure includes unfinished personal readings, loans, quota and
 deletion, ZIP import/export, production operations, privacy/help material, and
