@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhysicalLibrary } from "./serverApi";
-import { cataloguePageMean, physicalMapGeometry, proportionalBookSegments, proportionalRearrangementSlots } from "./serverMapGeometry";
+import { cataloguePageMean, physicalMapGeometry, previewPhysicalShelfLayout, proportionalBookSegments, proportionalRearrangementSlots } from "./serverMapGeometry";
 
 const data = {
   library_id: "library",
@@ -53,6 +53,23 @@ describe("Server Library Map geometry", () => {
     const segments = proportionalBookSegments(geometry.containers[0], physical.books, undefined, true);
     expect(segments[0].width).toBeCloseTo(10);
     expect(segments[1].width).toBeCloseTo(30);
+  });
+
+  it("previews physical shelf placement when structural controls change", () => {
+    const physical = {
+      ...data,
+      bookcases: [{
+        ...data.bookcases[0],
+        shelves: [{ ...data.bookcases[0].shelves[0], usable_width_mm: 700, usable_height_mm: 200 }],
+      }],
+      layout: {
+        ...data.layout,
+        geometry_mode: "PHYSICAL" as const,
+        bookcases: [{ ...data.layout.bookcases[0], top_closure_mm: 80 }],
+      },
+    };
+    const preview = previewPhysicalShelfLayout(physical, physical.layout);
+    expect(preview.shelves[0]).toMatchObject({ x_mm: 50, floor_y_mm: 920, width_mm: 700, height_mm: 200 });
   });
 
   it("keeps internal gaps visible and adds a selectable end target", () => {

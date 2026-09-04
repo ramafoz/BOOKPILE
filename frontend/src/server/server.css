@@ -461,6 +461,8 @@ button { cursor: pointer; }
 .server-physical-dialog label.server-compact-check input { flex: 0 0 auto; width: 17px; min-height: 0; height: 17px; margin: 0; padding: 0; }
 .server-geometry-subsection { display: grid; gap: 3px; padding-top: 4px; border-top: 1px solid #e4d9ca; }
 .server-geometry-subsection small { color: #6a7b76; font-weight: 500; }
+.server-geometry-locked-notice { display: flex; align-items: flex-start; gap: 9px; padding: 10px 11px; border: 1px solid #d5b56d; border-radius: 7px; color: #624b19; background: #fff3d5; font-size: 12px; line-height: 1.45; }
+.server-geometry-locked-notice svg { flex: 0 0 auto; margin-top: 1px; }
 .server-geometry-advanced { padding: 9px 11px; border: 1px solid #e1d6c7; border-radius: 7px; background: #faf6ef; }
 .server-geometry-advanced summary { cursor: pointer; color: #315b51; font-size: 12px; font-weight: 800; }
 .server-geometry-advanced[open] { display: grid; gap: 10px; }

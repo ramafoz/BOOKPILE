@@ -473,7 +473,9 @@ validation, and manual/physical rendering boundary are implemented and
 accepted. The precise layout editor is integrated as a floating, minimizable
 map panel. Direct editing is selection-first, exposing move/resize handles only
 for the active object and sharing one revisioned preview with the precise
-controls. Entered physical dimensions remain locked and clearly labelled;
+controls. Entered physical sizes remain locked and clearly labelled, while
+shelf placement remains editable through frames, closures, separators,
+alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
 alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
 import remain pending for later Server phases. Full Local ZIP import follows
@@ -487,6 +489,13 @@ Edit, iterative Batch Add with retained destination, compact mobile map
 controls, and queued self-expiring success notifications. Its design and
 acceptance record are in
 [SERVER_FRONTEND_UX_PLAN.md](SERVER_FRONTEND_UX_PLAN.md).
+
+The next development checkpoint is build architecture rather than a data-model
+change: explicit Local and Server frontend entrypoints and commands must make
+both editions reproducibly buildable and testable from the same `main` commit.
+The Local SQLite and Server PostgreSQL backends remain separate, the populated
+Local database is not used as a test target, and full ZIP import remains gated
+on Server reading and loan models.
 
 ## Licence
 

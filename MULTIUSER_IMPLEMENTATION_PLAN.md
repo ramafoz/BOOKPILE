@@ -962,6 +962,31 @@ move/resize handles only for the active furniture, shelf, or container. Entered
 physical dimensions stay locked and are identified as authoritative; touch
 handles are enlarged without changing world geometry. Apply remains atomic,
 Cancel restores the persisted layout, and Viewer access remains read-only.
+The final shelf-placement correction keeps only recorded size axes locked:
+frames, closures, separators, alignment, and offset continue to position a
+measured shelf. Their effects are projected live in the shared draft, including
+movement by the selected shelf handle, before canonical backend validation.
+
+### Immediate post-4D architecture checkpoint
+
+Before Phase 5, make `main` a reproducible monorepo commit for both editions:
+
+1. Add explicit Local and Server frontend entrypoints and development/build
+   commands; edition choice must no longer depend on the checked-out branch.
+2. Preserve `backend/` as the Local SQLite backend and `server/` as the Server
+   PostgreSQL backend. Do not perform a high-risk directory migration.
+3. Keep `release/local-v1` as the maintenance line for immutable Local 1.0.x,
+   while future Local and Server features return to `main` through short-lived
+   branches.
+4. Make Local and Server builds/tests independently runnable from the same
+   commit, retaining compatible command aliases during transition.
+5. Audit release tooling and adopt explicit future tags (`local-vX.Y.Z` and
+   `server-vX.Y.Z`) without changing the historical `v1.0.0` release.
+
+This checkpoint changes build/entrypoint architecture only. It must not migrate
+or open the populated Local database, alter either data model, or begin the
+Phase 8 ZIP importer. A clean build/test gate for both editions is required
+before Phase 5 begins.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
@@ -1048,6 +1073,8 @@ Schema v9–v11, explicit shelf geometry, fallbacks, support validation, and
 structural controls are implemented and accepted. Phases 5–10 remain pending;
 full Local ZIP import is intentionally gated on the reading and loan models in
 Phases 5 and 6.
+The immediate next milestone is the post-4D dual-edition entrypoint and build
+hardening described above; Phase 5 follows only after that checkpoint passes.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

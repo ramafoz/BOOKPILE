@@ -8,6 +8,7 @@ import {
   cataloguePageMean,
   catalogueBookVisualDefaults,
   physicalMapGeometry,
+  previewPhysicalShelfLayout,
   proportionalBookSegments,
   proportionalRearrangementSlots,
   type WorldRect,
@@ -138,7 +139,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   }, [data, rearrangement]);
   const mapPresentationData = useMemo(() => (
     displayData && layoutEditing && layoutDraft
-      ? { ...displayData, layout: layoutDraft }
+      ? { ...displayData, layout: previewPhysicalShelfLayout(displayData, layoutDraft) }
       : displayData
   ), [displayData, layoutDraft, layoutEditing]);
   const geometry = useMemo(() => mapPresentationData ? physicalMapGeometry(mapPresentationData) : null, [mapPresentationData]);
@@ -243,7 +244,55 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         }),
       });
     } else if (drag.selection.kind === "SHELF") {
-      if (base.geometry_mode === "PHYSICAL") return true;
+      if (base.geometry_mode === "PHYSICAL") {
+        if (!data) return true;
+        const shelfRecord = data.bookcases.flatMap((item) => item.shelves).find((item) => item.id === drag.selection.id);
+        const bookcaseRecord = data.bookcases.find((item) => item.id === shelfRecord?.bookcase_id);
+        const furniture = base.bookcases.find((item) => item.bookcase_id === shelfRecord?.bookcase_id);
+        const projectedShelf = previewPhysicalShelfLayout(data, base).shelves.find((item) => item.shelf_id === drag.selection.id);
+        if (!shelfRecord || !bookcaseRecord || !furniture || !projectedShelf) return true;
+        const ordered = [...bookcaseRecord.shelves].sort((a, b) => a.shelf_number - b.shelf_number);
+        const index = ordered.findIndex((item) => item.id === shelfRecord.id);
+        const previousShelfId = index > 0 ? ordered[index - 1].id : null;
+        const vertical = furniture.shelf_direction === "TOP_TO_BOTTOM" || furniture.shelf_direction === "BOTTOM_TO_TOP";
+        const nextFurniture = { ...furniture };
+        const nextShelves = base.shelves.map((item) => ({ ...item }));
+        const selected = nextShelves.find((item) => item.shelf_id === shelfRecord.id)!;
+        if (vertical) {
+          selected.alignment = "LEFT";
+          selected.offset_mm = Math.max(0, Math.min(furniture.width_mm - projectedShelf.width_mm, projectedShelf.x_mm + dx));
+          const structuralDelta = furniture.shelf_direction === "TOP_TO_BOTTOM" ? dy : -dy;
+          if (index === 0) {
+            if (furniture.shelf_direction === "TOP_TO_BOTTOM") nextFurniture.top_closure_mm = Math.max(0, furniture.top_closure_mm + structuralDelta);
+            else nextFurniture.bottom_closure_mm = Math.max(5, furniture.bottom_closure_mm + structuralDelta);
+          } else if (furniture.homogeneous_structure) {
+            nextFurniture.separator_thickness_mm = Math.max(5, furniture.separator_thickness_mm + structuralDelta / index);
+          } else if (previousShelfId) {
+            const previous = nextShelves.find((item) => item.shelf_id === previousShelfId);
+            if (previous) previous.separator_after_mm = Math.max(5, (previous.separator_after_mm ?? furniture.separator_thickness_mm) + structuralDelta);
+          }
+        } else {
+          const nextFloor = Math.max(0, projectedShelf.floor_y_mm - dy);
+          if (furniture.homogeneous_structure) nextFurniture.bottom_closure_mm = nextFloor;
+          else selected.bottom_board_mm = nextFloor;
+          const structuralDelta = furniture.shelf_direction === "LEFT_TO_RIGHT" ? dx : -dx;
+          if (index === 0) {
+            if (furniture.shelf_direction === "LEFT_TO_RIGHT") nextFurniture.frame_left_mm = Math.max(0, furniture.frame_left_mm + structuralDelta);
+            else nextFurniture.frame_right_mm = Math.max(0, furniture.frame_right_mm + structuralDelta);
+          } else if (furniture.homogeneous_structure) {
+            nextFurniture.separator_thickness_mm = Math.max(5, furniture.separator_thickness_mm + structuralDelta / index);
+          } else if (previousShelfId) {
+            const previous = nextShelves.find((item) => item.shelf_id === previousShelfId);
+            if (previous) previous.separator_after_mm = Math.max(5, (previous.separator_after_mm ?? furniture.separator_thickness_mm) + structuralDelta);
+          }
+        }
+        setLayoutDraft({
+          ...base,
+          bookcases: base.bookcases.map((item) => item.bookcase_id === nextFurniture.bookcase_id ? nextFurniture : item),
+          shelves: nextShelves,
+        });
+        return true;
+      }
       setLayoutDraft({
         ...base,
         shelves: base.shelves.map((item) => {
@@ -418,7 +467,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   const selectedLayoutContainer = layoutSelection?.kind === "CONTAINER"
     ? data.bookcases.flatMap((item) => item.shelves).flatMap((item) => item.containers).find((item) => item.id === layoutSelection.id)
     : null;
-  const layoutMoveAllowed = layoutSelection?.kind !== "SHELF" || layoutDraft?.geometry_mode === "MANUAL";
+  const layoutMoveAllowed = true;
   const layoutResizeAllowed = layoutSelection?.kind === "BOOKCASE"
     ? true
     : layoutSelection?.kind === "SHELF"

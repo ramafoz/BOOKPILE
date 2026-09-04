@@ -383,9 +383,18 @@ accepted precise editor and canonical backend validator:
    library-scoped authorization, and Viewer read-only behavior.
 8. [x] Run backend and frontend regression coverage and complete desktop,
    phone, and tablet acceptance. Final verification: 80 backend tests passed
-   with 1 skipped; 27 frontend tests passed; TypeScript/Vite build and ESLint
+   with 1 skipped; 28 frontend tests passed; TypeScript/Vite build and ESLint
    passed. Browser acceptance confirmed precise edits, selection-first direct
    manipulation, minimization, Apply, Cancel, and responsive touch behavior.
+
+The closing correction distinguishes measured size from structural placement.
+An entered furniture or shelf dimension produces a prominent locked-source
+notice and cannot be resized in the map. A measured shelf can still be moved
+through its frames, closures, separators, alignment, and offset. The frontend
+now mirrors the canonical shelf projection while a draft is open, so precise
+structural changes and the selected shelf's move handle preview immediately;
+the backend remains authoritative and reprojects and validates the complete
+structure on atomic Apply.
 
 Phase 4D is closed. More elaborate support visualization, tilted PILE rendering,
 and any additional accordion refinements remain optional future map work rather

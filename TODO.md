@@ -461,6 +461,21 @@ protects the completed catalogue.
   - [x] Complete desktop, phone, and tablet acceptance and close Phase 4D on
     2026-09-04. Touch devices use slightly larger manipulation handles, and
     entered physical dimensions are explicitly identified as locked sources.
+  - [x] Keep measured shelf size locked without freezing placement: frames,
+    closures, separators, alignment and offset remain editable, and both
+    precise changes and the selected shelf move handle now receive an immediate
+    structural preview before canonical backend validation on Apply.
+- [ ] Complete the post-4D dual-edition architecture checkpoint before Phase 5:
+  - [ ] Add explicit Local and Server frontend entrypoints and dev/build
+    commands so edition selection no longer depends on the current branch.
+  - [ ] Keep the existing Local SQLite and Server PostgreSQL backends separate;
+    do not reorganize directories or schemas during this checkpoint.
+  - [ ] Make Local and Server tests/builds runnable from the same `main` commit,
+    with temporary compatible aliases for existing scripts where needed.
+  - [ ] Harden edition-specific release tooling and document future
+    `local-vX.Y.Z` / `server-vX.Y.Z` tags while preserving historical `v1.0.0`.
+  - [ ] Prove the checkpoint without opening, migrating, or writing the
+    populated Local database and without starting the deferred ZIP importer.
 - [ ] **Future Local:** backport validated physical-geometry behaviour only in
   an isolated branch/worktree with a verified ZIP and rehearsed additive SQLite
   migration; never use the populated live Local database as a test target.

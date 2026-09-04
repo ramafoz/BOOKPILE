@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, ChevronDown, ChevronUp, Layers3, Pencil, Plus, Ruler, Settings2, Trash2, X } from "lucide-react";
+import { Boxes, ChevronDown, ChevronUp, Layers3, LockKeyhole, Pencil, Plus, Ruler, Settings2, Trash2, X } from "lucide-react";
 
 import {
   PhysicalBookcase,
@@ -12,7 +12,7 @@ import {
 } from "./serverApi";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
-import { physicalMapGeometry } from "./serverMapGeometry";
+import { physicalMapGeometry, previewPhysicalShelfLayout } from "./serverMapGeometry";
 
 
 type EditTarget =
@@ -250,7 +250,9 @@ export function GeometryDialog({
   const selectedContainer = draft.containers.find((item) => item.container_id === containerId);
   const selectedContainerContext = allContainers.find((item) => item.container.id === containerId);
   const selectedOutside = draft.outside_areas.find((item) => item.area_kind === outsideKind);
-  const draftGeometry = physicalMapGeometry({ ...data, layout: draft });
+  const projectedDraft = useMemo(() => previewPhysicalShelfLayout(data, draft), [data, draft]);
+  const projectedSelectedShelf = projectedDraft.shelves.find((item) => item.shelf_id === shelfId);
+  const draftGeometry = physicalMapGeometry({ ...data, layout: projectedDraft });
   const selectedContainerShelfRect = draftGeometry.shelves.find((item) => item.shelfId === selectedContainerContext?.shelf.id);
   const containerShelfWidthMm = selectedContainerContext?.shelf.usable_width_mm ?? selectedContainerShelfRect?.width ?? 1;
   const containerShelfHeightMm = selectedContainerContext?.shelf.usable_height_mm ?? selectedContainerShelfRect?.height ?? 1;
@@ -331,12 +333,13 @@ export function GeometryDialog({
 
   function shelfDisplayValue(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm"): number {
     if (!selectedShelf || !selectedShelfFurniture) return 0;
+    const displayedShelf = draft.geometry_mode === "PHYSICAL" ? (projectedSelectedShelf ?? selectedShelf) : selectedShelf;
     const denominator = field === "x_mm" || field === "width_mm"
       ? selectedShelfFurniture.width_mm
       : selectedShelfFurniture.height_mm;
     return draft.geometry_mode === "MANUAL"
-      ? selectedShelf[field] / denominator * 100
-      : selectedShelf[field];
+      ? displayedShelf[field] / denominator * 100
+      : displayedShelf[field];
   }
 
   function updateShelfGeometry(field: "x_mm" | "floor_y_mm" | "width_mm" | "height_mm", value: number) {
@@ -485,6 +488,10 @@ export function GeometryDialog({
       <fieldset><legend>Furniture geometry (mm)</legend>
         <label>Bookcase<select value={bookcaseId} onChange={(event) => selectBookcase(event.target.value)}>{data.bookcases.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         {selectedBookcase && <>
+          {draft.geometry_mode === "PHYSICAL" && selectedBookcaseRecord && (selectedBookcaseRecord.width_mm || selectedBookcaseRecord.height_mm) && <div className="server-geometry-locked-notice" role="note">
+            <LockKeyhole size={18} />
+            <span><b>Size fixed by recorded physical dimensions.</b> {selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "Exterior width and height" : selectedBookcaseRecord.width_mm ? "Exterior width" : "Exterior height"} cannot be resized on the map. Edit the furniture dimensions in Library layout to change {selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "them" : "it"}.</span>
+          </div>}
           <div className="server-dimension-grid">
             {numberField("Horizontal — left edge", selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}
             {numberField("Floor baseline", selectedBookcase.floor_y_mm, (value) => updateBookcase("floor_y_mm", value), { step: 1 })}
@@ -493,6 +500,7 @@ export function GeometryDialog({
           </div>
           <label>Fixed shelf distribution<select value={selectedBookcase.shelf_direction} onChange={(event) => updateBookcase("shelf_direction", event.target.value)} disabled={Boolean(selectedBookcaseRecord?.shelves.length)}><option value="TOP_TO_BOTTOM">Top to bottom</option><option value="BOTTOM_TO_TOP">Bottom to top</option><option value="LEFT_TO_RIGHT">Left to right</option><option value="RIGHT_TO_LEFT">Right to left</option></select></label>
           <label className="server-check server-compact-check"><input type="checkbox" checked={selectedBookcase.homogeneous_structure} onChange={(event) => changeHomogeneity(event.target.checked)} /> Homogeneous structure</label>
+          <div className="server-geometry-subsection"><b>Shared shelf placement structure</b><small>Frames and closures position the shelf compartments inside this furniture. Separator thickness controls the distance between consecutive shelves. These values remain editable when shelf width or height is fixed by recorded measurements.</small></div>
           <div className="server-dimension-grid">
             {numberField("Left frame", selectedBookcase.frame_left_mm, (value) => updateBookcase("frame_left_mm", value), { min: 0, step: 1 })}
             {numberField("Right frame", selectedBookcase.frame_right_mm, (value) => updateBookcase("frame_right_mm", value), { min: 0, step: 1 })}
@@ -500,19 +508,23 @@ export function GeometryDialog({
             {numberField("Lower closure / board", selectedBookcase.bottom_closure_mm, (value) => updateBookcase("bottom_closure_mm", value), { min: 5, step: 1 })}
             {numberField("Separator thickness", selectedBookcase.separator_thickness_mm, (value) => updateBookcase("separator_thickness_mm", value), { min: 5, step: 1 })}
           </div>
-          <small>{selectedBookcaseRecord && (selectedBookcaseRecord.width_mm || selectedBookcaseRecord.height_mm) ? "Dimensions entered by the user in the catalogue record are fixed here: their corresponding map sizes are derived and cannot be edited in Physical dimensions mode." : "Missing exterior measurements use editable fallback map millimetres (2200 × 800 × 280 defaults)."}</small>
+          {!(draft.geometry_mode === "PHYSICAL" && selectedBookcaseRecord && (selectedBookcaseRecord.width_mm || selectedBookcaseRecord.height_mm)) && <small>Missing exterior measurements use editable fallback map millimetres (2200 × 800 × 280 defaults).</small>}
         </>}
       </fieldset>
       <fieldset><legend>Shelf compartment {draft.geometry_mode === "PHYSICAL" ? "(mm)" : "(% of furniture)"}</legend>
         <label>Shelf<select value={shelfId} onChange={(event) => selectShelf(event.target.value)}><option value="">{selectedBookcaseShelves.length ? "Choose shelf" : "This furniture has no shelves"}</option>{selectedBookcaseShelves.map((shelf) => <option key={shelf.id} value={shelf.id}>{selectedBookcaseRecord?.name} · Shelf {shelf.shelf_number}</option>)}</select></label>
         {selectedShelf && selectedShelfFurniture && <>
+          {draft.geometry_mode === "PHYSICAL" && selectedShelfRecord && (selectedShelfRecord.usable_width_mm || selectedShelfRecord.usable_height_mm) && <div className="server-geometry-locked-notice" role="note">
+            <LockKeyhole size={18} />
+            <span><b>Only the recorded size is fixed.</b> {selectedShelfRecord.usable_width_mm && selectedShelfRecord.usable_height_mm ? "Interior width and height" : selectedShelfRecord.usable_width_mm ? "Interior width" : "Interior height"} cannot be resized on the map. Its position remains editable through {selectedShelfFurniture.homogeneous_structure ? "the shared frames, closures and separators in Furniture geometry above" : "the independent shelf structure below"}. Edit the physical measurement itself in Library layout.</span>
+          </div>}
           <div className="server-dimension-grid">
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived left edge (mm)" : "Left edge (%)", shelfDisplayValue("x_mm"), (value) => updateShelfGeometry("x_mm", value), { min: 0, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived floor baseline (mm)" : "Floor baseline (%)", shelfDisplayValue("floor_y_mm"), (value) => updateShelfGeometry("floor_y_mm", value), { min: 0, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior width (mm)" : "Width (%)", shelfDisplayValue("width_mm"), (value) => updateShelfGeometry("width_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
             {numberField(draft.geometry_mode === "PHYSICAL" ? "Derived interior height (mm)" : "Height (%)", shelfDisplayValue("height_mm"), (value) => updateShelfGeometry("height_mm", value), { min: draft.geometry_mode === "PHYSICAL" ? 5 : .1, step: draft.geometry_mode === "PHYSICAL" ? 1 : .1, disabled: draft.geometry_mode === "PHYSICAL" })}
           </div>
-          <small>Width: {(selectedShelf.width_source ?? "derived").toLowerCase()} · Height: {(selectedShelf.height_source ?? "derived").toLowerCase()}. Dimensions entered by the user in the shelf record fix the corresponding map size in Physical dimensions mode; edit those measurements in Library layout rather than overriding them here.</small>
+          <small>Left edge and floor baseline are calculated from the placement structure. Width source: {(selectedShelf.width_source ?? "derived").toLowerCase()} · Height source: {(selectedShelf.height_source ?? "derived").toLowerCase()}.</small>
           <label className="server-check server-compact-check"><input type="checkbox" checked={selectedShelf.open_top} onChange={(event) => updateShelf({ open_top: event.target.checked })} disabled={Boolean(selectedShelfRecord?.usable_width_mm && selectedShelfRecord.usable_width_mm !== selectedShelfFurniture.width_mm)} /> Open top shelf</label>
           {!selectedShelfFurniture.homogeneous_structure && <>
             <div className="server-geometry-subsection"><b>Independent shelf structure</b><small>Frames define this shelf's usable rectangle. Alignment adjustment is retained only for exceptional asymmetric measured shelves.</small></div>
