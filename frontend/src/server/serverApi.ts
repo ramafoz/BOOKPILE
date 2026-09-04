@@ -312,6 +312,11 @@ export interface BookcaseWrite {
   depth_mm: number | null;
 }
 
+export interface BookcaseCreate extends BookcaseWrite {
+  shelf_direction: "TOP_TO_BOTTOM" | "BOTTOM_TO_TOP" | "LEFT_TO_RIGHT" | "RIGHT_TO_LEFT";
+  homogeneous_structure: boolean;
+}
+
 export interface ShelfWrite {
   bookcase_id: string;
   shelf_number: number;
@@ -624,7 +629,7 @@ export const serverApi = {
       { method: "PUT", body: JSON.stringify(layout) },
       true,
     ),
-  createBookcase: (libraryId: string, payload: BookcaseWrite) =>
+  createBookcase: (libraryId: string, payload: BookcaseCreate) =>
     request<PhysicalLibrary>(
       `/libraries/${libraryId}/physical-library/bookcases`,
       { method: "POST", body: JSON.stringify(payload) },

@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from ..models import Book, Bookcase, Container, Shelf
 from ..repositories.physical_library import PhysicalLibraryRepository
 from ..schemas import (
+    BookcaseCreate,
     BookcaseWrite,
     BookPlacementWrite,
     RearrangementApplyRequest,
@@ -914,9 +915,12 @@ class PhysicalLibraryService:
         return result
 
     def create_bookcase(
-        self, *, library_id: UUID, actor_user_id: UUID, payload: BookcaseWrite
+        self, *, library_id: UUID, actor_user_id: UUID, payload: BookcaseCreate
     ) -> Bookcase:
-        item = Bookcase(library_id=library_id, **payload.model_dump())
+        item = Bookcase(
+            library_id=library_id,
+            **payload.model_dump(exclude={"shelf_direction", "homogeneous_structure"}),
+        )
         created = self._save_created(
             item,
             library_id=library_id,
@@ -929,9 +933,16 @@ class PhysicalLibraryService:
         # unmeasured bookcases created within the same timestamp resolution can
         # exchange fallback positions when the hierarchy is sorted again.
         layout = self.hierarchy(library_id).layout
+        bookcase_layouts = [
+            entry.model_copy(update={
+                "shelf_direction": payload.shelf_direction,
+                "homogeneous_structure": payload.homogeneous_structure,
+            }) if entry.bookcase_id == item.id else entry
+            for entry in layout.bookcases
+        ]
         self._repository.upsert_visual_layout(
             library_id=library_id,
-            bookcases=[entry.model_dump() for entry in layout.bookcases],
+            bookcases=[entry.model_dump() for entry in bookcase_layouts],
             shelves=[entry.model_dump() for entry in layout.shelves],
             containers=[entry.model_dump() for entry in layout.containers],
             outside_areas=[entry.model_dump() for entry in layout.outside_areas],

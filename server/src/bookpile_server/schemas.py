@@ -109,6 +109,13 @@ class BookcaseWrite(BaseModel):
         return optional_text(value)
 
 
+class BookcaseCreate(BookcaseWrite):
+    shelf_direction: Literal[
+        "TOP_TO_BOTTOM", "BOTTOM_TO_TOP", "LEFT_TO_RIGHT", "RIGHT_TO_LEFT"
+    ] = "TOP_TO_BOTTOM"
+    homogeneous_structure: bool = True
+
+
 class ShelfWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

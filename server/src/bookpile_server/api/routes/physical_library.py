@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from ...schemas import (
     BookcaseResponse,
+    BookcaseCreate,
     BookcaseWrite,
     BookPlacementWrite,
     ContainerResponse,
@@ -277,7 +278,7 @@ def update_visual_layout(
 )
 def create_bookcase(
     library_id: UUID,
-    payload: BookcaseWrite,
+    payload: BookcaseCreate,
     service: PhysicalLibraryServiceDependency,
     access_service: LibraryAccessServiceDependency,
     context: CurrentAuthDependency,

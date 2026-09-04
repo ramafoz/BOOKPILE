@@ -405,6 +405,12 @@ button { cursor: pointer; }
 .server-physical-builders input, .server-physical-builders select, .server-physical-dialog input, .server-physical-dialog select, .server-physical-dialog textarea { width: 100%; min-height: 41px; padding: 8px 10px; border: 1px solid #d0c2af; border-radius: 7px; color: #1e3b33; background: #fffdf9; font: inherit; }
 .server-physical-builders button { min-height: 40px; border: 1px solid #8fad9f; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; color: #24574b; background: #f8fbf9; font-weight: 750; }
 .server-physical-builders button:disabled { opacity: .5; }
+.server-builder-details { display: grid; gap: 9px; padding: 8px 9px; border: 1px solid #dacdbc; border-radius: 7px; background: #faf6ef; }
+.server-builder-details summary { cursor: pointer; color: #315b51; font-size: 12px; font-weight: 800; }
+.server-builder-details[open] { display: grid; gap: 9px; }
+.server-builder-details .server-dimension-grid { grid-template-columns: 1fr; }
+.server-physical-builders label.server-compact-check { width: fit-content; min-height: 28px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.server-physical-builders label.server-compact-check input { flex: 0 0 auto; width: 17px; min-height: 0; height: 17px; margin: 0; padding: 0; }
 .server-inline-fields { display: grid; grid-template-columns: 1fr 1.25fr .7fr; gap: 7px; }
 .server-book-placement { display: grid; gap: 11px; margin-bottom: 18px; padding: 16px; border: 1px solid #b9cdc4; border-radius: 9px; background: #edf4f0; }
 .server-book-placement > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -445,6 +451,13 @@ button { cursor: pointer; }
 .server-geometry-sections fieldset { display: grid; gap: 11px; background: #fffdf8; }
 .server-geometry-sections .server-dimension-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .server-geometry-sections label small { color: #6a7b76; font-weight: 500; }
+.server-physical-dialog label.server-compact-check { width: fit-content; min-height: 30px; display: inline-flex; align-items: center; gap: 9px; cursor: pointer; }
+.server-physical-dialog label.server-compact-check input { flex: 0 0 auto; width: 17px; min-height: 0; height: 17px; margin: 0; padding: 0; }
+.server-geometry-subsection { display: grid; gap: 3px; padding-top: 4px; border-top: 1px solid #e4d9ca; }
+.server-geometry-subsection small { color: #6a7b76; font-weight: 500; }
+.server-geometry-advanced { padding: 9px 11px; border: 1px solid #e1d6c7; border-radius: 7px; background: #faf6ef; }
+.server-geometry-advanced summary { cursor: pointer; color: #315b51; font-size: 12px; font-weight: 800; }
+.server-geometry-advanced[open] { display: grid; gap: 10px; }
 .server-dialog-actions .server-primary-action { border-color: #24584c; color: #fff; background: #24584c; }
 
 .server-library-map { position: relative; margin: 17px 0 22px; overflow: hidden; border: 1px solid #cfc1ae; border-radius: 12px; background: #f4eee4; }

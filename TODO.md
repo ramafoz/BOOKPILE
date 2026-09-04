@@ -444,13 +444,16 @@ protects the completed catalogue.
     - [x] Verify no-op saves, MANUAL/PHYSICAL projection, absolute measured
       shelf height, derived locks, atomic fit rejection and fixed furniture
       direction through Owner acceptance.
-    - [ ] Fix the structural-control UI: reveal independent per-shelf controls
+    - [x] Fix the structural-control UI: reveal independent per-shelf controls
       when homogeneity is disabled, warn before re-homogenizing, compact the
       oversized checkbox controls, and remove ambiguity between shelf offset
       and frame-derived placement.
-    - [ ] Move furniture direction and suitable initial structural choices to
+    - [x] Move furniture direction and suitable initial structural choices to
       empty-furniture creation while keeping direction immutable after the
       first shelf is added.
+    - [x] Keep visual-editor selectors scoped in furniture → shelf → container
+      order, expose only genuinely independent frame/closure controls for the
+      selected distribution axis, and label outside-library geometry in mm.
   - [ ] Integrate floating/minimizable and direct map layout editing over the
     same canonical validation service.
   - [ ] Complete desktop, phone, and tablet acceptance before closing Phase 4D.

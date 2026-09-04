@@ -669,7 +669,11 @@ def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_p
     owner = add_user(session, "unmeasured_furniture_owner")
     library = add_library(session, owner)
     authenticate(client, session, owner)
-    def create_unmeasured(name: str) -> dict:
+    def create_unmeasured(
+        name: str,
+        direction: str = "TOP_TO_BOTTOM",
+        homogeneous: bool = True,
+    ) -> dict:
         created = client.post(
             f"{base(library)}/bookcases",
             json={
@@ -678,6 +682,8 @@ def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_p
                 "height_mm": None,
                 "width_mm": None,
                 "depth_mm": None,
+                "shelf_direction": direction,
+                "homogeneous_structure": homogeneous,
             },
             headers=csrf(),
         )
@@ -686,7 +692,7 @@ def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_p
             item for item in created.json()["bookcases"] if item["name"] == name
         )
 
-    first = create_unmeasured("Zulu")
+    first = create_unmeasured("Zulu", "RIGHT_TO_LEFT", False)
     second = create_unmeasured("Alpha")
 
     response = client.get(base(library))
@@ -705,3 +711,5 @@ def test_unmeasured_bookcases_keep_missing_dimensions_and_receive_distinct_map_p
     assert layouts[second["id"]]["x_mm"] == 900
     assert layouts[first["id"]]["width_mm"] == 800
     assert layouts[second["id"]]["width_mm"] == 800
+    assert layouts[first["id"]]["shelf_direction"] == "RIGHT_TO_LEFT"
+    assert layouts[first["id"]]["homogeneous_structure"] is False

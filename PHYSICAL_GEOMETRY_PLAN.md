@@ -335,23 +335,23 @@ Accepted on 2026-09-02:
   atomic rejection of a shelf that cannot fit, and immutable distribution
   direction once a shelf exists.
 
-Known UI defects intentionally carried into the next checkpoint:
+The schema-v11 structural-control checkpoint is now accepted. Independent
+per-shelf controls are revealed only when homogeneity is disabled; restoring
+homogeneity warns before recalculation. The checkboxes are compact and the
+exceptional alignment offset lives under an explicit advanced disclosure.
+Furniture direction and initial homogeneity can be chosen when empty furniture
+is created, while direction remains immutable after its first shelf.
 
-- Toggling `Homogeneous structure` off does not yet reveal the independent
-  per-shelf structural controls, and toggling it back on does not yet show the
-  required destructive/recalculation warning.
-- The `Homogeneous structure` and `Open top shelf` checkbox presentation is
-  oversized and must be replaced with compact controls.
-- Shelf alignment offset overlaps conceptually with frame controls and needs a
-  single unambiguous placement model in the UI.
-- Furniture direction and appropriate initial structural parameters should be
-  chosen during empty-furniture creation, rather than discovered only in the
-  visual editor.
+Editor selection now cascades from furniture to shelf to container, so empty
+furniture cannot expose another furniture's containers. Independent controls
+also follow the distribution axis: vertical furniture shares upper/lower
+closures and exposes per-shelf side frames, while horizontal furniture shares
+side frames and exposes per-shelf upper/lower boards. Outside-library area
+controls are explicitly labelled in millimetres.
 
-Still required before Phase 4D closes: resolve the v11 UI defects above,
-complete the structural-control acceptance pass, add floating/minimizable and
-direct map layout editing, refine deeper accordion edge cases, and complete
-final cross-device acceptance.
+Still required before Phase 4D closes: add floating/minimizable and direct map
+layout editing, refine deeper accordion edge cases, and complete final
+cross-device acceptance.
 
 ## 10. Edition boundary and future Local work
 
