@@ -64,7 +64,11 @@ must not be used for Server migrations or test databases.
 - Phase 5A personal-reading foundation: reversible additive session and sparse
   personal-book-record tables, database-enforced date shapes and active/unknown
   uniqueness, plus pure chronology, state, inclusive-duration, reading-rate,
-  and active-counter rules. No reading-write API or frontend is exposed yet.
+  and active-counter rules. That schema increment itself exposed no API.
+- Phase 5B scoped reading API: members can inspect an Owner perspective;
+  authenticated Owners can mutate only their own sessions and Goodreads URL;
+  Viewers remain read-only; copy locking and database uniqueness prevent two
+  simultaneous readers; writes require CSRF and emit library audit events.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
@@ -178,6 +182,14 @@ CSRF token.
 - `GET /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
 - `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
 - `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
+- `GET /api/v1/libraries/{library_id}/catalogue/{book_id}/reading`
+- `POST /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/start`
+- `POST /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/{session_id}/finish`
+- `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/{session_id}/cancel`
+- `POST /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/historical`
+- `PUT|DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/{session_id}`
+- `GET /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/goodreads`
+- `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/goodreads/me`
 
 Updates are complete replacements rather than partial patches. The client
 must send the complete editable bibliographic record and contributor order.

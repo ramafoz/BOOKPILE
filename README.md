@@ -521,8 +521,10 @@ reading and loan models. See
 Server Phase 5A now provides the reversible PostgreSQL foundation for personal
 reading history and per-Owner Goodreads records, plus pure chronology, state,
 duration, rate, and counter rules. It adds no frontend or reading-write API yet.
-The next milestone is 5B: Owner-scoped session and Goodreads services,
-Viewer-safe projections, authorization, and concurrency-controlled commands.
+Phase 5B adds Owner-scoped session and Goodreads services, Viewer-safe
+projections, authorization, audit and concurrency-controlled commands. The next
+milestone is 5C: the perspective-aware catalogue, status dialogs, personal
+reading-history manager, and Goodreads interface.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

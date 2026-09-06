@@ -767,7 +767,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Complete Server Phase 5 according to
   `SERVER_PHASE5_READING_PLAN.md`:
   - [x] 5A: add the reversible personal-reading schema and pure domain rules.
-  - [ ] 5B: add Owner-scoped reading/Goodreads services and Viewer-safe APIs.
+  - [x] 5B: add Owner-scoped reading/Goodreads services and Viewer-safe APIs.
   - [ ] 5C: add perspective-aware clickable status labels, separate shared
     metadata and personal-reading actions, personal history management, and
     perspective-specific Goodreads links.

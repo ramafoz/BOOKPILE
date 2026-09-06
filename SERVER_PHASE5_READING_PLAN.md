@@ -1,8 +1,9 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: 5A complete on the Server feature branch; 5B services and APIs are the
-next increment. This phase changes Server only. Released BOOKPILE Local v1 and
-its populated SQLite database remain untouched.
+Status: 5A complete and 5B implemented and automatically verified on the Server
+feature branch; 5C is the next user-visible increment. This phase changes
+Server only. Released BOOKPILE Local v1 and its populated SQLite database remain
+untouched.
 
 ## 1. Objective and boundary
 
@@ -142,14 +143,21 @@ active-reading counter notation.
 
 ### 5B — scoped services and API projections
 
-- Add list/start/finish/cancel/add-historical/edit/delete session commands.
-- Add personal Goodreads read/write commands.
-- Lock the physical copy when starting a session.
-- Return personal reading and shared custody as separate projections.
-- Enforce Owner-self writes and member read-only access.
+- [x] Add list/start/finish/cancel/add-historical/edit/delete session commands.
+- [x] Add personal Goodreads read/write commands.
+- [x] Lock the physical copy when starting a session.
+- [x] Return personal reading and shared custody as separate projections.
+- [x] Enforce Owner-self writes and member read-only access.
 
 Gate: two Owners see distinct histories for one shared copy; neither can write
 the other's; concurrent starts produce one success and one controlled failure.
+
+Verified implementation record (2026-09-06): scoped services and `/api/v1`
+routes expose paginated chronological projections, self-only Owner commands,
+member-readable Owner reviews, CSRF-protected writes, audit events, and hidden
+cross-library failures. Automated API coverage uses two Owners, one Viewer and
+one outsider. The PostgreSQL gate invokes the real service concurrently and
+confirms one successful start plus one controlled conflict for a single copy.
 
 ### 5C — catalogue and reading-history experience
 

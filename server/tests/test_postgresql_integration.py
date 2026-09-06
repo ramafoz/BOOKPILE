@@ -48,6 +48,7 @@ from bookpile_server.models import (
     VisualShelfLayout,
 )
 from bookpile_server.repositories.books import BookRepository
+from bookpile_server.repositories.readings import ReadingRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
@@ -63,6 +64,7 @@ from bookpile_server.services.rate_limits import (
     RateLimitPolicy,
 )
 from bookpile_server.services.auth import hash_session_secret
+from bookpile_server.services.readings import ReadingConflictError, ReadingService
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -387,24 +389,14 @@ def test_postgresql_migration_and_tenant_scope() -> None:
 
             def start_same_copy_concurrently(number: int) -> bool:
                 try:
-                    with engine.begin() as connection:
-                        connection.execute(
-                            text(
-                                "INSERT INTO reading_sessions "
-                                "(id, library_id, book_id, user_id, state, "
-                                "started_date, dates_unknown) VALUES "
-                                "(:id, :library_id, :book_id, :user_id, "
-                                "'ACTIVE', :started_date, false)"
-                            ),
-                            {
-                                "id": uuid4(),
-                                "library_id": first.id,
-                                "book_id": first_book.id,
-                                "user_id": user.id,
-                                "started_date": date(2026, 9, number),
-                            },
+                    with Session(engine, expire_on_commit=False) as concurrent_session:
+                        ReadingService(ReadingRepository(concurrent_session)).start(
+                            library_id=first.id,
+                            book_id=first_book.id,
+                            actor_user_id=user.id,
+                            started=date(2026, 9, number),
                         )
-                except IntegrityError:
+                except ReadingConflictError:
                     return False
                 return True
 

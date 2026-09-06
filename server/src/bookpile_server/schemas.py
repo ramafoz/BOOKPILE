@@ -663,3 +663,50 @@ class ReadingPerspectiveResponse(BaseModel):
 class SelectReadingPerspectiveRequest(BaseModel):
     user_id: UUID
 
+
+class ReadingSessionResponse(BaseModel):
+    id: UUID
+    state: str
+    started_date: date | None
+    finished_date: date | None
+    dates_unknown: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class BookReadingResponse(BaseModel):
+    library_id: UUID
+    book_id: UUID
+    perspective_user_id: UUID
+    state: str
+    active_reader_present: bool
+    writable: bool
+    total_sessions: int
+    limit: int
+    offset: int
+    sessions: list[ReadingSessionResponse]
+
+
+class StartReadingRequest(BaseModel):
+    started_date: date
+
+
+class FinishReadingRequest(BaseModel):
+    finished_date: date
+
+
+class HistoricalReadingWrite(BaseModel):
+    started_date: date | None = None
+    finished_date: date | None = None
+    dates_unknown: bool = False
+
+
+class GoodreadsWrite(BaseModel):
+    url: str | None = Field(default=None, max_length=2048)
+
+
+class GoodreadsReviewResponse(BaseModel):
+    user_id: UUID
+    username: str
+    url: str
+
