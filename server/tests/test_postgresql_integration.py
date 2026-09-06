@@ -6,7 +6,7 @@ production database accidentally.
 """
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -35,7 +35,9 @@ from bookpile_server.models import (
     LibraryAuditEvent,
     LibraryInvitation,
     LibraryMembership,
+    PersonalBookRecord,
     RateLimitBucket,
+    ReadingSession,
     SecurityEvent,
     Shelf,
     User,
@@ -154,6 +156,8 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "visual_shelf_layouts",
             "visual_container_layouts",
             "visual_outside_areas",
+            "reading_sessions",
+            "personal_book_records",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = session.get(Library, first_library_id)
@@ -362,7 +366,59 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     expires_at=now + timedelta(hours=24),
                 )
             )
+            session.add_all(
+                [
+                    ReadingSession(
+                        library_id=first.id,
+                        book_id=first_book.id,
+                        user_id=user.id,
+                        state="COMPLETED",
+                        dates_unknown=True,
+                    ),
+                    PersonalBookRecord(
+                        library_id=first.id,
+                        book_id=first_book.id,
+                        user_id=user.id,
+                        goodreads_url="https://www.goodreads.com/review/show/1",
+                    ),
+                ]
+            )
             session.commit()
+
+            def start_same_copy_concurrently(number: int) -> bool:
+                try:
+                    with engine.begin() as connection:
+                        connection.execute(
+                            text(
+                                "INSERT INTO reading_sessions "
+                                "(id, library_id, book_id, user_id, state, "
+                                "started_date, dates_unknown) VALUES "
+                                "(:id, :library_id, :book_id, :user_id, "
+                                "'ACTIVE', :started_date, false)"
+                            ),
+                            {
+                                "id": uuid4(),
+                                "library_id": first.id,
+                                "book_id": first_book.id,
+                                "user_id": user.id,
+                                "started_date": date(2026, 9, number),
+                            },
+                        )
+                except IntegrityError:
+                    return False
+                return True
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                reading_results = list(
+                    executor.map(start_same_copy_concurrently, (1, 2))
+                )
+            assert sorted(reading_results) == [False, True]
+            assert (
+                session.query(ReadingSession)
+                .filter(ReadingSession.state == "ACTIVE")
+                .count()
+                == 1
+            )
 
             books = BookRepository(session).list_for_library(first.id)
             assert [book.title for book in books] == ["One"]
@@ -574,6 +630,18 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Prove 0012 is independently reversible without altering Phase 4.
+        command.downgrade(alembic, "0011_explicit_shelves")
+        phase_eleven_tables = set(inspect(engine).get_table_names())
+        assert {"reading_sessions", "personal_book_records"}.isdisjoint(
+            phase_eleven_tables
+        )
+        assert {"books", "visual_shelf_layouts"} <= phase_eleven_tables
+        command.upgrade(alembic, "head")
+        assert {"reading_sessions", "personal_book_records"} <= set(
+            inspect(engine).get_table_names()
+        )
 
         # Prove 0007 is independently reversible and preserves the original
         # Phase 1 catalogue values while removing only Phase 4A structures.

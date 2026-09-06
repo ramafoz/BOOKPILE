@@ -664,7 +664,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     registration, verification, login/logout, and password recovery end to end.
 - [x] Assign all currently implemented shared catalogue, cover, hierarchy, and
   layout records to a library.
-- [ ] Add Owner-scoped personal reading records in Server Phase 5; see
+- [ ] Complete Owner-scoped personal reading records in Server Phase 5; schema
+  and pure domain rules are complete, while scoped commands and UI remain; see
   `SERVER_PHASE5_READING_PLAN.md`.
 - [x] Implement the Phase 3 library-membership and authorization foundation:
   - [x] Support equal co-Owners and read-only Viewers, without an Editor role.
@@ -765,7 +766,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     self-expiring success notifications.
 - [ ] Complete Server Phase 5 according to
   `SERVER_PHASE5_READING_PLAN.md`:
-  - [ ] 5A: add the reversible personal-reading schema and pure domain rules.
+  - [x] 5A: add the reversible personal-reading schema and pure domain rules.
   - [ ] 5B: add Owner-scoped reading/Goodreads services and Viewer-safe APIs.
   - [ ] 5C: add perspective-aware clickable status labels, separate shared
     metadata and personal-reading actions, personal history management, and

@@ -20,6 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -543,6 +544,116 @@ class Book(Base):
     library: Mapped[Library] = relationship(back_populates="books")
     cover: Mapped["BookCover | None"] = relationship(
         back_populates="book", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+
+
+class ReadingSession(Base):
+    __tablename__ = "reading_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('ACTIVE', 'COMPLETED')",
+            name="ck_reading_sessions_state",
+        ),
+        CheckConstraint(
+            "(state = 'ACTIVE' AND dates_unknown = false "
+            "AND started_date IS NOT NULL AND finished_date IS NULL) OR "
+            "(state = 'COMPLETED' AND dates_unknown = false "
+            "AND started_date IS NOT NULL AND finished_date IS NOT NULL "
+            "AND finished_date >= started_date) OR "
+            "(state = 'COMPLETED' AND dates_unknown = true "
+            "AND started_date IS NULL AND finished_date IS NULL)",
+            name="ck_reading_sessions_date_shape",
+        ),
+        ForeignKeyConstraint(
+            ["library_id", "book_id"],
+            ["books.library_id", "books.id"],
+            name="fk_reading_sessions_library_book",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "uq_reading_sessions_active_book",
+            "book_id",
+            unique=True,
+            postgresql_where=text("state = 'ACTIVE'"),
+            sqlite_where=text("state = 'ACTIVE'"),
+        ),
+        Index(
+            "uq_reading_sessions_unknown_owner_book",
+            "library_id",
+            "book_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("dates_unknown = true"),
+            sqlite_where=text("dates_unknown = 1"),
+        ),
+        Index(
+            "ix_reading_sessions_owner_book_dates",
+            "library_id",
+            "user_id",
+            "book_id",
+            "started_date",
+            "finished_date",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    book_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    started_date: Mapped[date | None] = mapped_column(Date)
+    finished_date: Mapped[date | None] = mapped_column(Date)
+    dates_unknown: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PersonalBookRecord(Base):
+    __tablename__ = "personal_book_records"
+    __table_args__ = (
+        CheckConstraint(
+            "goodreads_url IS NULL OR length(trim(goodreads_url)) > 0",
+            name="ck_personal_book_records_goodreads_nonblank",
+        ),
+        ForeignKeyConstraint(
+            ["library_id", "book_id"],
+            ["books.library_id", "books.id"],
+            name="fk_personal_book_records_library_book",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "library_id",
+            "book_id",
+            "user_id",
+            name="uq_personal_book_records_owner_book",
+        ),
+        Index(
+            "ix_personal_book_records_owner",
+            "library_id",
+            "user_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    book_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    goodreads_url: Mapped[str | None] = mapped_column(String(2048))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 

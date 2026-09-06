@@ -21,8 +21,9 @@ must not be used for Server migrations or test databases.
   account-registration invitations.
 - Membership management with password reauthentication, explicit consequence
   warnings, final-Owner protection, and structured audit events.
-- Reading-perspective selection state, while personal reading writes remain a
-  later phase.
+- Reading-perspective selection state plus the Phase 5A persistence foundation
+  for Owner-scoped sessions and personal Goodreads records; write services and
+  APIs begin in Phase 5B.
 - Repository and API tests proving that one library cannot read another
   library's catalogue merely by knowing its UUID.
 - Reversible Phase 2A identity foundation: users, hashed opaque-session
@@ -60,13 +61,17 @@ must not be used for Server migrations or test databases.
   scoped map reads, responsive camera and inspection, catalogue-row locations,
   per-book placement, and transactional visual rearrangement with read-only
   previews, stale-revision protection, proportional geometry, and audit.
+- Phase 5A personal-reading foundation: reversible additive session and sparse
+  personal-book-record tables, database-enforced date shapes and active/unknown
+  uniqueness, plus pure chronology, state, inclusive-duration, reading-rate,
+  and active-counter rules. No reading-write API or frontend is exposed yet.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
 edition is still not deployable because the production private-object adapter,
-personal reading data, loans, backup/restore, storage quota, and production
+personal reading services and interface, loans, backup/restore, storage quota, and production
 infrastructure have not yet been ported.
 
 ## Development setup
@@ -184,14 +189,15 @@ payloads.
 ## Safety status
 
 The migration and isolation gate now upgrades through migration
-`0011_explicit_shelves` against PostgreSQL 17. It checks catalogue and
+`0012_personal_readings` against PostgreSQL 17. It checks catalogue and
 membership isolation, identity/session/account-invitation/library-invitation
 records, concurrent invitation consumption, atomic rate limiting, final-Owner
 protection, scope changes, reading perspectives, shared metadata constraints,
 cross-library physical relationships, contributor normalization, preservation
 of pre-Phase-4A books, Phase 4B service writes and ordered contributors, and
 private covers, revisioned layout, physical projection, explicit shelf
-geometry, fallbacks, support rules, and each incremental rollback. It then downgrades
+geometry, fallbacks, support rules, reading-session shape and uniqueness,
+concurrent starts for one physical copy, personal-book records, and each incremental rollback. It then downgrades
 disposable `bookpile_test` until no BOOKPILE application tables remain.
 Alembic may retain its empty administrative `alembic_version` table.
 

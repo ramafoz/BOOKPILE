@@ -1,8 +1,8 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: implementation-ready design, pending final frontend decisions and a
-fresh feature branch. This phase changes Server only. Released BOOKPILE Local
-v1 and its populated SQLite database remain untouched.
+Status: 5A complete on the Server feature branch; 5B services and APIs are the
+next increment. This phase changes Server only. Released BOOKPILE Local v1 and
+its populated SQLite database remain untouched.
 
 ## 1. Objective and boundary
 
@@ -121,13 +121,24 @@ catalogue.
 
 ### 5A — schema and pure domain rules
 
-- Add reading-session and personal-book-record tables and relationships.
-- Implement pure state, chronology, duration, and display-counter helpers.
-- Add migration round-trip, invariant, and race-oriented database tests.
-- Expose nothing in the frontend yet.
+- [x] Add reading-session and personal-book-record tables and relationships.
+- [x] Implement pure state, chronology, duration, and display-counter helpers.
+- [x] Add migration round-trip, invariant, and race-oriented database tests.
+- [x] Expose nothing in the frontend yet.
 
 Gate: migrations are reversible; existing Server counts and values are
 unchanged; invalid date shapes and duplicate active/unknown sessions fail.
+
+Verified implementation record (2026-09-06): migration
+`0012_personal_readings` was backed up with a verified PostgreSQL custom dump,
+restored into a disposable rehearsal database, upgraded, downgraded to
+`0011_explicit_shelves`, and upgraded again. Existing development counts were
+unchanged after applying 0012; `reading_sessions` and `personal_book_records`
+were created empty. PostgreSQL concurrency testing proves that exactly one of
+two simultaneous starts for the same physical copy can succeed. Pure tests
+cover valid and invalid date shapes, overlap/boundary rules, unknown history,
+derived personal states, inclusive duration/rates, ordering, and the agreed
+active-reading counter notation.
 
 ### 5B — scoped services and API projections
 

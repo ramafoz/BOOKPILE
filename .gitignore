@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 backend/data/
 backend/backups/
+server/backups/
 frontend/node_modules/
 frontend/dist/
 .bookpile-runtime/

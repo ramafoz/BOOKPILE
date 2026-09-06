@@ -518,9 +518,12 @@ was not used as a test target, and full ZIP import remains gated on Server
 reading and loan models. See
 [`ADR 0011`](docs/adr/0011-dual-edition-entrypoints.md).
 
-The next Server milestone is personal reading history, per-Owner Goodreads
-reviews, perspective-aware statistics/suggestions, and shared physical custody.
-Its implementation boundary and migration gates are defined in
+Server Phase 5A now provides the reversible PostgreSQL foundation for personal
+reading history and per-Owner Goodreads records, plus pure chronology, state,
+duration, rate, and counter rules. It adds no frontend or reading-write API yet.
+The next milestone is 5B: Owner-scoped session and Goodreads services,
+Viewer-safe projections, authorization, and concurrency-controlled commands.
+The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 
 ## Licence
