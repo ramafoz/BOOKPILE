@@ -465,17 +465,19 @@ protects the completed catalogue.
     closures, separators, alignment and offset remain editable, and both
     precise changes and the selected shelf move handle now receive an immediate
     structural preview before canonical backend validation on Apply.
-- [ ] Complete the post-4D dual-edition architecture checkpoint before Phase 5:
-  - [ ] Add explicit Local and Server frontend entrypoints and dev/build
+- [x] Complete the post-4D dual-edition architecture checkpoint before Phase 5:
+  - [x] Add explicit Local and Server frontend entrypoints and dev/build
     commands so edition selection no longer depends on the current branch.
-  - [ ] Keep the existing Local SQLite and Server PostgreSQL backends separate;
+  - [x] Keep the existing Local SQLite and Server PostgreSQL backends separate;
     do not reorganize directories or schemas during this checkpoint.
-  - [ ] Make Local and Server tests/builds runnable from the same `main` commit,
+  - [x] Make Local and Server tests/builds runnable from the same `main` commit,
     with temporary compatible aliases for existing scripts where needed.
-  - [ ] Harden edition-specific release tooling and document future
+  - [x] Harden edition-specific release tooling and document future
     `local-vX.Y.Z` / `server-vX.Y.Z` tags while preserving historical `v1.0.0`.
-  - [ ] Prove the checkpoint without opening, migrating, or writing the
+  - [x] Prove the automated checkpoint without opening, migrating, or writing the
     populated Local database and without starting the deferred ZIP importer.
+  - [x] Manually launch and identify each frontend/backend pairing before
+    merging the checkpoint branch.
 - [ ] **Future Local:** backport validated physical-geometry behaviour only in
   an isolated branch/worktree with a verified ZIP and rehearsed additive SQLite
   migration; never use the populated live Local database as a test target.

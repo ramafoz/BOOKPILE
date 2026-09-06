@@ -90,7 +90,7 @@ try {
     }
 
     Write-Step "Building the optimized frontend"
-    & $NpmCommand.Source run build
+    & $NpmCommand.Source run build:local
     if ($LASTEXITCODE -ne 0) {
         throw "The optimized frontend build failed."
     }

@@ -88,7 +88,7 @@ try {
     $StartupLog = Join-Path $Runtime "startup.log"
     Set-Content $StartupLog "BOOKPILE startup: $(Get-Date -Format o)"
 
-    $DistIndex = Join-Path $Frontend "dist\index.html"
+    $DistIndex = Join-Path $Frontend "dist\local\index.html"
     $SourceFiles = Get-ChildItem -Path @(
         (Join-Path $Frontend "src"),
         (Join-Path $Frontend "index.html"),
@@ -106,7 +106,7 @@ try {
         Add-Content $StartupLog "Building optimized frontend..."
         Push-Location $Frontend
         try {
-            & npm.cmd run build *>> $StartupLog
+            & npm.cmd run build:local *>> $StartupLog
             if ($LASTEXITCODE -ne 0) {
                 throw "The optimized frontend build failed."
             }
@@ -131,7 +131,7 @@ try {
     $FrontendProcess = Start-Process `
         -FilePath $Node `
         -ArgumentList @(
-            $ViteScript, "preview",
+            $ViteScript, "preview", "--mode=edition-local",
             "--host=$LanAddress", "--port=5173"
         ) `
         -WorkingDirectory $Frontend `

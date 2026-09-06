@@ -4,11 +4,20 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run dev:server",
+    "dev:local": "vite --mode edition-local",
+    "dev:server": "vite --mode edition-server",
+    "build": "npm run build:server",
+    "build:local": "tsc -b && vite build --mode edition-local",
+    "build:server": "tsc -b && vite build --mode edition-server",
+    "build:all": "npm run build:local && npm run build:server",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "test:local": "vitest run --config vitest.local.config.ts",
+    "test:server": "vitest run --config vitest.server.config.ts",
+    "preview": "npm run preview:server",
+    "preview:local": "vite preview --mode edition-local",
+    "preview:server": "vite preview --mode edition-server"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.4.1",

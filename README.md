@@ -1,11 +1,16 @@
 # BOOKPILE
 
-BOOKPILE is a local-first personal library manager for cataloguing books,
-recording reading history, and finding each physical copy in a real room.
+BOOKPILE is a personal library manager for cataloguing books, recording
+reading history, and finding each physical copy in a real room. One monorepo
+now contains two explicitly selected products:
 
-It is currently a single-user application intended to run on a Windows PC and
-be used from that computer or from a phone on the same private Wi-Fi network.
-The catalogue, covers, and physical layout remain under the user's control.
+- **BOOKPILE Local**, the released single-user SQLite application for a
+  Windows PC and devices on the same private Wi-Fi network.
+- **BOOKPILE Server**, the in-development PostgreSQL multi-user product.
+
+They share selected frontend source and domain concepts, but not runtimes,
+databases, migrations, launchers, or release lifecycles. Merely building or
+testing one edition never opens the other edition's data.
 
 BOOKPILE Local v1 is distributed as source with a guided Windows installer.
 New users should begin with [INSTALLATION.md](INSTALLATION.md), then read the
@@ -205,7 +210,8 @@ are not imported.
 
 ## Technology
 
-- Backend: FastAPI, SQLite, Pillow, and pillow-heif.
+- Local backend: FastAPI, SQLite, Pillow, and pillow-heif.
+- Server backend: FastAPI, PostgreSQL, SQLAlchemy, and Alembic.
 - Frontend: React, TypeScript, and Vite.
 - Barcode decoding: ZXing in the browser.
 - Temporary cover OCR: Tesseract.js in the browser.
@@ -269,7 +275,7 @@ networks only.
 BOOKPILE currently uses local HTTP. Browser features that require a trusted
 HTTPS context, such as continuous live-camera streams, remain deferred.
 
-### Manual development start
+### Manual Local development start
 
 Backend:
 
@@ -289,7 +295,7 @@ Frontend, in a second terminal:
 ```powershell
 cd frontend
 npm install
-npm run dev
+npm run dev:local
 ```
 
 Open <http://localhost:5173>.
@@ -334,21 +340,34 @@ backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py --duplicat
 
 ## Verification
 
-Backend tests:
+Local backend tests:
 
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Frontend checks:
+Edition-specific frontend checks:
 
 ```powershell
 cd frontend
-npm test
+npm run test:local
+npm run test:server
 npm run lint
-npm run build
+npm run build:all
 ```
+
+The generated frontends are kept separately under `frontend/dist/local/` and
+`frontend/dist/server/`. Compatibility aliases intentionally select Server:
+`npm run dev`, `npm run build`, and `npm run preview`. Prefer the explicit
+edition command in scripts and documentation.
+
+The development proxies default to Local port 8000 and Server port 8100.
+Isolated parallel tests may set `BOOKPILE_LOCAL_BACKEND_URL` or
+`BOOKPILE_SERVER_BACKEND_URL`; normal users do not need these overrides.
+
+Server setup and its isolated backend test commands are documented in
+[`server/README.md`](server/README.md).
 
 Automated provider tests use mocked responses and do not depend on live
 third-party services.
@@ -490,12 +509,14 @@ controls, and queued self-expiring success notifications. Its design and
 acceptance record are in
 [SERVER_FRONTEND_UX_PLAN.md](SERVER_FRONTEND_UX_PLAN.md).
 
-The next development checkpoint is build architecture rather than a data-model
-change: explicit Local and Server frontend entrypoints and commands must make
-both editions reproducibly buildable and testable from the same `main` commit.
-The Local SQLite and Server PostgreSQL backends remain separate, the populated
-Local database is not used as a test target, and full ZIP import remains gated
-on Server reading and loan models.
+The post-4D architecture checkpoint now gives Local and Server explicit
+frontend entrypoints, commands, test scopes, output directories, proxies, and
+browser titles from one source commit. Local launch/install scripts explicitly
+build `dist/local`; normal Server development explicitly uses the Server
+entrypoint. SQLite and PostgreSQL remain separate, the populated Local database
+was not used as a test target, and full ZIP import remains gated on Server
+reading and loan models. See
+[`ADR 0011`](docs/adr/0011-dual-edition-entrypoints.md).
 
 ## Licence
 

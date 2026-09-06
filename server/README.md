@@ -107,11 +107,23 @@ In a second terminal, start the isolated Server frontend:
 ```powershell
 cd frontend
 npm ci
-npm run dev -- --host=127.0.0.1
+npm run dev:server -- --host=127.0.0.1
 ```
 
 Open <http://127.0.0.1:5173>. Vite proxies `/api/v1` to the Server backend on
 port 8100. Mailpit captures verification and recovery links during development.
+
+The same frontend workspace can build both products explicitly without
+sharing runtime data:
+
+```powershell
+npm run build:server
+npm run test:server
+```
+
+Server output is written to `frontend/dist/server/`. Local has a separate
+entrypoint, proxy, tests, and `frontend/dist/local/` output; this Server setup
+never starts the Local SQLite backend.
 
 The first volume initialization creates two databases:
 

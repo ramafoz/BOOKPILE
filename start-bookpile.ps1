@@ -77,7 +77,7 @@ if ($OccupiedServices.Count -gt 0) {
     throw "BOOKPILE is already running or its ports are occupied by $ServiceList. Close the existing BOOKPILE server windows before starting it again."
 }
 
-$DistIndex = Join-Path $Frontend "dist\index.html"
+$DistIndex = Join-Path $Frontend "dist\local\index.html"
 $SourceFiles = Get-ChildItem -Path @(
     (Join-Path $Frontend "src"),
     (Join-Path $Frontend "index.html"),
@@ -95,7 +95,7 @@ if (
     Write-Host "Building the optimized mobile frontend..." -ForegroundColor Yellow
     Push-Location $Frontend
     try {
-        npm run build
+        npm run build:local
         if ($LASTEXITCODE -ne 0) {
             throw "The frontend build failed."
         }
@@ -114,7 +114,7 @@ Start-Process powershell -WindowStyle Normal -ArgumentList @(
 Start-Process powershell -WindowStyle Normal -ArgumentList @(
     "-NoExit",
     "-Command",
-    "Set-Location '$Frontend'; & '$Vite' preview --host=$LanAddress --port=5173"
+    "Set-Location '$Frontend'; & '$Vite' preview --mode=edition-local --host=$LanAddress --port=5173"
 )
 
 Write-Host ""
