@@ -9,8 +9,8 @@ This roadmap separates future work by its effect on the current data model.
 ## Local v1 release preparation
 
 - [x] Preserve the accepted single-user application on the dedicated
-  `release/local-v1` branch while the hosted multi-user product remains a
-  separate future line of development.
+  `release/local-v1` branch while the hosted multi-user product evolves on
+  `main` and short-lived Server feature branches.
 - [x] Create and validate a full pre-release backup before distribution work.
 - [x] Add a repeatable Windows installer for isolated backend/frontend
   dependencies, the optimized build, safe empty-catalogue initialization, and
@@ -662,8 +662,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     security tests, including concurrent final-attempt enforcement.
   - [x] Implement the isolated responsive authentication frontend and validate
     registration, verification, login/logout, and password recovery end to end.
-- [ ] Assign every library-level record to a library and every personal reading
-  record to an Owner.
+- [x] Assign all currently implemented shared catalogue, cover, hierarchy, and
+  layout records to a library.
+- [ ] Add Owner-scoped personal reading records in Server Phase 5; see
+  `SERVER_PHASE5_READING_PLAN.md`.
 - [x] Implement the Phase 3 library-membership and authorization foundation:
   - [x] Support equal co-Owners and read-only Viewers, without an Editor role.
   - [x] Support catalogue-only and catalogue-and-map Viewer scopes; map access
@@ -761,8 +763,16 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Desktop and mobile acceptance completed on 2026-09-02, including anchored
     menus, compact mobile map controls, aligned Viewer actions, and queued
     self-expiring success notifications.
-- [ ] Implement perspective-aware catalogue states, statistics, map colouring,
-  suggestions, and personal reading/rereading sessions.
+- [ ] Complete Server Phase 5 according to
+  `SERVER_PHASE5_READING_PLAN.md`:
+  - [ ] 5A: add the reversible personal-reading schema and pure domain rules.
+  - [ ] 5B: add Owner-scoped reading/Goodreads services and Viewer-safe APIs.
+  - [ ] 5C: add perspective-aware clickable status labels, separate shared
+    metadata and personal-reading actions, personal history management, and
+    perspective-specific Goodreads links.
+  - [ ] 5D: integrate shared custody, an all-active-copies Reading area,
+    Statistics navigation, filters, map colouring, and suggestions.
+  - [ ] 5E: complete compatibility cleanup and cross-device acceptance.
 - [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase
   5: only the Owner edits their own link; Owners and Viewers see all reviews
   labelled by username; Local import assigns existing links to its chosen

@@ -16,7 +16,7 @@ BOOKPILE Local v1 is distributed as source with a guided Windows installer.
 New users should begin with [INSTALLATION.md](INSTALLATION.md), then read the
 [user guide](USER_GUIDE.md) and [backup guide](BACKUP_AND_RECOVERY.md).
 
-## Current capabilities
+## BOOKPILE Local capabilities
 
 ### Catalogue and reading history
 
@@ -392,6 +392,9 @@ third-party services.
   rehearsals, mandatory pre-migration backups, and recovery.
 - `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
   tenancy, privacy, quota, migration, and deployment roadmap.
+- `SERVER_PHASE5_READING_PLAN.md` defines the next Server milestone: personal
+  reading sessions, per-Owner Goodreads links, shared custody, migration
+  safety, API boundaries, frontend increments, and acceptance gates.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
@@ -449,19 +452,16 @@ in place:
     row-supported piles. The map renders book thickness proportionally to page
     count within each container; missing values use the complete catalogue's
     arithmetic mean, falling back to 200 only when no page data exists.
-12. Server schema v9 establishes the physical-geometry foundation without
-    changing Local v1: versioned manual/physical modes, millimetre world
-    coordinates, generic acyclic container supports, row anchors, and PILE
-    alignment. The migration was backed up, rehearsed forwards and backwards,
-    and applied with existing Server data preserved. The precise editor now
-    presents millimetres only, including support-relative bottom clearance and
-    shelf-relative anchor/alignment coordinates. Manual rendering remains
-    isolated until physical projection and accordion behaviour are complete.
+12. Server schemas v9–v11 establish the accepted physical-geometry model
+    without changing Local v1: versioned manual/physical modes, millimetre
+    world coordinates, generic acyclic supports, row anchors, PILE alignment,
+    explicit shelf/frame/separator geometry, per-axis fallbacks, physical
+    projection, and accordion behaviour. The migrations were backed up and
+    rehearsed forwards and backwards with existing Server data preserved.
 
 Later database phases include structured subjects and genres, ratings and
-tags.
-Multi-user accounts and publication as a hosted application are a separate,
-larger product phase rather than assumptions in the current local-first build.
+tags. Multi-user accounts and publication are now active development in the
+separate hosted Server edition; they are not assumptions in released Local v1.
 The agreed separation between stable BOOKPILE Local v1 and the hosted Server
 edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
@@ -517,6 +517,11 @@ entrypoint. SQLite and PostgreSQL remain separate, the populated Local database
 was not used as a test target, and full ZIP import remains gated on Server
 reading and loan models. See
 [`ADR 0011`](docs/adr/0011-dual-edition-entrypoints.md).
+
+The next Server milestone is personal reading history, per-Owner Goodreads
+reviews, perspective-aware statistics/suggestions, and shared physical custody.
+Its implementation boundary and migration gates are defined in
+[SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 
 ## Licence
 

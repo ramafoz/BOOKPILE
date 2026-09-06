@@ -1,7 +1,7 @@
 # BOOKPILE Server — compact workspace and catalogue workflow plan
 
-Status: implemented and accepted on desktop and mobile on 2026-09-02 on
-`feature/server-compact-workspace`.
+Status: implemented, accepted on desktop and mobile on 2026-09-02, and merged
+into `main`.
 
 ## 1. Objective
 
@@ -206,6 +206,7 @@ For every increment:
 - manually validate desktop and mobile before commit;
 - keep BOOKPILE Local and its populated SQLite database untouched.
 
-The preferred Git strategy is to finish the accepted Phase 4D rearrangement
-commit first, then implement this plan as a new focused feature branch or as
-clearly separated commits after the current branch strategy is reviewed.
+All five increments are implemented and accepted. Future Server UI work uses a
+short-lived feature branch from `main`; the released Local maintenance line
+remains `release/local-v1`. Edition selection is explicit and never inferred
+from the checked-out branch.

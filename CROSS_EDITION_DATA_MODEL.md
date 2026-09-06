@@ -1,6 +1,8 @@
 # BOOKPILE cross-edition data model
 
-Status: Phase 3.5 design baseline
+Status: accepted Phase 3.5 semantic baseline. Server Phase 4 and the explicit
+dual-edition checkpoint now implement its separation; conversion remains
+deferred until Server reading and loan destinations exist.
 
 Date: 2026-08-31
 

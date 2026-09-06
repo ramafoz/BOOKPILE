@@ -1,8 +1,8 @@
 # BOOKPILE Server — multi-user implementation plan
 
-Status: product and architecture planning. No multi-user implementation has
-started. This document records the decisions agreed before changing the local
-application or creating the hosted edition.
+Status: active Server implementation. Phases 0–4D and the dual-edition
+architecture checkpoint are complete; Phase 5 is the next milestone. This
+document remains the product and security roadmap for the hosted edition.
 
 ## 1. Product boundary
 
@@ -967,9 +967,10 @@ frames, closures, separators, alignment, and offset continue to position a
 measured shelf. Their effects are projected live in the shared draft, including
 movement by the selected shelf handle, before canonical backend validation.
 
-### Immediate post-4D architecture checkpoint
+### Completed post-4D architecture checkpoint
 
-Before Phase 5, make `main` a reproducible monorepo commit for both editions:
+Completed on 2026-09-06: `main` is a reproducible monorepo commit for both
+editions:
 
 1. Add explicit Local and Server frontend entrypoints and development/build
    commands; edition choice must no longer depend on the checked-out branch.
@@ -983,15 +984,18 @@ Before Phase 5, make `main` a reproducible monorepo commit for both editions:
 5. Audit release tooling and adopt explicit future tags (`local-vX.Y.Z` and
    `server-vX.Y.Z`) without changing the historical `v1.0.0` release.
 
-This checkpoint changes build/entrypoint architecture only. It must not migrate
+This checkpoint changed build/entrypoint architecture only. It did not migrate
 or open the populated Local database, alter either data model, or begin the
-Phase 8 ZIP importer. A clean build/test gate for both editions is required
-before Phase 5 begins.
+Phase 8 ZIP importer. Both editions passed their independent build and test
+gates plus manual pairing checks.
 
 Gate: Owners retain current catalogue behavior; Viewers are read-only; image
 abuse and cross-library cover tests pass.
 
 ### Phase 5 — personal readings and shared custody
+
+The detailed domain, migration, API, UI, and acceptance plan is maintained in
+[SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 
 - Port reading/rereading rules into user-owned sessions.
 - Add per-Owner Goodreads review links keyed by library, book, and user.
@@ -1063,7 +1067,7 @@ recovery, and cost checks.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
 
-### Progress snapshot — 2026-09-04
+### Progress snapshot — 2026-09-06
 
 Phases 0, 1, 2, 3, 3.5, and 4A–4D are complete. Phase 4D passed its hierarchy,
 precise-layout, responsive-map, gesture, inspection, Viewer-scope,
@@ -1073,8 +1077,8 @@ Schema v9–v11, explicit shelf geometry, fallbacks, support validation, and
 structural controls are implemented and accepted. Phases 5–10 remain pending;
 full Local ZIP import is intentionally gated on the reading and loan models in
 Phases 5 and 6.
-The immediate next milestone is the post-4D dual-edition entrypoint and build
-hardening described above; Phase 5 follows only after that checkpoint passes.
+The post-4D dual-edition checkpoint is complete. Phase 5 personal readings and
+shared custody is now the immediate next milestone.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

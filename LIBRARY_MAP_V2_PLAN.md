@@ -1,7 +1,7 @@
 # Library Map v2 — viewport, navigation, and inspection plan
 
-Status: **implementation in progress** on `feature/library-map-viewport`.
-Phases 1 and 2 are implemented and manually accepted; phase 3 is next.
+Status: **implemented, accepted, and merged**. Phases 1–7 form the Local v1
+visual-map contract; later measured-geometry evolution is Server-first.
 
 No catalogue or layout data should be rewritten merely by opening the new map.
 Any persistent-layout change must continue to require explicit layout-editing
@@ -347,7 +347,7 @@ books and covers, and the live layout now records 18 shelf-supported and 9
 row-supported piles without changing bibliographic or physical-position data.
 Missing page counts use the arithmetic mean across the complete catalogue.
 
-### Phase 6 — integration hardening
+### Phase 6 — integration hardening — complete
 
 - [x] Integrate projected page-proportional container geometry and destination
   slots into provisional rearrangement chains.
@@ -371,13 +371,13 @@ the five-percent compression ceiling and movement-local `Release shelf space`,
 blocks invalid support/collision outcomes, and applies book positions plus
 visual-container geometry in one stale-revision-protected database transaction.
 
-### Phase 7 — multi-device acceptance and merge
+### Phase 7 — multi-device acceptance and merge — complete
 
-- User validation on desktop browser, phone, and tablet.
-- Test narrow/short screens, orientation changes, browser zoom, and touch.
-- Confirm no catalogue, cover, reading-session, loan, or physical-position data
+- [x] User validation on desktop browser, phone, and tablet.
+- [x] Test narrow/short screens, orientation changes, browser zoom, and touch.
+- [x] Confirm no catalogue, cover, reading-session, loan, or physical-position data
   changes merely from inspection/navigation.
-- Update README and TODO, run the complete test/build suite, then merge the
+- [x] Update README and TODO, run the complete test/build suite, then merge the
   feature branch into `main` only after explicit approval.
 
 ## 11. Risk register

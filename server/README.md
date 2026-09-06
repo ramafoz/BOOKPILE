@@ -62,13 +62,12 @@ must not be used for Server migrations or test databases.
   previews, stale-revision protection, proportional geometry, and audit.
 
 The authentication and library-membership foundations are complete through
-Phase 3, the shared catalogue foundation is complete through Phase 4C, and the
-Server physical-library work is implemented through the rearrangement slice of
-Phase 4D. Catalogue access requires an authenticated membership; a library ID is never
-authorization. The Server branch is still not deployable because the
-production private-object adapter, full physical-dimension geometry and direct
-layout manipulation, personal reading data, loans, backup/restore, storage
-quota, and production infrastructure have not yet been ported.
+Phase 3, and the shared catalogue, private-cover, and physical-library
+foundations are complete through Phase 4D. Catalogue access requires an
+authenticated membership; a library ID is never authorization. The Server
+edition is still not deployable because the production private-object adapter,
+personal reading data, loans, backup/restore, storage quota, and production
+infrastructure have not yet been ported.
 
 ## Development setup
 
@@ -184,14 +183,15 @@ payloads.
 
 ## Safety status
 
-The migration and isolation gate now upgrades through Phase 4A migration
-`0008_private_book_covers` against PostgreSQL 17. It checks catalogue and
+The migration and isolation gate now upgrades through migration
+`0011_explicit_shelves` against PostgreSQL 17. It checks catalogue and
 membership isolation, identity/session/account-invitation/library-invitation
 records, concurrent invitation consumption, atomic rate limiting, final-Owner
 protection, scope changes, reading perspectives, shared metadata constraints,
 cross-library physical relationships, contributor normalization, preservation
 of pre-Phase-4A books, Phase 4B service writes and ordered contributors, and
-each incremental rollback. It then downgrades
+private covers, revisioned layout, physical projection, explicit shelf
+geometry, fallbacks, support rules, and each incremental rollback. It then downgrades
 disposable `bookpile_test` until no BOOKPILE application tables remain.
 Alembic may retain its empty administrative `alembic_version` table.
 
@@ -219,3 +219,8 @@ hosted email provider.
 Do not use `docker compose down -v` as a routine stop command: `-v` deliberately
 deletes the Server PostgreSQL volume. It still cannot affect BOOKPILE Local's
 SQLite catalogue, which is outside Docker in the separate Local worktree.
+
+If the browser remains on **Opening BOOKPILE...**, first verify that the Docker
+PostgreSQL service is running. Restart the Server Vite process after changes to
+Vite configuration or edition entrypoints; an already-open tab cannot repair a
+stale development process by itself.
