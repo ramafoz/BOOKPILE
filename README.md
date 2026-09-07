@@ -392,9 +392,12 @@ third-party services.
   rehearsals, mandatory pre-migration backups, and recovery.
 - `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
   tenancy, privacy, quota, migration, and deployment roadmap.
-- `SERVER_PHASE5_READING_PLAN.md` defines the next Server milestone: personal
-  reading sessions, per-Owner Goodreads links, shared custody, migration
-  safety, API boundaries, frontend increments, and acceptance gates.
+- `SERVER_PHASE5_READING_PLAN.md` records the completed personal-reading phase:
+  per-Owner sessions and Goodreads links, shared custody, migration safety,
+  API boundaries, frontend increments, and acceptance gates.
+- `SERVER_PHASE6_LOAN_PLAN.md` defines the shared-loan model, Owner-only
+  borrower privacy, migration protocol, concurrency rules, frontend increments,
+  and acceptance gates for the next Server milestone.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
@@ -531,9 +534,9 @@ date/rate gradients, bibliographic colour modes, and Reading-area inspection
 all follow the selected Owner perspective. Phase 5E completed the compatibility
 transition: a verified backup and isolated migration rehearsal proved the old
 shared Goodreads field empty, and guarded migration `0013` removed it while
-preserving per-Owner reviews. Phase 5 is ready for final merge approval. The
-next functional milestone is Phase 6, shared loans with Owner-only sensitive
-borrower details and Viewer-safe projections.
+preserving per-Owner reviews. Phase 5 is merged into `main`. The next functional
+milestone is Phase 6, shared loans with Owner-only sensitive borrower details
+and Viewer-safe projections.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

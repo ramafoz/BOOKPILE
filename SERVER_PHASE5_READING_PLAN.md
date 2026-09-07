@@ -1,7 +1,7 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: 5A–5E complete on the Server feature branch and ready for final merge
-approval. This phase changes Server only. Released
+Status: 5A–5E complete, accepted, and merged into `main`. This phase changes
+Server only. Released
 BOOKPILE Local v1 and its populated SQLite database remain untouched.
 
 ## 1. Objective and boundary
@@ -283,10 +283,9 @@ The whole phase is therefore roughly 1.5–2.5 full contexts, depending on defec
 found during manual acceptance. With less than half a context available, the
 safe work is documentation, read-only preflight, backup, and branch creation;
 starting a live migration plus its full verification is poor risk management.
-Phase 5 is complete. The next functional milestone is Phase 6: shared loan
-history with Owner-only borrower details and Viewer-safe projections. Phase 5
-must first receive explicit merge approval; no Phase 6 work belongs on this
-feature branch.
+Phase 5 is complete and merged. The next functional milestone is Phase 6:
+shared loan history with Owner-only borrower details and Viewer-safe
+projections, developed independently on `feature/server-loans`.
 
 ## 9. Resolved frontend contract
 

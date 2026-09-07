@@ -791,6 +791,16 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   import will assign its links to the selected importing Owner.
 - [x] Implement shared `SHELVED`/`BEING_READ` custody, retain saved shelf
   positions, and prevent simultaneous active reading of one physical copy.
+- [ ] Complete Server Phase 6 according to `SERVER_PHASE6_LOAN_PLAN.md`:
+  - [ ] 6A: add the reversible shared-loan schema and pure domain rules.
+  - [ ] 6B: add scoped services/APIs, concurrency control, audit, and strictly
+    separate Owner-full and Viewer-redacted projections.
+  - [ ] 6C: add Loan/Return, history management, Single/Batch Add integration,
+    filters, sorting, and responsive catalogue UX.
+  - [ ] 6D: integrate On-loan custody with map, inspection, suggestions, and
+    non-sensitive statistics.
+  - [ ] 6E: complete compatibility review, full acceptance, documentation, and
+    guarded merge.
 - [ ] Implement transactional shared quota allocation and atomic library
   deletion/recovery.
 
