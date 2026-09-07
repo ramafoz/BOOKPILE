@@ -523,7 +523,6 @@ class Book(Base):
     genre_text: Mapped[str | None] = mapped_column(String(1000))
     series_name: Mapped[str | None] = mapped_column(String(300))
     series_volume: Mapped[str | None] = mapped_column(String(100))
-    goodreads_url: Mapped[str | None] = mapped_column(String(2048))
     notes: Mapped[str | None] = mapped_column(Text)
     acquisition_date: Mapped[date | None] = mapped_column(Date)
     is_original_collection: Mapped[bool] = mapped_column(

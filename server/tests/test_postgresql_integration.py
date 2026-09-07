@@ -136,7 +136,29 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 ],
             )
 
+        # Phase 5E must never silently discard an unexpected legacy shared
+        # Goodreads value. Prove the guard aborts, then clear the synthetic
+        # value and finish the migration.
+        command.upgrade(alembic, "0012_personal_readings")
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE books SET goodreads_url = :url WHERE id = :id"),
+                {
+                    "id": first_book_id,
+                    "url": "https://www.goodreads.com/review/show/legacy",
+                },
+            )
+        with pytest.raises(RuntimeError, match="require manual migration"):
+            command.upgrade(alembic, "head")
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE books SET goodreads_url = NULL WHERE id = :id"),
+                {"id": first_book_id},
+            )
         command.upgrade(alembic, "head")
+        assert "goodreads_url" not in {
+            column["name"] for column in inspect(engine).get_columns("books")
+        }
         assert {
             "libraries",
             "books",
@@ -622,6 +644,17 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Prove 0013 is independently reversible, restoring only the empty
+        # compatibility column before removing it again.
+        command.downgrade(alembic, "0012_personal_readings")
+        assert "goodreads_url" in {
+            column["name"] for column in inspect(engine).get_columns("books")
+        }
+        command.upgrade(alembic, "head")
+        assert "goodreads_url" not in {
+            column["name"] for column in inspect(engine).get_columns("books")
+        }
 
         # Prove 0012 is independently reversible without altering Phase 4.
         command.downgrade(alembic, "0011_explicit_shelves")

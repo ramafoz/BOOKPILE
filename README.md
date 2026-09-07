@@ -528,9 +528,12 @@ and Batch Add integration. Phase 5D is also implemented and accepted: shared
 active-copy custody is represented in the map without losing retained shelf
 positions; advanced filters, suggestions, statistics, status colours,
 date/rate gradients, bibliographic colour modes, and Reading-area inspection
-all follow the selected Owner perspective. The next milestone is 5E:
-compatibility preflight, guarded cleanup, complete regression and cross-device
-acceptance before merging Phase 5.
+all follow the selected Owner perspective. Phase 5E completed the compatibility
+transition: a verified backup and isolated migration rehearsal proved the old
+shared Goodreads field empty, and guarded migration `0013` removed it while
+preserving per-Owner reviews. Phase 5 is ready for final merge approval. The
+next functional milestone is Phase 6, shared loans with Owner-only sensitive
+borrower details and Viewer-safe projections.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

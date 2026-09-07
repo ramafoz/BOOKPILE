@@ -664,10 +664,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     registration, verification, login/logout, and password recovery end to end.
 - [x] Assign all currently implemented shared catalogue, cover, hierarchy, and
   layout records to a library.
-- [ ] Complete Owner-scoped personal reading records in Server Phase 5; schema,
+- [x] Complete Owner-scoped personal reading records in Server Phase 5; schema,
   scoped commands/APIs, catalogue/history, map, statistics, filters, shared
-  active-reading custody, and suggestions are complete through 5D. Guarded
-  compatibility cleanup and final acceptance remain in 5E; see
+  active-reading custody, suggestions, and guarded compatibility cleanup are
+  complete through 5E; see
   `SERVER_PHASE5_READING_PLAN.md`.
 - [x] Implement the Phase 3 library-membership and authorization foundation:
   - [x] Support equal co-Owners and read-only Viewers, without an Editor role.
@@ -766,7 +766,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Desktop and mobile acceptance completed on 2026-09-02, including anchored
     menus, compact mobile map controls, aligned Viewer actions, and queued
     self-expiring success notifications.
-- [ ] Complete Server Phase 5 according to
+- [x] Complete Server Phase 5 according to
   `SERVER_PHASE5_READING_PLAN.md`:
   - [x] 5A: add the reversible personal-reading schema and pure domain rules.
   - [x] 5B: add Owner-scoped reading/Goodreads services and Viewer-safe APIs.
@@ -782,11 +782,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     acceptance passed on 2026-09-07, including Reading-area inspection,
     percentile-clipped gradients, bibliographic categories, original language,
     and translation status.
-  - [ ] 5E: complete compatibility cleanup and cross-device acceptance.
-- [ ] Finish the Goodreads compatibility transition in Server Phase 5E:
-  per-Owner editing and member-readable labelled reviews are implemented;
-  audit the dormant shared-book column, explicitly map any value to an Owner,
-  and retire the compatibility path only after zero-loss verification. Local
+  - [x] 5E: complete compatibility cleanup and final acceptance. The dormant
+    shared Goodreads column was empty, backed up, rehearsed through
+    upgrade/downgrade/upgrade, and removed by guarded migration `0013`.
+- [x] Finish the Goodreads compatibility transition in Server Phase 5E:
+  per-Owner editing and member-readable labelled reviews remain canonical;
+  the empty shared-book column was retired after zero-loss verification. Local
   import will assign its links to the selected importing Owner.
 - [x] Implement shared `SHELVED`/`BEING_READ` custody, retain saved shelf
   positions, and prevent simultaneous active reading of one physical copy.

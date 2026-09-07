@@ -1,7 +1,7 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: 5A–5D complete and accepted on the Server feature branch; 5E is the
-next and final Phase 5 increment. This phase changes Server only. Released
+Status: 5A–5E complete on the Server feature branch and ready for final merge
+approval. This phase changes Server only. Released
 BOOKPILE Local v1 and its populated SQLite database remain untouched.
 
 ## 1. Objective and boundary
@@ -54,8 +54,8 @@ import remains blocked until both Phase 5 and Phase 6 have canonical targets.
 - Acquisition history remains shared copy metadata.
 - Goodreads review URLs are personal to an Owner. Owners edit only their own;
   authenticated library members may read all reviews, labelled by visible
-  username. The existing dormant shared column is retained until data
-  preflight proves it can be retired safely.
+  username. The dormant shared compatibility column was audited as empty and
+  removed safely in migration `0013_remove_shared_goodreads`.
 - Perspective drives personal catalogue state, history, statistics,
   suggestions, and personal map colouring.
 - A copy actively being read appears in the shared Reading area, while its
@@ -217,15 +217,27 @@ Reading copies, metadata colouring, complete statistics, and shared custody.
 
 ### 5E — compatibility cleanup and full acceptance
 
-- Audit dormant shared Goodreads data and migrate it only through an explicit,
-  reviewed mapping to an Owner.
-- Remove compatibility paths only after zero-loss checks.
-- Run complete backend/frontend, migration, authorization, responsive, and
+- [x] Audit dormant shared Goodreads data and migrate it only through an
+  explicit, reviewed mapping to an Owner.
+- [x] Remove compatibility paths only after zero-loss checks.
+- [x] Run complete backend/frontend, migration, authorization, responsive, and
   regression suites.
-- Update all user and operator documentation before merge.
+- [x] Update all user and operator documentation before merge.
 
 Gate: explicit user acceptance, then commit, push, and merge; no Phase 6 work is
 mixed into the branch.
+
+Verified implementation record (2026-09-07): the active database and verified
+backup contained zero nonblank legacy shared Goodreads values. A custom-format
+`pg_dump` was listed and restored into an isolated PostgreSQL database. Migration
+`0013_remove_shared_goodreads` refuses to run if any nonblank legacy value is
+present, removes only the empty `books.goodreads_url` column, and restores that
+nullable column on downgrade. The restored snapshot passed upgrade, downgrade,
+and second upgrade with unchanged book, reading-session, and personal-record
+counts. The active database now reports the new head and unchanged counts.
+Backend tests pass (98 plus the opt-in PostgreSQL migration test), as do all 34
+frontend tests, ESLint, and the Server production build. Cross-device Owner and
+Viewer behaviour was already accepted in 5C–5D; this cleanup has no UI path.
 
 ## 6. API projection rule
 
@@ -271,10 +283,10 @@ The whole phase is therefore roughly 1.5–2.5 full contexts, depending on defec
 found during manual acceptance. With less than half a context available, the
 safe work is documentation, read-only preflight, backup, and branch creation;
 starting a live migration plus its full verification is poor risk management.
-The recommended next coding session closes 5E as a guarded compatibility and
-acceptance increment. It starts with a read-only audit and verified PostgreSQL
-backup before deciding whether the dormant shared Goodreads column contains
-anything that needs an explicit Owner mapping.
+Phase 5 is complete. The next functional milestone is Phase 6: shared loan
+history with Owner-only borrower details and Viewer-safe projections. Phase 5
+must first receive explicit merge approval; no Phase 6 work belongs on this
+feature branch.
 
 ## 9. Resolved frontend contract
 
