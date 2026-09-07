@@ -1,7 +1,7 @@
 # BOOKPILE Server — multi-user implementation plan
 
 Status: active Server implementation. Phases 0–4D, the dual-edition
-architecture checkpoint, and Server Phase 5A–5C are complete; Phase 5D is the
+architecture checkpoint, and Server Phase 5A–5D are complete; Phase 5E is the
 next milestone. This document remains the product and security roadmap for the
 hosted edition.
 
@@ -1075,12 +1075,15 @@ precise-layout, responsive-map, gesture, inspection, Viewer-scope,
 catalogue-location, placement, rearrangement, physical-projection, floating
 editor, selection-first manipulation, and cross-device acceptance gates.
 Schema v9–v11, explicit shelf geometry, fallbacks, support validation, and
-structural controls are implemented and accepted. Phase 5A–5C now adds the
-reversible personal-reading model, scoped services/APIs, and accepted
-perspective-aware catalogue and history experience. Phase 5D–5E and Phases
-6–10 remain pending; full Local ZIP import is intentionally gated on the
-reading and loan models in Phases 5 and 6. The immediate next milestone is
-Phase 5D map, statistics, filter, custody, and suggestion consistency.
+structural controls are implemented and accepted. Phase 5A–5D now adds the
+reversible personal-reading model, scoped services/APIs, accepted
+perspective-aware catalogue and history experience, shared active-reading
+custody, session-aware filters and suggestions, complete reading statistics,
+and perspective-aware Library Map colouring and inspection. Phase 5E and
+Phases 6–10 remain pending; full Local ZIP import is intentionally gated on
+the reading and loan models in Phases 5 and 6. The immediate next milestone is
+Phase 5E compatibility preflight, guarded cleanup, full regression,
+cross-device acceptance, and Phase 5 merge.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:
@@ -1088,7 +1091,7 @@ than a false exact measurement:
 - current shared-catalogue/physical-map foundation (through Phase 4):
   **complete**;
 - complete invitation-only hosted beta roadmap (Phases 0–10): about
-  **55–60% complete**.
+  **60–65% complete**.
 
 The second figure includes unfinished personal readings, loans, quota and
 deletion, ZIP import/export, production operations, privacy/help material, and

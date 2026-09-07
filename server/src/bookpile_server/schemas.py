@@ -212,6 +212,18 @@ class PhysicalBookResponse(BaseModel):
     title: str
     author: str
     page_count: int | None
+    publisher: str | None
+    current_ed_year: int | None
+    original_publication_year: int | None
+    language: str | None
+    original_language: str | None
+    translation_status: str
+    fiction_category: str | None
+    binding: str | None
+    publication_type: str | None
+    genre_text: str | None
+    acquisition_date: date | None
+    is_original_collection: bool
     height_mm: int | None
     width_mm: int | None
     thickness_mm: int | None
@@ -716,6 +728,9 @@ class ReadingCatalogueItemResponse(BaseModel):
     state: str
     active_reader_present: bool
     goodreads_url: str | None
+    started_date: date | None
+    finished_date: date | None
+    dates_unknown: bool
 
 
 class ReadingCatalogueOverviewResponse(BaseModel):
@@ -727,4 +742,47 @@ class ReadingCatalogueOverviewResponse(BaseModel):
     read: int
     active_display: str
     items: list[ReadingCatalogueItemResponse]
+
+
+class ReadingStatisticsBookResponse(BaseModel):
+    book_id: UUID
+    title: str
+    author: str
+    reading_events: int
+    pages_read: int
+    average_pages_per_day: float | None
+    latest_finished_date: date | None
+
+
+class ReadingDurationStatisticResponse(BaseModel):
+    average_days: float | None
+    median_days: float | None
+    sample_size: int
+    excluded: int
+
+
+class ReadingStatisticsYearResponse(BaseModel):
+    year: int
+    reading_events: int
+    books_read: int
+    pages_read: int
+
+
+class ReadingStatisticsResponse(BaseModel):
+    perspective_user_id: UUID
+    total_catalogue_books: int
+    unique_books_read: int
+    completed_readings: int
+    dated_readings: int
+    rereadings: int
+    pages_read: int
+    average_pages_per_day: float | None
+    median_pages_per_day: float | None
+    pages_per_week: float | None
+    pages_per_month: float | None
+    active_readings: int
+    pending_duration: ReadingDurationStatisticResponse
+    reading_duration: ReadingDurationStatisticResponse
+    books: list[ReadingStatisticsBookResponse]
+    years: list[ReadingStatisticsYearResponse]
 

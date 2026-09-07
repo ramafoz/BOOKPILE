@@ -4,7 +4,13 @@ from uuid import UUID
 from sqlalchemy import Select, and_, delete, exists, func, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Book, BookContributor, ContributorRole, LibraryAuditEvent
+from ..models import (
+    Book,
+    BookContributor,
+    ContributorRole,
+    LibraryAuditEvent,
+    ReadingSession,
+)
 
 
 def _exact_values(column: object, values: Sequence[str]) -> object | None:
@@ -48,6 +54,13 @@ def catalogue_filters(
     year_field: str = "current_ed_year",
     year_min: int | None = None,
     year_max: int | None = None,
+    perspective_user_id: UUID | None = None,
+    reading_state: str = "ANY",
+    rereading_state: str = "ANY",
+    reading_date_field: str = "FINISHED",
+    reading_date_from: object | None = None,
+    reading_date_to: object | None = None,
+    available_only: bool = False,
 ) -> list[object]:
     filters: list[object] = [Book.library_id == library_id]
     if search and search.strip():
@@ -113,6 +126,54 @@ def catalogue_filters(
         filters.append(year_column >= year_min)
     if year_max is not None:
         filters.append(year_column <= year_max)
+    if perspective_user_id is not None:
+        personal_sessions = [
+            ReadingSession.library_id == library_id,
+            ReadingSession.book_id == Book.id,
+            ReadingSession.user_id == perspective_user_id,
+        ]
+        active = exists(select(ReadingSession.id).where(
+            *personal_sessions, ReadingSession.state == "ACTIVE"
+        ))
+        completed = exists(select(ReadingSession.id).where(
+            *personal_sessions, ReadingSession.state == "COMPLETED"
+        ))
+        completed_count = (
+            select(func.count(ReadingSession.id))
+            .where(*personal_sessions, ReadingSession.state == "COMPLETED")
+            .correlate(Book)
+            .scalar_subquery()
+        )
+        if reading_state == "PENDING":
+            filters.extend((~active, ~completed))
+        elif reading_state == "READING":
+            filters.extend((active, ~completed))
+        elif reading_state == "REREADING":
+            filters.extend((active, completed))
+        elif reading_state == "READ":
+            filters.extend((~active, completed))
+        if rereading_state == "YES":
+            filters.append(or_(completed_count >= 2, and_(active, completed_count >= 1)))
+        elif rereading_state == "NO":
+            filters.append(and_(completed_count < 2, ~and_(active, completed_count >= 1)))
+        if reading_date_from is not None or reading_date_to is not None:
+            date_column = (
+                ReadingSession.started_date
+                if reading_date_field == "STARTED"
+                else ReadingSession.finished_date
+            )
+            date_conditions = [*personal_sessions, date_column.is_not(None)]
+            if reading_date_from is not None:
+                date_conditions.append(date_column >= reading_date_from)
+            if reading_date_to is not None:
+                date_conditions.append(date_column <= reading_date_to)
+            filters.append(exists(select(ReadingSession.id).where(*date_conditions)))
+    if available_only:
+        filters.append(~exists(select(ReadingSession.id).where(
+            ReadingSession.library_id == library_id,
+            ReadingSession.book_id == Book.id,
+            ReadingSession.state == "ACTIVE",
+        )))
     return filters
 
 
@@ -138,6 +199,14 @@ def catalogue_query(
     sort_order: str = "asc",
     **filters: object,
 ) -> Select[tuple[Book]]:
+    if sort_by == "random":
+        return (
+            select(Book)
+            .where(*catalogue_filters(library_id, **filters))
+            .order_by(func.random())
+            .limit(limit)
+            .offset(offset)
+        )
     column = SORT_COLUMNS.get(sort_by, Book.title)
     direction = column.desc() if sort_order == "desc" else column.asc()
     return (

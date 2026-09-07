@@ -71,6 +71,9 @@ describe("Server catalogue requests", () => {
       language: ["English", "Galician"],
       genre: ["Fantasy", "Science Fiction"],
       page_max: 300,
+      perspective_user_id: "owner-1",
+      reading_state: "READ",
+      reading_date_from: "2025-01-01",
     });
 
     const url = String(fetchMock.mock.calls[0][0]);
@@ -79,6 +82,25 @@ describe("Server catalogue requests", () => {
     expect(query.getAll("language")).toEqual(["English", "Galician"]);
     expect(query.getAll("genre")).toEqual(["Fantasy", "Science Fiction"]);
     expect(query.get("page_max")).toBe("300");
+    expect(query.get("perspective_user_id")).toBe("owner-1");
+    expect(query.get("reading_state")).toBe("READ");
+    expect(query.get("reading_date_from")).toBe("2025-01-01");
+  });
+
+  it("loads statistics for a selected perspective and metadata filters", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ books: [], years: [] }), { status: 200 }),
+    );
+
+    await serverApi.readingStatistics("library-1", "owner-2", {
+      language: "Galician", reading_year: 2026,
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "http://bookpile.test");
+    expect(url.pathname).toContain("/reading-overview/statistics");
+    expect(url.searchParams.get("perspective_user_id")).toBe("owner-2");
+    expect(url.searchParams.get("language")).toBe("Galician");
+    expect(url.searchParams.get("reading_year")).toBe("2026");
   });
 
   it("sends CSRF protection with catalogue writes", async () => {

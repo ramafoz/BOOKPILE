@@ -63,6 +63,13 @@ class ReadingRepository:
     def library_book_ids(self, *, library_id: UUID) -> list[UUID]:
         return list(self._session.scalars(select(Book.id).where(Book.library_id == library_id)))
 
+    def library_books(self, *, library_id: UUID) -> list[Book]:
+        return list(
+            self._session.scalars(
+                select(Book).where(Book.library_id == library_id).order_by(Book.title, Book.id)
+            )
+        )
+
     def library_sessions(
         self, *, library_id: UUID, user_id: UUID
     ) -> list[ReadingSession]:

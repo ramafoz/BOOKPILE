@@ -186,9 +186,12 @@ def test_personal_perspectives_and_single_shared_active_copy(
         {
             "book_id": str(book.id),
             "state": "READ",
-            "active_reader_present": False,
-            "goodreads_url": None,
-        }
+                "active_reader_present": False,
+                "goodreads_url": None,
+                "started_date": "2026-09-01",
+                "finished_date": "2026-09-03",
+                "dates_unknown": False,
+            }
     ]
     reread = client.post(
         f"{url}/sessions/start",
@@ -300,3 +303,104 @@ def test_historical_crud_validation_and_personal_goodreads(
         "reading.deleted",
         "personal_book.goodreads_changed",
     }
+
+
+def test_perspective_filters_statistics_and_shared_availability(
+    client: TestClient, session: Session
+) -> None:
+    library, book, first, second, viewer, _ = shared_fixture(session)
+    book.page_count = 300
+    book.acquisition_date = date(2024, 12, 31)
+    book.language = "Galician"
+    book.genre_text = "History, Politics"
+    pending = Book(
+        library_id=library.id,
+        title="Still pending",
+        author="Another author",
+        page_count=120,
+        language="English",
+    )
+    session.add(pending)
+    session.commit()
+    authenticate(client, session, first)
+    url = reading_url(library, book)
+
+    for started, finished in (("2025-01-01", "2025-01-03"), ("2026-02-10", "2026-02-10")):
+        response = client.post(
+            f"{url}/sessions/historical",
+            json={"started_date": started, "finished_date": finished},
+            headers=headers(),
+        )
+        assert response.status_code == 201, response.text
+
+    catalogue_url = f"/api/v1/libraries/{library.id}/catalogue"
+    read = client.get(catalogue_url, params={
+        "perspective_user_id": first.id, "reading_state": "READ"
+    })
+    assert read.status_code == 200, read.text
+    assert [item["title"] for item in read.json()["books"]] == ["Shared copy"]
+    reread = client.get(catalogue_url, params={
+        "perspective_user_id": first.id, "rereading_state": "YES"
+    })
+    assert reread.status_code == 200, reread.text
+    assert reread.json()["total"] == 1
+    dated = client.get(catalogue_url, params={
+        "perspective_user_id": first.id,
+        "reading_date_field": "FINISHED",
+        "reading_date_from": "2026-01-01",
+        "reading_date_to": "2026-12-31",
+    })
+    assert dated.status_code == 200, dated.text
+    assert dated.json()["total"] == 1
+
+    statistics = client.get(
+        f"/api/v1/libraries/{library.id}/reading-overview/statistics",
+        params={"perspective_user_id": first.id, "language": "Galician"},
+    )
+    assert statistics.status_code == 200, statistics.text
+    body = statistics.json()
+    assert body["unique_books_read"] == 1
+    assert body["completed_readings"] == 2
+    assert body["rereadings"] == 1
+    assert body["pages_read"] == 600
+    assert body["average_pages_per_day"] == 200
+    assert body["median_pages_per_day"] == 200
+    assert body["pages_per_week"] > 0
+    assert body["pages_per_month"] > body["pages_per_week"]
+    assert body["pending_duration"] == {
+        "average_days": 2,
+        "median_days": 2,
+        "sample_size": 1,
+        "excluded": 0,
+    }
+    assert body["reading_duration"] == {
+        "average_days": 2,
+        "median_days": 2,
+        "sample_size": 2,
+        "excluded": 0,
+    }
+    assert [item["year"] for item in body["years"]] == [2026, 2025]
+
+    authenticate(client, session, second)
+    started = client.post(
+        f"{reading_url(library, pending)}/sessions/start",
+        json={"started_date": "2026-09-07"},
+        headers=headers(),
+    )
+    assert started.status_code == 201, started.text
+    authenticate(client, session, first)
+    available = client.get(catalogue_url, params={
+        "perspective_user_id": first.id,
+        "reading_state": "PENDING",
+        "available_only": True,
+    })
+    assert available.status_code == 200, available.text
+    assert available.json()["total"] == 0
+
+    authenticate(client, session, viewer)
+    visible = client.get(
+        f"/api/v1/libraries/{library.id}/reading-overview/statistics",
+        params={"perspective_user_id": first.id, "reading_year": 2026},
+    )
+    assert visible.status_code == 200
+    assert visible.json()["completed_readings"] == 1

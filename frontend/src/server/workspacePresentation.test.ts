@@ -20,6 +20,7 @@ describe("compact Server workspace presentation", () => {
   it("labels the active workspace and reading perspective", () => {
     expect(workspacePerspectiveLabel("CATALOGUE", "self", self)).toBe("Catalogue — self");
     expect(workspacePerspectiveLabel("MAP", "viewer", other)).toBe("Map — ramafoz");
+    expect(workspacePerspectiveLabel("STATISTICS", "viewer", other)).toBe("Statistics — ramafoz");
     expect(catalogueTitle("self", self)).toBe("Your books");
     expect(catalogueTitle("viewer", other)).toBe("ramafoz's books");
   });

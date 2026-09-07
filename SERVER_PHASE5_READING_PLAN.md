@@ -1,8 +1,8 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: 5A–5C complete and accepted on the Server feature branch; 5D is the
-next increment. This phase changes Server only. Released BOOKPILE Local v1 and
-its populated SQLite database remain untouched.
+Status: 5A–5D complete and accepted on the Server feature branch; 5E is the
+next and final Phase 5 increment. This phase changes Server only. Released
+BOOKPILE Local v1 and its populated SQLite database remain untouched.
 
 ## 1. Objective and boundary
 
@@ -189,14 +189,31 @@ all 98 backend tests including the disposable PostgreSQL integration test,
 
 ### 5D — map, statistics, filters, and suggestions
 
-- Move an actively read copy visually to Reading while retaining its position.
-- Make map colours and statistics use the selected perspective.
-- Add advanced rereading filters and session-aware date results.
-- Count reading events/pages correctly while preserving unique-book totals.
-- Exclude physically unavailable copies from suggestions.
+- [x] Move an actively read copy visually to Reading while retaining its
+  stored shelf position.
+- [x] Make map colours and statistics use the selected perspective.
+- [x] Add advanced rereading filters and session-aware date results.
+- [x] Count reading events/pages correctly while preserving unique-book
+  totals.
+- [x] Exclude physically unavailable copies from suggestions.
 
 Gate: catalogue, map, statistics, and suggestions agree for two Owners with
 different histories and one shared physical copy.
+
+Verified implementation record (2026-09-07): catalogue filters and random
+suggestions use the selected Owner's reading state while respecting shared
+physical availability. The Statistics workspace reports unique books,
+completed sessions, rereadings, dated and page-derived totals, per-year and
+per-book results, pending and reading durations, and reading rates. The
+Library Map supports perspective-aware status and date-derived gradients with
+1st–99th percentile clipping, categorical and focused bibliographic colours,
+and explicit missing/special states. Its shared Reading area contains every
+active physical copy while preserving retained placement; selecting one of
+its open-book symbols now opens the same inspection card as a shelved book,
+from which complete read-only information remains available. Translation
+status and original language are also available as map-colour modes. Desktop
+and phone acceptance confirmed perspective colour separation, clickable
+Reading copies, metadata colouring, complete statistics, and shared custody.
 
 ### 5E — compatibility cleanup and full acceptance
 
@@ -254,8 +271,10 @@ The whole phase is therefore roughly 1.5–2.5 full contexts, depending on defec
 found during manual acceptance. With less than half a context available, the
 safe work is documentation, read-only preflight, backup, and branch creation;
 starting a live migration plus its full verification is poor risk management.
-The recommended next coding session starts near a full budget and completes 5D
-as one coherent cross-view consistency increment.
+The recommended next coding session closes 5E as a guarded compatibility and
+acceptance increment. It starts with a read-only audit and verified PostgreSQL
+backup before deciding whether the dormant shared Goodreads column contains
+anything that needs an explicit Owner mapping.
 
 ## 9. Resolved frontend contract
 

@@ -665,9 +665,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [x] Assign all currently implemented shared catalogue, cover, hierarchy, and
   layout records to a library.
 - [ ] Complete Owner-scoped personal reading records in Server Phase 5; schema,
-  scoped commands/APIs, and the perspective-aware catalogue/history experience
-  are complete through 5C. Map, statistics, filters, and compatibility work
-  remain in 5D–5E; see `SERVER_PHASE5_READING_PLAN.md`.
+  scoped commands/APIs, catalogue/history, map, statistics, filters, shared
+  active-reading custody, and suggestions are complete through 5D. Guarded
+  compatibility cleanup and final acceptance remain in 5E; see
+  `SERVER_PHASE5_READING_PLAN.md`.
 - [x] Implement the Phase 3 library-membership and authorization foundation:
   - [x] Support equal co-Owners and read-only Viewers, without an Editor role.
   - [x] Support catalogue-only and catalogue-and-map Viewer scopes; map access
@@ -775,15 +776,20 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     acceptance passed on 2026-09-07. Single and Batch Add can also create one
     completed/unknown historical reading or start a known-date active reading;
     Batch Add clears personal reading/Goodreads values between books.
-  - [ ] 5D: integrate shared custody, an all-active-copies Reading area,
-    Statistics navigation, filters, map colouring, and suggestions.
+  - [x] 5D: integrate shared custody, an all-active-copies Reading area,
+    Statistics navigation, session-aware filters, perspective-aware map
+    colouring, and physically available suggestions. Desktop and phone
+    acceptance passed on 2026-09-07, including Reading-area inspection,
+    percentile-clipped gradients, bibliographic categories, original language,
+    and translation status.
   - [ ] 5E: complete compatibility cleanup and cross-device acceptance.
-- [ ] Move Goodreads review URLs into per-Owner book metadata in Server Phase
-  5: only the Owner edits their own link; Owners and Viewers see all reviews
-  labelled by username; Local import assigns existing links to its chosen
-  Owner. Retire the dormant shared-book compatibility column safely.
-- [ ] Implement shared physical custody and prevent simultaneous active reading
-  of one physical copy.
+- [ ] Finish the Goodreads compatibility transition in Server Phase 5E:
+  per-Owner editing and member-readable labelled reviews are implemented;
+  audit the dormant shared-book column, explicitly map any value to an Owner,
+  and retire the compatibility path only after zero-loss verification. Local
+  import will assign its links to the selected importing Owner.
+- [x] Implement shared `SHELVED`/`BEING_READ` custody, retain saved shelf
+  positions, and prevent simultaneous active reading of one physical copy.
 - [ ] Implement transactional shared quota allocation and atomic library
   deletion/recovery.
 

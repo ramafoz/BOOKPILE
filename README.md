@@ -522,14 +522,15 @@ Server Phase 5A provides the reversible PostgreSQL foundation for personal
 reading history and per-Owner Goodreads records, plus pure chronology, state,
 duration, rate, and counter rules. Phase 5B adds Owner-scoped session and
 Goodreads services, Viewer-safe projections, authorization, audit and
-concurrency-controlled commands. Phase 5C is implemented and accepted: the
-catalogue has perspective-aware `Pending`, `Reading...`, `Re-reading...`, and
-`Read` actions; read-only cross-Owner history and reviews; self-only reading
-management; suggestions; and unique/read/reread-aware counters. Single and
-Batch Add may also record one completed or unknown historical reading, or
-start a known-date active reading, while Batch Add clears all personal values
-for the next book. The next milestone is 5D: make the map, statistics, advanced
-filters, and suggestions consistently session- and perspective-aware.
+concurrency-controlled commands. Phase 5C adds the accepted
+perspective-aware catalogue and reading-history experience, including Single
+and Batch Add integration. Phase 5D is also implemented and accepted: shared
+active-copy custody is represented in the map without losing retained shelf
+positions; advanced filters, suggestions, statistics, status colours,
+date/rate gradients, bibliographic colour modes, and Reading-area inspection
+all follow the selected Owner perspective. The next milestone is 5E:
+compatibility preflight, guarded cleanup, complete regression and cross-device
+acceptance before merging Phase 5.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

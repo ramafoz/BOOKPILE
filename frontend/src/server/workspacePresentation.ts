@@ -1,12 +1,13 @@
 import type { CatalogueQuery, LibraryMemberSummary, ReadingPerspective } from "./serverApi";
 
-export type ViewingWorkspace = "CATALOGUE" | "MAP" | "LAYOUT";
+export type ViewingWorkspace = "CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT";
 
 const FILTER_KEYS: Array<keyof CatalogueQuery> = [
   "search", "isbn", "language", "original_language", "genre", "publisher",
   "series_name", "translation_status", "fiction_category", "binding",
   "publication_type", "series_state", "author_structure", "page_min",
   "page_max", "year_min", "year_max",
+  "reading_state", "rereading_state", "reading_date_from", "reading_date_to",
 ];
 
 export function hasActiveCatalogueFilters(query: CatalogueQuery): boolean {
@@ -29,7 +30,7 @@ export function workspacePerspectiveLabel(
   signedInUserId: string,
   perspectives: ReadingPerspective[],
 ): string {
-  const view = workspace === "MAP" ? "Map" : "Catalogue";
+  const view = workspace === "MAP" ? "Map" : workspace === "STATISTICS" ? "Statistics" : "Catalogue";
   const perspective = selectedPerspective(perspectives);
   if (!perspective || perspective.user_id === signedInUserId) return `${view} — self`;
   return `${view} — ${perspective.username}`;

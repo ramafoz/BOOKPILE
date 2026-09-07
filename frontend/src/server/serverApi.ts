@@ -79,7 +79,44 @@ export interface ReadingCatalogueOverview {
     state: PersonalReadingState;
     active_reader_present: boolean;
     goodreads_url: string | null;
+    started_date: string | null;
+    finished_date: string | null;
+    dates_unknown: boolean;
   }>;
+}
+
+export interface ReadingStatistics {
+  perspective_user_id: string;
+  total_catalogue_books: number;
+  unique_books_read: number;
+  completed_readings: number;
+  dated_readings: number;
+  rereadings: number;
+  pages_read: number;
+  average_pages_per_day: number | null;
+  median_pages_per_day: number | null;
+  pages_per_week: number | null;
+  pages_per_month: number | null;
+  active_readings: number;
+  pending_duration: ReadingDurationStatistic;
+  reading_duration: ReadingDurationStatistic;
+  books: Array<{
+    book_id: string;
+    title: string;
+    author: string;
+    reading_events: number;
+    pages_read: number;
+    average_pages_per_day: number | null;
+    latest_finished_date: string | null;
+  }>;
+  years: Array<{ year: number; reading_events: number; books_read: number; pages_read: number }>;
+}
+
+export interface ReadingDurationStatistic {
+  average_days: number | null;
+  median_days: number | null;
+  sample_size: number;
+  excluded: number;
 }
 
 export interface GoodreadsReview {
@@ -226,6 +263,18 @@ export interface PhysicalBook {
   title: string;
   author: string;
   page_count: number | null;
+  publisher?: string | null;
+  current_ed_year?: number | null;
+  original_publication_year?: number | null;
+  language?: string | null;
+  original_language?: string | null;
+  translation_status?: "UNKNOWN" | "ORIGINAL" | "TRANSLATED";
+  fiction_category?: string | null;
+  binding?: string | null;
+  publication_type?: string | null;
+  genre_text?: string | null;
+  acquisition_date?: string | null;
+  is_original_collection?: boolean;
   height_mm: number | null;
   width_mm: number | null;
   thickness_mm: number | null;
@@ -398,6 +447,13 @@ export interface CatalogueQuery {
   year_field?: "current_ed_year" | "original_publication_year";
   year_min?: number;
   year_max?: number;
+  perspective_user_id?: string;
+  reading_state?: "ANY" | "PENDING" | "READING" | "REREADING" | "READ";
+  rereading_state?: "ANY" | "YES" | "NO";
+  reading_date_field?: "STARTED" | "FINISHED";
+  reading_date_from?: string;
+  reading_date_to?: string;
+  available_only?: boolean;
   sort_by?: string;
   sort_order?: "asc" | "desc";
   limit?: number;
@@ -601,6 +657,17 @@ export const serverApi = {
     return request<ReadingCatalogueOverview>(
       `/libraries/${libraryId}/reading-overview?${query}`,
     );
+  },
+  readingStatistics: (
+    libraryId: string,
+    perspectiveUserId: string,
+    filters: { language?: string; genre?: string; publisher?: string; reading_year?: number } = {},
+  ) => {
+    const query = new URLSearchParams({ perspective_user_id: perspectiveUserId });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    });
+    return request<ReadingStatistics>(`/libraries/${libraryId}/reading-overview/statistics?${query}`);
   },
   startReading: (libraryId: string, bookId: string, startedDate: string) =>
     request<ReadingSession>(

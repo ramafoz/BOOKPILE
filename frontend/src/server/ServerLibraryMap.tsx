@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Settings2, Undo2, X } from "lucide-react";
 import { BookDetails } from "./CatalogueWorkspace";
 import { GeometryDialog, type GeometrySelection } from "./PhysicalLibraryWorkspace";
-import { serverApi, type PhysicalBook, type PhysicalLibrary, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
+import { serverApi, type BookReading, type GoodreadsReview, type PhysicalBook, type PhysicalLibrary, type ReadingCatalogueOverview, type ReadingPerspective, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
 import {
   boundsForRects,
   cataloguePageMean,
@@ -13,6 +13,7 @@ import {
   proportionalRearrangementSlots,
   type WorldRect,
 } from "./serverMapGeometry";
+import { buildMapColourScale, MAP_COLOUR_OPTIONS, type MapColourMode } from "./serverMapColour";
 
 interface Camera {
   x: number;
@@ -61,12 +62,34 @@ function zoomCamera(camera: Camera, factor: number, anchorX?: number, anchorY?: 
   };
 }
 
-export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: string; onBack: () => void }) {
+function retainedLocationLabel(data: PhysicalLibrary, bookId: string): string | null {
+  const book = data.books.find((item) => item.id === bookId);
+  if (!book?.container_id || !book.position) return null;
+  for (const bookcase of data.bookcases) {
+    for (const shelf of bookcase.shelves) {
+      const container = shelf.containers.find((item) => item.id === book.container_id);
+      if (!container) continue;
+      const layer = container.layer === "BACKGROUND" ? "Background" : "Foreground";
+      const type = container.container_type === "ROW" ? "Row" : "Pile";
+      return `${bookcase.name} · Shelf ${shelf.shelf_number} · ${layer} ${type} ${container.container_number} · Position ${book.position}`;
+    }
+  }
+  return null;
+}
+
+export default function ServerLibraryMap({ libraryId, perspective, onBack }: { libraryId: string; perspective: ReadingPerspective | null; onBack: () => void }) {
+  const perspectiveUserId = perspective?.user_id ?? null;
   const [data, setData] = useState<PhysicalLibrary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [inspectionMode, setInspectionMode] = useState<"BOOK" | "CONTAINER">("BOOK");
   const [details, setDetails] = useState<ServerBook | null>(null);
+  const [detailsReading, setDetailsReading] = useState<BookReading | null>(null);
+  const [detailsReviews, setDetailsReviews] = useState<GoodreadsReview[]>([]);
+  const [readingOverview, setReadingOverview] = useState<ReadingCatalogueOverview | null>(null);
+  const [colourMode, setColourMode] = useState<MapColourMode>("status");
+  const [colourFocus, setColourFocus] = useState("");
+  const [colourLegendExpanded, setColourLegendExpanded] = useState(false);
   const [detailsBusy, setDetailsBusy] = useState(false);
   const [rearranging, setRearranging] = useState(false);
   const [moveBookId, setMoveBookId] = useState("");
@@ -109,10 +132,13 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
     setLayoutDraft(null);
     cancelRearrangement();
     setCameraReady(false);
-    void serverApi.physicalLibrary(libraryId)
-      .then(setData)
+    void Promise.all([
+      serverApi.physicalLibrary(libraryId),
+      perspectiveUserId ? serverApi.readingOverview(libraryId, perspectiveUserId) : Promise.resolve(null),
+    ])
+      .then(([physical, overview]) => { setData(physical); setReadingOverview(overview); })
       .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "Library Map unavailable."));
-  }, [libraryId]);
+  }, [libraryId, perspectiveUserId]);
 
   useEffect(() => {
     const element = svgRef.current;
@@ -352,7 +378,14 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   async function showDetails(book: PhysicalBook) {
     setDetailsBusy(true);
     setError(null);
-    try { setDetails(await serverApi.book(libraryId, book.id)); }
+    try {
+      const [record, reading, reviews] = await Promise.all([
+        serverApi.book(libraryId, book.id),
+        perspectiveUserId ? serverApi.bookReading(libraryId, book.id, perspectiveUserId) : Promise.resolve(null),
+        serverApi.goodreadsReviews(libraryId, book.id),
+      ]);
+      setDetails(record); setDetailsReading(reading); setDetailsReviews(reviews);
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Book information unavailable."); }
     finally { setDetailsBusy(false); }
   }
@@ -446,9 +479,22 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
   if (!data || !geometry) return <section className="server-map-loading"><p>{error ?? "Loading Library Map…"}</p></section>;
   const mapData = mapPresentationData ?? data;
 
+  const readingByBook = new Map((readingOverview?.items ?? []).map((item) => [item.book_id, item]));
+  const activeBookIds = new Set((readingOverview?.items ?? []).filter((item) => item.active_reader_present).map((item) => item.book_id));
+  const moveActiveCopiesOutside = !rearranging && !layoutEditing;
+  const colourScale = buildMapColourScale(colourMode, mapData.books, readingByBook, colourFocus);
+  const focusOptions = colourMode === "genre"
+    ? [...new Set(mapData.books.flatMap((book) => (book.genre_text ?? "").split(",").map((value) => value.trim()).filter(Boolean)))].sort()
+    : colourMode === "publisher"
+      ? [...new Set(mapData.books.map((book) => book.publisher).filter((value): value is string => Boolean(value)))].sort()
+      : colourMode === "author"
+        ? [...new Set(mapData.books.map((book) => book.author).filter(Boolean))].sort()
+        : [];
+
   const booksByContainer = new Map<string, PhysicalBook[]>();
   mapData.books.forEach((book) => {
     if (!book.container_id) return;
+    if (moveActiveCopiesOutside && activeBookIds.has(book.id)) return;
     booksByContainer.set(book.container_id, [...(booksByContainer.get(book.container_id) ?? []), book]);
   });
   const selectedContainer = selection?.kind === "CONTAINER"
@@ -480,13 +526,22 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
     <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title="Back to catalogue" aria-label="Back to catalogue"><ArrowLeft size={16} /> <span>Catalogue</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} disabled={layoutEditing} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}{data.can_edit && <button type="button" className={layoutEditing ? "active" : ""} disabled={rearranging} onClick={() => layoutEditing ? cancelLayoutEditing() : enterLayoutEditing()}><Settings2 size={16} /> Edit layout</button>}<span>Choose inspection mode</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={`Inspection mode: ${inspectionMode === "BOOK" ? "books" : "containers"}. Tap to switch.`}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {inspectionMode === "BOOK" ? "Books" : "Containers"}</button></div></header>
     {error && <div className="server-map-error">{error}</div>}
     <div className="server-map-stage">
+      {perspective && <div className={`server-map-colour-legend ${colourLegendExpanded ? "expanded" : "collapsed"}`}>
+        <button type="button" className="server-map-colour-summary" onClick={() => setColourLegendExpanded((value) => !value)}><b>{colourFocus && ["genre", "publisher", "author"].includes(colourMode) ? colourFocus : colourScale.label}</b>{colourLegendExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>
+        {colourLegendExpanded && <div className="server-map-colour-body"><label>Colour by<select value={colourMode} onChange={(event) => { setColourMode(event.target.value as MapColourMode); setColourFocus(""); }}>{MAP_COLOUR_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          {focusOptions.length > 0 && <label>{colourMode === "genre" ? "Genre" : colourMode === "publisher" ? "Publisher" : "Author"}<select value={colourFocus} onChange={(event) => setColourFocus(event.target.value)}><option value="">Choose…</option>{focusOptions.map((value) => <option key={value}>{value}</option>)}</select></label>}
+          {colourScale.continuous && <div className="server-map-gradient-legend"><span>{colourScale.lowLabel}</span><i /><span>{colourScale.highLabel}</span></div>}
+          <div className="server-map-legend-items">{colourScale.legendItems.map((item) => <span key={item.label}><i style={{ background: item.colour }} />{item.label}</span>)}</div>
+          <small>Colours show {perspective.username}'s perspective. Physical custody is shared.</small>
+        </div>}
+      </div>}
       <svg
         ref={svgRef}
         viewBox={`${camera.x} ${camera.y} ${camera.width} ${camera.height}`}
         preserveAspectRatio="xMidYMid meet"
         onPointerDown={(event) => {
           const target = event.target as SVGElement;
-          if (event.button !== 0 || target.closest(".server-layout-handle") || (event.pointerType === "mouse" && target.closest(layoutEditing ? ".server-map-container, .server-map-book, .server-map-shelf, .server-map-bookcase" : ".server-map-container, .server-map-book"))) return;
+          if (event.button !== 0 || target.closest(".server-layout-handle, .server-map-reading-book") || (event.pointerType === "mouse" && target.closest(layoutEditing ? ".server-map-container, .server-map-book, .server-map-shelf, .server-map-bookcase" : ".server-map-container, .server-map-book"))) return;
           event.currentTarget.setPointerCapture(event.pointerId);
           pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
           gestureMovedRef.current = false;
@@ -534,7 +589,7 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         onClick={(event) => {
           if (gestureMovedRef.current) return;
           const target = event.target as SVGElement;
-          if (!target.closest(".server-map-container, .server-map-book, .server-map-shelf, .server-map-bookcase, .server-layout-handle")) {
+          if (!target.closest(".server-map-container, .server-map-book, .server-map-reading-book, .server-map-shelf, .server-map-bookcase, .server-layout-handle")) {
             if (layoutEditing) setLayoutSelection(null);
             else setSelection(null);
           }
@@ -567,9 +622,10 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
             {(rearranging && moveBookId ? rearrangementSlots.filter((slot) => slot.book).map((slot) => ({ ...slot, book: slot.book! })) : segments).map((segment) => <rect
               key={segment.book.id}
               className={`server-map-book ${selection?.kind === "BOOK" && selection.book.id === segment.book.id ? "selected" : ""}`}
+              style={{ "--map-book-colour": colourScale.colour(segment.book) } as CSSProperties}
               x={segment.x} y={segment.y} width={segment.width} height={segment.height}
               onClick={(event) => { event.stopPropagation(); if (gestureMovedRef.current) return; if (layoutEditing) setLayoutSelection({ kind: "CONTAINER", id: container.containerId }); else if (rearranging) { if (!moveBookId) selectMoveBook(segment.book.id); else if (!rearrangement?.complete) void previewDestination(container.containerId, String(segment.book.position)); } else setSelection(inspectionMode === "BOOK" ? { kind: "BOOK", book: segment.book } : { kind: "CONTAINER", containerId: container.containerId }); }}
-            ><title>{segment.book.title} — {segment.book.author}</title></rect>)}
+            ><title>{segment.book.title} — {segment.book.author} · {colourScale.detail(segment.book)}</title></rect>)}
             {rearrangementSlots.filter((slot) => !slot.book).map((slot) => <rect
               key={`${container.containerId}-target-${slot.position}`}
               className={`server-map-rearrangement-target ${slot.isEndTarget ? "end" : "gap"}`}
@@ -582,6 +638,25 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
         {data.layout.outside_areas.map((area) => <g key={area.area_kind} className={`server-map-outside ${area.area_kind.toLowerCase()}`}>
           <rect x={area.x_mm} y={-area.y_mm - area.height_mm} width={area.width_mm} height={area.height_mm} rx="2" />
           <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
+          {area.area_kind === "READING" && moveActiveCopiesOutside && (() => {
+            const activeBooks = mapData.books.filter((book) => activeBookIds.has(book.id));
+            const columns = Math.max(1, Math.ceil(Math.sqrt(activeBooks.length * area.width_mm / Math.max(1, area.height_mm))));
+            const rows = Math.max(1, Math.ceil(activeBooks.length / columns));
+            const cellWidth = area.width_mm / columns;
+            const cellHeight = area.height_mm / rows;
+            return activeBooks.map((book, index) => {
+              const width = cellWidth * .62;
+              const height = Math.min(cellHeight * .62, width * .72);
+              const x = area.x_mm + (index % columns) * cellWidth + (cellWidth - width) / 2;
+              const y = -area.y_mm - area.height_mm + Math.floor(index / columns) * cellHeight + (cellHeight - height) / 2;
+              const colour = colourScale.colour(book);
+              return <g key={book.id} className={`server-map-reading-book physically-active ${selection?.kind === "BOOK" && selection.book.id === book.id ? "selected" : ""}`} onClick={(event) => { event.stopPropagation(); setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>
+                <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .27} ${y} ${x} ${y + height * .12} L ${x} ${y + height} Q ${x + width * .27} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
+                <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .73} ${y} ${x + width} ${y + height * .12} L ${x + width} ${y + height} Q ${x + width * .73} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
+                <title>{book.title} — {book.author} · {colourScale.detail(book)} · This physical copy is being read</title>
+              </g>;
+            });
+          })()}
         </g>)}
         {layoutEditing && layoutSelectionRect && <g className="server-layout-selection">
           <rect className="server-layout-selection-outline" x={layoutSelectionRect.x} y={layoutSelectionRect.y} width={layoutSelectionRect.width} height={layoutSelectionRect.height} />
@@ -631,6 +706,6 @@ export default function ServerLibraryMap({ libraryId, onBack }: { libraryId: str
       {selection.kind === "BOOK" ? <><p className="server-card-eyebrow">Selected book</p><h4>{selection.book.title}</h4><p>{selection.book.author}</p><small>{selection.book.page_count ? `${selection.book.page_count} pages` : `Page count unknown · visual fallback ${Math.round(meanPages)} pages`}</small></> : <><p className="server-card-eyebrow">Selected container</p><h4>{selectedBooks.length} {selectedBooks.length === 1 ? "book" : "books"}</h4><ol>{selectedBooks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((book) => <li key={book.id}><button type="button" onClick={() => { setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>{book.title}<small>{book.author}</small></button></li>)}</ol></>}
       <div><span className="server-map-inspector-actions">{selectedContainer && <button type="button" onClick={() => focus(selectedContainer)}><Focus size={16} /> Focus container</button>}{selection.kind === "BOOK" && <button type="button" onClick={() => void showDetails(selection.book)} disabled={detailsBusy}><Eye size={16} /> {detailsBusy ? "Loading…" : "Complete information"}</button>}</span><span><Move size={15} /> Read-only inspection</span></div>
     </aside>}
-    {details && <BookDetails libraryId={libraryId} book={details} onClose={() => setDetails(null)} onEdit={null} />}
+    {details && <BookDetails libraryId={libraryId} book={details} location={retainedLocationLabel(data, details.id)} reading={detailsReading} perspectiveName={perspective?.username} reviews={detailsReviews} onClose={() => setDetails(null)} onEdit={null} />}
   </section>;
 }

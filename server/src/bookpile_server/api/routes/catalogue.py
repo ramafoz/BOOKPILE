@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile, status
 
@@ -36,6 +36,7 @@ from ...services.physical_library import (
     PhysicalLibraryNotFoundError,
     PhysicalLibraryValidationError,
 )
+from ...services.readings import ReadingNotFoundError
 from ..dependencies import (
     CatalogueServiceDependency,
     CoverServiceDependency,
@@ -44,6 +45,7 @@ from ..dependencies import (
     LibraryAccessServiceDependency,
     PhysicalLibraryServiceDependency,
     RateLimiterDependency,
+    ReadingServiceDependency,
 )
 
 
@@ -137,6 +139,7 @@ def get_catalogue(
     library_id: UUID,
     service: CatalogueServiceDependency,
     access_service: LibraryAccessServiceDependency,
+    reading_service: ReadingServiceDependency,
     context: CurrentAuthDependency,
     search: str | None = Query(default=None, max_length=200),
     isbn: str | None = Query(default=None, max_length=40),
@@ -158,6 +161,13 @@ def get_catalogue(
     ] = "current_ed_year",
     year_min: int | None = Query(default=None, ge=1000, le=9999),
     year_max: int | None = Query(default=None, ge=1000, le=9999),
+    perspective_user_id: UUID | None = Query(default=None),
+    reading_state: Literal["ANY", "PENDING", "READING", "REREADING", "READ"] = "ANY",
+    rereading_state: Literal["ANY", "YES", "NO"] = "ANY",
+    reading_date_field: Literal["STARTED", "FINISHED"] = "FINISHED",
+    reading_date_from: date | None = Query(default=None),
+    reading_date_to: date | None = Query(default=None),
+    available_only: bool = False,
     sort_by: Literal[
         "title",
         "author",
@@ -168,6 +178,7 @@ def get_catalogue(
         "current_ed_year",
         "original_publication_year",
         "acquisition_date",
+        "random",
     ] = "title",
     sort_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=50, ge=1, le=100),
@@ -177,6 +188,24 @@ def get_catalogue(
         access = access_service.require_catalogue(
             library_id=library_id, user_id=context.user_id
         )
+        target_perspective = (
+            perspective_user_id
+            or access.selected_reading_user_id
+            or context.user_id
+        )
+        if (
+            perspective_user_id is not None
+            or reading_state != "ANY"
+            or rereading_state != "ANY"
+            or reading_date_from is not None
+            or reading_date_to is not None
+            or available_only
+        ):
+            reading_service.require_perspective(
+                library_id=library_id,
+                actor_user_id=context.user_id,
+                perspective_user_id=target_perspective,
+            )
         page = service.list_books(
             library_id,
             search=search,
@@ -197,11 +226,20 @@ def get_catalogue(
             year_field=year_field,
             year_min=year_min,
             year_max=year_max,
+            perspective_user_id=target_perspective,
+            reading_state=reading_state,
+            rereading_state=rereading_state,
+            reading_date_field=reading_date_field,
+            reading_date_from=reading_date_from,
+            reading_date_to=reading_date_to,
+            available_only=available_only,
             sort_by=sort_by,
             sort_order=sort_order,
             limit=limit,
             offset=offset,
         )
+    except ReadingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Reading perspective not found") from exc
     except (LibraryNotFoundError, CatalogueValidationError) as exc:
         raise catalogue_error(exc) from exc
     return CatalogueResponse(

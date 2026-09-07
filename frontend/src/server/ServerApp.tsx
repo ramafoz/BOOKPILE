@@ -1,6 +1,7 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
+  BarChart3,
   BookOpen,
   CheckCircle2,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
 import CatalogueWorkspace from "./CatalogueWorkspace";
 import PhysicalLibraryWorkspace from "./PhysicalLibraryWorkspace";
 import ServerLibraryMap from "./ServerLibraryMap";
+import StatisticsWorkspace from "./StatisticsWorkspace";
 import {
   workspacePerspectiveLabel,
 } from "./workspacePresentation";
@@ -447,7 +449,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [dataBusy, setDataBusy] = useState(false);
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
-  const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "LAYOUT">("CATALOGUE");
+  const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT">("CATALOGUE");
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "SETTINGS" | null>(null);
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
 
@@ -698,7 +700,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
             <LibraryBig size={17} /><span><b>{selected?.name ?? "Choose library"}</b>{selected && <small>{selected.role === "OWNER" ? "Owner" : "Viewer"}</small>}</span><ChevronDown size={15} />
           </button>
           {selected && <button type="button" className={controlsPanel === "VIEW" ? "active" : ""} onClick={(event) => toggleControlsPanel("VIEW", event.currentTarget)}>
-            {workspace === "MAP" ? <Map size={17} /> : workspace === "LAYOUT" ? <Layers3 size={17} /> : <BookOpen size={17} />}
+            {workspace === "MAP" ? <Map size={17} /> : workspace === "STATISTICS" ? <BarChart3 size={17} /> : workspace === "LAYOUT" ? <Layers3 size={17} /> : <BookOpen size={17} />}
             <span><b>{workspace === "LAYOUT" ? "Customize layout" : workspacePerspectiveLabel(workspace, user.user_id, perspectives)}</b><small>{selected.can_view_map ? "Catalogue and map" : "Catalogue only"}</small></span><ChevronDown size={15} />
           </button>}
           <span className="server-compact-identity" title="Session protected; membership checked per request"><ShieldCheck size={18} /><span><b>{user.username}</b><small>Protected session</small></span></span>
@@ -733,7 +735,9 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div className="server-library-main">
             {selected ? <>
               {workspace === "MAP" && selected.can_view_map
-                ? <ServerLibraryMap libraryId={selected.library_id} onBack={() => setWorkspace("CATALOGUE")} />
+                ? <ServerLibraryMap libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
+                : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
+                  ? <StatisticsWorkspace libraryId={selected.library_id} perspective={(perspectives.find((item) => item.selected) ?? perspectives[0])!} />
                 : workspace === "LAYOUT" && selected.role === "OWNER"
                   ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
                   : <CatalogueWorkspace library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} />}
@@ -743,6 +747,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                 <nav className="server-view-choices" aria-label="Library view">
                   <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => { setWorkspace("CATALOGUE"); setControlsPanel(null); }}><BookOpen size={17} /> Catalogue</button>
                   {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => { setWorkspace("MAP"); setControlsPanel(null); }}><Map size={17} /> Library Map</button>}
+                  <button type="button" className={workspace === "STATISTICS" ? "active" : ""} onClick={() => { setWorkspace("STATISTICS"); setControlsPanel(null); }}><BarChart3 size={17} /> Statistics</button>
                 </nav>
                 <p>Choose whose personal reading data is represented. Other members' perspectives are read-only.</p>
                 <select value={perspectives.find((item) => item.selected)?.user_id ?? ""} onChange={(event) => void selectPerspective(event.target.value)} disabled={dataBusy}>

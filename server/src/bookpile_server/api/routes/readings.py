@@ -11,6 +11,10 @@ from ...schemas import (
     ReadingSessionResponse,
     ReadingCatalogueItemResponse,
     ReadingCatalogueOverviewResponse,
+    ReadingStatisticsBookResponse,
+    ReadingDurationStatisticResponse,
+    ReadingStatisticsResponse,
+    ReadingStatisticsYearResponse,
     StartReadingRequest,
 )
 from ...services.readings import (
@@ -69,7 +73,58 @@ def get_reading_catalogue_overview(
             state=item.state.value,
             active_reader_present=item.active_reader_present,
             goodreads_url=item.goodreads_url,
+            started_date=item.started_date,
+            finished_date=item.finished_date,
+            dates_unknown=item.dates_unknown,
         ) for item in overview.items],
+    )
+
+
+@overview_router.get("/statistics", response_model=ReadingStatisticsResponse)
+def get_reading_statistics(
+    library_id: UUID,
+    service: ReadingServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    perspective_user_id: UUID | None = Query(default=None),
+    language: str | None = Query(default=None, max_length=200),
+    genre: str | None = Query(default=None, max_length=200),
+    publisher: str | None = Query(default=None, max_length=300),
+    reading_year: int | None = Query(default=None, ge=1000, le=9999),
+) -> ReadingStatisticsResponse:
+    try:
+        access = access_service.require_catalogue(
+            library_id=library_id, user_id=context.user_id
+        )
+        target = perspective_user_id or access.selected_reading_user_id or context.user_id
+        result = service.statistics(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            perspective_user_id=target,
+            language=language,
+            genre=genre,
+            publisher=publisher,
+            reading_year=reading_year,
+        )
+    except Exception as exc:
+        raise reading_error(exc) from exc
+    return ReadingStatisticsResponse(
+        perspective_user_id=result.user_id,
+        total_catalogue_books=result.total_catalogue_books,
+        unique_books_read=result.unique_books_read,
+        completed_readings=result.completed_readings,
+        dated_readings=result.dated_readings,
+        rereadings=result.rereadings,
+        pages_read=result.pages_read,
+        average_pages_per_day=result.average_pages_per_day,
+        median_pages_per_day=result.median_pages_per_day,
+        pages_per_week=result.pages_per_week,
+        pages_per_month=result.pages_per_month,
+        active_readings=result.active_readings,
+        pending_duration=ReadingDurationStatisticResponse(**result.pending_duration.__dict__),
+        reading_duration=ReadingDurationStatisticResponse(**result.reading_duration.__dict__),
+        books=[ReadingStatisticsBookResponse(**item.__dict__) for item in result.books],
+        years=[ReadingStatisticsYearResponse(**item.__dict__) for item in result.years],
     )
 
 
