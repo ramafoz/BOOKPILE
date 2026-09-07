@@ -518,13 +518,18 @@ was not used as a test target, and full ZIP import remains gated on Server
 reading and loan models. See
 [`ADR 0011`](docs/adr/0011-dual-edition-entrypoints.md).
 
-Server Phase 5A now provides the reversible PostgreSQL foundation for personal
+Server Phase 5A provides the reversible PostgreSQL foundation for personal
 reading history and per-Owner Goodreads records, plus pure chronology, state,
-duration, rate, and counter rules. It adds no frontend or reading-write API yet.
-Phase 5B adds Owner-scoped session and Goodreads services, Viewer-safe
-projections, authorization, audit and concurrency-controlled commands. The next
-milestone is 5C: the perspective-aware catalogue, status dialogs, personal
-reading-history manager, and Goodreads interface.
+duration, rate, and counter rules. Phase 5B adds Owner-scoped session and
+Goodreads services, Viewer-safe projections, authorization, audit and
+concurrency-controlled commands. Phase 5C is implemented and accepted: the
+catalogue has perspective-aware `Pending`, `Reading...`, `Re-reading...`, and
+`Read` actions; read-only cross-Owner history and reviews; self-only reading
+management; suggestions; and unique/read/reread-aware counters. Single and
+Batch Add may also record one completed or unknown historical reading, or
+start a known-date active reading, while Batch Add clears all personal values
+for the next book. The next milestone is 5D: make the map, statistics, advanced
+filters, and suggestions consistently session- and perspective-aware.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

@@ -710,3 +710,21 @@ class GoodreadsReviewResponse(BaseModel):
     username: str
     url: str
 
+
+class ReadingCatalogueItemResponse(BaseModel):
+    book_id: UUID
+    state: str
+    active_reader_present: bool
+    goodreads_url: str | None
+
+
+class ReadingCatalogueOverviewResponse(BaseModel):
+    perspective_user_id: UUID
+    writable: bool
+    pending: int
+    reading: int
+    rereading: int
+    read: int
+    active_display: str
+    items: list[ReadingCatalogueItemResponse]
+

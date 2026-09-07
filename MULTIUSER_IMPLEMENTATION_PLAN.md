@@ -1,8 +1,9 @@
 # BOOKPILE Server — multi-user implementation plan
 
-Status: active Server implementation. Phases 0–4D and the dual-edition
-architecture checkpoint are complete; Phase 5 is the next milestone. This
-document remains the product and security roadmap for the hosted edition.
+Status: active Server implementation. Phases 0–4D, the dual-edition
+architecture checkpoint, and Server Phase 5A–5C are complete; Phase 5D is the
+next milestone. This document remains the product and security roadmap for the
+hosted edition.
 
 ## 1. Product boundary
 
@@ -1067,18 +1068,19 @@ recovery, and cost checks.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
 
-### Progress snapshot — 2026-09-06
+### Progress snapshot — 2026-09-07
 
 Phases 0, 1, 2, 3, 3.5, and 4A–4D are complete. Phase 4D passed its hierarchy,
 precise-layout, responsive-map, gesture, inspection, Viewer-scope,
 catalogue-location, placement, rearrangement, physical-projection, floating
 editor, selection-first manipulation, and cross-device acceptance gates.
 Schema v9–v11, explicit shelf geometry, fallbacks, support validation, and
-structural controls are implemented and accepted. Phases 5–10 remain pending;
-full Local ZIP import is intentionally gated on the reading and loan models in
-Phases 5 and 6.
-The post-4D dual-edition checkpoint is complete. Phase 5 personal readings and
-shared custody is now the immediate next milestone.
+structural controls are implemented and accepted. Phase 5A–5C now adds the
+reversible personal-reading model, scoped services/APIs, and accepted
+perspective-aware catalogue and history experience. Phase 5D–5E and Phases
+6–10 remain pending; full Local ZIP import is intentionally gated on the
+reading and loan models in Phases 5 and 6. The immediate next milestone is
+Phase 5D map, statistics, filter, custody, and suggestion consistency.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:
@@ -1086,7 +1088,7 @@ than a false exact measurement:
 - current shared-catalogue/physical-map foundation (through Phase 4):
   **complete**;
 - complete invitation-only hosted beta roadmap (Phases 0–10): about
-  **50–55% complete**.
+  **55–60% complete**.
 
 The second figure includes unfinished personal readings, loans, quota and
 deletion, ZIP import/export, production operations, privacy/help material, and

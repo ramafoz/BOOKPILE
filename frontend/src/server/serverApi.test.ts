@@ -32,6 +32,32 @@ describe("empty accepted responses", () => {
 });
 
 describe("Server catalogue requests", () => {
+  it("loads one book through the selected reading perspective", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ state: "PENDING", sessions: [] }), { status: 200 }),
+    );
+
+    await serverApi.bookReading("library-1", "book-1", "owner-2");
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "http://bookpile.test");
+    expect(url.pathname).toContain("/catalogue/book-1/reading");
+    expect(url.searchParams.get("perspective_user_id")).toBe("owner-2");
+  });
+
+  it("protects personal reading and Goodreads writes with CSRF", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=personal-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "session-1" }), { status: 201 }),
+    );
+
+    await serverApi.startReading("library-1", "book-1", "2026-09-07");
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("POST");
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("personal-token");
+    expect(JSON.parse(String(options.body))).toEqual({ started_date: "2026-09-07" });
+  });
+
   it("encodes repeated advanced filters without losing their AND/OR structure", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({

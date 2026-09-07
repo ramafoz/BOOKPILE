@@ -9,6 +9,8 @@ from ...schemas import (
     GoodreadsWrite,
     HistoricalReadingWrite,
     ReadingSessionResponse,
+    ReadingCatalogueItemResponse,
+    ReadingCatalogueOverviewResponse,
     StartReadingRequest,
 )
 from ...services.readings import (
@@ -17,6 +19,7 @@ from ...services.readings import (
     ReadingNotFoundError,
     ReadingValidationError,
 )
+from ...services.reading_domain import format_active_reading_count
 from ...services.library_access import LibraryNotFoundError
 from ..dependencies import (
     CsrfDependency,
@@ -30,6 +33,44 @@ router = APIRouter(
     prefix="/libraries/{library_id}/catalogue/{book_id}/reading",
     tags=["personal readings"],
 )
+overview_router = APIRouter(prefix="/libraries/{library_id}/reading-overview", tags=["personal readings"])
+
+
+@overview_router.get("", response_model=ReadingCatalogueOverviewResponse)
+def get_reading_catalogue_overview(
+    library_id: UUID,
+    service: ReadingServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    perspective_user_id: UUID | None = Query(default=None),
+) -> ReadingCatalogueOverviewResponse:
+    try:
+        access = access_service.require_catalogue(
+            library_id=library_id, user_id=context.user_id
+        )
+        target = perspective_user_id or access.selected_reading_user_id or context.user_id
+        overview = service.catalogue_overview(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            perspective_user_id=target,
+        )
+    except Exception as exc:
+        raise reading_error(exc) from exc
+    return ReadingCatalogueOverviewResponse(
+        perspective_user_id=overview.user_id,
+        writable=overview.writable,
+        pending=overview.pending,
+        reading=overview.reading,
+        rereading=overview.rereading,
+        read=overview.read,
+        active_display=format_active_reading_count(overview.reading, overview.rereading),
+        items=[ReadingCatalogueItemResponse(
+            book_id=item.book_id,
+            state=item.state.value,
+            active_reader_present=item.active_reader_present,
+            goodreads_url=item.goodreads_url,
+        ) for item in overview.items],
+    )
 
 
 def reading_error(exc: Exception) -> HTTPException:

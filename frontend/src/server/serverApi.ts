@@ -41,6 +41,53 @@ export interface ReadingPerspective {
   writable: boolean;
 }
 
+export type PersonalReadingState = "PENDING" | "READING" | "REREADING" | "READ";
+
+export interface ReadingSession {
+  id: string;
+  state: "ACTIVE" | "COMPLETED";
+  started_date: string | null;
+  finished_date: string | null;
+  dates_unknown: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookReading {
+  library_id: string;
+  book_id: string;
+  perspective_user_id: string;
+  state: PersonalReadingState;
+  active_reader_present: boolean;
+  writable: boolean;
+  total_sessions: number;
+  limit: number;
+  offset: number;
+  sessions: ReadingSession[];
+}
+
+export interface ReadingCatalogueOverview {
+  perspective_user_id: string;
+  writable: boolean;
+  pending: number;
+  reading: number;
+  rereading: number;
+  read: number;
+  active_display: string;
+  items: Array<{
+    book_id: string;
+    state: PersonalReadingState;
+    active_reader_present: boolean;
+    goodreads_url: string | null;
+  }>;
+}
+
+export interface GoodreadsReview {
+  user_id: string;
+  username: string;
+  url: string;
+}
+
 export interface CreatedLibraryInvitation {
   invitation_id: string;
   invitation_token: string;
@@ -541,6 +588,73 @@ export const serverApi = {
     ),
   book: (libraryId: string, bookId: string) =>
     request<ServerBook>(`/libraries/${libraryId}/catalogue/${bookId}`),
+  bookReading: (libraryId: string, bookId: string, perspectiveUserId?: string) => {
+    const query = new URLSearchParams();
+    if (perspectiveUserId) query.set("perspective_user_id", perspectiveUserId);
+    const suffix = query.size ? `?${query}` : "";
+    return request<BookReading>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading${suffix}`,
+    );
+  },
+  readingOverview: (libraryId: string, perspectiveUserId: string) => {
+    const query = new URLSearchParams({ perspective_user_id: perspectiveUserId });
+    return request<ReadingCatalogueOverview>(
+      `/libraries/${libraryId}/reading-overview?${query}`,
+    );
+  },
+  startReading: (libraryId: string, bookId: string, startedDate: string) =>
+    request<ReadingSession>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/start`,
+      { method: "POST", body: JSON.stringify({ started_date: startedDate }) },
+      true,
+    ),
+  finishReading: (libraryId: string, bookId: string, sessionId: string, finishedDate: string) =>
+    request<ReadingSession>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/${sessionId}/finish`,
+      { method: "POST", body: JSON.stringify({ finished_date: finishedDate }) },
+      true,
+    ),
+  cancelReading: (libraryId: string, bookId: string, sessionId: string) =>
+    request<void>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/${sessionId}/cancel`,
+      { method: "DELETE" },
+      true,
+    ),
+  addHistoricalReading: (
+    libraryId: string,
+    bookId: string,
+    payload: { started_date: string | null; finished_date: string | null; dates_unknown: boolean },
+  ) => request<ReadingSession>(
+    `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/historical`,
+    { method: "POST", body: JSON.stringify(payload) },
+    true,
+  ),
+  updateHistoricalReading: (
+    libraryId: string,
+    bookId: string,
+    sessionId: string,
+    payload: { started_date: string | null; finished_date: string | null; dates_unknown: boolean },
+  ) => request<ReadingSession>(
+    `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/${sessionId}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+    true,
+  ),
+  deleteHistoricalReading: (libraryId: string, bookId: string, sessionId: string) =>
+    request<void>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/sessions/${sessionId}`,
+      { method: "DELETE" },
+      true,
+    ),
+  goodreadsReviews: (libraryId: string, bookId: string) =>
+    request<GoodreadsReview[]>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/goodreads`,
+    ),
+  setMyGoodreadsReview: (libraryId: string, bookId: string, url: string | null) =>
+    request<GoodreadsReview | null>(
+      `/libraries/${libraryId}/catalogue/${bookId}/reading/goodreads/me`,
+      { method: "PUT", body: JSON.stringify({ url }) },
+      true,
+    ),
   createBook: (libraryId: string, book: ServerBookWrite) =>
     request<ServerBook>(
       `/libraries/${libraryId}/catalogue`,

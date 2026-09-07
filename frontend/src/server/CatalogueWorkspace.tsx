@@ -7,11 +7,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  ExternalLink,
   Layers3,
   MapPin,
   Pencil,
   Plus,
   Search,
+  BookMarked,
+  Sparkles,
+  RefreshCw,
   SlidersHorizontal,
   Trash2,
   X,
@@ -26,12 +30,22 @@ import {
   type ServerBookSummary,
   type ServerBookWrite,
   type ReadingPerspective,
+  type BookReading,
+  type GoodreadsReview,
+  type ReadingCatalogueOverview,
   ServerApiError,
   serverApi,
 } from "./serverApi";
 import { cataloguePrivacyLabel, catalogueTitle, hasActiveCatalogueFilters } from "./workspacePresentation";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
+import {
+  GoodreadsSummary,
+  ReadingActionDialog,
+  ReadingManager,
+  ReadingStatusBadge,
+  ReadingSummary,
+} from "./ReadingExperience";
 
 
 const PAGE_SIZE = 25;
@@ -146,10 +160,13 @@ function locationLabel(data: PhysicalLibrary | null, bookId: string): string | n
   return location ? `${location.label} · Position ${book.position}` : null;
 }
 
-export function BookDetails({ libraryId, book, location, onClose, onEdit }: {
+export function BookDetails({ libraryId, book, location, reading, perspectiveName, reviews, onClose, onEdit }: {
   libraryId: string;
   book: ServerBook;
   location?: string | null;
+  reading?: BookReading | null;
+  perspectiveName?: string;
+  reviews?: GoodreadsReview[];
   onClose: () => void;
   onEdit: (() => void) | null;
 }) {
@@ -174,6 +191,8 @@ export function BookDetails({ libraryId, book, location, onClose, onEdit }: {
     <p className="server-card-eyebrow">Read-only catalogue record</p>
     <div className="server-book-details-heading"><CoverImage libraryId={libraryId} book={book} /><div><h2>{book.title}</h2><p className="server-book-author">{book.display_author}</p></div></div>
     {!!book.contributors.length && <section><h3>Contributors</h3><div className="server-contributor-credits">{book.contributors.map((item) => <span key={item.id}><b>{item.role_label}</b>{item.name}</span>)}</div></section>}
+    {reading && <ReadingSummary reading={reading} perspectiveName={perspectiveName ?? "Selected Owner"} />}
+    <GoodreadsSummary reviews={reviews ?? []} />
     <dl className="server-book-metadata">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value === null || value === "" ? "Not recorded" : String(value).replaceAll("_", " ")}</dd></div>)}</dl>
     <div className="server-dialog-actions"><button type="button" onClick={onClose}>Close</button>{onEdit && <button className="confirm" type="button" onClick={onEdit}><Pencil size={16} /> Edit book</button>}</div>
   </section></div>;
@@ -183,6 +202,22 @@ interface PlacementWrite {
   containerId: string;
   position: string;
 }
+
+interface InitialPersonalReadingWrite {
+  readingMode: "NONE" | "HISTORICAL" | "ACTIVE";
+  datesUnknown: boolean;
+  startedDate: string;
+  finishedDate: string;
+  goodreadsUrl: string;
+}
+
+const EMPTY_INITIAL_PERSONAL_READING: InitialPersonalReadingWrite = {
+  readingMode: "NONE",
+  datesUnknown: false,
+  startedDate: "",
+  finishedDate: "",
+  goodreadsUrl: "",
+};
 
 function BookEditor({ initial, initialCover, roles, options, physical, bookId, initialPlacement, batchMode, batchAddedCount = 0, onClose, onSave }: {
   initial: ServerBookWrite;
@@ -195,7 +230,7 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   batchMode?: boolean;
   batchAddedCount?: number;
   onClose: () => void;
-  onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, placement: PlacementWrite | null, reportProgress: (message: string) => void) => Promise<void>;
+  onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, reportProgress: (message: string) => void) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ServerBookWrite>(initial);
   const [busy, setBusy] = useState(false);
@@ -204,6 +239,8 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [removeCover, setRemoveCover] = useState(false);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [personal, setPersonal] = useState<InitialPersonalReadingWrite>(EMPTY_INITIAL_PERSONAL_READING);
+  const [creatingAtOpen] = useState(!bookId);
   const placed = physical?.books.find((item) => item.id === bookId);
   const initialContainerId = initialPlacement?.containerId ?? placed?.container_id ?? "";
   const currentLocation = physicalLocations(physical).find(({ container }) => container.id === initialContainerId);
@@ -230,7 +267,7 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setProgress("Saving book…");
-    try { await onSave(draft, coverFile, removeCover, physical ? { containerId, position } : null, setProgress); } catch (caught) { setError(message(caught)); setBusy(false); setProgress(""); }
+    try { await onSave(draft, coverFile, removeCover, physical ? { containerId, position } : null, creatingAtOpen ? personal : null, setProgress); } catch (caught) { setError(message(caught)); setBusy(false); setProgress(""); }
   }
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog editor" role="dialog" aria-modal="true">
     <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close" disabled={busy}><X /></button>
@@ -301,6 +338,15 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
       <fieldset><legend>Library notes</legend><div className="server-form-grid">
         <label className="wide">Notes<textarea rows={4} maxLength={4000} value={draft.notes ?? ""} onChange={(e) => text("notes", e.target.value)} /></label>
       </div></fieldset>
+      {creatingAtOpen && <fieldset className="server-initial-reading"><legend>My reading <small>optional</small></legend>
+        <p className="server-field-help">Add your own reading record and Goodreads review while creating this shared catalogue record. These values are personal and are cleared before the next Batch Add book.</p>
+        <div className="server-form-grid"><label className="wide">Reading record<select value={personal.readingMode} onChange={(event) => setPersonal({ ...personal, readingMode: event.target.value as InitialPersonalReadingWrite["readingMode"], datesUnknown: false, startedDate: "", finishedDate: "" })}><option value="NONE">No reading record</option><option value="HISTORICAL">Historical reading — completed</option><option value="ACTIVE">Currently reading — started</option></select></label></div>
+        {personal.readingMode !== "NONE" && <div className="server-form-grid server-initial-reading-dates">
+          {personal.readingMode === "HISTORICAL" && <label className="server-compact-check wide"><input type="checkbox" checked={personal.datesUnknown} onChange={(event) => setPersonal({ ...personal, datesUnknown: event.target.checked, startedDate: event.target.checked ? "" : personal.startedDate, finishedDate: event.target.checked ? "" : personal.finishedDate })} /> Reading dates unknown</label>}
+          {!personal.datesUnknown && <><label>Started<input type="date" required value={personal.startedDate} onChange={(event) => setPersonal({ ...personal, startedDate: event.target.value })} /></label>{personal.readingMode === "HISTORICAL" && <label>Finished<input type="date" required value={personal.finishedDate} onChange={(event) => setPersonal({ ...personal, finishedDate: event.target.value })} /></label>}</>}
+        </div>}
+        <div className="server-form-grid"><label className="wide">My Goodreads review URL<input type="url" placeholder="https://www.goodreads.com/review/show/..." value={personal.goodreadsUrl} onChange={(event) => setPersonal({ ...personal, goodreadsUrl: event.target.value })} /></label></div>
+      </fieldset>}
       <datalist id="server-publishers">{options.publishers.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-genres">{options.genres.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-series">{options.series_names.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-languages">{options.languages.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-original-languages">{options.original_languages.map((v) => <option key={v} value={v} />)}</datalist>
       {progress && <div className="server-save-progress" role="status">{progress}<small>{progress.startsWith("Processing") ? "Large phone photos can take several seconds. Please keep this window open." : ""}</small></div>}
       <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>{batchMode ? "Finish batch" : "Cancel"}</button><button className="confirm" disabled={busy} type="submit">{busy ? "Please wait…" : batchMode ? "Save and add next" : "Save book"}</button></div>
@@ -331,17 +377,47 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   const [batchPlacement, setBatchPlacement] = useState<PlacementWrite | null>(null);
   const [editorSequence, setEditorSequence] = useState(0);
   const [batchAddedCount, setBatchAddedCount] = useState(0);
+  const [readings, setReadings] = useState<Record<string, BookReading>>({});
+  const [bookReviews, setBookReviews] = useState<Record<string, GoodreadsReview[]>>({});
+  const [readingOverview, setReadingOverview] = useState<ReadingCatalogueOverview | null>(null);
+  const [detailsReading, setDetailsReading] = useState<BookReading | null>(null);
+  const [detailsReviews, setDetailsReviews] = useState<GoodreadsReview[]>([]);
+  const [readingAction, setReadingAction] = useState<{ book: ServerBookSummary; reading: BookReading } | null>(null);
+  const [readingManager, setReadingManager] = useState<ServerBookSummary | null>(null);
+  const [suggestion, setSuggestion] = useState<ServerBookSummary | null>(null);
+  const selectedPerspective = perspectives.find((item) => item.selected);
+  const perspectiveUserId = selectedPerspective?.user_id ?? signedInUserId;
+
+  const loadPersonalRows = useCallback(async (items: ServerBookSummary[]) => {
+    const overview = await serverApi.readingOverview(library.library_id, perspectiveUserId);
+    setReadingOverview(overview);
+    const overviewByBook = Object.fromEntries(overview.items.map((item) => [item.book_id, item]));
+    setReadings(Object.fromEntries(items.map((book) => {
+      const item = overviewByBook[book.id];
+      return [book.id, {
+        library_id: library.library_id, book_id: book.id,
+        perspective_user_id: overview.perspective_user_id,
+        state: item?.state ?? "PENDING",
+        active_reader_present: item?.active_reader_present ?? false,
+        writable: overview.writable, total_sessions: 0, limit: 0, offset: 0, sessions: [],
+      } satisfies BookReading];
+    })));
+    setBookReviews(Object.fromEntries(items.map((book) => {
+      const url = overviewByBook[book.id]?.goodreads_url;
+      return [book.id, url ? [{ user_id: overview.perspective_user_id, username: selectedPerspective?.username ?? "Owner", url }] : []];
+    })));
+  }, [library.library_id, perspectiveUserId, selectedPerspective?.username]);
 
   const load = useCallback(async (next: CatalogueQuery) => {
     setBusy(true); setError("");
-    try { const page = await serverApi.catalogue(library.library_id, next); setBooks(page.books); setTotal(page.total); }
+    try { const page = await serverApi.catalogue(library.library_id, next); setBooks(page.books); setTotal(page.total); await loadPersonalRows(page.books); }
     catch (caught) { setError(message(caught)); }
     finally { setBusy(false); }
-  }, [library.library_id]);
+  }, [library.library_id, loadPersonalRows]);
 
   useEffect(() => {
     const initial = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const };
-    setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null);
+    setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null); setReadingAction(null); setReadingManager(null);
     void load(initial);
     if (library.can_view_map) void serverApi.physicalLibrary(library.library_id).then(setPhysical).catch((caught) => setError(message(caught)));
     else setPhysical(null);
@@ -372,9 +448,28 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   }
   function apply(event?: FormEvent) { event?.preventDefault(); const next = { ...draftQuery, limit: PAGE_SIZE, offset: 0 }; setQuery(next); void load(next); }
   function page(offset: number) { const next = { ...query, offset }; setQuery(next); setDraftQuery(next); void load(next); }
-  async function openDetails(bookId: string) { setBusy(true); try { setDetails(await serverApi.book(library.library_id, bookId)); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
+  async function openDetails(bookId: string) { setBusy(true); try { const [book, reading, reviews] = await Promise.all([serverApi.book(library.library_id, bookId), serverApi.bookReading(library.library_id, bookId, perspectiveUserId), serverApi.goodreadsReviews(library.library_id, bookId)]); setDetails(book); setDetailsReading(reading); setDetailsReviews(reviews); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
+  async function openReadingAction(book: ServerBookSummary) {
+    setBusy(true); setError("");
+    try {
+      const reading = await serverApi.bookReading(library.library_id, book.id, perspectiveUserId);
+      if (reading.writable) setReadingAction({ book, reading });
+    } catch (caught) { setError(message(caught)); }
+    finally { setBusy(false); }
+  }
+  async function suggestNewRead() {
+    const candidates = readingOverview?.items.filter((item) => item.state === "PENDING" && !item.active_reader_present) ?? [];
+    if (!candidates.length) { setError("No available pending books can be suggested in this perspective."); return; }
+    setBusy(true); setError("");
+    try {
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      setSuggestion(await serverApi.book(library.library_id, chosen.book_id));
+      setAddMenu(false);
+    } catch (caught) { setError(message(caught)); }
+    finally { setBusy(false); }
+  }
   async function edit(bookId: string) { setBusy(true); setBatchMode(false); setBatchPlacement(null); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book), cover: book.cover }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
-  async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, placement: PlacementWrite | null, reportProgress: (message: string) => void) {
+  async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, reportProgress: (message: string) => void) {
     const wasNew = !editing?.id;
     const placementPosition = placement?.containerId
       ? Number.parseInt(placement.position, 10)
@@ -398,8 +493,23 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
         reportProgress("Removing private cover…");
         await serverApi.deleteCover(library.library_id, saved.id);
       }
+      if (personal?.goodreadsUrl.trim()) {
+        reportProgress("Saving your Goodreads review…");
+        await serverApi.setMyGoodreadsReview(library.library_id, saved.id, personal.goodreadsUrl.trim());
+      }
+      if (personal?.readingMode === "HISTORICAL") {
+        reportProgress("Saving your reading history…");
+        await serverApi.addHistoricalReading(library.library_id, saved.id, {
+          started_date: personal.datesUnknown ? null : personal.startedDate,
+          finished_date: personal.datesUnknown ? null : personal.finishedDate,
+          dates_unknown: personal.datesUnknown,
+        });
+      } else if (personal?.readingMode === "ACTIVE") {
+        reportProgress("Starting your reading…");
+        await serverApi.startReading(library.library_id, saved.id, personal.startedDate);
+      }
     } catch (caught) {
-      if (wasNew) throw new Error(`Book and location saved, but its cover was not saved. ${message(caught)} You can retry without creating the book again.`);
+      if (wasNew) throw new Error(`The shared book and location were saved, but some private cover or personal reading data was not. ${message(caught)} Correct it and retry: BOOKPILE will update this book rather than create a duplicate.`);
       throw caught;
     }
     if (batchMode) {
@@ -421,9 +531,18 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   }
   async function remove(book: ServerBookSummary) { if (!window.confirm(`Permanently delete “${book.title}”? This cannot be undone.`)) return; try { await serverApi.deleteBook(library.library_id, book.id, book.title); pushNotice("Book permanently deleted."); await load(query); if (library.can_view_map) setPhysical(await serverApi.physicalLibrary(library.library_id)); } catch (caught) { setError(message(caught)); } }
 
+  async function refreshPersonalData() {
+    await loadPersonalRows(books);
+    if (details) {
+      const [reading, reviews] = await Promise.all([serverApi.bookReading(library.library_id, details.id, perspectiveUserId), serverApi.goodreadsReviews(library.library_id, details.id)]);
+      setDetailsReading(reading); setDetailsReviews(reviews);
+    }
+    pushNotice("Personal reading data updated.");
+  }
+
   const filtered = hasActiveCatalogueFilters(query);
   return <section className="server-catalogue-workspace">
-    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><b>{member.username}</b><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small></span></div>{library.role === "OWNER" && <div className="server-catalogue-actions"><button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button></div>}</div>}</header>
+    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><b>{member.username}</b><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small>{readingOverview && <span className="server-reading-overview"><b>{readingOverview.pending}</b> pending <b>{readingOverview.active_display}</b> reading <b>{readingOverview.read + readingOverview.rereading}</b> read</span>}</span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> New read</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">Reading suggestion</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> Another</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>Start reading</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label="Close suggestion"><X size={15} /></button></div>}</div>}</header>
     {error && <div className="server-message error">{error}</div>}<TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
     <form className="server-catalogue-search" onSubmit={apply}><label><Search size={18} /><input value={draftQuery.search ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, search: e.target.value })} placeholder="Search title, author, contributor or series" /></label><button type="submit">Search</button><button type="button" className={advanced ? "active" : ""} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={17} /> Advanced</button></form>
     {advanced && <form className="server-advanced-search" onSubmit={apply}>
@@ -436,8 +555,10 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
       <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
       <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; setDraftQuery(clear); setQuery(clear); void load(clear); }}>Clear</button><button className="confirm" type="submit">Apply filters</button></div>
     </form>}
-    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); return <article key={book.id}><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className="server-book-location"><MapPin size={16} /><span>{location ?? "No physical location"}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
+    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); const reading = readings[book.id]; const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className="server-book-location"><MapPin size={16} /><span>{location ?? "No physical location"}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={`${selectedPerspective?.username ?? "Owner"}'s Goodreads review`}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title="My reading"><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
     {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
-    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={`${editing.id ?? "new"}-${editorSequence}`} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} batchAddedCount={batchAddedCount} onClose={() => { setEditing(null); setBatchMode(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
+    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} batchAddedCount={batchAddedCount} onClose={() => { setEditing(null); setBatchMode(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
+    {readingAction && <ReadingActionDialog libraryId={library.library_id} book={readingAction.book} reading={readingAction.reading} onClose={() => setReadingAction(null)} onChanged={refreshPersonalData} />}
+    {readingManager && <ReadingManager libraryId={library.library_id} book={readingManager} onClose={() => setReadingManager(null)} onChanged={refreshPersonalData} />}
   </section>;
 }

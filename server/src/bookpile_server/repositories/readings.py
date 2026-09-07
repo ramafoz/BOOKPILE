@@ -60,6 +60,43 @@ class ReadingRepository:
             )
         )
 
+    def library_book_ids(self, *, library_id: UUID) -> list[UUID]:
+        return list(self._session.scalars(select(Book.id).where(Book.library_id == library_id)))
+
+    def library_sessions(
+        self, *, library_id: UUID, user_id: UUID
+    ) -> list[ReadingSession]:
+        return list(
+            self._session.scalars(
+                select(ReadingSession).where(
+                    ReadingSession.library_id == library_id,
+                    ReadingSession.user_id == user_id,
+                )
+            )
+        )
+
+    def active_book_ids(self, *, library_id: UUID) -> set[UUID]:
+        return set(
+            self._session.scalars(
+                select(ReadingSession.book_id).where(
+                    ReadingSession.library_id == library_id,
+                    ReadingSession.state == "ACTIVE",
+                )
+            )
+        )
+
+    def personal_records(
+        self, *, library_id: UUID, user_id: UUID
+    ) -> list[PersonalBookRecord]:
+        return list(
+            self._session.scalars(
+                select(PersonalBookRecord).where(
+                    PersonalBookRecord.library_id == library_id,
+                    PersonalBookRecord.user_id == user_id,
+                )
+            )
+        )
+
     def session(
         self, *, library_id: UUID, book_id: UUID, session_id: UUID
     ) -> ReadingSession | None:

@@ -21,9 +21,9 @@ must not be used for Server migrations or test databases.
   account-registration invitations.
 - Membership management with password reauthentication, explicit consequence
   warnings, final-Owner protection, and structured audit events.
-- Reading-perspective selection state plus the Phase 5A persistence foundation
-  for Owner-scoped sessions and personal Goodreads records; write services and
-  APIs begin in Phase 5B.
+- Reading-perspective selection plus the complete Phase 5A–5C persistence,
+  service, API, and catalogue experience for Owner-scoped sessions and
+  personal Goodreads records.
 - Repository and API tests proving that one library cannot read another
   library's catalogue merely by knowing its UUID.
 - Reversible Phase 2A identity foundation: users, hashed opaque-session
@@ -69,13 +69,17 @@ must not be used for Server migrations or test databases.
   authenticated Owners can mutate only their own sessions and Goodreads URL;
   Viewers remain read-only; copy locking and database uniqueness prevent two
   simultaneous readers; writes require CSRF and emit library audit events.
+- Phase 5C perspective-aware catalogue: personal status actions, read-only
+  cross-Owner history, self-only history/Goodreads management, suggestions,
+  rereading-aware counters, and optional completed/unknown/active reading data
+  during Single or Batch Add.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
 edition is still not deployable because the production private-object adapter,
-personal reading services and interface, loans, backup/restore, storage quota, and production
+remaining map/statistics reading integration, loans, backup/restore, storage quota, and production
 infrastructure have not yet been ported.
 
 ## Development setup
@@ -183,6 +187,7 @@ CSRF token.
 - `PUT /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
 - `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/cover`
 - `GET /api/v1/libraries/{library_id}/catalogue/{book_id}/reading`
+- `GET /api/v1/libraries/{library_id}/reading-overview`
 - `POST /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/start`
 - `POST /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/{session_id}/finish`
 - `DELETE /api/v1/libraries/{library_id}/catalogue/{book_id}/reading/sessions/{session_id}/cancel`
@@ -211,6 +216,9 @@ private covers, revisioned layout, physical projection, explicit shelf
 geometry, fallbacks, support rules, reading-session shape and uniqueness,
 concurrent starts for one physical copy, personal-book records, and each incremental rollback. It then downgrades
 disposable `bookpile_test` until no BOOKPILE application tables remain.
+
+Phase 5C additionally passes the frontend unit suite, lint and Server build;
+desktop/mobile Owner and Viewer acceptance was completed on 2026-09-07.
 Alembic may retain its empty administrative `alembic_version` table.
 
 The committed password is for loopback-only local development. Hosted and

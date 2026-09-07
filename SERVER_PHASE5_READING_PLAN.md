@@ -1,9 +1,8 @@
 # BOOKPILE Server Phase 5 — personal readings and shared custody
 
-Status: 5A complete and 5B implemented and automatically verified on the Server
-feature branch; 5C is the next user-visible increment. This phase changes
-Server only. Released BOOKPILE Local v1 and its populated SQLite database remain
-untouched.
+Status: 5A–5C complete and accepted on the Server feature branch; 5D is the
+next increment. This phase changes Server only. Released BOOKPILE Local v1 and
+its populated SQLite database remain untouched.
 
 ## 1. Objective and boundary
 
@@ -161,16 +160,32 @@ confirms one successful start plus one controlled conflict for a single copy.
 
 ### 5C — catalogue and reading-history experience
 
-- Add perspective-aware status badges and start/finish/reread confirmations.
-- Add chronological summary and full read-only history.
-- Add self-only history management with destructive warnings.
-- Add member-labelled Goodreads reviews and self-only editing.
-- Adapt hero/current-reading counters, including the agreed `1+1` and `+2`
+- [x] Add perspective-aware status badges and start/finish/reread confirmations.
+- [x] Add chronological summary and full read-only history.
+- [x] Add self-only history management with destructive warnings.
+- [x] Add member-labelled Goodreads reviews and self-only editing.
+- [x] Adapt catalogue/current-reading counters, including the agreed `1+1` and `+2`
   rereading notation.
+- [x] Let an Owner create a shared book with one optional completed or
+  unknown-date historical reading, or with a known-date active reading, in
+  both Single Add and Batch Add. Keep these personal values per-book rather
+  than retaining them in the next Batch Add form.
 
 Gate: desktop and mobile Owner/Viewer acceptance across first reading,
 rereading, cancellation, historical unknown dates, editing, deletion, and
 perspective changes.
+
+Verified implementation record (2026-09-07): Owner acceptance covered
+Pending, Reading, Re-reading and Read actions; start, finish, cancel and
+reread confirmations; known and unknown historical sessions; session editing
+and destructive deletion; self-owned Goodreads creation/removal; suggestions;
+counter notation; and read-only complete information. Perspective acceptance
+covered another Owner and a Viewer, non-writable labels, hidden personal
+actions, perspective-specific row links, member-labelled reviews, and
+one-active-reader enforcement. Single and Batch Add were then accepted with
+completed, unknown, and active initial reading choices. Automated gates pass
+all 98 backend tests including the disposable PostgreSQL integration test,
+30 frontend tests, ESLint, and the Server build.
 
 ### 5D — map, statistics, filters, and suggestions
 
@@ -239,8 +254,8 @@ The whole phase is therefore roughly 1.5–2.5 full contexts, depending on defec
 found during manual acceptance. With less than half a context available, the
 safe work is documentation, read-only preflight, backup, and branch creation;
 starting a live migration plus its full verification is poor risk management.
-The recommended next coding session starts near a full budget and completes 5A
-as one coherent migration gate.
+The recommended next coding session starts near a full budget and completes 5D
+as one coherent cross-view consistency increment.
 
 ## 9. Resolved frontend contract
 

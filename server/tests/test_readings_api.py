@@ -174,6 +174,22 @@ def test_personal_perspectives_and_single_shared_active_copy(
     )
     assert finished.status_code == 200, finished.text
     assert client.get(url).json()["state"] == "READ"
+
+    overview = client.get(
+        f"/api/v1/libraries/{library.id}/reading-overview",
+        params={"perspective_user_id": first.id},
+    )
+    assert overview.status_code == 200, overview.text
+    assert overview.json()["read"] == 1
+    assert overview.json()["active_display"] == "0"
+    assert overview.json()["items"] == [
+        {
+            "book_id": str(book.id),
+            "state": "READ",
+            "active_reader_present": False,
+            "goodreads_url": None,
+        }
+    ]
     reread = client.post(
         f"{url}/sessions/start",
         json={"started_date": "2026-09-03"},

@@ -43,6 +43,25 @@ class ReadingProjection:
     writable: bool
 
 
+@dataclass(frozen=True)
+class ReadingCatalogueItem:
+    book_id: UUID
+    state: ReadingState
+    active_reader_present: bool
+    goodreads_url: str | None
+
+
+@dataclass(frozen=True)
+class ReadingCatalogueOverview:
+    user_id: UUID
+    writable: bool
+    pending: int
+    reading: int
+    rereading: int
+    read: int
+    items: list[ReadingCatalogueItem]
+
+
 def _period(session: ReadingSession, order: int) -> ReadingPeriod:
     return ReadingPeriod(
         state=SessionState(session.state),
@@ -145,6 +164,58 @@ class ReadingService:
             is not None,
             writable=actor_user_id == perspective_user_id
             and self._member(library_id, actor_user_id).role == "OWNER",
+        )
+
+    def catalogue_overview(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        perspective_user_id: UUID,
+    ) -> ReadingCatalogueOverview:
+        self._read_access(
+            library_id=library_id,
+            actor_user_id=actor_user_id,
+            perspective_user_id=perspective_user_id,
+        )
+        book_ids = self._repository.library_book_ids(library_id=library_id)
+        grouped: dict[UUID, list[ReadingSession]] = {book_id: [] for book_id in book_ids}
+        for session in self._repository.library_sessions(
+            library_id=library_id, user_id=perspective_user_id
+        ):
+            grouped.setdefault(session.book_id, []).append(session)
+        active_books = self._repository.active_book_ids(library_id=library_id)
+        review_by_book = {
+            record.book_id: record.goodreads_url
+            for record in self._repository.personal_records(
+                library_id=library_id, user_id=perspective_user_id
+            )
+        }
+        states: dict[ReadingState, int] = {state: 0 for state in ReadingState}
+        items: list[ReadingCatalogueItem] = []
+        for book_id in book_ids:
+            sessions = self._validated(grouped.get(book_id, []))
+            state = derive_reading_state(
+                [_period(session, index) for index, session in enumerate(sessions)]
+            )
+            states[state] += 1
+            items.append(
+                ReadingCatalogueItem(
+                    book_id=book_id,
+                    state=state,
+                    active_reader_present=book_id in active_books,
+                    goodreads_url=review_by_book.get(book_id),
+                )
+            )
+        return ReadingCatalogueOverview(
+            user_id=perspective_user_id,
+            writable=actor_user_id == perspective_user_id
+            and self._member(library_id, actor_user_id).role == "OWNER",
+            pending=states[ReadingState.PENDING],
+            reading=states[ReadingState.READING],
+            rereading=states[ReadingState.REREADING],
+            read=states[ReadingState.READ],
+            items=items,
         )
 
     def start(
