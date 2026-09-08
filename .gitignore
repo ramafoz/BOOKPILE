@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-*/
 backend/data/
 backend/backups/
 server/backups/
