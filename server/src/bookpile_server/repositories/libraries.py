@@ -10,6 +10,10 @@ from ..models import (
     LibraryAuditEvent,
     LibraryInvitation,
     LibraryMembership,
+    LibraryDeletionTombstone,
+    LibraryStorageAllocation,
+    LibraryStorageUsage,
+    BookCover,
     User,
 )
 
@@ -78,6 +82,68 @@ class LibraryRepository:
 
     def find_user(self, user_id: UUID) -> User | None:
         return self._session.get(User, user_id)
+
+    def lock_library(self, library_id: UUID) -> Library | None:
+        return self._session.scalar(
+            select(Library).where(Library.id == library_id).with_for_update()
+        )
+
+    def allocations_for_library(self, library_id: UUID) -> list[LibraryStorageAllocation]:
+        return list(
+            self._session.scalars(
+                select(LibraryStorageAllocation)
+                .where(LibraryStorageAllocation.library_id == library_id)
+                .order_by(LibraryStorageAllocation.user_id)
+            )
+        )
+
+    def usage_for_library(self, library_id: UUID) -> LibraryStorageUsage | None:
+        return self._session.get(LibraryStorageUsage, library_id)
+
+    def cover_manifest(self, library_id: UUID) -> list[BookCover]:
+        return list(
+            self._session.scalars(
+                select(BookCover)
+                .where(BookCover.library_id == library_id)
+                .order_by(BookCover.book_id)
+            )
+        )
+
+    def add_tombstone(self, tombstone: LibraryDeletionTombstone) -> None:
+        self._session.add(tombstone)
+
+    def lock_tombstone(self, tombstone_id: UUID) -> LibraryDeletionTombstone | None:
+        return self._session.scalar(
+            select(LibraryDeletionTombstone)
+            .where(LibraryDeletionTombstone.id == tombstone_id)
+            .with_for_update()
+        )
+
+    def recoverable_tombstones(self, user_id: UUID) -> list[LibraryDeletionTombstone]:
+        user = str(user_id)
+        return [
+            item
+            for item in self._session.scalars(
+                select(LibraryDeletionTombstone)
+                .where(LibraryDeletionTombstone.state == "PENDING")
+                .order_by(LibraryDeletionTombstone.recover_until)
+            )
+            if any(
+                member.get("user_id") == user and member.get("role") == "OWNER"
+                for member in item.membership_snapshot
+            )
+        ]
+
+    def revoke_open_invitations(self, *, library_id: UUID, now: datetime) -> None:
+        invitations = self._session.scalars(
+            select(LibraryInvitation).where(
+                LibraryInvitation.library_id == library_id,
+                LibraryInvitation.consumed_at.is_(None),
+                LibraryInvitation.revoked_at.is_(None),
+            )
+        )
+        for invitation in invitations:
+            invitation.revoked_at = now
 
     def find_user_by_username(self, username: str) -> User | None:
         return self._session.scalar(

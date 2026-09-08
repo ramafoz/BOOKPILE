@@ -14,6 +14,7 @@ import {
   type ProfileGender,
   type ProfilePronoun,
   type ProfileVisibility,
+  type RecoverableLibrary,
   type StorageOverview,
   ServerApiError,
   serverApi,
@@ -64,12 +65,17 @@ function message(error: unknown) {
 
 export default function AccountWorkspace({
   onSignOut,
+  onLibrariesChanged,
 }: {
   onSignOut: (everyDevice: boolean) => Promise<void>;
+  onLibrariesChanged: (preferredId?: string) => Promise<void>;
 }) {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [account, setAccount] = useState<PrivateAccount | null>(null);
   const [storage, setStorage] = useState<StorageOverview | null>(null);
+  const [recoverable, setRecoverable] = useState<RecoverableLibrary[]>([]);
+  const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
+  const [restorePassword, setRestorePassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -81,14 +87,37 @@ export default function AccountWorkspace({
   });
 
   async function load() {
-    const [nextProfile, nextStorage, nextAccount] = await Promise.all([
+    const [nextProfile, nextStorage, nextAccount, nextRecoverable] = await Promise.all([
       serverApi.accountProfile(),
       serverApi.accountStorage(),
       serverApi.account(),
+      serverApi.recoverableLibraries(),
     ]);
     setProfile(nextProfile);
     setStorage(nextStorage);
     setAccount(nextAccount);
+    setRecoverable(nextRecoverable);
+  }
+
+  async function restoreLibrary(event: FormEvent) {
+    event.preventDefault();
+    if (!restoreTarget) return;
+    setBusy(true);
+    setError("");
+    try {
+      const restored = await serverApi.restoreLibrary(
+        restoreTarget.deletion_id,
+        restorePassword,
+      );
+      setRestoreTarget(null);
+      setRestorePassword("");
+      await Promise.all([load(), onLibrariesChanged(restored.library_id)]);
+      setNotice(`“${restored.name}” and all its memberships were restored.`);
+    } catch (caught) {
+      setError(message(caught));
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -583,6 +612,20 @@ export default function AccountWorkspace({
           </span>
         </div>
       </section>
+      {recoverable.length > 0 && (
+        <section className="server-profile-card server-recovery-card">
+          <h3>Recently deleted libraries</h3>
+          <p>Every former Owner may restore the complete library for 48 hours. Recovery is all-or-nothing and requires available shared storage.</p>
+          <div className="server-recovery-list">
+            {recoverable.map((item) => (
+              <div key={item.deletion_id}>
+                <span><b>{item.name}</b><small>Recoverable until {new Date(item.recover_until).toLocaleString()}</small></span>
+                <button type="button" onClick={() => { setRestoreTarget(item); setRestorePassword(""); }}>Restore</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="server-profile-card server-security-card server-security-expanded">
         <div>
           <KeyRound size={24} />
@@ -646,6 +689,19 @@ export default function AccountWorkspace({
           </button>
         </div>
       </section>
+      {restoreTarget && (
+        <div className="server-modal-backdrop" role="presentation">
+          <section className="server-permission-dialog" role="dialog" aria-modal="true">
+            <p className="server-card-eyebrow">Complete recovery</p>
+            <h2>Restore “{restoreTarget.name}”?</h2>
+            <p>Books, covers, layout, readings, loans and every previous membership will return together.</p>
+            <form onSubmit={restoreLibrary}>
+              <label>Your current password<input type="password" autoComplete="current-password" autoFocus required value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} /></label>
+              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setRestoreTarget(null)}>Cancel</button><button className="confirm" type="submit" disabled={busy || !restorePassword}>{busy ? "Restoring…" : "Restore library"}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

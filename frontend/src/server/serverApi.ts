@@ -67,6 +67,14 @@ export interface LibrarySummary {
   can_view_map: boolean;
 }
 
+export interface RecoverableLibrary {
+  deletion_id: string;
+  library_id: string;
+  name: string;
+  deleted_at: string;
+  recover_until: string;
+}
+
 export interface LibraryMember {
   user_id: string;
   username: string;
@@ -694,6 +702,26 @@ export const serverApi = {
     { method: "POST", body: JSON.stringify({ name }) },
     true,
   ),
+  deleteLibrary: (
+    libraryId: string,
+    payload: {
+      current_password: string;
+      confirmation_name: string;
+      acknowledge_permanent_deletion: boolean;
+    },
+  ) => request<RecoverableLibrary>(
+    `/libraries/${libraryId}`,
+    { method: "DELETE", body: JSON.stringify(payload) },
+    true,
+  ),
+  recoverableLibraries: () =>
+    request<RecoverableLibrary[]>("/account/deleted-libraries"),
+  restoreLibrary: (deletionId: string, currentPassword: string) =>
+    request<LibrarySummary>(
+      `/account/deleted-libraries/${deletionId}/restore`,
+      { method: "POST", body: JSON.stringify({ current_password: currentPassword }) },
+      true,
+    ),
   libraryMembers: (libraryId: string) =>
     request<LibraryMember[]>(`/libraries/${libraryId}/members`),
   libraryMemberSummary: (libraryId: string) =>

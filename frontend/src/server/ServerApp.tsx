@@ -14,6 +14,7 @@ import {
   Map,
   Plus,
   ShieldCheck,
+  Trash2,
   Users,
   UserRound,
 } from "lucide-react";
@@ -453,6 +454,11 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [settingsSection, setSettingsSection] = useState<"ROOT" | "MEMBERS">("ROOT");
+  const [deleteTarget, setDeleteTarget] = useState<LibrarySummary | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
 
   const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
 
@@ -689,6 +695,32 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     }
   }
 
+  async function confirmLibraryDeletion(event: FormEvent) {
+    event.preventDefault();
+    if (!deleteTarget) return;
+    setDataBusy(true);
+    setError("");
+    try {
+      const deleted = await serverApi.deleteLibrary(deleteTarget.library_id, {
+        current_password: deletePassword,
+        confirmation_name: deleteConfirmation,
+        acknowledge_permanent_deletion: deleteAcknowledged,
+      });
+      setDeleteTarget(null);
+      setDeletePassword("");
+      setDeleteConfirmation("");
+      setDeleteAcknowledged(false);
+      setControlsPanel(null);
+      setWorkspace("ACCOUNT");
+      await reloadLibraries();
+      pushNotice(`“${deleted.name}” was deleted. Its former Owners can restore it from their private profiles for 48 hours.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
   return (
     <main className={`server-account-shell ${workspace === "MAP" ? "map-active" : ""}`}>
       <header className="server-account-header">
@@ -722,7 +754,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
               ))}
               {!libraries.length && <p>No libraries yet. Create your first one below.</p>}
             </div>
-            {selected?.role === "OWNER" && <button className="server-library-settings-link" type="button" onClick={(event) => { setWorkspace("CATALOGUE"); toggleControlsPanel("LIBRARY_SETTINGS", event.currentTarget); }}><Layers3 size={17} /><span><b>Library settings</b><small>Members, invitations and physical structure</small></span></button>}
+            {selected?.role === "OWNER" && <button className="server-library-settings-link" type="button" onClick={(event) => { setWorkspace("CATALOGUE"); setSettingsSection("ROOT"); toggleControlsPanel("LIBRARY_SETTINGS", event.currentTarget); }}><Layers3 size={17} /><span><b>Library settings</b><small>Members, physical structure and deletion</small></span></button>}
             <form className="server-compact-form" onSubmit={createLibrary}>
               <label>New library name<input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} maxLength={160} required /></label>
               <button type="submit" disabled={dataBusy}><Plus size={17} /> Create library</button>
@@ -734,7 +766,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           </aside>
 
           <div className="server-library-main">
-            {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} /> : selected ? <>
+            {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} onLibrariesChanged={reloadLibraries} /> : selected ? <>
               {workspace === "MAP" && selected.can_view_map
                 ? <ServerLibraryMap libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
@@ -757,19 +789,23 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                 <div className="server-perspective-profiles"><small>Member profiles</small>{perspectives.map((item) => <button key={item.user_id} type="button" onClick={() => setProfileUserId(item.user_id)}>@{item.username}</button>)}</div>
               </section>
 
-              <div className={`server-members-control-stack ${controlsPanel === "LIBRARY_SETTINGS" ? "open" : ""}`} style={anchoredPanelStyle(620, "left")}>
+              <div className={`server-members-control-stack ${controlsPanel === "LIBRARY_SETTINGS" ? "open" : ""}`}>
                 <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close settings panel">×</button>
                 <section className="server-dashboard-panel server-settings-menu">
-                  <h3>Library settings</h3>
-                  {selected.role === "OWNER" && <button type="button" onClick={() => { setWorkspace("LAYOUT"); setControlsPanel(null); }}><Layers3 size={17} /><span><b>Manage physical structure</b><small>Create or remove furniture, shelves and containers. Visual positioning remains in Edit layout on the map.</small></span></button>}
+                  <h3>Library settings: {selected.name}</h3>
+                  {selected.role === "OWNER" && <>
+                    <button type="button" onClick={() => { setWorkspace("LAYOUT"); setControlsPanel(null); }}><Layers3 size={17} /><span><b>Manage physical structure</b><small>Create or remove furniture, shelves and containers.</small></span></button>
+                    <button type="button" onClick={() => setSettingsSection(settingsSection === "MEMBERS" ? "ROOT" : "MEMBERS")}><Users size={17} /><span><b>Manage members</b><small>Members, permissions and invitations.</small></span></button>
+                    <button className="danger" type="button" onClick={() => { setDeleteTarget(selected); setControlsPanel(null); }}><Trash2 size={17} /><span><b>Delete library</b><small>Remove it for everyone, with a 48-hour recovery window.</small></span></button>
+                  </>}
                 </section>
-                {selected.role === "OWNER" && <>
+                {selected.role === "OWNER" && settingsSection === "MEMBERS" && <>
                 <section className="server-dashboard-panel server-members-panel">
-                  <h3>Members</h3>
+                  <h3>Manage members</h3>
                   <div className="server-member-list">{members.map((member) => <div key={member.user_id}><span><button className="server-username-link" type="button" onClick={() => setProfileUserId(member.user_id)}>@{member.username}</button><small>{member.role === "OWNER" ? "Equal co-Owner" : member.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue only"}</small></span><span className="server-member-actions">{member.role === "VIEWER" ? <><button type="button" onClick={() => requestMemberChange(member, "CHANGE_VIEWER_SCOPE")}>{member.viewer_scope === "CATALOG_ONLY" ? "Give map access" : "Remove map access"}</button><button type="button" onClick={() => requestMemberChange(member, "PROMOTE_TO_OWNER")}>Make co-Owner</button></> : member.user_id !== user.user_id && <button type="button" onClick={() => requestMemberChange(member, "DOWNGRADE_TO_VIEWER")}>Make Viewer</button>}<button type="button" onClick={() => requestMemberChange(member, "REMOVE")}>Remove</button></span></div>)}</div>
                 </section>
                 <section className="server-dashboard-panel server-invite-panel">
-                  <h3>Invite a member</h3>
+                  <h4>Invite a member</h4>
                   <form className="server-invite-form" onSubmit={createInvitation}>
                     <label>Role<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value as "OWNER" | "VIEWER"); setOwnerWarning(false); }}><option value="VIEWER">Viewer</option><option value="OWNER">Equal co-Owner</option></select></label>
                     {inviteRole === "VIEWER" && <label>Access<select value={inviteScope} onChange={(event) => setInviteScope(event.target.value as typeof inviteScope)}><option value="CATALOG_ONLY">Catalogue only</option><option value="CATALOG_AND_MAP">Catalogue and map</option></select></label>}
@@ -796,6 +832,19 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
             {pendingMemberChange.action === "DOWNGRADE_TO_VIEWER" && <label className="server-field">Viewer access<select value={pendingMemberChange.viewerScope ?? "CATALOG_ONLY"} onChange={(event) => setPendingMemberChange({ ...pendingMemberChange, viewerScope: event.target.value as "CATALOG_ONLY" | "CATALOG_AND_MAP" })}><option value="CATALOG_ONLY">Catalogue only</option><option value="CATALOG_AND_MAP">Catalogue and map</option></select></label>}
             <Field label="Your current password" icon={<LockKeyhole size={18} />} type="password" value={memberChangePassword} onChange={(event) => setMemberChangePassword(event.target.value)} autoComplete="current-password" autoFocus />
             <div className="server-dialog-actions"><button type="button" onClick={() => setPendingMemberChange(null)} disabled={dataBusy}>Cancel</button><button className={pendingMemberChange.action === "REMOVE" ? "danger" : "confirm"} type="submit" disabled={dataBusy || !memberChangePassword}>{dataBusy ? "Applying…" : "Confirm change"}</button></div>
+          </form>
+        </section>
+      </div>}
+      {deleteTarget && <div className="server-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !dataBusy) setDeleteTarget(null); }}>
+        <section className="server-permission-dialog server-delete-library-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-library-title">
+          <p className="server-card-eyebrow">Danger zone</p>
+          <h2 id="delete-library-title">Delete “{deleteTarget.name}”?</h2>
+          <p>This immediately removes access for every member and quarantines all books, covers, physical layout, readings and loans. Any person who was an Owner at deletion time may restore everything for 48 hours. After that, deletion is permanent.</p>
+          <form onSubmit={confirmLibraryDeletion}>
+            <label>Type <b>{deleteTarget.name}</b> exactly<input required value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoFocus /></label>
+            <Field label="Your current password" icon={<LockKeyhole size={18} />} type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" />
+            <label className="server-check"><input type="checkbox" checked={deleteAcknowledged} onChange={(event) => setDeleteAcknowledged(event.target.checked)} /> I understand that recovery expires after 48 hours and then all library data is permanently deleted.</label>
+            <div className="server-dialog-actions"><button type="button" onClick={() => setDeleteTarget(null)} disabled={dataBusy}>Cancel</button><button className="danger" type="submit" disabled={dataBusy || deleteConfirmation !== deleteTarget.name || !deletePassword || !deleteAcknowledged}>{dataBusy ? "Deleting…" : "Delete library"}</button></div>
           </form>
         </section>
       </div>}

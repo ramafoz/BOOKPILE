@@ -7,11 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bookpile_server.config import get_settings
+from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.models import (
     AccountStorageEntitlement,
     Book,
     Library,
     LibraryAuditEvent,
+    LibraryDeletionTombstone,
     LibraryMembership,
     User,
     UserSession,
@@ -19,6 +21,7 @@ from bookpile_server.models import (
 from bookpile_server.repositories.libraries import LibraryRepository
 from bookpile_server.repositories.storage import StorageRepository
 from bookpile_server.services.libraries import LibraryService
+from bookpile_server.services.library_deletion_cleanup import finalize_expired_library_deletions
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 from bookpile_server.services.auth import hash_session_secret
@@ -64,6 +67,92 @@ def authenticate(client: TestClient, session: Session, user: User) -> None:
 
 def csrf_headers() -> dict[str, str]:
     return {"X-CSRF-Token": CSRF}
+
+
+def test_all_owners_can_restore_a_deleted_library_but_viewers_cannot(
+    client: TestClient, session: Session
+) -> None:
+    first_owner = add_user(session, "deleting_owner")
+    second_owner = add_user(session, "recovering_owner")
+    viewer = add_user(session, "deleted_library_viewer")
+    library = Library(name="Shared Study", slug="shared-study", created_by_user_id=first_owner.id)
+    session.add(library)
+    session.flush()
+    session.add_all([
+        LibraryMembership(library_id=library.id, user_id=first_owner.id, role="OWNER", selected_reading_user_id=first_owner.id),
+        LibraryMembership(library_id=library.id, user_id=second_owner.id, role="OWNER", selected_reading_user_id=second_owner.id),
+        LibraryMembership(library_id=library.id, user_id=viewer.id, role="VIEWER", viewer_scope="CATALOG_ONLY", selected_reading_user_id=first_owner.id),
+    ])
+    session.commit()
+    StorageService(StorageRepository(session)).rebuild_owned_library_usage()
+
+    authenticate(client, session, first_owner)
+    rejected = client.request(
+        "DELETE",
+        f"/api/v1/libraries/{library.id}",
+        json={"current_password": PASSWORD, "confirmation_name": "wrong", "acknowledge_permanent_deletion": True},
+        headers=csrf_headers(),
+    )
+    assert rejected.status_code == 422
+    deleted = client.request(
+        "DELETE",
+        f"/api/v1/libraries/{library.id}",
+        json={"current_password": PASSWORD, "confirmation_name": "Shared Study", "acknowledge_permanent_deletion": True},
+        headers=csrf_headers(),
+    )
+    assert deleted.status_code == 200
+    deletion_id = deleted.json()["deletion_id"]
+    assert client.get("/api/v1/libraries").json() == []
+    assert client.get(f"/api/v1/libraries/{library.id}/catalogue").status_code == 404
+
+    authenticate(client, session, viewer)
+    assert client.get("/api/v1/account/deleted-libraries").json() == []
+
+    authenticate(client, session, second_owner)
+    recoverable = client.get("/api/v1/account/deleted-libraries")
+    assert recoverable.status_code == 200
+    assert [item["deletion_id"] for item in recoverable.json()] == [deletion_id]
+    restored = client.post(
+        f"/api/v1/account/deleted-libraries/{deletion_id}/restore",
+        json={"current_password": PASSWORD},
+        headers=csrf_headers(),
+    )
+    assert restored.status_code == 200
+    assert restored.json()["library_id"] == str(library.id)
+    assert len(client.get(f"/api/v1/libraries/{library.id}/members").json()) == 3
+    tombstone = session.get(LibraryDeletionTombstone, UUID(deletion_id))
+    assert tombstone is not None and tombstone.state == "RECOVERED"
+
+
+def test_expired_library_cleanup_removes_data_and_private_objects(
+    session: Session, tmp_path
+) -> None:
+    owner = add_user(session, "expired_deletion_owner")
+    library = Library(name="Expired Library", slug="expired-library", created_by_user_id=owner.id, state="pending_deletion")
+    session.add(library)
+    session.flush()
+    now = datetime.now(UTC)
+    tombstone = LibraryDeletionTombstone(
+        library_id=library.id,
+        library_name=library.name,
+        requested_by_user_id=owner.id,
+        logical_size_bytes=3,
+        membership_snapshot=[{"user_id": str(owner.id), "role": "OWNER"}],
+        allocation_snapshot=[],
+        object_manifest=[{"object_key": "covers/expired.webp", "byte_size": 3}],
+        created_at=now - timedelta(hours=2),
+        recover_until=now - timedelta(hours=1),
+    )
+    session.add(tombstone)
+    session.commit()
+    storage = FilesystemCoverStorage(tmp_path / "private")
+    storage.put("covers/expired.webp", b"old")
+
+    assert finalize_expired_library_deletions(session, storage, now=now) == 1
+    assert session.get(Library, library.id) is None
+    assert session.get(LibraryDeletionTombstone, tombstone.id).state == "FINALIZED"
+    with pytest.raises(FileNotFoundError):
+        storage.read("covers/expired.webp")
 
 
 def test_create_list_invite_and_accept_viewer_membership(

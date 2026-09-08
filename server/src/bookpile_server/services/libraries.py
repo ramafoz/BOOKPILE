@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy.exc import IntegrityError
 
-from ..models import Library, LibraryInvitation, LibraryMembership
+from ..models import Library, LibraryDeletionTombstone, LibraryInvitation, LibraryMembership
 from ..repositories.libraries import LibraryRepository
 from ..security.passwords import verify_password
 from .library_access import (
@@ -19,6 +19,7 @@ from .library_access import (
 
 
 LIBRARY_INVITATION_LIFETIME = timedelta(days=7)
+LIBRARY_RECOVERY_LIFETIME = timedelta(hours=48)
 
 
 class LibraryValidationError(Exception):
@@ -38,6 +39,10 @@ class LibraryReauthenticationError(Exception):
 
 
 class FinalOwnerError(Exception):
+    pass
+
+
+class LibraryRecoveryExpiredError(Exception):
     pass
 
 
@@ -119,6 +124,149 @@ class LibraryService:
         )
         self._repository.commit()
         return membership
+
+    def delete_library(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        current_password: str,
+        confirmation_name: str,
+        acknowledge_permanent_deletion: bool,
+    ) -> LibraryDeletionTombstone:
+        self._access.require_owner(library_id=library_id, user_id=actor_user_id)
+        actor = self._repository.find_user(actor_user_id)
+        if actor is None or not verify_password(actor.password_hash, current_password):
+            raise LibraryReauthenticationError
+        if not acknowledge_permanent_deletion:
+            raise LibraryValidationError("You must acknowledge the permanent deletion warning.")
+        now = datetime.now(UTC)
+        self._repository.lock_storage_entitlements_first()
+        library = self._repository.lock_library(library_id)
+        members = self._repository.lock_members_for_library(library_id)
+        if library is None or library.state != "active" or not any(
+            member.user_id == actor_user_id and member.role == "OWNER" for member in members
+        ):
+            raise LibraryNotFoundError
+        if confirmation_name.strip() != library.name:
+            raise LibraryValidationError("Type the library name exactly to confirm deletion.")
+        usage = self._repository.usage_for_library(library_id)
+        tombstone = LibraryDeletionTombstone(
+            library_id=library.id,
+            library_name=library.name,
+            requested_by_user_id=actor_user_id,
+            logical_size_bytes=usage.logical_size_bytes if usage else 0,
+            membership_snapshot=[
+                {
+                    "user_id": str(member.user_id),
+                    "role": member.role,
+                    "viewer_scope": member.viewer_scope,
+                    "selected_reading_user_id": (
+                        str(member.selected_reading_user_id)
+                        if member.selected_reading_user_id else None
+                    ),
+                    "created_at": member.created_at.isoformat(),
+                }
+                for member in members
+            ],
+            allocation_snapshot=[
+                {"user_id": str(item.user_id), "allocated_bytes": item.allocated_bytes}
+                for item in self._repository.allocations_for_library(library_id)
+            ],
+            object_manifest=[
+                {"object_key": cover.object_key, "byte_size": cover.byte_size}
+                for cover in self._repository.cover_manifest(library_id)
+            ],
+            created_at=now,
+            recover_until=now + LIBRARY_RECOVERY_LIFETIME,
+        )
+        self._repository.add_tombstone(tombstone)
+        self._repository.revoke_open_invitations(library_id=library_id, now=now)
+        library.state = "pending_deletion"
+        self._repository.add_audit_event(
+            library_id=library_id,
+            actor_user_id=actor_user_id,
+            event_type="library_deletion_requested",
+            details={"recover_until": tombstone.recover_until.isoformat()},
+        )
+        for member in members:
+            self._repository.delete_membership(member)
+        self._repository.commit()
+        return tombstone
+
+    def recoverable_libraries(self, *, user_id: UUID) -> list[LibraryDeletionTombstone]:
+        now = datetime.now(UTC)
+        return [
+            item for item in self._repository.recoverable_tombstones(user_id)
+            if now < utc_value(item.recover_until)
+        ]
+
+    def restore_library(
+        self,
+        *,
+        tombstone_id: UUID,
+        actor_user_id: UUID,
+        current_password: str,
+    ) -> LibraryMembership:
+        actor = self._repository.find_user(actor_user_id)
+        if actor is None or not verify_password(actor.password_hash, current_password):
+            raise LibraryReauthenticationError
+        self._repository.lock_storage_entitlements_first()
+        tombstone = self._repository.lock_tombstone(tombstone_id)
+        if tombstone is None or tombstone.state != "PENDING":
+            raise LibraryNotFoundError
+        eligible = any(
+            item.get("user_id") == str(actor_user_id) and item.get("role") == "OWNER"
+            for item in tombstone.membership_snapshot
+        )
+        if not eligible:
+            raise LibraryNotFoundError
+        if datetime.now(UTC) >= utc_value(tombstone.recover_until):
+            raise LibraryRecoveryExpiredError
+        library = self._repository.lock_library(tombstone.library_id)
+        if library is None or library.state != "pending_deletion":
+            raise LibraryConflictError("This library can no longer be recovered.")
+
+        valid_user_ids = {
+            item.id
+            for item in (
+                self._repository.find_user(UUID(str(snapshot["user_id"])))
+                for snapshot in tombstone.membership_snapshot
+            )
+            if item is not None
+        }
+        for snapshot in tombstone.membership_snapshot:
+            user_id = UUID(str(snapshot["user_id"]))
+            if user_id not in valid_user_ids:
+                continue
+            selected = snapshot.get("selected_reading_user_id")
+            selected_id = UUID(str(selected)) if selected else None
+            if selected_id not in valid_user_ids:
+                selected_id = user_id if snapshot["role"] == "OWNER" else None
+            self._repository.add_membership(
+                LibraryMembership(
+                    library_id=library.id,
+                    user_id=user_id,
+                    role=str(snapshot["role"]),
+                    viewer_scope=snapshot.get("viewer_scope"),
+                    selected_reading_user_id=selected_id,
+                )
+            )
+        library.state = "active"
+        tombstone.state = "RECOVERED"
+        tombstone.recovered_at = datetime.now(UTC)
+        self._repository.add_audit_event(
+            library_id=library.id,
+            actor_user_id=actor_user_id,
+            event_type="library_recovered",
+            details={"deletion_id": str(tombstone.id)},
+        )
+        self._repository.commit()
+        restored = self._repository.find_membership(
+            library_id=library.id, user_id=actor_user_id
+        )
+        assert restored is not None
+        return restored
 
     def list_members(self, *, library_id: UUID, actor_user_id: UUID) -> list[LibraryMembership]:
         self._access.require_owner(

@@ -786,6 +786,24 @@ class SelectReadingPerspectiveRequest(BaseModel):
     user_id: UUID
 
 
+class DeleteLibraryRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    confirmation_name: str = Field(min_length=1, max_length=160)
+    acknowledge_permanent_deletion: bool = False
+
+
+class RestoreLibraryRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+
+
+class RecoverableLibraryResponse(BaseModel):
+    deletion_id: UUID
+    library_id: UUID
+    name: str
+    deleted_at: datetime
+    recover_until: datetime
+
+
 class ReadingSessionResponse(BaseModel):
     id: UUID
     state: str
