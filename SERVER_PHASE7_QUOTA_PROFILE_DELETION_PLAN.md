@@ -2,7 +2,7 @@
 
 
 
-Status: active on `feature/server-storage-quota`; 7A is complete. Phase 6 is merged into
+Status: active on `feature/server-storage-quota`; 7A and 7B are complete. Phase 6 is merged into
 `main`. This phase changes Server only and leaves released Local v1 untouched.
 
 ## 1. Product contract
@@ -95,6 +95,14 @@ Implement versioned logical-size rules, entitlement and allocation value objects
 the deterministic solver, worked examples and property/edge tests. No schema or UX.
 
 ### 7B — additive schema and scoped services
+
+Status: complete. Backup restoration was rehearsed before migration `0015`; the
+active database then migrated without data loss. Profile visibility and gender
+shape are database-guarded, existing users received entitlement rows, logical
+usage was backfilled only for libraries with an actual Owner, allocation totals
+reconcile exactly, and private field projections plus authenticated pronouns are
+covered by regression tests. Historical unowned Demo seeds remain deliberately
+unallocated rather than being silently assigned to an account.
 
 After backup/restore rehearsal, add account profile/visibility, entitlement,
 library usage, allocation and deletion-tombstone tables. Add tenant-safe constraints,

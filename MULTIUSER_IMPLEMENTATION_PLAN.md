@@ -1087,8 +1087,12 @@ perspective-aware Library Map colouring and inspection, and guarded retirement
 of the empty shared Goodreads compatibility field. Phase 6A–6E now supplies
 the guarded loan schema, concurrency-safe services, strict privacy projections,
 accepted responsive catalogue/history UX, atomic loan-at-creation, On-loan map
-custody and shared statistics. Its Local compatibility and final gates pass;
-the immediate action is the explicitly approved merge, followed by Phase 7.
+custody and shared statistics. Its Local compatibility and final gates pass and
+Phase 6 is merged into `main`. Phase 7A–7B now provide deterministic logical
+accounting, co-Owner allocation, additive profile/visibility/entitlement/usage/
+allocation/tombstone schema, private profile projections and a rehearsed,
+reconciled production backfill. Phase 7C transactional write and membership
+enforcement is next.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

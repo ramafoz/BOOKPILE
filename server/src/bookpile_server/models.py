@@ -92,6 +92,207 @@ class User(Base):
     )
 
 
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "gender IN ('UNSPECIFIED', 'MALE', 'FEMALE', 'CUSTOM')",
+            name="ck_user_profiles_gender",
+        ),
+        CheckConstraint(
+            "preferred_pronoun IS NULL OR preferred_pronoun IN "
+            "('MALE', 'FEMALE', 'NEUTRAL')",
+            name="ck_user_profiles_pronoun",
+        ),
+        CheckConstraint(
+            "(gender <> 'CUSTOM' AND custom_gender IS NULL "
+            "AND preferred_pronoun IS NULL AND neutral_pronoun IS NULL) OR "
+            "(gender = 'CUSTOM' AND custom_gender IS NOT NULL "
+            "AND length(trim(custom_gender)) > 0 "
+            "AND preferred_pronoun IS NOT NULL "
+            "AND (preferred_pronoun = 'NEUTRAL' OR neutral_pronoun IS NULL))",
+            name="ck_user_profiles_gender_shape",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    display_name: Mapped[str | None] = mapped_column(String(100))
+    timezone: Mapped[str | None] = mapped_column(String(64))
+    gender: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="UNSPECIFIED", server_default="UNSPECIFIED"
+    )
+    custom_gender: Mapped[str | None] = mapped_column(String(80))
+    preferred_pronoun: Mapped[str | None] = mapped_column(String(16))
+    neutral_pronoun: Mapped[str | None] = mapped_column(String(80))
+    city: Mapped[str | None] = mapped_column(String(120))
+    state: Mapped[str | None] = mapped_column(String(120))
+    country: Mapped[str | None] = mapped_column(String(120))
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class UserProfileFieldVisibility(Base):
+    __tablename__ = "user_profile_field_visibilities"
+    __table_args__ = (
+        CheckConstraint(
+            "field_name IN ('display_name', 'timezone', 'gender', 'city', "
+            "'state', 'country', 'date_of_birth', 'profile_image')",
+            name="ck_profile_visibilities_field",
+        ),
+        CheckConstraint(
+            "visibility IN ('PRIVATE', 'SHARED_LIBRARY_MEMBERS', 'AUTHENTICATED')",
+            name="ck_profile_visibilities_value",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    field_name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    visibility: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="PRIVATE", server_default="PRIVATE"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class UserProfileImage(Base):
+    __tablename__ = "user_profile_images"
+    __table_args__ = (
+        CheckConstraint("media_type = 'image/webp'", name="ck_profile_images_media_type"),
+        CheckConstraint("byte_size > 0", name="ck_profile_images_byte_size"),
+        CheckConstraint("width_px > 0", name="ck_profile_images_width_px"),
+        CheckConstraint("height_px > 0", name="ck_profile_images_height_px"),
+        CheckConstraint("length(sha256) = 64", name="ck_profile_images_sha256"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    object_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    media_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="image/webp", server_default="image/webp"
+    )
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    width_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    height_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AccountStorageEntitlement(Base):
+    __tablename__ = "account_storage_entitlements"
+    __table_args__ = (
+        CheckConstraint("limit_bytes > 0", name="ck_storage_entitlements_limit"),
+        CheckConstraint(
+            "length(trim(plan_code)) > 0", name="ck_storage_entitlements_plan"
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    plan_code: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="FREE_BETA", server_default="FREE_BETA"
+    )
+    limit_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=100_000_000, server_default="100000000"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LibraryStorageUsage(Base):
+    __tablename__ = "library_storage_usages"
+    __table_args__ = (
+        CheckConstraint("logical_size_bytes >= 0", name="ck_library_storage_usage_size"),
+        CheckConstraint("accounting_version > 0", name="ck_library_storage_usage_version"),
+        CheckConstraint("revision >= 0", name="ck_library_storage_usage_revision"),
+    )
+
+    library_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), primary_key=True
+    )
+    logical_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    accounting_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LibraryStorageAllocation(Base):
+    __tablename__ = "library_storage_allocations"
+    __table_args__ = (
+        CheckConstraint("allocated_bytes >= 0", name="ck_library_storage_allocation_size"),
+        ForeignKeyConstraint(
+            ["library_id", "user_id"],
+            ["library_memberships.library_id", "library_memberships.user_id"],
+            name="fk_storage_allocations_membership",
+            ondelete="CASCADE",
+        ),
+        Index("ix_storage_allocations_user", "user_id"),
+    )
+
+    library_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    allocated_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LibraryDeletionTombstone(Base):
+    __tablename__ = "library_deletion_tombstones"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('PENDING', 'RECOVERED', 'FINALIZED')",
+            name="ck_library_deletion_tombstones_state",
+        ),
+        CheckConstraint(
+            "logical_size_bytes >= 0", name="ck_library_deletion_tombstones_size"
+        ),
+        CheckConstraint(
+            "recover_until > created_at", name="ck_library_deletion_tombstones_window"
+        ),
+        Index("ix_library_deletion_tombstones_recovery", "state", "recover_until"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    library_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    requested_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="PENDING", server_default="PENDING"
+    )
+    logical_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    membership_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    allocation_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    object_manifest: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    recover_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AccountInvitation(Base):
     __tablename__ = "account_invitations"
     __table_args__ = (
