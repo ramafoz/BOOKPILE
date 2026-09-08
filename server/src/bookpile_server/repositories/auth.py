@@ -19,6 +19,9 @@ class AuthRepository:
             )
         )
 
+    def find_user(self, user_id: UUID) -> User | None:
+        return self._session.get(User, user_id)
+
     def add_session(self, user_session: UserSession) -> None:
         self._session.add(user_session)
 
@@ -53,6 +56,19 @@ class AuthRepository:
         self._session.execute(
             update(UserSession)
             .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+
+    def revoke_other_user_sessions(
+        self, user_id: UUID, current_session_id: UUID, now: datetime
+    ) -> None:
+        self._session.execute(
+            update(UserSession)
+            .where(
+                UserSession.user_id == user_id,
+                UserSession.id != current_session_id,
+                UserSession.revoked_at.is_(None),
+            )
             .values(revoked_at=now)
         )
 

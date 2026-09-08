@@ -397,7 +397,11 @@ third-party services.
   API boundaries, frontend increments, and acceptance gates.
 - `SERVER_PHASE6_LOAN_PLAN.md` defines the shared-loan model, Owner-only
   borrower privacy, migration protocol, concurrency rules, frontend increments,
-  and acceptance gates for the next Server milestone.
+  and completed acceptance gates.
+- `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md` defines private profiles,
+  entitlement-ready accounting, co-Owner allocation and safe deletion. Its
+  accounting, enforcement and private profile/storage UX increments 7A–7D are
+  complete; shared deletion and recovery remain next.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.

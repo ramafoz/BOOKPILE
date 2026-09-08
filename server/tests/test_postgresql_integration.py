@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from bookpile_server.database import get_session
 from bookpile_server.config import get_settings
 from bookpile_server.main import create_app
 from bookpile_server.models import (
+    AccountStorageEntitlement,
     AccountInvitation,
     AccountActionToken,
     Book,
@@ -51,6 +52,7 @@ from bookpile_server.models import (
 from bookpile_server.repositories.books import BookRepository
 from bookpile_server.repositories.readings import ReadingRepository
 from bookpile_server.repositories.loans import LoanRepository
+from bookpile_server.repositories.storage import StorageRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
@@ -68,6 +70,9 @@ from bookpile_server.services.rate_limits import (
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
 from bookpile_server.services.loans import LoanConflictError, LoanService
+from bookpile_server.services.storage import StorageService
+from bookpile_server.services.storage_accounting import calculate_library_logical_bytes
+from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -186,6 +191,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "reading_sessions",
             "personal_book_records",
             "loans",
+            "user_profiles",
+            "user_profile_field_visibilities",
+            "user_profile_images",
+            "account_storage_entitlements",
+            "library_storage_usages",
+            "library_storage_allocations",
+            "library_deletion_tombstones",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = session.get(Library, first_library_id)
@@ -687,6 +699,86 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Two growth transactions that individually fit but jointly exceed the
+        # entitlement must serialize at the quota boundary; exactly one wins.
+        quota_user_id = uuid4()
+        quota_library_id = uuid4()
+        with Session(engine) as session:
+            session.add_all(
+                [
+                    User(
+                        id=quota_user_id,
+                        email="quota-race@example.test",
+                        username="quota_race",
+                        password_hash="not-a-real-hash",
+                        state="active",
+                    ),
+                    Library(
+                        id=quota_library_id,
+                        name="Quota race",
+                        slug="postgres-quota-race",
+                    ),
+                ]
+            )
+            session.flush()
+            session.add(
+                LibraryMembership(
+                    library_id=quota_library_id,
+                    user_id=quota_user_id,
+                    role="OWNER",
+                )
+            )
+            session.commit()
+            StorageService(StorageRepository(session)).rebuild_owned_library_usage()
+            probe = Book(
+                library_id=quota_library_id,
+                title="Concurrent quota 0",
+                author="Author",
+            )
+            session.add(probe)
+            session.flush()
+            one_book_limit = calculate_library_logical_bytes(session, quota_library_id)
+            session.rollback()
+            entitlement = session.get(AccountStorageEntitlement, quota_user_id)
+            assert entitlement is not None
+            entitlement.limit_bytes = one_book_limit
+            session.commit()
+
+        def grow_quota_library(number: int) -> bool:
+            with Session(engine) as concurrent_session:
+                repository = BookRepository(concurrent_session)
+                repository.add(
+                    Book(
+                        library_id=quota_library_id,
+                        title=f"Concurrent quota {number}",
+                        author="Author",
+                    )
+                )
+                try:
+                    repository.commit()
+                except InsufficientSharedCapacity:
+                    return False
+                return True
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            quota_results = list(executor.map(grow_quota_library, (1, 2)))
+        assert sorted(quota_results) == [False, True]
+        with Session(engine) as session:
+            assert session.scalar(
+                select(func.count()).select_from(Book).where(
+                    Book.library_id == quota_library_id
+                )
+            ) == 1
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM libraries WHERE id = :id"),
+                {"id": quota_library_id},
+            )
+            connection.execute(
+                text("DELETE FROM users WHERE id = :id"),
+                {"id": quota_user_id},
+            )
 
         # Phase 6 history must make a destructive 0014 downgrade fail. Once
         # the synthetic row is removed, prove 0014 and 0013 are independently

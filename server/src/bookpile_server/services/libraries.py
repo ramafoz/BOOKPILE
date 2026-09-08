@@ -301,6 +301,7 @@ class LibraryService:
         if actor is None or not verify_password(actor.password_hash, current_password):
             raise LibraryReauthenticationError
 
+        self._repository.lock_storage_entitlements_first()
         members = self._repository.lock_members_for_library(library_id)
         actor_membership = next(
             (item for item in members if item.user_id == actor_user_id), None

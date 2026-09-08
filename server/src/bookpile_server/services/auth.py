@@ -45,6 +45,10 @@ class InvalidCsrfTokenError(Exception):
     pass
 
 
+class PasswordConfirmationError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class AuthContext:
     user_id: UUID
@@ -205,6 +209,34 @@ class AuthService:
         self._repository.revoke_all_user_sessions(context.user_id, now)
         self._repository.add_security_event(
             "all_sessions_revoked", user_id=context.user_id, ip_address=ip_address
+        )
+        self._repository.commit()
+
+    def private_account(self, context: AuthContext):
+        return context.user_session.user
+
+    def change_password(
+        self,
+        context: AuthContext,
+        *,
+        current_password: str,
+        new_password: str,
+        confirmation: str,
+        ip_address: str | None,
+    ) -> None:
+        if new_password != confirmation:
+            raise PasswordConfirmationError("The new passwords do not match.")
+        user = self._repository.find_user(context.user_id)
+        if user is None or not verify_password(user.password_hash, current_password):
+            raise InvalidCredentialsError
+        # hash_password applies the shared 12–128 character policy.
+        user.password_hash = hash_password(new_password)
+        now = datetime.now(UTC)
+        self._repository.revoke_other_user_sessions(
+            context.user_id, context.user_session.id, now
+        )
+        self._repository.add_security_event(
+            "password_changed", user_id=context.user_id, ip_address=ip_address
         )
         self._repository.commit()
 

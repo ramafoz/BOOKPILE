@@ -26,6 +26,9 @@ PublicationType = Literal[
     "MAGAZINE_PERIODICAL",
     "OTHER",
 ]
+ProfileVisibility = Literal["PRIVATE", "SHARED_LIBRARY_MEMBERS", "AUTHENTICATED"]
+ProfileGender = Literal["UNSPECIFIED", "MALE", "FEMALE", "CUSTOM"]
+ProfilePronoun = Literal["MALE", "FEMALE", "NEUTRAL"]
 
 
 def optional_text(value: str | None) -> str | None:
@@ -44,6 +47,100 @@ def normalize_genres(value: str | None) -> str | None:
         if cleaned:
             genres.setdefault(cleaned.casefold(), cleaned)
     return ", ".join(sorted(genres.values(), key=str.casefold)) or None
+
+
+class ProfileWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=100)
+    timezone: str | None = Field(default=None, max_length=64)
+    gender: ProfileGender = "UNSPECIFIED"
+    custom_gender: str | None = Field(default=None, max_length=80)
+    preferred_pronoun: ProfilePronoun | None = None
+    neutral_pronoun: str | None = Field(default=None, max_length=80)
+    city: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
+    date_of_birth: date | None = None
+    visibilities: dict[
+        Literal[
+            "display_name", "timezone", "personal_data", "profile_image"
+        ],
+        ProfileVisibility,
+    ] = Field(default_factory=dict)
+
+    @field_validator(
+        "display_name", "timezone", "custom_gender", "neutral_pronoun",
+        "city", "state", "country",
+    )
+    @classmethod
+    def normalize_profile_text(cls, value: str | None) -> str | None:
+        return optional_text(value)
+
+    @model_validator(mode="after")
+    def validate_gender_shape(self) -> "ProfileWrite":
+        if self.gender != "CUSTOM":
+            # Older clients may echo a derived MALE/FEMALE pronoun from a
+            # profile response. Non-Custom gender has no separate pronoun
+            # controls, so normalise those stale details instead of rejecting
+            # an otherwise valid profile save.
+            self.custom_gender = None
+            self.preferred_pronoun = None
+            self.neutral_pronoun = None
+            return self
+        if not self.custom_gender:
+            raise ValueError("Custom gender is required")
+        if self.preferred_pronoun is None:
+            raise ValueError("Preferred pronoun is required for Custom gender")
+        if self.preferred_pronoun != "NEUTRAL" and self.neutral_pronoun:
+            raise ValueError("Custom pronoun text is available only for Neutral pronouns")
+        return self
+
+
+class ProfileResponse(BaseModel):
+    user_id: UUID
+    username: str
+    display_name: str | None = None
+    timezone: str | None = None
+    gender: ProfileGender | None = None
+    custom_gender: str | None = None
+    preferred_pronoun: ProfilePronoun | None = None
+    neutral_pronoun: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    date_of_birth: date | None = None
+    profile_image_visible: bool = False
+    visibilities: dict[str, ProfileVisibility] | None = None
+
+
+class StorageLibraryContributionResponse(BaseModel):
+    library_id: UUID
+    name: str
+    colour_key: int = Field(ge=0)
+    share_of_used: float = Field(ge=0, le=1)
+    share_of_entitlement: float = Field(ge=0, le=1)
+
+
+class StorageOverviewResponse(BaseModel):
+    libraries: list[StorageLibraryContributionResponse]
+    account_data_share_of_used: float = Field(ge=0, le=1)
+    account_data_share_of_entitlement: float = Field(ge=0, le=1)
+    used_share_of_entitlement: float = Field(ge=0, le=1)
+
+
+class PrivateAccountResponse(BaseModel):
+    user_id: UUID
+    username: str
+    email: str
+    created_at: datetime
+    password_protected: bool = True
+
+
+class ChangePasswordWrite(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+    confirmation: str = Field(min_length=12, max_length=128)
 
 
 class ContributorWrite(BaseModel):

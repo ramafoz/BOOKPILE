@@ -671,6 +671,67 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-loan-history article { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid #ded2c2; border-radius: 7px; }
 .server-loan-history article span { display: grid; flex: 1; }
 
+.server-account-workspace { display: grid; gap: 16px; margin: 17px 0 22px; }
+.server-account-workspace.loading { min-height: 360px; place-content: center; grid-auto-flow: column; align-items: center; color: #60736c; }
+.server-account-workspace > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 4px 5px 10px; }
+.server-account-workspace > header h2 { margin: 2px 0 5px; font: 700 clamp(32px, 5vw, 46px)/1 Georgia, "Times New Roman", serif; }
+.server-account-workspace > header p:not(.server-card-eyebrow) { max-width: 700px; margin: 0; color: #61736d; line-height: 1.5; }
+.server-profile-layout { display: grid; grid-template-columns: minmax(210px, .72fr) minmax(360px, 1.6fr); gap: 14px; }
+.server-profile-card { min-width: 0; padding: 20px; border: 1px solid #d9cdbc; border-radius: 11px; background: #fffdf8; }
+.server-profile-card h3 { margin: 0 0 8px; font: 700 23px Georgia, "Times New Roman", serif; }
+.server-profile-card > p { margin: 0 0 16px; color: #65766f; line-height: 1.5; }
+.server-profile-card label { display: grid; gap: 6px; color: #39564e; font-size: 12px; font-weight: 750; }
+.server-profile-card input, .server-profile-card select { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid #cdbfac; border-radius: 7px; color: #173a31; background: #fffdf9; }
+.server-profile-photo { width: 132px; height: 132px; display: grid; place-items: center; overflow: hidden; margin: 17px auto; border: 1px solid #b9cbc3; border-radius: 50%; color: #54746b; background: #eaf2ee; }
+.server-profile-photo img { width: 100%; height: 100%; object-fit: cover; }
+.server-profile-photo-actions { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; }
+.server-profile-photo-actions label, .server-profile-photo-actions button, .server-security-card button { min-height: 39px; border: 1px solid #a8bdb4; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 10px; color: #28594e; background: #f5faf7; font-size: 12px; font-weight: 750; cursor: pointer; }
+.server-profile-photo-actions input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+.server-profile-fields { grid-column: 2; grid-row: span 2; }
+.server-profile-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.server-profile-pronoun-note { grid-column: 1 / -1; margin: -2px 0 0; color: #66766f; font-size: 12px; line-height: 1.5; }
+.server-privacy-card { grid-column: 1; }
+.server-privacy-card > label { grid-template-columns: 1fr; align-items: center; padding: 9px 0; border-top: 1px solid #eee4d8; }
+.server-privacy-card .server-primary-action { width: 100%; justify-content: center; margin-top: 14px; }
+.server-storage-card { overflow: hidden; }
+.server-storage-library-list { display: grid; gap: 14px; }
+.server-storage-library-list > div { display: grid; grid-template-columns: minmax(150px, 240px) 1fr; align-items: center; gap: 15px; }
+.server-storage-library-list span { display: flex; align-items: center; gap: 8px; font-weight: 750; }
+.server-storage-library-list span > i { --storage-colour: #778984; width: 11px; height: 11px; flex: 0 0 auto; border-radius: 50%; background: var(--storage-colour); }
+.server-storage-track { height: 17px; display: flex; overflow: hidden; border: 1px solid #c9c0b3; border-radius: 999px; background: #ece6dd; }
+.server-storage-track > i { display: block; height: 100%; }
+.server-storage-track .neutral, .server-storage-library-list i.neutral { background: #88938f; }
+.server-storage-total { display: grid; gap: 8px; margin-top: 23px; padding-top: 18px; border-top: 1px solid #e2d7c8; }
+.server-storage-total .server-storage-track { height: 25px; }
+.server-security-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.server-security-card > div { display: flex; align-items: center; gap: 12px; }
+.server-security-card h3, .server-security-card p { margin: 0; }
+.server-security-card > div:last-child { flex-wrap: wrap; justify-content: flex-end; }
+.server-account-data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.server-account-data-grid span { display: grid; gap: 3px; overflow-wrap: anywhere; }
+.server-account-data-grid small { color: #687a73; }
+.server-security-expanded { display: grid; }
+.server-password-form { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; gap: 10px; }
+.server-password-form button, .server-session-actions button { min-height: 42px; padding: 8px 12px; border: 1px solid #a8bdb4; border-radius: 7px; color: #28594e; background: #f5faf7; font-weight: 750; }
+.server-session-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.server-library-settings-link { width: 100%; display: flex; align-items: center; gap: 9px; margin: 9px 0 16px; padding: 11px; border: 1px solid #b8c9c2; border-radius: 8px; color: #214e43; background: #f3f8f5; text-align: left; }
+.server-library-settings-link span, .server-settings-menu button span { display: grid; gap: 2px; }
+.server-library-settings-link small, .server-settings-menu button small { font-weight: 500; line-height: 1.35; }
+.server-username-link, .server-perspective-profiles button { width: auto; min-height: 0; padding: 0; border: 0; color: #236557; background: transparent; font-weight: 800; text-decoration: underline; cursor: pointer; }
+.server-perspective-profiles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 13px; margin-top: 14px; }
+.server-perspective-profiles small { width: 100%; color: #687a73; }
+.server-public-profile { position: relative; width: min(620px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; padding: 28px; border: 1px solid #d3c5b2; border-radius: 13px; color: #173a31; background: #fffaf2; box-shadow: 0 24px 80px #102d2670; }
+.server-public-profile h2, .server-public-profile p, .server-public-profile dd { color: #173a31; }
+.server-public-profile .server-card-eyebrow { color: #a6532d; }
+.server-dialog-close { position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; display: grid; place-items: center; border: 0; background: transparent; color: #315d52; }
+.server-public-profile-heading { display: flex; align-items: center; gap: 20px; }
+.server-public-profile-heading .server-profile-photo { flex: 0 0 auto; margin: 0; }
+.server-public-profile-heading h2 { margin: 3px 0; font: 700 36px Georgia, serif; }
+.server-public-profile-data { display: grid; grid-template-columns: minmax(120px, .5fr) 1fr; gap: 8px 18px; margin-top: 24px; }
+.server-public-profile-data dt { color: #6b7b75; font-weight: 700; }
+.server-public-profile-data dd { margin: 0; }
+.server-profile-loading { display: flex; gap: 10px; align-items: center; }
+
 @media (max-width: 850px) {
   .server-shell { display: block; }
   .server-story { min-height: 300px; padding: 26px 25px 36px; }
@@ -701,6 +762,8 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
   .server-library-sidebar { left: 14px; padding: 20px; border: 1px solid #cfc1ae; }
   .server-floating-control-panel { right: 14px; }
   .server-members-control-stack { right: 14px; }
+  .server-profile-layout { grid-template-columns: 1fr; }
+  .server-profile-fields, .server-privacy-card { grid-column: 1; grid-row: auto; }
 }
 
 @media (max-width: 480px) {
@@ -727,6 +790,15 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
   .server-compact-navigation .server-settings-trigger { width: 40px; flex: 0 0 40px; }
   .server-compact-navigation .server-settings-trigger > svg { display: block !important; }
   .server-account-card { padding-inline: 23px; }
+  .server-account-workspace > header { align-items: flex-start; }
+  .server-account-workspace > header > svg { width: 30px; }
+  .server-profile-card { padding: 16px 13px; }
+  .server-profile-field-grid { grid-template-columns: 1fr; }
+  .server-password-form, .server-account-data-grid { grid-template-columns: 1fr; }
+  .server-privacy-card > label { grid-template-columns: 1fr; }
+  .server-storage-library-list > div { grid-template-columns: 1fr; gap: 6px; }
+  .server-security-card, .server-security-card > div:last-child { align-items: stretch; flex-direction: column; }
+  .server-security-card > div:last-child { width: 100%; }
   .server-library-dashboard { margin-top: 12px; padding: 14px 9px; }
   .server-dashboard-title { grid-template-columns: 1fr; text-align: center; }
   .server-dashboard-title .server-account-icon { margin: 0 auto; }

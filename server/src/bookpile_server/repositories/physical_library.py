@@ -326,7 +326,9 @@ class PhysicalLibraryRepository:
         self._session.flush()
 
     def commit(self) -> None:
-        self._session.commit()
+        from ..services.storage_transactions import commit_with_storage
+
+        commit_with_storage(self._session)
 
     def rollback(self) -> None:
         self._session.rollback()

@@ -640,7 +640,7 @@ export default function PhysicalLibraryWorkspace({
   if (!data) return <section className="server-dashboard-panel"><h3>Library layout</h3><p>{busy ? "Loading physical library…" : error ?? "Physical library unavailable."}</p></section>;
 
   return <section className="server-physical-workspace">
-    <header><div><p className="server-card-eyebrow">Shared physical structure</p><h3>Library layout</h3><p>{data.can_edit ? "Build and maintain furniture, shelves, rows and piles, then define their visual geometry and support." : "Read-only physical hierarchy. Your Viewer access includes the Library Map."}</p></div><div className="server-physical-heading-actions">{data.can_edit && <button type="button" onClick={() => setLayoutEditing(true)}><Settings2 size={17} /> Visual layout</button>}<Ruler size={30} /></div></header>
+    <header><div><p className="server-card-eyebrow">Shared physical structure</p><h3>Library structure</h3><p>{data.can_edit ? "Create, edit or remove furniture, shelves, rows and piles. Use Visual layout only to position and resize their map representation." : "Read-only physical hierarchy. Your Viewer access includes the Library Map."}</p></div><div className="server-physical-heading-actions">{data.can_edit && <button type="button" onClick={() => setLayoutEditing(true)}><Settings2 size={17} /> Visual layout</button>}<Ruler size={30} /></div></header>
     {error && <div className="server-message error">{error}</div>}
     <TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
 

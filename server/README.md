@@ -89,7 +89,16 @@ must not be used for Server migrations or test databases.
   Viewer-redacted inspection, atomic Single/Batch Add loans, catalogue filters,
   On-loan map precedence, retained locations, suggestion exclusion, and shared
   non-sensitive statistics. Phase 6E Local-contract comparison and all final
-  gates pass; only the explicitly approved merge remains pending.
+  gates pass, and Phase 6 is merged into `main`.
+- Phase 7A–7B storage/profile foundation: deterministic logical-byte accounting,
+  entitlement-ready co-Owner allocation, additive migration `0015`, exact
+  backfill, database-guarded profile privacy and scoped authenticated projections.
+  Phase 7C applies one locked quota transaction boundary to all shared writes,
+  membership changes and cover-object compensation, including a PostgreSQL race
+  gate. Phase 7D adds the responsive private account/profile workspace, grouped
+  privacy, authenticated member-profile projections, profile-image processing,
+  password/session controls, Owner library-settings navigation, and non-numeric
+  storage contribution/total bars. Phase 7E deletion and recovery follows.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library

@@ -1021,6 +1021,7 @@ Gate: API-level tests prove Viewers cannot recover borrower data.
 
 ### Phase 7 — storage quota and co-owner allocation
 
+- Follow [SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md](SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md).
 - Define exact charged-byte rules.
 - Implement transactional allocation solver, usage UI, limits, and concurrent
 upload/membership tests.
@@ -1086,8 +1087,17 @@ perspective-aware Library Map colouring and inspection, and guarded retirement
 of the empty shared Goodreads compatibility field. Phase 6A–6E now supplies
 the guarded loan schema, concurrency-safe services, strict privacy projections,
 accepted responsive catalogue/history UX, atomic loan-at-creation, On-loan map
-custody and shared statistics. Its Local compatibility and final gates pass;
-the immediate action is the explicitly approved merge, followed by Phase 7.
+custody and shared statistics. Its Local compatibility and final gates pass and
+Phase 6 is merged into `main`. Phase 7A–7B now provide deterministic logical
+accounting, co-Owner allocation, additive profile/visibility/entitlement/usage/
+allocation/tombstone schema, private profile projections and a rehearsed,
+reconciled production backfill. Phase 7C additionally enforces quota at the common
+transaction boundary for all shared-domain writes, compensates rejected objects,
+protects Owner changes and passes a real PostgreSQL quota race. Phase 7D now adds
+the accepted private account/profile workspace, four grouped privacy controls,
+authenticated member profiles, private account/security data, Owner-scoped library
+settings, and non-numeric responsive storage visualization. Atomic deletion,
+quarantine and recovery in 7E is next.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

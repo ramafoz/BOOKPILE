@@ -18,6 +18,12 @@ class LibraryRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def lock_storage_entitlements_first(self) -> None:
+        """Establish the global quota lock order before membership row locks."""
+        from .storage import StorageRepository
+
+        StorageRepository(self._session).ensure_entitlements()
+
     def find_membership(
         self, *, library_id: UUID, user_id: UUID
     ) -> LibraryMembership | None:
@@ -145,7 +151,9 @@ class LibraryRepository:
         self._session.flush()
 
     def commit(self) -> None:
-        self._session.commit()
+        from ..services.storage_transactions import commit_with_storage
+
+        commit_with_storage(self._session)
 
     def rollback(self) -> None:
         self._session.rollback()
