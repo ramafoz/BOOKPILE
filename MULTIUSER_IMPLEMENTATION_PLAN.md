@@ -1021,6 +1021,7 @@ Gate: API-level tests prove Viewers cannot recover borrower data.
 
 ### Phase 7 — storage quota and co-owner allocation
 
+- Follow [SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md](SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md).
 - Define exact charged-byte rules.
 - Implement transactional allocation solver, usage UI, limits, and concurrent
 upload/membership tests.

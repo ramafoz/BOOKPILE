@@ -791,7 +791,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   import will assign its links to the selected importing Owner.
 - [x] Implement shared `SHELVED`/`BEING_READ` custody, retain saved shelf
   positions, and prevent simultaneous active reading of one physical copy.
-- [ ] Complete Server Phase 6 according to `SERVER_PHASE6_LOAN_PLAN.md`:
+- [x] Complete Server Phase 6 according to `SERVER_PHASE6_LOAN_PLAN.md`:
   - [x] 6A: add the reversible shared-loan schema and pure domain rules.
     Backup/restore, PostgreSQL upgrade/downgrade/upgrade, guarded non-empty
     downgrade, and preservation of all 15 development books passed on
@@ -809,9 +809,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     perspective colouring and complete statistics were accepted on 2026-09-08.
   - [x] 6E: complete compatibility review, final automated acceptance and
     documentation. All gates passed on 2026-09-08 with Local untouched.
-  - [ ] Merge the accepted Phase 6 branch into `main` after explicit approval.
-- [ ] Implement transactional shared quota allocation and atomic library
-  deletion/recovery.
+  - [x] Merge the accepted Phase 6 branch into `main` after explicit approval.
+- [ ] Complete Server Phase 7 according to
+  `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md`:
+  - [ ] 7A: versioned logical accounting and pure deterministic allocator.
+  - [ ] 7B: additive profile, entitlement, usage, allocation and deletion schema.
+  - [ ] 7C: transactional enforcement and Owner-membership integration.
+  - [ ] 7D: private profile/security shell and non-numeric storage visualization.
+  - [ ] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
+  - [ ] 7F: compatibility, release gates and guarded merge.
 
 ### Privacy and social features
 
