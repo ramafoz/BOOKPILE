@@ -73,13 +73,21 @@ must not be used for Server migrations or test databases.
   cross-Owner history, self-only history/Goodreads management, suggestions,
   rereading-aware counters, and optional completed/unknown/active reading data
   during Single or Batch Add.
+- Phase 5D–5E map/statistics integration and compatibility cleanup: shared
+  active-reading custody, perspective-aware colours and inspection, complete
+  reading statistics, and guarded removal of the obsolete shared Goodreads
+  field.
+- Phase 6A shared-loan foundation: additive `0014_shared_loans`, one active
+  loan per physical copy, tenant-safe composite ownership, guarded rollback,
+  and pure chronology, overdue, ordering, and custody-precedence rules. No
+  loan API or frontend is exposed yet.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
 edition is still not deployable because the production private-object adapter,
-remaining map/statistics reading integration, loans, backup/restore, storage quota, and production
+loan services and UX, backup/restore, storage quota, and production
 infrastructure have not yet been ported.
 
 ## Development setup

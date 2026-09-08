@@ -544,6 +544,9 @@ class Book(Base):
     cover: Mapped["BookCover | None"] = relationship(
         back_populates="book", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
+    loans: Mapped[list["Loan"]] = relationship(
+        back_populates="book", cascade="all, delete-orphan"
+    )
 
 
 class ReadingSession(Base):
@@ -613,6 +616,77 @@ class ReadingSession(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class Loan(Base):
+    __tablename__ = "loans"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('ACTIVE', 'RETURNED')", name="ck_loans_state"
+        ),
+        CheckConstraint(
+            "length(trim(loaned_to)) BETWEEN 1 AND 300",
+            name="ck_loans_loaned_to",
+        ),
+        CheckConstraint(
+            "notes IS NULL OR length(notes) <= 4000",
+            name="ck_loans_notes_length",
+        ),
+        CheckConstraint(
+            "state = 'RETURNED' OR returned_date IS NULL",
+            name="ck_loans_active_has_no_returned_date",
+        ),
+        CheckConstraint(
+            "loaned_date IS NULL OR expected_return_date IS NULL OR "
+            "expected_return_date >= loaned_date",
+            name="ck_loans_expected_after_loaned",
+        ),
+        CheckConstraint(
+            "loaned_date IS NULL OR returned_date IS NULL OR "
+            "returned_date >= loaned_date",
+            name="ck_loans_returned_after_loaned",
+        ),
+        ForeignKeyConstraint(
+            ["library_id", "book_id"],
+            ["books.library_id", "books.id"],
+            name="fk_loans_library_book",
+            ondelete="CASCADE",
+        ),
+        Index(
+            "uq_loans_active_book",
+            "library_id",
+            "book_id",
+            unique=True,
+            postgresql_where=text("state = 'ACTIVE'"),
+            sqlite_where=text("state = 'ACTIVE'"),
+        ),
+        Index(
+            "ix_loans_library_history",
+            "library_id",
+            "state",
+            "loaned_date",
+            "returned_date",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    book_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    loaned_to: Mapped[str] = mapped_column(String(300), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    loaned_date: Mapped[date | None] = mapped_column(Date)
+    expected_return_date: Mapped[date | None] = mapped_column(Date)
+    returned_date: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    book: Mapped[Book] = relationship(back_populates="loans")
 
 
 class PersonalBookRecord(Base):

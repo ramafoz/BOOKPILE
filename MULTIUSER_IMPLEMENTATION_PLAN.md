@@ -1,8 +1,9 @@
 # BOOKPILE Server — multi-user implementation plan
 
 Status: active Server implementation. Phases 0–4D, the dual-edition
-architecture checkpoint, and Server Phase 5A–5E are complete and merged;
-Phase 6 is the next functional milestone. This
+architecture checkpoint, and Server Phase 5A–5E are complete and merged.
+Phase 6A is complete on `feature/server-loans`; Phase 6B scoped loan services,
+privacy projections, and APIs are the next functional increment. This
 document remains the product and security roadmap for the hosted edition.
 
 ## 1. Product boundary
@@ -1084,8 +1085,9 @@ custody, session-aware filters and suggestions, complete reading statistics,
 perspective-aware Library Map colouring and inspection, and guarded retirement
 of the empty shared Goodreads compatibility field. Phases 6–10 remain pending;
 full Local ZIP import is intentionally gated on the reading and loan models in
-Phases 5 and 6. Phase 5 is merged; the immediate next action is Phase 6 loan
-modelling and sensitive-field projections on its dedicated feature branch.
+Phases 5 and 6. Phase 5 is merged and Phase 6A supplies the guarded loan
+schema; the immediate next action is Phase 6B services, concurrency, audit,
+and sensitive-field projections on its dedicated feature branch.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

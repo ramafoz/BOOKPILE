@@ -35,6 +35,7 @@ from bookpile_server.models import (
     LibraryAuditEvent,
     LibraryInvitation,
     LibraryMembership,
+    Loan,
     PersonalBookRecord,
     RateLimitBucket,
     ReadingSession,
@@ -182,6 +183,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "visual_outside_areas",
             "reading_sessions",
             "personal_book_records",
+            "loans",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = session.get(Library, first_library_id)
@@ -644,6 +646,28 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Phase 6 history must make a destructive 0014 downgrade fail. Once
+        # the synthetic row is removed, prove 0014 and 0013 are independently
+        # reversible and then restore head.
+        with Session(engine) as session:
+            session.add(
+                Loan(
+                    library_id=first_library_id,
+                    book_id=first_book_id,
+                    state="ACTIVE",
+                    loaned_to="Migration test borrower",
+                )
+            )
+            session.commit()
+        with pytest.raises(RuntimeError, match="must be preserved"):
+            command.downgrade(alembic, "0013_remove_shared_goodreads")
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM loans"))
+        command.downgrade(alembic, "0013_remove_shared_goodreads")
+        assert "loans" not in set(inspect(engine).get_table_names())
+        command.upgrade(alembic, "head")
+        assert "loans" in set(inspect(engine).get_table_names())
 
         # Prove 0013 is independently reversible, restoring only the empty
         # compatibility column before removing it again.

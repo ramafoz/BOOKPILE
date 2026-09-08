@@ -1,8 +1,8 @@
 # BOOKPILE Server Phase 6 — shared loans and private borrower data
 
-Status: implementation-ready plan on `feature/server-loans`. Phase 5 is merged
-into `main`. Phase 6 changes Server only; released BOOKPILE Local v1 and its
-populated SQLite catalogue remain untouched.
+Status: active on `feature/server-loans`. Phase 5 is merged into `main` and
+Phase 6A was completed on 2026-09-08. Phase 6 changes Server only; released
+BOOKPILE Local v1 and its populated SQLite catalogue remain untouched.
 
 ## 1. Objective and ownership boundary
 
@@ -162,6 +162,13 @@ after user testing.
 ## 7. Implementation increments
 
 ### 6A — schema and pure loan domain
+
+Status: complete on the feature branch. Migration `0014_shared_loans`, the
+`Loan` model, canonical pure rules, SQLite tests, and the PostgreSQL migration
+gate are implemented. The verified pre-migration backup is retained at
+`server/backups/bookpile-phase6a-pre-20260908-064317.dump`. Its restoration in
+an isolated database preserved all 15 development books; development now runs
+at `0014_shared_loans` with an empty loan table.
 
 - Add `Loan`, constraints, indexes, relationships, and migration.
 - Implement normalization, chronology, overdue, sorting, and custody helpers as
