@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from bookpile_server.config import get_settings
 from bookpile_server.models import (
+    AccountStorageEntitlement,
     Book,
     BookContributor,
     ContributorRole,
@@ -197,6 +198,35 @@ def test_owner_crud_normalizes_and_audits_complete_books(
             select(LibraryAuditEvent).order_by(LibraryAuditEvent.id)
         )
     ] == ["book_created", "book_updated", "book_deleted"]
+
+
+def test_catalogue_growth_is_atomically_rejected_when_shared_capacity_is_full(
+    client: TestClient, session: Session
+) -> None:
+    seed_roles(session)
+    owner = add_user(session, "quota_owner")
+    library = create_library_with_members(session, owner)
+    session.add(AccountStorageEntitlement(user_id=owner.id, limit_bytes=1))
+    session.commit()
+    authenticate(client, session, owner)
+
+    response = client.post(
+        f"/api/v1/libraries/{library.id}/catalogue",
+        json=payload("This must roll back"),
+        headers=csrf(),
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Shared storage capacity is insufficient."}
+    assert session.scalar(
+        select(Book).where(Book.library_id == library.id)
+    ) is None
+    assert session.scalar(
+        select(LibraryAuditEvent).where(
+            LibraryAuditEvent.library_id == library.id,
+            LibraryAuditEvent.event_type == "book_created",
+        )
+    ) is None
 
 
 def test_viewer_reads_complete_catalogue_but_cannot_mutate(

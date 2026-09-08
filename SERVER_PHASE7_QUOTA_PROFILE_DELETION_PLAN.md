@@ -2,7 +2,7 @@
 
 
 
-Status: active on `feature/server-storage-quota`; 7A and 7B are complete. Phase 6 is merged into
+Status: active on `feature/server-storage-quota`; 7A–7C are complete. Phase 6 is merged into
 `main`. This phase changes Server only and leaves released Local v1 untouched.
 
 ## 1. Product contract
@@ -109,6 +109,14 @@ library usage, allocation and deletion-tombstone tables. Add tenant-safe constra
 locking repositories, private projections and migration guards.
 
 ### 7C — enforcement and membership integration
+
+Status: complete. Catalogue, cover, physical-layout, reading, loan and membership
+writes now flush, lock, recalculate and allocate before one shared commit. Capacity
+failure has a non-identifying API response and rolls back domain rows, audit rows
+and newly stored cover objects. Owner removal is rejected atomically when remaining
+Owners cannot absorb the allocation. A disposable PostgreSQL gate proves two
+individually valid but jointly excessive concurrent writes serialize and exactly
+one succeeds.
 
 Charge cover/profile-object writes and relevant relational growth, recalculate
 allocations atomically, and integrate Owner add/remove and quota races. Ordinary

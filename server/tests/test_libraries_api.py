@@ -1,12 +1,26 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bookpile_server.config import get_settings
-from bookpile_server.models import LibraryAuditEvent, LibraryMembership, User, UserSession
+from bookpile_server.models import (
+    AccountStorageEntitlement,
+    Book,
+    Library,
+    LibraryAuditEvent,
+    LibraryMembership,
+    User,
+    UserSession,
+)
+from bookpile_server.repositories.libraries import LibraryRepository
+from bookpile_server.repositories.storage import StorageRepository
+from bookpile_server.services.libraries import LibraryService
+from bookpile_server.services.storage import StorageService
+from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.security.passwords import hash_password
 
@@ -354,3 +368,46 @@ def test_catalog_only_viewer_cannot_receive_map_access(session: Session) -> None
         pass
     else:
         raise AssertionError("CATALOG_ONLY must never authorize map data")
+
+
+def test_owner_removal_rolls_back_when_remaining_owner_cannot_absorb_quota(
+    session: Session,
+) -> None:
+    constrained = add_user(session, "constrained_owner")
+    capacity_owner = add_user(session, "capacity_owner")
+    library = Library(name="Quota membership", slug="quota-membership")
+    session.add(library)
+    session.flush()
+    session.add_all(
+        [
+            LibraryMembership(
+                library_id=library.id, user_id=constrained.id, role="OWNER"
+            ),
+            LibraryMembership(
+                library_id=library.id, user_id=capacity_owner.id, role="OWNER"
+            ),
+            Book(library_id=library.id, title="Charged", author="Author"),
+            AccountStorageEntitlement(user_id=constrained.id, limit_bytes=1),
+            AccountStorageEntitlement(user_id=capacity_owner.id),
+        ]
+    )
+    session.commit()
+    StorageService(StorageRepository(session)).rebuild_owned_library_usage()
+
+    with pytest.raises(InsufficientSharedCapacity):
+        LibraryService(LibraryRepository(session)).change_member(
+            library_id=library.id,
+            actor_user_id=constrained.id,
+            target_user_id=capacity_owner.id,
+            action="DOWNGRADE_TO_VIEWER",
+            viewer_scope="CATALOG_ONLY",
+            current_password=PASSWORD,
+            acknowledge_equal_owner_power=False,
+        )
+
+    session.expire_all()
+    membership = session.query(LibraryMembership).filter_by(
+        library_id=library.id, user_id=capacity_owner.id
+    ).one()
+    assert membership.role == "OWNER"
+    assert membership.viewer_scope is None

@@ -815,7 +815,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 7A: versioned logical accounting and pure deterministic allocator.
   - [x] 7B: additive profile, entitlement, usage, allocation and deletion schema,
     migration rehearsal, exact initial backfill and private profile projections.
-  - [ ] 7C: transactional enforcement and Owner-membership integration.
+  - [x] 7C: transactional enforcement, private-object compensation,
+    Owner-membership integration and PostgreSQL quota-race gate.
   - [ ] 7D: private profile/security shell and non-numeric storage visualization.
   - [ ] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
   - [ ] 7F: compatibility, release gates and guarded merge.

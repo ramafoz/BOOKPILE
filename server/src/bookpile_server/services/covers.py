@@ -11,6 +11,7 @@ from ..models import BookCover
 from ..repositories.books import BookRepository
 from ..repositories.covers import CoverRepository
 from .catalogue import CatalogueConflictError, CatalogueNotFoundError
+from .storage_domain import InsufficientSharedCapacity
 
 
 class CoverNotFoundError(Exception):
@@ -76,6 +77,9 @@ class CoverService:
         )
         try:
             self._covers.commit()
+        except InsufficientSharedCapacity:
+            self._storage.delete(object_key)
+            raise
         except IntegrityError as exc:
             self._covers.rollback()
             self._storage.delete(object_key)

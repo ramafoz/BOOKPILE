@@ -93,7 +93,9 @@ must not be used for Server migrations or test databases.
 - Phase 7A–7B storage/profile foundation: deterministic logical-byte accounting,
   entitlement-ready co-Owner allocation, additive migration `0015`, exact
   backfill, database-guarded profile privacy and scoped authenticated projections.
-  Quota enforcement and the account frontend follow in the next increments.
+  Phase 7C applies one locked quota transaction boundary to all shared writes,
+  membership changes and cover-object compensation, including a PostgreSQL race
+  gate. The account frontend follows in the next increment.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library

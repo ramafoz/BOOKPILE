@@ -6,7 +6,12 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from bookpile_server.models import BookCover, LibraryAuditEvent
+from bookpile_server.models import (
+    AccountStorageEntitlement,
+    BookCover,
+    LibraryAuditEvent,
+    LibraryStorageAllocation,
+)
 from test_catalogue_services import (
     add_user,
     authenticate,
@@ -98,3 +103,28 @@ def test_cover_rejects_non_image_and_missing_csrf(client: TestClient, session: S
     path = f"/api/v1/libraries/{library.id}/catalogue/{book['id']}/cover"
     assert client.put(path, files={"cover": ("fake.jpg", b"not an image", "image/jpeg")}, headers=csrf()).status_code == 422
     assert client.put(path, files={"cover": ("cover.jpg", image_bytes(), "image/jpeg")}).status_code == 403
+
+
+def test_rejected_cover_quota_rolls_back_metadata_and_stored_object(
+    client: TestClient, session: Session, tmp_path
+) -> None:
+    owner, library, book = create_book(client, session, "cover_quota_owner")
+    allocated = session.get(LibraryStorageAllocation, (library.id, owner.id))
+    entitlement = session.get(AccountStorageEntitlement, owner.id)
+    assert allocated is not None and entitlement is not None
+    entitlement.limit_bytes = allocated.allocated_bytes
+    session.commit()
+
+    path = f"/api/v1/libraries/{library.id}/catalogue/{book['id']}/cover"
+    response = client.put(
+        path,
+        files={"cover": ("cover.jpg", image_bytes(), "image/jpeg")},
+        headers=csrf(),
+    )
+
+    assert response.status_code == 409
+    assert session.scalar(
+        select(BookCover).where(BookCover.book_id == UUID(book["id"]))
+    ) is None
+    cover_directory = tmp_path / "private-objects" / "covers"
+    assert not cover_directory.exists() or not list(cover_directory.iterdir())

@@ -1091,8 +1091,10 @@ custody and shared statistics. Its Local compatibility and final gates pass and
 Phase 6 is merged into `main`. Phase 7A–7B now provide deterministic logical
 accounting, co-Owner allocation, additive profile/visibility/entitlement/usage/
 allocation/tombstone schema, private profile projections and a rehearsed,
-reconciled production backfill. Phase 7C transactional write and membership
-enforcement is next.
+reconciled production backfill. Phase 7C additionally enforces quota at the common
+transaction boundary for all shared-domain writes, compensates rejected objects,
+protects Owner changes and passes a real PostgreSQL quota race. The private profile
+and storage UX in 7D is next.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:
