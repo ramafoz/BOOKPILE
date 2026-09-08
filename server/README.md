@@ -88,7 +88,8 @@ must not be used for Server migrations or test databases.
 - Phase 6C–6D accepted loan experience: responsive Owner management and
   Viewer-redacted inspection, atomic Single/Batch Add loans, catalogue filters,
   On-loan map precedence, retained locations, suggestion exclusion, and shared
-  non-sensitive statistics. Phase 6E final gates and merge remain pending.
+  non-sensitive statistics. Phase 6E Local-contract comparison and all final
+  gates pass; only the explicitly approved merge remains pending.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library

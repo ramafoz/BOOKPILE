@@ -47,8 +47,13 @@ export default function LoanManager({ libraryId, book, onClose, onChanged }: {
   }
   async function saveActive(event: FormEvent) {
     event.preventDefault();
-    const { returned_date: _returnedDate, ...payload } = activeDraft;
-    await run(() => serverApi.startLoan(libraryId, book.id, payload as LoanWrite));
+    const payload: LoanWrite = {
+      loaned_to: activeDraft.loaned_to,
+      notes: activeDraft.notes,
+      loaned_date: activeDraft.loaned_date,
+      expected_return_date: activeDraft.expected_return_date,
+    };
+    await run(() => serverApi.startLoan(libraryId, book.id, payload));
     setActiveDraft(EMPTY);
   }
   async function saveHistory(event: FormEvent) {

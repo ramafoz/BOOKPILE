@@ -2,8 +2,8 @@
 
 Status: active Server implementation. Phases 0–4D, the dual-edition
 architecture checkpoint, and Server Phase 5A–5E are complete and merged.
-Phases 6A–6B are complete on `feature/server-loans`; Phase 6C responsive loan
-and history UX is the next functional increment. This
+Phase 6A–6E is complete and accepted on `feature/server-loans`; only the
+explicitly approved merge into `main` remains. This
 document remains the product and security roadmap for the hosted edition.
 
 ## 1. Product boundary
@@ -1071,7 +1071,7 @@ recovery, and cost checks.
 - Optional new collaboration role only after a demonstrated use case.
 - Interface localization after the model and terminology stabilize.
 
-### Progress snapshot — 2026-09-07
+### Progress snapshot — 2026-09-08
 
 Phases 0, 1, 2, 3, 3.5, and 4A–4D are complete. Phase 4D passed its hierarchy,
 precise-layout, responsive-map, gesture, inspection, Viewer-scope,
@@ -1083,12 +1083,11 @@ reversible personal-reading model, scoped services/APIs, accepted
 perspective-aware catalogue and history experience, shared active-reading
 custody, session-aware filters and suggestions, complete reading statistics,
 perspective-aware Library Map colouring and inspection, and guarded retirement
-of the empty shared Goodreads compatibility field. Phases 6–10 remain pending;
-full Local ZIP import is intentionally gated on the reading and loan models in
-Phases 5 and 6. Phase 5 is merged; Phase 6A supplies the guarded loan schema
-and 6B supplies concurrency-safe services, audit, and sensitive-field
-projections. The immediate next action is Phase 6C responsive catalogue,
-history, filter, sorting, and Add/Batch Add UX.
+of the empty shared Goodreads compatibility field. Phase 6A–6E now supplies
+the guarded loan schema, concurrency-safe services, strict privacy projections,
+accepted responsive catalogue/history UX, atomic loan-at-creation, On-loan map
+custody and shared statistics. Its Local compatibility and final gates pass;
+the immediate action is the explicitly approved merge, followed by Phase 7.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:
@@ -1096,7 +1095,7 @@ than a false exact measurement:
 - current shared-catalogue/physical-map foundation (through Phase 4):
   **complete**;
 - complete invitation-only hosted beta roadmap (Phases 0–10): about
-  **65–70% complete**.
+  **72–77% complete**.
 
 The second figure includes unfinished personal readings, loans, quota and
 deletion, ZIP import/export, production operations, privacy/help material, and

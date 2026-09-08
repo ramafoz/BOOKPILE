@@ -499,9 +499,9 @@ controls. Entered physical sizes remain locked and clearly labelled, while
 shelf placement remains editable through frames, closures, separators,
 alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
-alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
-import remain pending for later Server phases. Full Local ZIP import follows
-the Server reading and loan models so those histories are preserved rather
+alter or replace Local v1. Server personal readings and loans are now complete;
+Server backup/export and Local ZIP import remain pending for Phase 8. Their
+canonical destinations now exist, so those histories can be preserved rather
 than discarded or flattened.
 
 The compact Server workspace increment is complete and accepted on desktop and
@@ -540,8 +540,9 @@ verified backup-and-restore rehearsal. Phase 6B adds the shared lifecycle,
 locking, redacted audit, and structurally separate Owner-full and Viewer-safe
 book/catalogue API projections. Phases 6C–6D add the accepted responsive
 Owner/Viewer loan workflow, atomic loan-at-creation, advanced loan search,
-On-loan map custody and shared statistics. Phase 6E final compatibility and
-release gates remain before the feature branch can merge into `main`.
+On-loan map custody and shared statistics. Phase 6E compatibility, privacy,
+test, lint, build and PostgreSQL gates pass; the feature branch is ready for
+the explicitly approved merge into `main`.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

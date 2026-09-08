@@ -1,7 +1,8 @@
 # BOOKPILE Server Phase 6 — shared loans and private borrower data
 
-Status: active on `feature/server-loans`. Phase 5 is merged into `main` and
-Phases 6A–6D were completed and manually accepted on 2026-09-08. Phase 6 changes Server only; released
+Status: complete on `feature/server-loans`, awaiting explicit approval to merge.
+Phases 6A–6D were completed and manually accepted on 2026-09-08; 6E passed its
+compatibility and release gates the same day. Phase 6 changes Server only; released
 BOOKPILE Local v1 and its populated SQLite catalogue remain untouched.
 
 ## 1. Objective and ownership boundary
@@ -251,6 +252,11 @@ Estimated effort: 25–35%.
 
 ### 6E — compatibility, documentation, and final acceptance
 
+Status: complete; branch is ready for the guarded merge. The Local contract
+comparison, privacy review, 116-test backend suite, 23 frontend tests, lint,
+production Server build and opt-in PostgreSQL gate all pass. No Local source or
+populated data was modified.
+
 - Compare Server behaviour against the accepted Local loan contract without
   copying Local's single-user architecture.
 - Run the complete backend, opt-in PostgreSQL, frontend, lint, build,
@@ -263,6 +269,17 @@ Gate: Phase 6 supplies the canonical loan destination required before Phase 8
 Local ZIP import can begin. Backups/exports themselves remain Phase 8.
 
 Estimated effort: 10–20%.
+
+### Local-to-Server compatibility result
+
+Both editions now agree on required borrower text, optional notes and dates,
+chronology, one active loan per copy, retained shelf position, reading/loan
+independence, custody priority, history, search, map and statistics semantics.
+Server deliberately replaces Local's implicit single-user trust boundary with
+library-scoped UUIDs, Book-row locking, CSRF, immutable redacted audit events,
+Owner writes and structurally separate Viewer responses. These are hosted-mode
+security requirements, not data incompatibilities. Consequently Local v1 loan
+rows have a canonical lossless destination for the Phase 8 ZIP adapter.
 
 ## 8. Acceptance matrix
 
@@ -296,7 +313,6 @@ Automated and manual validation must cover:
 
 ## 10. Recommended next session
 
-Complete 6E only: compare the accepted Server workflow with the Local contract,
-run the final authorization, concurrency, responsive, full-suite, PostgreSQL,
-build and documentation gates, then request explicit approval before merging
-`feature/server-loans` into `main`. Do not begin Phase 7 in that increment.
+After explicit approval, merge `feature/server-loans` into `main`, verify the
+merge commit and remote branch, and retain the Phase 6 pre-migration backup.
+Then create a fresh Phase 7 branch; do not mix quota/deletion work into this one.

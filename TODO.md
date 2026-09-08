@@ -807,8 +807,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 6D: integrate On-loan custody with map, inspection, suggestions, and
     non-sensitive statistics. Custody precedence, retained-location return,
     perspective colouring and complete statistics were accepted on 2026-09-08.
-  - [ ] 6E: complete compatibility review, full acceptance, documentation, and
-    guarded merge.
+  - [x] 6E: complete compatibility review, final automated acceptance and
+    documentation. All gates passed on 2026-09-08 with Local untouched.
+  - [ ] Merge the accepted Phase 6 branch into `main` after explicit approval.
 - [ ] Implement transactional shared quota allocation and atomic library
   deletion/recovery.
 
