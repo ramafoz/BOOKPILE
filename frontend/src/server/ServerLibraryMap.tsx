@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Settings2, Undo2, X } from "lucide-react";
 import { BookDetails } from "./CatalogueWorkspace";
 import { GeometryDialog, type GeometrySelection } from "./PhysicalLibraryWorkspace";
-import { serverApi, type BookReading, type GoodreadsReview, type PhysicalBook, type PhysicalLibrary, type ReadingCatalogueOverview, type ReadingPerspective, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
+import { serverApi, type BookLoans, type BookReading, type GoodreadsReview, type LoanOverview, type PhysicalBook, type PhysicalLibrary, type ReadingCatalogueOverview, type ReadingPerspective, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
 import {
   boundsForRects,
   cataloguePageMean,
@@ -86,7 +86,9 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
   const [details, setDetails] = useState<ServerBook | null>(null);
   const [detailsReading, setDetailsReading] = useState<BookReading | null>(null);
   const [detailsReviews, setDetailsReviews] = useState<GoodreadsReview[]>([]);
+  const [detailsLoans, setDetailsLoans] = useState<BookLoans | null>(null);
   const [readingOverview, setReadingOverview] = useState<ReadingCatalogueOverview | null>(null);
+  const [loanOverview, setLoanOverview] = useState<LoanOverview | null>(null);
   const [colourMode, setColourMode] = useState<MapColourMode>("status");
   const [colourFocus, setColourFocus] = useState("");
   const [colourLegendExpanded, setColourLegendExpanded] = useState(false);
@@ -135,8 +137,9 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
     void Promise.all([
       serverApi.physicalLibrary(libraryId),
       perspectiveUserId ? serverApi.readingOverview(libraryId, perspectiveUserId) : Promise.resolve(null),
+      serverApi.loanOverview(libraryId),
     ])
-      .then(([physical, overview]) => { setData(physical); setReadingOverview(overview); })
+      .then(([physical, overview, loans]) => { setData(physical); setReadingOverview(overview); setLoanOverview(loans); })
       .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "Library Map unavailable."));
   }, [libraryId, perspectiveUserId]);
 
@@ -379,12 +382,13 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
     setDetailsBusy(true);
     setError(null);
     try {
-      const [record, reading, reviews] = await Promise.all([
+      const [record, reading, reviews, loans] = await Promise.all([
         serverApi.book(libraryId, book.id),
         perspectiveUserId ? serverApi.bookReading(libraryId, book.id, perspectiveUserId) : Promise.resolve(null),
         serverApi.goodreadsReviews(libraryId, book.id),
+        serverApi.bookLoans(libraryId, book.id),
       ]);
-      setDetails(record); setDetailsReading(reading); setDetailsReviews(reviews);
+      setDetails(record); setDetailsReading(reading); setDetailsReviews(reviews); setDetailsLoans(loans);
     }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Book information unavailable."); }
     finally { setDetailsBusy(false); }
@@ -481,6 +485,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
 
   const readingByBook = new Map((readingOverview?.items ?? []).map((item) => [item.book_id, item]));
   const activeBookIds = new Set((readingOverview?.items ?? []).filter((item) => item.active_reader_present).map((item) => item.book_id));
+  const loanedBookIds = new Set((loanOverview?.loans ?? []).filter((item) => item.state === "ACTIVE").map((item) => item.book_id));
   const moveActiveCopiesOutside = !rearranging && !layoutEditing;
   const colourScale = buildMapColourScale(colourMode, mapData.books, readingByBook, colourFocus);
   const focusOptions = colourMode === "genre"
@@ -494,7 +499,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
   const booksByContainer = new Map<string, PhysicalBook[]>();
   mapData.books.forEach((book) => {
     if (!book.container_id) return;
-    if (moveActiveCopiesOutside && activeBookIds.has(book.id)) return;
+    if (moveActiveCopiesOutside && (activeBookIds.has(book.id) || loanedBookIds.has(book.id))) return;
     booksByContainer.set(book.container_id, [...(booksByContainer.get(book.container_id) ?? []), book]);
   });
   const selectedContainer = selection?.kind === "CONTAINER"
@@ -638,8 +643,10 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
         {data.layout.outside_areas.map((area) => <g key={area.area_kind} className={`server-map-outside ${area.area_kind.toLowerCase()}`}>
           <rect x={area.x_mm} y={-area.y_mm - area.height_mm} width={area.width_mm} height={area.height_mm} rx="2" />
           <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
-          {area.area_kind === "READING" && moveActiveCopiesOutside && (() => {
-            const activeBooks = mapData.books.filter((book) => activeBookIds.has(book.id));
+          {moveActiveCopiesOutside && (() => {
+            const activeBooks = mapData.books.filter((book) => area.area_kind === "LOANED"
+              ? loanedBookIds.has(book.id)
+              : activeBookIds.has(book.id) && !loanedBookIds.has(book.id));
             const columns = Math.max(1, Math.ceil(Math.sqrt(activeBooks.length * area.width_mm / Math.max(1, area.height_mm))));
             const rows = Math.max(1, Math.ceil(activeBooks.length / columns));
             const cellWidth = area.width_mm / columns;
@@ -650,10 +657,10 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
               const x = area.x_mm + (index % columns) * cellWidth + (cellWidth - width) / 2;
               const y = -area.y_mm - area.height_mm + Math.floor(index / columns) * cellHeight + (cellHeight - height) / 2;
               const colour = colourScale.colour(book);
-              return <g key={book.id} className={`server-map-reading-book physically-active ${selection?.kind === "BOOK" && selection.book.id === book.id ? "selected" : ""}`} onClick={(event) => { event.stopPropagation(); setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>
+              return <g key={book.id} className={`server-map-reading-book physically-active ${area.area_kind === "LOANED" ? "on-loan" : ""} ${selection?.kind === "BOOK" && selection.book.id === book.id ? "selected" : ""}`} onClick={(event) => { event.stopPropagation(); setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>
                 <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .27} ${y} ${x} ${y + height * .12} L ${x} ${y + height} Q ${x + width * .27} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
                 <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .73} ${y} ${x + width} ${y + height * .12} L ${x + width} ${y + height} Q ${x + width * .73} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
-                <title>{book.title} — {book.author} · {colourScale.detail(book)} · This physical copy is being read</title>
+                <title>{book.title} — {book.author} · {colourScale.detail(book)} · {area.area_kind === "LOANED" ? "This physical copy is on loan" : "This physical copy is being read"}</title>
               </g>;
             });
           })()}
@@ -706,6 +713,6 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       {selection.kind === "BOOK" ? <><p className="server-card-eyebrow">Selected book</p><h4>{selection.book.title}</h4><p>{selection.book.author}</p><small>{selection.book.page_count ? `${selection.book.page_count} pages` : `Page count unknown · visual fallback ${Math.round(meanPages)} pages`}</small></> : <><p className="server-card-eyebrow">Selected container</p><h4>{selectedBooks.length} {selectedBooks.length === 1 ? "book" : "books"}</h4><ol>{selectedBooks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((book) => <li key={book.id}><button type="button" onClick={() => { setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>{book.title}<small>{book.author}</small></button></li>)}</ol></>}
       <div><span className="server-map-inspector-actions">{selectedContainer && <button type="button" onClick={() => focus(selectedContainer)}><Focus size={16} /> Focus container</button>}{selection.kind === "BOOK" && <button type="button" onClick={() => void showDetails(selection.book)} disabled={detailsBusy}><Eye size={16} /> {detailsBusy ? "Loading…" : "Complete information"}</button>}</span><span><Move size={15} /> Read-only inspection</span></div>
     </aside>}
-    {details && <BookDetails libraryId={libraryId} book={details} location={retainedLocationLabel(data, details.id)} reading={detailsReading} perspectiveName={perspective?.username} reviews={detailsReviews} onClose={() => setDetails(null)} onEdit={null} />}
+    {details && <BookDetails libraryId={libraryId} book={details} location={retainedLocationLabel(data, details.id)} reading={detailsReading} perspectiveName={perspective?.username} reviews={detailsReviews} loans={detailsLoans} onClose={() => setDetails(null)} onEdit={null} />}
   </section>;
 }

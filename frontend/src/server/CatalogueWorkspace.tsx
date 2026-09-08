@@ -14,6 +14,7 @@ import {
   Plus,
   Search,
   BookMarked,
+  Handshake,
   Sparkles,
   RefreshCw,
   SlidersHorizontal,
@@ -33,6 +34,9 @@ import {
   type BookReading,
   type GoodreadsReview,
   type ReadingCatalogueOverview,
+  type LoanOverview,
+  type BookLoans,
+  type LoanWrite,
   ServerApiError,
   serverApi,
 } from "./serverApi";
@@ -46,6 +50,7 @@ import {
   ReadingStatusBadge,
   ReadingSummary,
 } from "./ReadingExperience";
+import LoanManager, { LoanSummary } from "./LoanExperience";
 
 
 const PAGE_SIZE = 25;
@@ -160,13 +165,14 @@ function locationLabel(data: PhysicalLibrary | null, bookId: string): string | n
   return location ? `${location.label} · Position ${book.position}` : null;
 }
 
-export function BookDetails({ libraryId, book, location, reading, perspectiveName, reviews, onClose, onEdit }: {
+export function BookDetails({ libraryId, book, location, reading, perspectiveName, reviews, loans, onClose, onEdit }: {
   libraryId: string;
   book: ServerBook;
   location?: string | null;
   reading?: BookReading | null;
   perspectiveName?: string;
   reviews?: GoodreadsReview[];
+  loans?: BookLoans | null;
   onClose: () => void;
   onEdit: (() => void) | null;
 }) {
@@ -192,6 +198,7 @@ export function BookDetails({ libraryId, book, location, reading, perspectiveNam
     <div className="server-book-details-heading"><CoverImage libraryId={libraryId} book={book} /><div><h2>{book.title}</h2><p className="server-book-author">{book.display_author}</p></div></div>
     {!!book.contributors.length && <section><h3>Contributors</h3><div className="server-contributor-credits">{book.contributors.map((item) => <span key={item.id}><b>{item.role_label}</b>{item.name}</span>)}</div></section>}
     {reading && <ReadingSummary reading={reading} perspectiveName={perspectiveName ?? "Selected Owner"} />}
+    <LoanSummary loans={loans ?? null} />
     <GoodreadsSummary reviews={reviews ?? []} />
     <dl className="server-book-metadata">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value === null || value === "" ? "Not recorded" : String(value).replaceAll("_", " ")}</dd></div>)}</dl>
     <div className="server-dialog-actions"><button type="button" onClick={onClose}>Close</button>{onEdit && <button className="confirm" type="button" onClick={onEdit}><Pencil size={16} /> Edit book</button>}</div>
@@ -211,12 +218,24 @@ interface InitialPersonalReadingWrite {
   goodreadsUrl: string;
 }
 
+interface InitialLoanWrite extends LoanWrite {
+  enabled: boolean;
+}
+
 const EMPTY_INITIAL_PERSONAL_READING: InitialPersonalReadingWrite = {
   readingMode: "NONE",
   datesUnknown: false,
   startedDate: "",
   finishedDate: "",
   goodreadsUrl: "",
+};
+
+const EMPTY_INITIAL_LOAN: InitialLoanWrite = {
+  enabled: false,
+  loaned_to: "",
+  notes: null,
+  loaned_date: null,
+  expected_return_date: null,
 };
 
 function BookEditor({ initial, initialCover, roles, options, physical, bookId, initialPlacement, batchMode, batchAddedCount = 0, onClose, onSave }: {
@@ -230,7 +249,7 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   batchMode?: boolean;
   batchAddedCount?: number;
   onClose: () => void;
-  onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, reportProgress: (message: string) => void) => Promise<void>;
+  onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, loan: InitialLoanWrite | null, reportProgress: (message: string) => void) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ServerBookWrite>(initial);
   const [busy, setBusy] = useState(false);
@@ -240,6 +259,7 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   const [removeCover, setRemoveCover] = useState(false);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [personal, setPersonal] = useState<InitialPersonalReadingWrite>(EMPTY_INITIAL_PERSONAL_READING);
+  const [loan, setLoan] = useState<InitialLoanWrite>(EMPTY_INITIAL_LOAN);
   const [creatingAtOpen] = useState(!bookId);
   const placed = physical?.books.find((item) => item.id === bookId);
   const initialContainerId = initialPlacement?.containerId ?? placed?.container_id ?? "";
@@ -267,7 +287,10 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setProgress("Saving book…");
-    try { await onSave(draft, coverFile, removeCover, physical ? { containerId, position } : null, creatingAtOpen ? personal : null, setProgress); } catch (caught) { setError(message(caught)); setBusy(false); setProgress(""); }
+    try {
+      if (creatingAtOpen && loan.enabled && personal.readingMode === "ACTIVE") throw new Error("A copy cannot be on loan and actively read at the same time.");
+      await onSave(draft, coverFile, removeCover, physical ? { containerId, position } : null, creatingAtOpen ? personal : null, creatingAtOpen ? loan : null, setProgress);
+    } catch (caught) { setError(message(caught)); setBusy(false); setProgress(""); }
   }
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog editor" role="dialog" aria-modal="true">
     <button className="server-dialog-close" type="button" onClick={onClose} aria-label="Close" disabled={busy}><X /></button>
@@ -347,6 +370,15 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
         </div>}
         <div className="server-form-grid"><label className="wide">My Goodreads review URL<input type="url" placeholder="https://www.goodreads.com/review/show/..." value={personal.goodreadsUrl} onChange={(event) => setPersonal({ ...personal, goodreadsUrl: event.target.value })} /></label></div>
       </fieldset>}
+      {creatingAtOpen && <fieldset className="server-initial-loan"><legend>Current loan <small>optional</small></legend>
+        <label className="server-compact-check"><input type="checkbox" checked={loan.enabled} onChange={(event) => setLoan({ ...EMPTY_INITIAL_LOAN, enabled: event.target.checked })} /> This physical copy is currently on loan</label>
+        {loan.enabled && <><p className="server-field-help">The retained shelf position is preserved while the copy appears in the shared On loan area.</p><div className="server-form-grid">
+          <label>Loaned to *<input required maxLength={300} value={loan.loaned_to} onChange={(event) => setLoan({ ...loan, loaned_to: event.target.value })} /></label>
+          <label>Loan date <small>optional / unknown</small><input type="date" value={loan.loaned_date ?? ""} onChange={(event) => setLoan({ ...loan, loaned_date: event.target.value || null })} /></label>
+          <label>Expected return <small>optional</small><input type="date" value={loan.expected_return_date ?? ""} onChange={(event) => setLoan({ ...loan, expected_return_date: event.target.value || null })} /></label>
+          <label className="wide">Private Owner notes<textarea rows={2} maxLength={4000} value={loan.notes ?? ""} onChange={(event) => setLoan({ ...loan, notes: event.target.value || null })} /></label>
+        </div></>}
+      </fieldset>}
       <datalist id="server-publishers">{options.publishers.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-genres">{options.genres.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-series">{options.series_names.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-languages">{options.languages.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-original-languages">{options.original_languages.map((v) => <option key={v} value={v} />)}</datalist>
       {progress && <div className="server-save-progress" role="status">{progress}<small>{progress.startsWith("Processing") ? "Large phone photos can take several seconds. Please keep this window open." : ""}</small></div>}
       <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>{batchMode ? "Finish batch" : "Cancel"}</button><button className="confirm" disabled={busy} type="submit">{busy ? "Please wait…" : batchMode ? "Save and add next" : "Save book"}</button></div>
@@ -382,6 +414,9 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   const [readingOverview, setReadingOverview] = useState<ReadingCatalogueOverview | null>(null);
   const [detailsReading, setDetailsReading] = useState<BookReading | null>(null);
   const [detailsReviews, setDetailsReviews] = useState<GoodreadsReview[]>([]);
+  const [detailsLoans, setDetailsLoans] = useState<BookLoans | null>(null);
+  const [loanOverview, setLoanOverview] = useState<LoanOverview | null>(null);
+  const [loanManager, setLoanManager] = useState<ServerBookSummary | null>(null);
   const [readingAction, setReadingAction] = useState<{ book: ServerBookSummary; reading: BookReading } | null>(null);
   const [readingManager, setReadingManager] = useState<ServerBookSummary | null>(null);
   const [suggestion, setSuggestion] = useState<ServerBookSummary | null>(null);
@@ -410,14 +445,20 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
 
   const load = useCallback(async (next: CatalogueQuery) => {
     setBusy(true); setError("");
-    try { const page = await serverApi.catalogue(library.library_id, { ...next, perspective_user_id: perspectiveUserId }); setBooks(page.books); setTotal(page.total); await loadPersonalRows(page.books); }
+    try {
+      const [page, loans] = await Promise.all([
+        serverApi.catalogue(library.library_id, { ...next, perspective_user_id: perspectiveUserId }),
+        serverApi.loanOverview(library.library_id),
+      ]);
+      setBooks(page.books); setTotal(page.total); setLoanOverview(loans); await loadPersonalRows(page.books);
+    }
     catch (caught) { setError(message(caught)); }
     finally { setBusy(false); }
   }, [library.library_id, loadPersonalRows, perspectiveUserId]);
 
   useEffect(() => {
     const initial = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const };
-    setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null); setReadingAction(null); setReadingManager(null);
+    setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null); setReadingAction(null); setReadingManager(null); setLoanManager(null);
     void load(initial);
     if (library.can_view_map) void serverApi.physicalLibrary(library.library_id).then(setPhysical).catch((caught) => setError(message(caught)));
     else setPhysical(null);
@@ -448,7 +489,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   }
   function apply(event?: FormEvent) { event?.preventDefault(); const next = { ...draftQuery, limit: PAGE_SIZE, offset: 0 }; setQuery(next); void load(next); }
   function page(offset: number) { const next = { ...query, offset }; setQuery(next); setDraftQuery(next); void load(next); }
-  async function openDetails(bookId: string) { setBusy(true); try { const [book, reading, reviews] = await Promise.all([serverApi.book(library.library_id, bookId), serverApi.bookReading(library.library_id, bookId, perspectiveUserId), serverApi.goodreadsReviews(library.library_id, bookId)]); setDetails(book); setDetailsReading(reading); setDetailsReviews(reviews); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
+  async function openDetails(bookId: string) { setBusy(true); try { const [book, reading, reviews, loans] = await Promise.all([serverApi.book(library.library_id, bookId), serverApi.bookReading(library.library_id, bookId, perspectiveUserId), serverApi.goodreadsReviews(library.library_id, bookId), serverApi.bookLoans(library.library_id, bookId)]); setDetails(book); setDetailsReading(reading); setDetailsReviews(reviews); setDetailsLoans(loans); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
   async function openReadingAction(book: ServerBookSummary) {
     setBusy(true); setError("");
     try {
@@ -481,7 +522,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     finally { setBusy(false); }
   }
   async function edit(bookId: string) { setBusy(true); setBatchMode(false); setBatchPlacement(null); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book), cover: book.cover }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
-  async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, reportProgress: (message: string) => void) {
+  async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, loan: InitialLoanWrite | null, reportProgress: (message: string) => void) {
     const wasNew = !editing?.id;
     const placementPosition = placement?.containerId
       ? Number.parseInt(placement.position, 10)
@@ -490,6 +531,13 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
       ? placement
         ? await serverApi.updateBookWithPlacement(library.library_id, editing.id, book, placement.containerId || null, placementPosition)
         : await serverApi.updateBook(library.library_id, editing.id, book)
+      : loan?.enabled
+        ? await serverApi.createBookWithPlacementAndLoan(library.library_id, book, placement?.containerId || null, placementPosition, {
+          loaned_to: loan.loaned_to,
+          notes: loan.notes,
+          loaned_date: loan.loaned_date,
+          expected_return_date: loan.expected_return_date,
+        })
       : placement
         ? await serverApi.createBookWithPlacement(library.library_id, book, placement.containerId || null, placementPosition)
         : await serverApi.createBook(library.library_id, book);
@@ -552,7 +600,14 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     pushNotice("Personal reading data updated.");
   }
 
+  async function refreshLoanData() {
+    await load(query);
+    if (details) setDetailsLoans(await serverApi.bookLoans(library.library_id, details.id));
+    pushNotice("Shared loan data updated.");
+  }
+
   const filtered = hasActiveCatalogueFilters(query);
+  const activeLoans = Object.fromEntries((loanOverview?.loans ?? []).filter((item) => item.state === "ACTIVE").map((item) => [item.book_id, item]));
   return <section className="server-catalogue-workspace">
     <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><b>{member.username}</b><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small>{readingOverview && <span className="server-reading-overview"><b>{readingOverview.pending}</b> pending <b>{readingOverview.active_display}</b> reading <b>{readingOverview.read + readingOverview.rereading}</b> read</span>}</span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> New read</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">Reading suggestion</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> Another</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>Start reading</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label="Close suggestion"><X size={15} /></button></div>}</div>}</header>
     {error && <div className="server-message error">{error}</div>}<TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
@@ -568,13 +623,18 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
       <label>Rereading history<select value={draftQuery.rereading_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, rereading_state: e.target.value as CatalogueQuery["rereading_state"] })}><option value="ANY">Any</option><option value="YES">Has been reread</option><option value="NO">Has not been reread</option></select></label>
       <label>Reading date<select value={draftQuery.reading_date_field ?? "FINISHED"} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_field: e.target.value as CatalogueQuery["reading_date_field"] })}><option value="STARTED">Reading started</option><option value="FINISHED">Finished reading</option></select></label>
       <label>Reading date from<input type="date" value={draftQuery.reading_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_from: e.target.value || undefined })} /></label><label>Reading date to<input type="date" value={draftQuery.reading_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_to: e.target.value || undefined })} /></label>
-      <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+      <label>Loan history<select value={draftQuery.loan_scope ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_scope: e.target.value as CatalogueQuery["loan_scope"] })}><option value="ANY">Any</option><option value="ACTIVE">Currently on loan</option><option value="OVERDUE">Overdue</option><option value="EVER">Ever loaned</option><option value="NEVER">Never loaned</option></select></label>
+      {library.role === "OWNER" && <label>Borrower contains<input maxLength={300} value={draftQuery.loaned_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loaned_to: e.target.value || undefined })} /></label>}
+      <label>Loan date<select value={draftQuery.loan_date_field ?? "LOANED"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_field: e.target.value as CatalogueQuery["loan_date_field"] })}><option value="LOANED">Loaned</option><option value="EXPECTED">Expected return</option><option value="RETURNED">Returned</option></select></label>
+      <label>Loan date from<input type="date" value={draftQuery.loan_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_from: e.target.value || undefined })} /></label><label>Loan date to<input type="date" value={draftQuery.loan_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_to: e.target.value || undefined })} /></label>
+      <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"], ["loaned_date", "Loaned date"], ["expected_return_date", "Expected return"], ["returned_date", "Returned date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
       <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; setDraftQuery(clear); setQuery(clear); void load(clear); }}>Clear</button><button className="confirm" type="submit">Apply filters</button></div>
     </form>}
-    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); const reading = readings[book.id]; const custody = reading?.active_reader_present ? `Being read${location ? ` · returns to ${location}` : ""}` : (location ?? "No physical location"); const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className={`server-book-location ${reading?.active_reader_present ? "being-read" : ""}`}><MapPin size={16} /><span>{custody}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={`${selectedPerspective?.username ?? "Owner"}'s Goodreads review`}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title="My reading"><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
+    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); const reading = readings[book.id]; const activeLoan = activeLoans[book.id]; const custody = activeLoan ? `${activeLoan.loaned_to ? `On loan to ${activeLoan.loaned_to}` : "On loan"}${location ? ` · returns to ${location}` : ""}` : reading?.active_reader_present ? `Being read${location ? ` · returns to ${location}` : ""}` : (location ?? "No physical location"); const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className={`server-book-location ${activeLoan ? activeLoan.overdue ? "on-loan overdue" : "on-loan" : reading?.active_reader_present ? "being-read" : ""}`}><MapPin size={16} /><span>{custody}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={`${selectedPerspective?.username ?? "Owner"}'s Goodreads review`}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title="My reading"><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => setLoanManager(book)} title={activeLoan ? "Manage or return loan" : "Loan this book"}><Handshake size={17} /></button><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{total ? "Try another page or filter." : library.role === "OWNER" ? "Add the first book to this library." : "This library has no catalogue records yet."}</p></div>}</div>
     {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
-    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} batchAddedCount={batchAddedCount} onClose={() => { setEditing(null); setBatchMode(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
+    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} loans={detailsLoans} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} batchAddedCount={batchAddedCount} onClose={() => { setEditing(null); setBatchMode(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
     {readingAction && <ReadingActionDialog libraryId={library.library_id} book={readingAction.book} reading={readingAction.reading} onClose={() => setReadingAction(null)} onChanged={refreshPersonalData} />}
     {readingManager && <ReadingManager libraryId={library.library_id} book={readingManager} onClose={() => setReadingManager(null)} onChanged={refreshPersonalData} />}
+    {loanManager && <LoanManager libraryId={library.library_id} book={loanManager} onClose={() => setLoanManager(null)} onChanged={refreshLoanData} />}
   </section>;
 }

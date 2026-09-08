@@ -801,10 +801,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     aggregate catalogue overview pass both Viewer scopes, cross-library,
     CSRF, sensitive-audit-redaction, reading/loan ordering, and PostgreSQL
     concurrent-Owner tests (115 tests total on 2026-09-08).
-  - [ ] 6C: add Loan/Return, history management, Single/Batch Add integration,
+  - [x] 6C: add Loan/Return, history management, Single/Batch Add integration,
     filters, sorting, and responsive catalogue UX.
-  - [ ] 6D: integrate On-loan custody with map, inspection, suggestions, and
-    non-sensitive statistics.
+    Accepted for Owner and Viewer on desktop and mobile on 2026-09-08.
+  - [x] 6D: integrate On-loan custody with map, inspection, suggestions, and
+    non-sensitive statistics. Custody precedence, retained-location return,
+    perspective colouring and complete statistics were accepted on 2026-09-08.
   - [ ] 6E: complete compatibility review, full acceptance, documentation, and
     guarded merge.
 - [ ] Implement transactional shared quota allocation and atomic library

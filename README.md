@@ -538,7 +538,10 @@ preserving per-Owner reviews. Phase 5 is merged into `main`. Phase 6A now adds
 the guarded `0014_shared_loans` schema and pure loan/custody rules after a
 verified backup-and-restore rehearsal. Phase 6B adds the shared lifecycle,
 locking, redacted audit, and structurally separate Owner-full and Viewer-safe
-book/catalogue API projections. Phase 6C responsive loan UX is next.
+book/catalogue API projections. Phases 6C–6D add the accepted responsive
+Owner/Viewer loan workflow, atomic loan-at-creation, advanced loan search,
+On-loan map custody and shared statistics. Phase 6E final compatibility and
+release gates remain before the feature branch can merge into `main`.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

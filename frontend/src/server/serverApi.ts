@@ -125,6 +125,55 @@ export interface GoodreadsReview {
   url: string;
 }
 
+export interface LoanWrite {
+  loaned_to: string;
+  notes: string | null;
+  loaned_date: string | null;
+  expected_return_date: string | null;
+}
+
+export interface LoanRecord {
+  id: string;
+  book_id: string;
+  state: "ACTIVE" | "RETURNED";
+  loaned_date: string | null;
+  expected_return_date: string | null;
+  returned_date: string | null;
+  created_at: string;
+  updated_at: string;
+  overdue: boolean;
+  loaned_to?: string;
+  notes?: string | null;
+}
+
+export interface LoanOverview {
+  access: "OWNER" | "VIEWER";
+  library_id: string;
+  writable: boolean;
+  total_active: number;
+  total_overdue: number;
+  loans: LoanRecord[];
+}
+
+export interface BookLoans {
+  access: "OWNER" | "VIEWER";
+  library_id: string;
+  book_id: string;
+  writable: boolean;
+  total_loans: number;
+  loans: LoanRecord[];
+}
+
+export interface LoanStatistics {
+  active: number;
+  overdue: number;
+  completed: number;
+  unknown_loan_dates: number;
+  unknown_return_dates: number;
+  books: Array<{ book_id: string; title: string; author: string; loans: number }>;
+  years: Array<{ year: number; loans: number; returns: number }>;
+}
+
 export interface CreatedLibraryInvitation {
   invitation_id: string;
   invitation_token: string;
@@ -454,6 +503,11 @@ export interface CatalogueQuery {
   reading_date_from?: string;
   reading_date_to?: string;
   available_only?: boolean;
+  loan_scope?: "ANY" | "ACTIVE" | "OVERDUE" | "EVER" | "NEVER";
+  loaned_to?: string;
+  loan_date_field?: "LOANED" | "EXPECTED" | "RETURNED";
+  loan_date_from?: string;
+  loan_date_to?: string;
   sort_by?: string;
   sort_order?: "asc" | "desc";
   limit?: number;
@@ -722,6 +776,44 @@ export const serverApi = {
       { method: "PUT", body: JSON.stringify({ url }) },
       true,
     ),
+  loanOverview: (libraryId: string) =>
+    request<LoanOverview>(`/libraries/${libraryId}/loan-overview`),
+  loanStatistics: (libraryId: string, query: { language?: string; genre?: string; publisher?: string; loan_year?: number } = {}) => {
+    const parameters = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => { if (value !== undefined) parameters.set(key, String(value)); });
+    const suffix = parameters.size ? `?${parameters}` : "";
+    return request<LoanStatistics>(`/libraries/${libraryId}/loan-overview/statistics${suffix}`);
+  },
+  bookLoans: (libraryId: string, bookId: string) =>
+    request<BookLoans>(`/libraries/${libraryId}/catalogue/${bookId}/loans`),
+  startLoan: (libraryId: string, bookId: string, payload: LoanWrite) =>
+    request<LoanRecord>(
+      `/libraries/${libraryId}/catalogue/${bookId}/loans/active`,
+      { method: "POST", body: JSON.stringify(payload) }, true,
+    ),
+  returnLoan: (libraryId: string, bookId: string, returnedDate: string | null) =>
+    request<LoanRecord>(
+      `/libraries/${libraryId}/catalogue/${bookId}/loans/active/return`,
+      { method: "POST", body: JSON.stringify({ returned_date: returnedDate }) }, true,
+    ),
+  cancelLoan: (libraryId: string, bookId: string) => request<void>(
+    `/libraries/${libraryId}/catalogue/${bookId}/loans/active`,
+    { method: "DELETE" }, true,
+  ),
+  addHistoricalLoan: (libraryId: string, bookId: string, payload: LoanWrite & { returned_date: string | null }) =>
+    request<LoanRecord>(
+      `/libraries/${libraryId}/catalogue/${bookId}/loans/history`,
+      { method: "POST", body: JSON.stringify(payload) }, true,
+    ),
+  updateHistoricalLoan: (libraryId: string, bookId: string, loanId: string, payload: LoanWrite & { returned_date: string | null }) =>
+    request<LoanRecord>(
+      `/libraries/${libraryId}/catalogue/${bookId}/loans/${loanId}`,
+      { method: "PUT", body: JSON.stringify(payload) }, true,
+    ),
+  deleteHistoricalLoan: (libraryId: string, bookId: string, loanId: string) => request<void>(
+    `/libraries/${libraryId}/catalogue/${bookId}/loans/${loanId}`,
+    { method: "DELETE" }, true,
+  ),
   createBook: (libraryId: string, book: ServerBookWrite) =>
     request<ServerBook>(
       `/libraries/${libraryId}/catalogue`,
@@ -736,6 +828,17 @@ export const serverApi = {
   ) => request<ServerBook>(
     `/libraries/${libraryId}/catalogue/with-placement`,
     { method: "POST", body: JSON.stringify({ book, placement: { container_id: containerId, position } }) },
+    true,
+  ),
+  createBookWithPlacementAndLoan: (
+    libraryId: string,
+    book: ServerBookWrite,
+    containerId: string | null,
+    position: number | null,
+    loan: LoanWrite,
+  ) => request<ServerBook>(
+    `/libraries/${libraryId}/catalogue/with-placement-and-loan`,
+    { method: "POST", body: JSON.stringify({ book, placement: { container_id: containerId, position }, loan }) },
     true,
   ),
   updateBook: (libraryId: string, bookId: string, book: ServerBookWrite) =>

@@ -503,6 +503,19 @@ class BookWithPlacementWrite(BaseModel):
     placement: BookPlacementWrite
 
 
+class InitialLoanWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    loaned_to: str = Field(min_length=1, max_length=300)
+    notes: str | None = Field(default=None, max_length=4000)
+    loaned_date: date | None = None
+    expected_return_date: date | None = None
+
+
+class BookWithPlacementAndLoanWrite(BookWithPlacementWrite):
+    loan: InitialLoanWrite
+
+
 class BookSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -787,11 +800,8 @@ class ReadingStatisticsResponse(BaseModel):
     years: list[ReadingStatisticsYearResponse]
 
 
-class ActiveLoanWrite(BaseModel):
-    loaned_to: str = Field(min_length=1, max_length=300)
-    notes: str | None = Field(default=None, max_length=4000)
-    loaned_date: date | None = None
-    expected_return_date: date | None = None
+class ActiveLoanWrite(InitialLoanWrite):
+    pass
 
 
 class ReturnLoanWrite(BaseModel):
@@ -804,6 +814,7 @@ class HistoricalLoanWrite(ActiveLoanWrite):
 
 class ViewerLoanResponse(BaseModel):
     id: UUID
+    book_id: UUID
     state: Literal["ACTIVE", "RETURNED"]
     loaned_date: date | None
     expected_return_date: date | None
@@ -852,4 +863,27 @@ class OwnerLoanOverviewResponse(BaseModel):
     total_active: int
     total_overdue: int
     loans: list[OwnerLoanResponse]
+
+
+class LoanStatisticsBookResponse(BaseModel):
+    book_id: UUID
+    title: str
+    author: str
+    loans: int
+
+
+class LoanStatisticsYearResponse(BaseModel):
+    year: int
+    loans: int
+    returns: int
+
+
+class LoanStatisticsResponse(BaseModel):
+    active: int
+    overdue: int
+    completed: int
+    unknown_loan_dates: int
+    unknown_return_dates: int
+    books: list[LoanStatisticsBookResponse]
+    years: list[LoanStatisticsYearResponse]
 

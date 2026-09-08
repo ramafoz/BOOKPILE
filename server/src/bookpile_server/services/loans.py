@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
 
-from ..models import Loan
+from ..models import Book, Loan
 from ..repositories.loans import LoanRepository
 from .loan_domain import (
     LoanPeriod,
@@ -37,6 +37,7 @@ class LoanConflictError(Exception):
 @dataclass(frozen=True)
 class ViewerLoanItem:
     id: UUID
+    book_id: UUID
     state: str
     loaned_date: date | None
     expected_return_date: date | None
@@ -69,6 +70,32 @@ class LoanCatalogueProjection:
     total_overdue: int
     owner_items: list[OwnerLoanItem] | None
     viewer_items: list[ViewerLoanItem] | None
+
+
+@dataclass(frozen=True)
+class LoanStatisticsBook:
+    book_id: UUID
+    title: str
+    author: str
+    loans: int
+
+
+@dataclass(frozen=True)
+class LoanStatisticsYear:
+    year: int
+    loans: int
+    returns: int
+
+
+@dataclass(frozen=True)
+class LoanStatistics:
+    active: int
+    overdue: int
+    completed: int
+    unknown_loan_dates: int
+    unknown_return_dates: int
+    books: list[LoanStatisticsBook]
+    years: list[LoanStatisticsYear]
 
 
 def _period(record: Loan, order: int = 0) -> LoanPeriod:
@@ -155,6 +182,49 @@ class LoanService:
             overdue,
             None,
             [self._viewer_item(record) for record in records],
+        )
+
+    def statistics(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        language: str | None = None,
+        genre: str | None = None,
+        publisher: str | None = None,
+        loan_year: int | None = None,
+    ) -> LoanStatistics:
+        self._member(library_id, actor_user_id)
+        rows = self._repository.history_for_library(library_id=library_id)
+        if language:
+            rows = [(loan, book) for loan, book in rows if book.language == language]
+        if publisher:
+            rows = [(loan, book) for loan, book in rows if book.publisher == publisher]
+        if genre:
+            target = genre.casefold()
+            rows = [(loan, book) for loan, book in rows if target in (book.genre_text or "").casefold()]
+        if loan_year:
+            rows = [(loan, book) for loan, book in rows if loan.loaned_date and loan.loaned_date.year == loan_year]
+        book_counts: dict[UUID, tuple[Book, int]] = {}
+        years: dict[int, list[int]] = {}
+        for loan, book in rows:
+            book_counts[book.id] = (book, book_counts.get(book.id, (book, 0))[1] + 1)
+            if loan.loaned_date:
+                bucket = years.setdefault(loan.loaned_date.year, [0, 0])
+                bucket[0] += 1
+            if loan.returned_date:
+                bucket = years.setdefault(loan.returned_date.year, [0, 0])
+                bucket[1] += 1
+        books = [LoanStatisticsBook(book_id, book.title, book.author, count) for book_id, (book, count) in book_counts.items()]
+        books.sort(key=lambda item: (-item.loans, item.title.casefold(), str(item.book_id)))
+        return LoanStatistics(
+            active=sum(loan.state == "ACTIVE" for loan, _ in rows),
+            overdue=sum(is_overdue(_period(loan)) for loan, _ in rows),
+            completed=sum(loan.state == "RETURNED" for loan, _ in rows),
+            unknown_loan_dates=sum(loan.loaned_date is None for loan, _ in rows),
+            unknown_return_dates=sum(loan.state == "RETURNED" and loan.returned_date is None for loan, _ in rows),
+            books=books,
+            years=[LoanStatisticsYear(year, values[0], values[1]) for year, values in sorted(years.items(), reverse=True)],
         )
 
     def start(
@@ -365,6 +435,7 @@ class LoanService:
     def _viewer_item(record: Loan) -> ViewerLoanItem:
         return ViewerLoanItem(
             record.id,
+            record.book_id,
             record.state,
             record.loaned_date,
             record.expected_return_date,

@@ -75,6 +75,8 @@ class CatalogueService:
         year_max = filters.get("year_max")
         reading_date_from = filters.get("reading_date_from")
         reading_date_to = filters.get("reading_date_to")
+        loan_date_from = filters.get("loan_date_from")
+        loan_date_to = filters.get("loan_date_to")
         if page_min is not None and page_max is not None and page_min > page_max:
             raise CatalogueValidationError(
                 "Minimum pages must be less than or equal to maximum pages."
@@ -90,6 +92,14 @@ class CatalogueService:
         ):
             raise CatalogueValidationError(
                 "Reading date from must be earlier than or equal to reading date to."
+            )
+        if (
+            loan_date_from is not None
+            and loan_date_to is not None
+            and loan_date_from > loan_date_to
+        ):
+            raise CatalogueValidationError(
+                "Loan date from must be earlier than or equal to loan date to."
             )
         isbn = filters.get("isbn")
         if isinstance(isbn, str) and isbn.strip():

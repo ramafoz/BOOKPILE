@@ -82,6 +82,16 @@ class LoanRepository:
             )
         )
 
+    def history_for_library(self, *, library_id: UUID) -> list[tuple[Loan, Book]]:
+        return list(
+            self._session.execute(
+                select(Loan, Book)
+                .join(Book, (Book.library_id == Loan.library_id) & (Book.id == Loan.book_id))
+                .where(Loan.library_id == library_id)
+                .order_by(Loan.created_at, Loan.id)
+            ).all()
+        )
+
     def active_reading(
         self, *, library_id: UUID, book_id: UUID
     ) -> ReadingSession | None:

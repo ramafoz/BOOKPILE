@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from ...schemas import (
     ActiveLoanWrite,
@@ -9,6 +9,9 @@ from ...schemas import (
     OwnerBookLoansResponse,
     OwnerLoanResponse,
     OwnerLoanOverviewResponse,
+    LoanStatisticsBookResponse,
+    LoanStatisticsResponse,
+    LoanStatisticsYearResponse,
     ReturnLoanWrite,
     ViewerBookLoansResponse,
     ViewerLoanResponse,
@@ -37,6 +40,38 @@ overview_router = APIRouter(
 )
 
 
+@overview_router.get("/statistics", response_model=LoanStatisticsResponse)
+def get_loan_statistics(
+    library_id: UUID,
+    service: LoanServiceDependency,
+    context: CurrentAuthDependency,
+    language: str | None = Query(default=None, max_length=100),
+    genre: str | None = Query(default=None, max_length=200),
+    publisher: str | None = Query(default=None, max_length=300),
+    loan_year: int | None = Query(default=None, ge=1000, le=9999),
+) -> LoanStatisticsResponse:
+    try:
+        result = service.statistics(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            language=language,
+            genre=genre,
+            publisher=publisher,
+            loan_year=loan_year,
+        )
+    except Exception as exc:
+        raise loan_error(exc) from exc
+    return LoanStatisticsResponse(
+        active=result.active,
+        overdue=result.overdue,
+        completed=result.completed,
+        unknown_loan_dates=result.unknown_loan_dates,
+        unknown_return_dates=result.unknown_return_dates,
+        books=[LoanStatisticsBookResponse(**item.__dict__) for item in result.books],
+        years=[LoanStatisticsYearResponse(**item.__dict__) for item in result.years],
+    )
+
+
 def loan_error(exc: Exception) -> HTTPException:
     if isinstance(exc, LoanNotFoundError):
         return HTTPException(status_code=404, detail="Loan record not found")
@@ -60,6 +95,7 @@ def owner_response(item) -> OwnerLoanResponse:
 def record_response(item) -> OwnerLoanResponse:
     return OwnerLoanResponse(
         id=item.id,
+        book_id=item.book_id,
         state=item.state,
         loaned_to=item.loaned_to,
         notes=item.notes,

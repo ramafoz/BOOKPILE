@@ -193,6 +193,7 @@ def test_viewer_projection_omits_borrower_and_notes_and_cannot_write(
     assert overview.json()["total_active"] == 1
     assert "loaned_to" not in overview.json()["loans"][0]
     assert "notes" not in overview.json()["loans"][0]
+    assert overview.json()["loans"][0]["book_id"] == str(book.id)
     assert client.post(
         endpoint + "/active/return", headers=headers(), json={}
     ).status_code == 403
@@ -217,6 +218,30 @@ def test_viewer_projection_omits_borrower_and_notes_and_cannot_write(
 
     authenticate(client, session, outsider)
     assert client.get(endpoint).status_code == 404
+
+
+def test_loan_catalogue_filters_and_statistics(
+    client: TestClient, session: Session
+) -> None:
+    library, book, owner, _, viewer, _, _ = shared_fixture(session)
+    authenticate(client, session, owner)
+    assert client.post(
+        url(library, book) + "/active",
+        headers=headers(),
+        json={"loaned_to": "Visible only to owners", "loaned_date": "2026-09-01"},
+    ).status_code == 201
+    catalogue = f"/api/v1/libraries/{library.id}/catalogue"
+    assert client.get(catalogue, params={"loan_scope": "ACTIVE"}).json()["total"] == 1
+    assert client.get(catalogue, params={"available_only": "true"}).json()["total"] == 0
+    assert client.get(catalogue, params={"loaned_to": "Visible"}).json()["total"] == 1
+    statistics = client.get(f"/api/v1/libraries/{library.id}/loan-overview/statistics")
+    assert statistics.status_code == 200
+    assert statistics.json()["active"] == 1
+    assert statistics.json()["books"][0]["book_id"] == str(book.id)
+
+    authenticate(client, session, viewer)
+    assert client.get(catalogue, params={"loaned_to": "Visible"}).status_code == 403
+    assert client.get(f"/api/v1/libraries/{library.id}/loan-overview/statistics").status_code == 200
 
 
 def test_active_loan_blocks_new_reading_but_existing_reading_allows_later_loan(

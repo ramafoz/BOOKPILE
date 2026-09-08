@@ -84,14 +84,18 @@ must not be used for Server migrations or test databases.
 - Phase 6B shared-loan services and APIs: Owner lifecycle and full history,
   Viewer-safe projections that cannot serialize borrower/notes, catalogue
   overview, tenant scope, CSRF, redacted audit, Book-row locking, and
-  reading-start exclusion. The frontend intentionally remains Phase 6C work.
+  reading-start exclusion.
+- Phase 6C–6D accepted loan experience: responsive Owner management and
+  Viewer-redacted inspection, atomic Single/Batch Add loans, catalogue filters,
+  On-loan map precedence, retained locations, suggestion exclusion, and shared
+  non-sensitive statistics. Phase 6E final gates and merge remain pending.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
 edition is still not deployable because the production private-object adapter,
-loan services and UX, backup/restore, storage quota, and production
+backup/restore, storage quota, and production
 infrastructure have not yet been ported.
 
 ## Development setup

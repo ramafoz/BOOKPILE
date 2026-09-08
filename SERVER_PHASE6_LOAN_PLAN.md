@@ -1,7 +1,7 @@
 # BOOKPILE Server Phase 6 — shared loans and private borrower data
 
 Status: active on `feature/server-loans`. Phase 5 is merged into `main` and
-Phases 6A–6B were completed on 2026-09-08. Phase 6 changes Server only; released
+Phases 6A–6D were completed and manually accepted on 2026-09-08. Phase 6 changes Server only; released
 BOOKPILE Local v1 and its populated SQLite catalogue remain untouched.
 
 ## 1. Objective and ownership boundary
@@ -205,6 +205,10 @@ Estimated effort: 25–35%.
 
 ### 6C — catalogue actions, Add, and history UX
 
+Status: complete and accepted. The responsive catalogue exposes Owner loan
+management, Viewer-redacted availability, atomic initial placement plus loan,
+Single/Batch Add, complete-information history, filters and date sorting.
+
 - Add a Loan/Return button beside Complete information, Goodreads, Edit, and
   Delete. It changes label and icon according to active custody.
 - Owners see `On loan: <borrower>`; Viewers see only `On loan`, with the
@@ -224,6 +228,11 @@ that begins on loan.
 Estimated effort: 30–40%.
 
 ### 6D — map, suggestions, and statistics
+
+Status: complete and accepted. Shared active custody populates the On-loan
+area with priority over Reading, retained positions survive, inspection is
+privacy-safe, suggestions exclude loans, and shared loan statistics coexist
+with perspective-specific reading statistics.
 
 - Populate the existing On-loan outside area from shared active loans, taking
   priority over Reading without losing retained shelf positions or sessions.
@@ -287,8 +296,7 @@ Automated and manual validation must cover:
 
 ## 10. Recommended next session
 
-Start only 6A with a full token/context budget. Create and verify the backup
-before editing schema, then stop at the schema/domain gate if any invariant or
-migration result differs. A normal run should complete 6A and leave enough
-context to begin 6B, but no frontend should be promised until the APIs and
-privacy projections are proven.
+Complete 6E only: compare the accepted Server workflow with the Local contract,
+run the final authorization, concurrency, responsive, full-suite, PostgreSQL,
+build and documentation gates, then request explicit approval before merging
+`feature/server-loans` into `main`. Do not begin Phase 7 in that increment.
