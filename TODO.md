@@ -817,7 +817,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     migration rehearsal, exact initial backfill and private profile projections.
   - [x] 7C: transactional enforcement, private-object compensation,
     Owner-membership integration and PostgreSQL quota-race gate.
-  - [ ] 7D: private profile/security shell and non-numeric storage visualization.
+  - [x] 7D: grouped private profile/security shell, authenticated projected
+    profiles, Owner-scoped library settings and non-numeric storage visualization.
   - [ ] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
   - [ ] 7F: compatibility, release gates and guarded merge.
 

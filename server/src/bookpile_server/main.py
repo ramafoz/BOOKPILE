@@ -7,6 +7,7 @@ from .api.routes.libraries import router as libraries_router
 from .api.routes.loans import overview_router as loans_overview_router, router as loans_router
 from .api.routes.physical_library import router as physical_library_router
 from .api.routes.readings import overview_router as readings_overview_router, router as readings_router
+from .api.routes.profiles import router as profiles_router
 from .services.storage_domain import InsufficientSharedCapacity
 
 
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(readings_overview_router, prefix="/api/v1")
     app.include_router(loans_router, prefix="/api/v1")
     app.include_router(loans_overview_router, prefix="/api/v1")
+    app.include_router(profiles_router, prefix="/api/v1")
 
     @app.exception_handler(InsufficientSharedCapacity)
     async def storage_capacity_error(

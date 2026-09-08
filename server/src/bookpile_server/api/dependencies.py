@@ -13,6 +13,8 @@ from ..repositories.libraries import LibraryRepository
 from ..repositories.loans import LoanRepository
 from ..repositories.physical_library import PhysicalLibraryRepository
 from ..repositories.readings import ReadingRepository
+from ..repositories.profiles import ProfileRepository
+from ..repositories.storage import StorageRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
 from ..services.account_invitations import AccountInvitationService
@@ -33,6 +35,8 @@ from ..services.libraries import LibraryService
 from ..services.loans import LoanService
 from ..services.physical_library import PhysicalLibraryService
 from ..services.readings import ReadingService
+from ..services.profiles import ProfileImageService, ProfileService
+from ..services.storage import StorageService
 
 
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -103,6 +107,33 @@ def get_loan_service(session: SessionDependency) -> LoanService:
 
 
 LoanServiceDependency = Annotated[LoanService, Depends(get_loan_service)]
+
+
+def get_profile_service(session: SessionDependency) -> ProfileService:
+    return ProfileService(ProfileRepository(session))
+
+
+ProfileServiceDependency = Annotated[ProfileService, Depends(get_profile_service)]
+
+
+def get_profile_image_service(session: SessionDependency) -> ProfileImageService:
+    settings = get_settings()
+    return ProfileImageService(
+        ProfileRepository(session),
+        FilesystemCoverStorage(settings.private_object_root),
+    )
+
+
+ProfileImageServiceDependency = Annotated[
+    ProfileImageService, Depends(get_profile_image_service)
+]
+
+
+def get_storage_service(session: SessionDependency) -> StorageService:
+    return StorageService(StorageRepository(session))
+
+
+StorageServiceDependency = Annotated[StorageService, Depends(get_storage_service)]
 
 
 def get_auth_service(session: SessionDependency) -> AuthService:

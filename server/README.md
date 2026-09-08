@@ -95,7 +95,10 @@ must not be used for Server migrations or test databases.
   backfill, database-guarded profile privacy and scoped authenticated projections.
   Phase 7C applies one locked quota transaction boundary to all shared writes,
   membership changes and cover-object compensation, including a PostgreSQL race
-  gate. The account frontend follows in the next increment.
+  gate. Phase 7D adds the responsive private account/profile workspace, grouped
+  privacy, authenticated member-profile projections, profile-image processing,
+  password/session controls, Owner library-settings navigation, and non-numeric
+  storage contribution/total bars. Phase 7E deletion and recovery follows.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library

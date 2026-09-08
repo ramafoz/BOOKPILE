@@ -2,7 +2,7 @@
 
 
 
-Status: active on `feature/server-storage-quota`; 7A–7C are complete. Phase 6 is merged into
+Status: active on `feature/server-storage-quota`; 7A–7D are complete. Phase 6 is merged into
 `main`. This phase changes Server only and leaves released Local v1 untouched.
 
 ## 1. Product contract
@@ -30,6 +30,8 @@ numeric byte or percentage labels:
 - one stacked total bar, whose denominator is the account entitlement and whose
   coloured segments reuse the library colours;
 - any account-owned profile object is a separate neutral-colour `Account data` segment;
+- when one library is the sole contributor and there is no account-data segment,
+  omit its redundant contribution row and show only the total account bar;
 - accessible progress semantics remain available to the signed-in account without
   exposing another user's values.
 
@@ -38,11 +40,13 @@ For 5 MB in Salón and 25 MB in Oficina, their contribution bars are 5/30 and
 
 ## 3. Private account profile
 
-Initial editable optional fields are display name, timezone, gender, city, state,
+Initial editable optional fields are profile-only name, timezone, gender, city, state,
 country, date of birth and profile image. Email, account/security state, quota,
 allocations and sessions are always private.
 
-Every shareable profile field has one visibility:
+Privacy is deliberately grouped into four controls: profile image, profile-only
+name, timezone, and personal data (gender, location and date of birth). Each has
+one visibility:
 
 - `PRIVATE`;
 - `SHARED_LIBRARY_MEMBERS`;
@@ -53,11 +57,11 @@ delivery, decode validation, pixel/upload limits, metadata stripping and control
 WebP re-encoding; the original is discarded and the resulting bytes count as
 `Account data`.
 
-Gender is `UNSPECIFIED`, `MALE`, `FEMALE` or `CUSTOM`. Male and Female imply their
-pronouns and show no pronoun selector. Custom exposes `custom_gender` plus a
+Gender is `UNSPECIFIED`, `MALE`, `FEMALE` or `CUSTOM`. Male, Female and blank show
+no separate pronoun field. Custom exposes `custom_gender` plus a
 preferred-pronoun selector (`MALE`, `FEMALE`, `NEUTRAL`); Neutral may carry one
-free-text pronoun value. Pronouns are visible to authenticated users regardless of
-gender-field visibility.
+free-text pronoun value. Only Custom profiles expose pronouns, which are visible
+to authenticated users regardless of personal-data visibility.
 
 ## 4. Allocation rules
 
@@ -123,6 +127,15 @@ allocations atomically, and integrate Owner add/remove and quota races. Ordinary
 reads/deletions remain available at the limit.
 
 ### 7D — profile, security shell and storage UX
+
+Status: complete. The protected username opens a responsive private account
+workspace with grouped privacy, safe profile-image handling, private account
+identity, password change and session controls. Authenticated members can open
+privacy-projected profiles from shared-library usernames. Username remains the
+product identity; optional Name appears only in the profile. Library settings now
+hang from the Owner's library selector and distinguish structural creation/removal
+from visual map editing. Non-numeric storage bars suppress redundant single-source
+breakdowns. Desktop/mobile acceptance and backend/frontend regression gates pass.
 
 Add the private profile page, field visibility, safe profile image, security menu
 entry and non-numeric coloured contribution/stacked bars. Validate responsive and

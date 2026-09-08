@@ -72,6 +72,24 @@ class StorageRepository:
         self.session.execute(delete(LibraryStorageAllocation))
         self.session.add_all(allocations)
 
+    def entitlement_for_user(self, user_id: UUID) -> AccountStorageEntitlement | None:
+        return self.session.get(AccountStorageEntitlement, user_id)
+
+    def allocations_for_user(
+        self, user_id: UUID
+    ) -> list[tuple[LibraryStorageAllocation, Library]]:
+        return list(
+            self.session.execute(
+                select(LibraryStorageAllocation, Library)
+                .join(Library, Library.id == LibraryStorageAllocation.library_id)
+                .where(
+                    LibraryStorageAllocation.user_id == user_id,
+                    Library.state == "active",
+                )
+                .order_by(Library.name, Library.id)
+            ).all()
+        )
+
     def commit(self) -> None:
         self.session.commit()
 

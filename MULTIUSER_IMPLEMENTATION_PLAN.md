@@ -1093,8 +1093,11 @@ accounting, co-Owner allocation, additive profile/visibility/entitlement/usage/
 allocation/tombstone schema, private profile projections and a rehearsed,
 reconciled production backfill. Phase 7C additionally enforces quota at the common
 transaction boundary for all shared-domain writes, compensates rejected objects,
-protects Owner changes and passes a real PostgreSQL quota race. The private profile
-and storage UX in 7D is next.
+protects Owner changes and passes a real PostgreSQL quota race. Phase 7D now adds
+the accepted private account/profile workspace, four grouped privacy controls,
+authenticated member profiles, private account/security data, Owner-scoped library
+settings, and non-numeric responsive storage visualization. Atomic deletion,
+quarantine and recovery in 7E is next.
 
 Because phases differ greatly in size, progress is reported as a range rather
 than a false exact measurement:

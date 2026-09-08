@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import AccountInvitation, SecurityEvent, User
+from ..models import AccountInvitation, AccountStorageEntitlement, SecurityEvent, User
 
 
 class AccountInvitationRepository:
@@ -41,6 +41,9 @@ class AccountInvitationRepository:
 
     def add_user(self, user: User) -> None:
         self._session.add(user)
+
+    def add_storage_entitlement(self, user_id: UUID) -> None:
+        self._session.add(AccountStorageEntitlement(user_id=user_id))
 
     def add_event(
         self,

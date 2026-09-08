@@ -137,6 +137,7 @@ class AccountInvitationService:
         self._repository.add_user(user)
         try:
             self._repository.flush()
+            self._repository.add_storage_entitlement(user.id)
             invitation.consumed_at = now
             invitation.consumed_by_user_id = user.id
             self._repository.add_event(

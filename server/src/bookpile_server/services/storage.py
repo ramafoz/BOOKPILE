@@ -1,5 +1,8 @@
 """Transactional persistence boundary for logical storage allocations."""
 from collections import defaultdict
+from dataclasses import dataclass
+from hashlib import sha256
+from uuid import UUID
 
 from ..models import LibraryStorageAllocation, LibraryStorageUsage
 from ..repositories.storage import StorageRepository
@@ -83,3 +86,44 @@ class StorageService:
                 for item in plan.allocations
             ]
         )
+
+    def private_overview(self, user_id: UUID) -> "StorageOverview":
+        entitlement = self.repository.entitlement_for_user(user_id)
+        if entitlement is None:
+            raise LookupError("Storage entitlement does not exist.")
+        allocations = self.repository.allocations_for_user(user_id)
+        account_data = calculate_account_data_bytes(self.repository.session, user_id)
+        used = account_data + sum(item.allocated_bytes for item, _ in allocations)
+        denominator = used or 1
+        return StorageOverview(
+            libraries=tuple(
+                StorageLibraryContribution(
+                    library_id=library.id,
+                    name=library.name,
+                    colour_key=sha256(str(library.id).encode("ascii")).digest()[0] % 8,
+                    share_of_used=allocation.allocated_bytes / denominator,
+                    share_of_entitlement=allocation.allocated_bytes / entitlement.limit_bytes,
+                )
+                for allocation, library in allocations
+            ),
+            account_data_share_of_used=account_data / denominator,
+            account_data_share_of_entitlement=account_data / entitlement.limit_bytes,
+            used_share_of_entitlement=min(1.0, used / entitlement.limit_bytes),
+        )
+
+
+@dataclass(frozen=True)
+class StorageLibraryContribution:
+    library_id: UUID
+    name: str
+    colour_key: int
+    share_of_used: float
+    share_of_entitlement: float
+
+
+@dataclass(frozen=True)
+class StorageOverview:
+    libraries: tuple[StorageLibraryContribution, ...]
+    account_data_share_of_used: float
+    account_data_share_of_entitlement: float
+    used_share_of_entitlement: float

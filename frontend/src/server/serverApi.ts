@@ -5,6 +5,48 @@ export interface CurrentUser {
   username: string;
 }
 
+export type ProfileVisibility = "PRIVATE" | "SHARED_LIBRARY_MEMBERS" | "AUTHENTICATED";
+export type ProfileGender = "UNSPECIFIED" | "MALE" | "FEMALE" | "CUSTOM";
+export type ProfilePronoun = "MALE" | "FEMALE" | "NEUTRAL";
+
+export interface AccountProfile {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  timezone: string | null;
+  gender: ProfileGender | null;
+  custom_gender: string | null;
+  preferred_pronoun: ProfilePronoun | null;
+  neutral_pronoun: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  date_of_birth: string | null;
+  profile_image_visible: boolean;
+  visibilities: Record<string, ProfileVisibility> | null;
+}
+
+export interface PrivateAccount {
+  user_id: string;
+  username: string;
+  email: string;
+  created_at: string;
+  password_protected: boolean;
+}
+
+export interface StorageOverview {
+  libraries: Array<{
+    library_id: string;
+    name: string;
+    colour_key: number;
+    share_of_used: number;
+    share_of_entitlement: number;
+  }>;
+  account_data_share_of_used: number;
+  account_data_share_of_entitlement: number;
+  used_share_of_entitlement: number;
+}
+
 export interface RegistrationResult extends CurrentUser {
   state: string;
   verification_email_sent: boolean;
@@ -591,6 +633,30 @@ export const serverApi = {
     { method: "POST" },
     true,
   ),
+  accountProfile: () => request<AccountProfile>("/account/profile"),
+  account: () => request<PrivateAccount>("/account"),
+  profile: (userId: string) => request<AccountProfile>(`/profiles/${userId}`),
+  updateAccountProfile: (payload: Omit<AccountProfile, "user_id" | "username" | "profile_image_visible">) =>
+    request<AccountProfile>(
+      "/account/profile",
+      { method: "PUT", body: JSON.stringify(payload) },
+      true,
+    ),
+  accountStorage: () => request<StorageOverview>("/account/storage"),
+  changePassword: (payload: { current_password: string; new_password: string; confirmation: string }) =>
+    request<void>("/account/password", { method: "PUT", body: JSON.stringify(payload) }, true),
+  uploadProfileImage: (image: File) => {
+    const form = new FormData();
+    form.append("image", image);
+    return request<void>("/account/profile/image", { method: "PUT", body: form }, true);
+  },
+  removeProfileImage: () => request<void>(
+    "/account/profile/image",
+    { method: "DELETE" },
+    true,
+  ),
+  profileImageUrl: (userId: string, revision = "") =>
+    `${API_URL}/profiles/${userId}/image${revision ? `?v=${encodeURIComponent(revision)}` : ""}`,
   register: (payload: {
     invitation_token: string;
     email: string;
