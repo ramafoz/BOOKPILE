@@ -435,6 +435,12 @@ class ReadingService:
     ) -> ReadingSession:
         self._write_access(library_id=library_id, actor_user_id=actor_user_id)
         self._book(library_id, book_id, lock=True)
+        if self._repository.active_loan_for_book(
+            library_id=library_id, book_id=book_id
+        ):
+            raise ReadingConflictError(
+                "This physical copy is on loan and cannot start a reading."
+            )
         if self._repository.active_for_book(library_id=library_id, book_id=book_id):
             raise ReadingConflictError("This physical copy is already being read.")
         sessions = self._repository.sessions(

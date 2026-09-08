@@ -50,6 +50,7 @@ from bookpile_server.models import (
 )
 from bookpile_server.repositories.books import BookRepository
 from bookpile_server.repositories.readings import ReadingRepository
+from bookpile_server.repositories.loans import LoanRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
@@ -66,6 +67,7 @@ from bookpile_server.services.rate_limits import (
 )
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
+from bookpile_server.services.loans import LoanConflictError, LoanService
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -435,6 +437,45 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 .count()
                 == 1
             )
+
+            loan_race_book = Book(
+                library_id=first.id,
+                title="Loan race",
+                author="Concurrency",
+            )
+            session.add(loan_race_book)
+            session.commit()
+
+            def loan_same_copy_concurrently(number: int) -> bool:
+                try:
+                    with Session(engine, expire_on_commit=False) as concurrent_session:
+                        LoanService(LoanRepository(concurrent_session)).start(
+                            library_id=first.id,
+                            book_id=loan_race_book.id,
+                            actor_user_id=user.id,
+                            loaned_to=f"Borrower {number}",
+                            notes=None,
+                            loaned_date=None,
+                            expected_return_date=None,
+                        )
+                except LoanConflictError:
+                    return False
+                return True
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                loan_results = list(
+                    executor.map(loan_same_copy_concurrently, (1, 2))
+                )
+            assert sorted(loan_results) == [False, True]
+            assert (
+                session.query(Loan)
+                .filter(Loan.book_id == loan_race_book.id, Loan.state == "ACTIVE")
+                .count()
+                == 1
+            )
+            session.query(Loan).filter(Loan.book_id == loan_race_book.id).delete()
+            session.delete(loan_race_book)
+            session.commit()
 
             books = BookRepository(session).list_for_library(first.id)
             assert [book.title for book in books] == ["One"]

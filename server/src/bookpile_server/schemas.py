@@ -786,3 +786,70 @@ class ReadingStatisticsResponse(BaseModel):
     books: list[ReadingStatisticsBookResponse]
     years: list[ReadingStatisticsYearResponse]
 
+
+class ActiveLoanWrite(BaseModel):
+    loaned_to: str = Field(min_length=1, max_length=300)
+    notes: str | None = Field(default=None, max_length=4000)
+    loaned_date: date | None = None
+    expected_return_date: date | None = None
+
+
+class ReturnLoanWrite(BaseModel):
+    returned_date: date | None = None
+
+
+class HistoricalLoanWrite(ActiveLoanWrite):
+    returned_date: date | None = None
+
+
+class ViewerLoanResponse(BaseModel):
+    id: UUID
+    state: Literal["ACTIVE", "RETURNED"]
+    loaned_date: date | None
+    expected_return_date: date | None
+    returned_date: date | None
+    created_at: datetime
+    updated_at: datetime
+    overdue: bool
+
+
+class OwnerLoanResponse(ViewerLoanResponse):
+    loaned_to: str
+    notes: str | None
+
+
+class ViewerBookLoansResponse(BaseModel):
+    access: Literal["VIEWER"] = "VIEWER"
+    library_id: UUID
+    book_id: UUID
+    writable: Literal[False] = False
+    total_loans: int
+    loans: list[ViewerLoanResponse]
+
+
+class OwnerBookLoansResponse(BaseModel):
+    access: Literal["OWNER"] = "OWNER"
+    library_id: UUID
+    book_id: UUID
+    writable: Literal[True] = True
+    total_loans: int
+    loans: list[OwnerLoanResponse]
+
+
+class ViewerLoanOverviewResponse(BaseModel):
+    access: Literal["VIEWER"] = "VIEWER"
+    library_id: UUID
+    writable: Literal[False] = False
+    total_active: int
+    total_overdue: int
+    loans: list[ViewerLoanResponse]
+
+
+class OwnerLoanOverviewResponse(BaseModel):
+    access: Literal["OWNER"] = "OWNER"
+    library_id: UUID
+    writable: Literal[True] = True
+    total_active: int
+    total_overdue: int
+    loans: list[OwnerLoanResponse]
+

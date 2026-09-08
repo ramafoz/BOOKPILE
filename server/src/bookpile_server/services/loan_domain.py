@@ -32,7 +32,7 @@ class LoanPeriod:
 
 
 def normalize_loaned_to(value: str) -> str:
-    normalized = value.strip()
+    normalized = " ".join(value.split())
     if not normalized:
         raise LoanRuleViolation("The borrower is required.")
     if len(normalized) > 300:

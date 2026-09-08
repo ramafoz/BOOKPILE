@@ -796,8 +796,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     Backup/restore, PostgreSQL upgrade/downgrade/upgrade, guarded non-empty
     downgrade, and preservation of all 15 development books passed on
     2026-09-08; development is at `0014_shared_loans`.
-  - [ ] 6B: add scoped services/APIs, concurrency control, audit, and strictly
-    separate Owner-full and Viewer-redacted projections.
+  - [x] 6B: add scoped services/APIs, concurrency control, audit, and strictly
+    separate Owner-full and Viewer-redacted projections. The lifecycle and
+    aggregate catalogue overview pass both Viewer scopes, cross-library,
+    CSRF, sensitive-audit-redaction, reading/loan ordering, and PostgreSQL
+    concurrent-Owner tests (115 tests total on 2026-09-08).
   - [ ] 6C: add Loan/Return, history management, Single/Batch Add integration,
     filters, sorting, and responsive catalogue UX.
   - [ ] 6D: integrate On-loan custody with map, inspection, suggestions, and

@@ -79,8 +79,12 @@ must not be used for Server migrations or test databases.
   field.
 - Phase 6A shared-loan foundation: additive `0014_shared_loans`, one active
   loan per physical copy, tenant-safe composite ownership, guarded rollback,
-  and pure chronology, overdue, ordering, and custody-precedence rules. No
-  loan API or frontend is exposed yet.
+  and pure chronology, overdue, ordering, and custody-precedence rules. That
+  schema increment itself exposed no API or frontend.
+- Phase 6B shared-loan services and APIs: Owner lifecycle and full history,
+  Viewer-safe projections that cannot serialize borrower/notes, catalogue
+  overview, tenant scope, CSRF, redacted audit, Book-row locking, and
+  reading-start exclusion. The frontend intentionally remains Phase 6C work.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library

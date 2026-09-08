@@ -7,6 +7,7 @@ from ..models import (
     Book,
     LibraryAuditEvent,
     LibraryMembership,
+    Loan,
     PersonalBookRecord,
     ReadingSession,
     User,
@@ -123,6 +124,17 @@ class ReadingRepository:
                 ReadingSession.library_id == library_id,
                 ReadingSession.book_id == book_id,
                 ReadingSession.state == "ACTIVE",
+            )
+        )
+
+    def active_loan_for_book(
+        self, *, library_id: UUID, book_id: UUID
+    ) -> Loan | None:
+        return self._session.scalar(
+            select(Loan).where(
+                Loan.library_id == library_id,
+                Loan.book_id == book_id,
+                Loan.state == "ACTIVE",
             )
         )
 

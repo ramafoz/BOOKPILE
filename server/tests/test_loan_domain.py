@@ -20,7 +20,7 @@ TODAY = date(2026, 9, 8)
 
 
 def test_text_is_trimmed_limited_and_empty_notes_become_none() -> None:
-    assert normalize_loaned_to("  Alice  ") == "Alice"
+    assert normalize_loaned_to("  Alice   Example\n") == "Alice Example"
     assert normalize_notes("  private  ") == "private"
     assert normalize_notes("  ") is None
     with pytest.raises(LoanRuleViolation, match="required"):

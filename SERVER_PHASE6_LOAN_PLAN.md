@@ -1,7 +1,7 @@
 # BOOKPILE Server Phase 6 — shared loans and private borrower data
 
 Status: active on `feature/server-loans`. Phase 5 is merged into `main` and
-Phase 6A was completed on 2026-09-08. Phase 6 changes Server only; released
+Phases 6A–6B were completed on 2026-09-08. Phase 6 changes Server only; released
 BOOKPILE Local v1 and its populated SQLite catalogue remain untouched.
 
 ## 1. Objective and ownership boundary
@@ -182,6 +182,12 @@ edge cases have automated coverage. No frontend yet.
 Estimated effort: 20–30% of one full coding context.
 
 ### 6B — scoped repositories, services, and APIs
+
+Status: complete on the feature branch. Owner and Viewer responses are
+different schemas; Viewer payloads contain no borrower or private-note field.
+The shared lifecycle, catalogue overview, book history, CSRF, tenant scope,
+Book-row locking, reading-start exclusion, concurrent-Owner race, and redacted
+audit events pass the full 115-test Server suite, including PostgreSQL.
 
 - Add library-scoped history and active-loan repository queries.
 - Add start, return, cancel, historical create/update/delete services.
