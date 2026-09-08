@@ -360,6 +360,9 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-book-location svg { flex: 0 0 auto; color: #b15d3c; }
 .server-book-location.being-read { color: #315d73; font-weight: 700; }
 .server-book-location.being-read svg { color: #5f8fa5; }
+.server-book-location.on-loan { color: #855a21; font-weight: 700; }
+.server-book-location.on-loan svg { color: #bd7b27; }
+.server-book-location.on-loan.overdue { color: #a63f31; }
 .server-empty-catalogue { min-height: 180px; display: grid; place-content: center; justify-items: center; color: #71817b; text-align: center; }
 .server-empty-catalogue h4 { margin: 10px 0 0; }
 .server-empty-catalogue p { margin: 6px 0; }
@@ -577,6 +580,7 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-map-reading-book { cursor: pointer; }
 .server-map-reading-book path { fill: var(--map-book-colour, #5f8fa5); stroke: #315d73; stroke-width: .45; vector-effect: non-scaling-stroke; }
 .server-map-reading-book.physically-active path { stroke-dasharray: 2 1; stroke-width: .7; }
+.server-map-reading-book.on-loan path { stroke: #8a5a18; stroke-width: .8; }
 .server-map-reading-book.state-rereading path { fill: #80669a; stroke: #5d4375; }
 .server-map-reading-book:hover path, .server-map-reading-book.selected path { fill: #c75d36; stroke: #7a321d; stroke-width: 1.2; }
 .server-map-controls { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 5px; padding: 6px; border-radius: 9px; background: #174b40e8; box-shadow: 0 5px 18px #17382f4a; }
@@ -657,6 +661,15 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-statistics-rate > div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .server-statistics-rate span { display: grid; gap: 3px; }
 .server-statistics-rate b { color: #173d35; font-size: 18px; }
+.server-loan-statistics { margin-top: 24px; padding-top: 22px; border-top: 2px solid #dfd1bf; }
+.server-loan-statistics > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.server-loan-statistics > header h3 { margin: 2px 0 3px; font: 700 26px Georgia, serif; }
+.server-loan-statistics > header p:not(.server-card-eyebrow) { margin: 0; color: #65756f; }
+.server-loan-summary > p { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.server-loan-summary > p.overdue { color: #a63f31; }
+.server-loan-history { display: grid; gap: 8px; }
+.server-loan-history article { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid #ded2c2; border-radius: 7px; }
+.server-loan-history article span { display: grid; flex: 1; }
 
 @media (max-width: 850px) {
   .server-shell { display: block; }

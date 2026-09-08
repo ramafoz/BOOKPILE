@@ -35,6 +35,7 @@ from bookpile_server.models import (
     LibraryAuditEvent,
     LibraryInvitation,
     LibraryMembership,
+    Loan,
     PersonalBookRecord,
     RateLimitBucket,
     ReadingSession,
@@ -49,6 +50,7 @@ from bookpile_server.models import (
 )
 from bookpile_server.repositories.books import BookRepository
 from bookpile_server.repositories.readings import ReadingRepository
+from bookpile_server.repositories.loans import LoanRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
@@ -65,6 +67,7 @@ from bookpile_server.services.rate_limits import (
 )
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
+from bookpile_server.services.loans import LoanConflictError, LoanService
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
@@ -182,6 +185,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "visual_outside_areas",
             "reading_sessions",
             "personal_book_records",
+            "loans",
         } <= set(inspect(engine).get_table_names())
         with Session(engine) as session:
             first = session.get(Library, first_library_id)
@@ -434,6 +438,45 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 == 1
             )
 
+            loan_race_book = Book(
+                library_id=first.id,
+                title="Loan race",
+                author="Concurrency",
+            )
+            session.add(loan_race_book)
+            session.commit()
+
+            def loan_same_copy_concurrently(number: int) -> bool:
+                try:
+                    with Session(engine, expire_on_commit=False) as concurrent_session:
+                        LoanService(LoanRepository(concurrent_session)).start(
+                            library_id=first.id,
+                            book_id=loan_race_book.id,
+                            actor_user_id=user.id,
+                            loaned_to=f"Borrower {number}",
+                            notes=None,
+                            loaned_date=None,
+                            expected_return_date=None,
+                        )
+                except LoanConflictError:
+                    return False
+                return True
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                loan_results = list(
+                    executor.map(loan_same_copy_concurrently, (1, 2))
+                )
+            assert sorted(loan_results) == [False, True]
+            assert (
+                session.query(Loan)
+                .filter(Loan.book_id == loan_race_book.id, Loan.state == "ACTIVE")
+                .count()
+                == 1
+            )
+            session.query(Loan).filter(Loan.book_id == loan_race_book.id).delete()
+            session.delete(loan_race_book)
+            session.commit()
+
             books = BookRepository(session).list_for_library(first.id)
             assert [book.title for book in books] == ["One"]
 
@@ -644,6 +687,28 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        # Phase 6 history must make a destructive 0014 downgrade fail. Once
+        # the synthetic row is removed, prove 0014 and 0013 are independently
+        # reversible and then restore head.
+        with Session(engine) as session:
+            session.add(
+                Loan(
+                    library_id=first_library_id,
+                    book_id=first_book_id,
+                    state="ACTIVE",
+                    loaned_to="Migration test borrower",
+                )
+            )
+            session.commit()
+        with pytest.raises(RuntimeError, match="must be preserved"):
+            command.downgrade(alembic, "0013_remove_shared_goodreads")
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM loans"))
+        command.downgrade(alembic, "0013_remove_shared_goodreads")
+        assert "loans" not in set(inspect(engine).get_table_names())
+        command.upgrade(alembic, "head")
+        assert "loans" in set(inspect(engine).get_table_names())
 
         # Prove 0013 is independently reversible, restoring only the empty
         # compatibility column before removing it again.

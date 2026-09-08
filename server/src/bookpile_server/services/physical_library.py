@@ -654,6 +654,7 @@ class PhysicalLibraryService:
         book_id: UUID,
         actor_user_id: UUID,
         payload: BookPlacementWrite,
+        commit: bool = True,
     ) -> None:
         book = self._repository.find_book(library_id, book_id)
         if book is None:
@@ -716,11 +717,15 @@ class PhysicalLibraryService:
                 "position": payload.position,
             },
         )
-        self._commit("The book could not be placed at that position.")
+        if commit:
+            self._commit("The book could not be placed at that position.")
+        else:
+            self._repository.flush()
         # Placement updates are intentionally bulk operations so unique
         # positions can be vacated before they are reassigned. Refresh the
         # identity map before building the response in the same request.
-        self._repository.expire_all()
+        if commit:
+            self._repository.expire_all()
 
     def _refresh_shelf_structure(self, library_id: UUID) -> None:
         hierarchy = self.hierarchy(library_id)

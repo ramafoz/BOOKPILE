@@ -12,6 +12,7 @@ from bookpile_server.models import (
     Library,
     LibraryAuditEvent,
     LibraryMembership,
+    Loan,
     User,
     UserSession,
 )
@@ -218,6 +219,37 @@ def test_create_with_placement_is_atomic(
     assert unchanged.title == "Atomic book"
     assert str(unchanged.container_id) == container["id"]
     assert unchanged.position == 1
+
+
+def test_create_with_placement_and_loan_is_atomic(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "atomic_loan_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Loan room")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+    container = create_container(client, library, shelf["id"], 1)
+    endpoint = f"/api/v1/libraries/{library.id}/catalogue/with-placement-and-loan"
+    payload = {
+        "book": {"title": "Loaned on arrival", "author": "Careful Writer"},
+        "placement": {"container_id": container["id"], "position": 1},
+        "loan": {"loaned_to": "A trusted friend", "loaned_date": "2026-09-01"},
+    }
+    created = client.post(endpoint, json=payload, headers=csrf())
+    assert created.status_code == 201, created.text
+    book = session.get(Book, UUID(created.json()["id"]))
+    assert book is not None and str(book.container_id) == container["id"]
+    assert session.scalar(select(Loan).where(Loan.book_id == book.id)) is not None
+
+    invalid = client.post(
+        endpoint,
+        json={**payload, "book": {"title": "Rolled back loan", "author": "Writer"}, "loan": {"loaned_to": "   "}},
+        headers=csrf(),
+    )
+    assert invalid.status_code == 422
+    session.expire_all()
+    assert session.scalar(select(Book).where(Book.title == "Rolled back loan")) is None
 
 
 def test_owner_builds_and_renumbers_hierarchy_atomically(

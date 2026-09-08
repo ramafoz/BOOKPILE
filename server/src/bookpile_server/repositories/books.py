@@ -9,6 +9,7 @@ from ..models import (
     BookContributor,
     ContributorRole,
     LibraryAuditEvent,
+    Loan,
     ReadingSession,
 )
 
@@ -61,6 +62,11 @@ def catalogue_filters(
     reading_date_from: object | None = None,
     reading_date_to: object | None = None,
     available_only: bool = False,
+    loan_scope: str = "ANY",
+    loaned_to: str | None = None,
+    loan_date_field: str = "LOANED",
+    loan_date_from: object | None = None,
+    loan_date_to: object | None = None,
 ) -> list[object]:
     filters: list[object] = [Book.library_id == library_id]
     if search and search.strip():
@@ -174,6 +180,42 @@ def catalogue_filters(
             ReadingSession.book_id == Book.id,
             ReadingSession.state == "ACTIVE",
         )))
+        filters.append(~exists(select(Loan.id).where(
+            Loan.library_id == library_id,
+            Loan.book_id == Book.id,
+            Loan.state == "ACTIVE",
+        )))
+    loan_rows = [Loan.library_id == library_id, Loan.book_id == Book.id]
+    any_loan = exists(select(Loan.id).where(*loan_rows))
+    active_loan = exists(select(Loan.id).where(*loan_rows, Loan.state == "ACTIVE"))
+    if loan_scope == "ACTIVE":
+        filters.append(active_loan)
+    elif loan_scope == "OVERDUE":
+        filters.append(exists(select(Loan.id).where(
+            *loan_rows,
+            Loan.state == "ACTIVE",
+            Loan.expected_return_date.is_not(None),
+            Loan.expected_return_date < func.current_date(),
+        )))
+    elif loan_scope == "EVER":
+        filters.append(any_loan)
+    elif loan_scope == "NEVER":
+        filters.append(~any_loan)
+    if loaned_to and loaned_to.strip():
+        filters.append(exists(select(Loan.id).where(
+            *loan_rows, Loan.loaned_to.ilike(f"%{loaned_to.strip()}%")
+        )))
+    if loan_date_from is not None or loan_date_to is not None:
+        loan_date_column = {
+            "EXPECTED": Loan.expected_return_date,
+            "RETURNED": Loan.returned_date,
+        }.get(loan_date_field, Loan.loaned_date)
+        date_conditions = [*loan_rows, loan_date_column.is_not(None)]
+        if loan_date_from is not None:
+            date_conditions.append(loan_date_column >= loan_date_from)
+        if loan_date_to is not None:
+            date_conditions.append(loan_date_column <= loan_date_to)
+        filters.append(exists(select(Loan.id).where(*date_conditions)))
     return filters
 
 
@@ -207,7 +249,21 @@ def catalogue_query(
             .limit(limit)
             .offset(offset)
         )
-    column = SORT_COLUMNS.get(sort_by, Book.title)
+    if sort_by in {"loaned_date", "expected_return_date", "returned_date"}:
+        loan_column = getattr(Loan, sort_by)
+        state_filter = [Loan.state == "ACTIVE"] if sort_by != "returned_date" else []
+        column = (
+            select(func.max(loan_column))
+            .where(
+                Loan.library_id == library_id,
+                Loan.book_id == Book.id,
+                *state_filter,
+            )
+            .correlate(Book)
+            .scalar_subquery()
+        )
+    else:
+        column = SORT_COLUMNS.get(sort_by, Book.title)
     direction = column.desc() if sort_order == "desc" else column.asc()
     return (
         select(Book)

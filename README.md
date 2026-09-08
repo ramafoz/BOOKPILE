@@ -392,9 +392,12 @@ third-party services.
   rehearsals, mandatory pre-migration backups, and recovery.
 - `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
   tenancy, privacy, quota, migration, and deployment roadmap.
-- `SERVER_PHASE5_READING_PLAN.md` defines the next Server milestone: personal
-  reading sessions, per-Owner Goodreads links, shared custody, migration
-  safety, API boundaries, frontend increments, and acceptance gates.
+- `SERVER_PHASE5_READING_PLAN.md` records the completed personal-reading phase:
+  per-Owner sessions and Goodreads links, shared custody, migration safety,
+  API boundaries, frontend increments, and acceptance gates.
+- `SERVER_PHASE6_LOAN_PLAN.md` defines the shared-loan model, Owner-only
+  borrower privacy, migration protocol, concurrency rules, frontend increments,
+  and acceptance gates for the next Server milestone.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
@@ -496,9 +499,9 @@ controls. Entered physical sizes remain locked and clearly labelled, while
 shelf placement remains editable through frames, closures, separators,
 alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
-alter or replace Local v1. Personal readings, loans, backups, and Local ZIP
-import remain pending for later Server phases. Full Local ZIP import follows
-the Server reading and loan models so those histories are preserved rather
+alter or replace Local v1. Server personal readings and loans are now complete;
+Server backup/export and Local ZIP import remain pending for Phase 8. Their
+canonical destinations now exist, so those histories can be preserved rather
 than discarded or flattened.
 
 The compact Server workspace increment is complete and accepted on desktop and
@@ -531,9 +534,15 @@ date/rate gradients, bibliographic colour modes, and Reading-area inspection
 all follow the selected Owner perspective. Phase 5E completed the compatibility
 transition: a verified backup and isolated migration rehearsal proved the old
 shared Goodreads field empty, and guarded migration `0013` removed it while
-preserving per-Owner reviews. Phase 5 is ready for final merge approval. The
-next functional milestone is Phase 6, shared loans with Owner-only sensitive
-borrower details and Viewer-safe projections.
+preserving per-Owner reviews. Phase 5 is merged into `main`. Phase 6A now adds
+the guarded `0014_shared_loans` schema and pure loan/custody rules after a
+verified backup-and-restore rehearsal. Phase 6B adds the shared lifecycle,
+locking, redacted audit, and structurally separate Owner-full and Viewer-safe
+book/catalogue API projections. Phases 6C–6D add the accepted responsive
+Owner/Viewer loan workflow, atomic loan-at-creation, advanced loan search,
+On-loan map custody and shared statistics. Phase 6E compatibility, privacy,
+test, lint, build and PostgreSQL gates pass; the feature branch is ready for
+the explicitly approved merge into `main`.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 

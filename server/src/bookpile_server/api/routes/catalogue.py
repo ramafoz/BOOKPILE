@@ -9,6 +9,7 @@ from ...schemas import (
     BookResponse,
     BookSummary,
     BookWithPlacementWrite,
+    BookWithPlacementAndLoanWrite,
     BookWrite,
     CatalogueMetadataOptions,
     CatalogueResponse,
@@ -37,12 +38,19 @@ from ...services.physical_library import (
     PhysicalLibraryValidationError,
 )
 from ...services.readings import ReadingNotFoundError
+from ...services.loans import (
+    LoanAccessError,
+    LoanConflictError,
+    LoanNotFoundError,
+    LoanValidationError,
+)
 from ..dependencies import (
     CatalogueServiceDependency,
     CoverServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
     LibraryAccessServiceDependency,
+    LoanServiceDependency,
     PhysicalLibraryServiceDependency,
     RateLimiterDependency,
     ReadingServiceDependency,
@@ -168,6 +176,11 @@ def get_catalogue(
     reading_date_from: date | None = Query(default=None),
     reading_date_to: date | None = Query(default=None),
     available_only: bool = False,
+    loan_scope: Literal["ANY", "ACTIVE", "OVERDUE", "EVER", "NEVER"] = "ANY",
+    loaned_to: str | None = Query(default=None, max_length=300),
+    loan_date_field: Literal["LOANED", "EXPECTED", "RETURNED"] = "LOANED",
+    loan_date_from: date | None = Query(default=None),
+    loan_date_to: date | None = Query(default=None),
     sort_by: Literal[
         "title",
         "author",
@@ -178,6 +191,9 @@ def get_catalogue(
         "current_ed_year",
         "original_publication_year",
         "acquisition_date",
+        "loaned_date",
+        "expected_return_date",
+        "returned_date",
         "random",
     ] = "title",
     sort_order: Literal["asc", "desc"] = "asc",
@@ -188,6 +204,11 @@ def get_catalogue(
         access = access_service.require_catalogue(
             library_id=library_id, user_id=context.user_id
         )
+        if loaned_to and not access.is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Borrower search is available only to library Owners.",
+            )
         target_perspective = (
             perspective_user_id
             or access.selected_reading_user_id
@@ -233,6 +254,11 @@ def get_catalogue(
             reading_date_from=reading_date_from,
             reading_date_to=reading_date_to,
             available_only=available_only,
+            loan_scope=loan_scope,
+            loaned_to=loaned_to,
+            loan_date_field=loan_date_field,
+            loan_date_from=loan_date_from,
+            loan_date_to=loan_date_to,
             sort_by=sort_by,
             sort_order=sort_order,
             limit=limit,
@@ -362,6 +388,65 @@ def create_book_with_placement(
         if isinstance(exc, (PhysicalLibraryNotFoundError, PhysicalLibraryValidationError)):
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if isinstance(exc, PhysicalLibraryConflictError):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise catalogue_error(exc) from exc
+
+
+@router.post(
+    "/with-placement-and-loan",
+    response_model=BookResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_book_with_placement_and_loan(
+    library_id: UUID,
+    payload: BookWithPlacementAndLoanWrite,
+    service: CatalogueServiceDependency,
+    physical_service: PhysicalLibraryServiceDependency,
+    loan_service: LoanServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> BookResponse:
+    """Atomically create metadata, retained location, and an active loan."""
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        record = service.create_book(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            payload=payload.book,
+            commit=False,
+        )
+        physical_service.place_book(
+            library_id=library_id,
+            book_id=record.book.id,
+            actor_user_id=context.user_id,
+            payload=payload.placement,
+            commit=False,
+        )
+        loan_service.start(
+            library_id=library_id,
+            book_id=record.book.id,
+            actor_user_id=context.user_id,
+            **payload.loan.model_dump(),
+        )
+        return book_response(service.get_book(library_id, record.book.id), detail=True)
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        CatalogueValidationError,
+        CatalogueConflictError,
+        PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
+        PhysicalLibraryConflictError,
+        LoanAccessError,
+        LoanConflictError,
+        LoanNotFoundError,
+        LoanValidationError,
+    ) as exc:
+        service.rollback()
+        if isinstance(exc, (PhysicalLibraryNotFoundError, PhysicalLibraryValidationError, LoanValidationError)):
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if isinstance(exc, (PhysicalLibraryConflictError, LoanConflictError)):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise catalogue_error(exc) from exc
 

@@ -791,6 +791,25 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   import will assign its links to the selected importing Owner.
 - [x] Implement shared `SHELVED`/`BEING_READ` custody, retain saved shelf
   positions, and prevent simultaneous active reading of one physical copy.
+- [ ] Complete Server Phase 6 according to `SERVER_PHASE6_LOAN_PLAN.md`:
+  - [x] 6A: add the reversible shared-loan schema and pure domain rules.
+    Backup/restore, PostgreSQL upgrade/downgrade/upgrade, guarded non-empty
+    downgrade, and preservation of all 15 development books passed on
+    2026-09-08; development is at `0014_shared_loans`.
+  - [x] 6B: add scoped services/APIs, concurrency control, audit, and strictly
+    separate Owner-full and Viewer-redacted projections. The lifecycle and
+    aggregate catalogue overview pass both Viewer scopes, cross-library,
+    CSRF, sensitive-audit-redaction, reading/loan ordering, and PostgreSQL
+    concurrent-Owner tests (115 tests total on 2026-09-08).
+  - [x] 6C: add Loan/Return, history management, Single/Batch Add integration,
+    filters, sorting, and responsive catalogue UX.
+    Accepted for Owner and Viewer on desktop and mobile on 2026-09-08.
+  - [x] 6D: integrate On-loan custody with map, inspection, suggestions, and
+    non-sensitive statistics. Custody precedence, retained-location return,
+    perspective colouring and complete statistics were accepted on 2026-09-08.
+  - [x] 6E: complete compatibility review, final automated acceptance and
+    documentation. All gates passed on 2026-09-08 with Local untouched.
+  - [ ] Merge the accepted Phase 6 branch into `main` after explicit approval.
 - [ ] Implement transactional shared quota allocation and atomic library
   deletion/recovery.
 

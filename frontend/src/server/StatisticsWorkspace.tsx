@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, BookCheck, BookOpen, Clock3, Gauge, Repeat2 } from "lucide-react";
+import { AlertTriangle, BarChart3, BookCheck, BookOpen, Clock3, Gauge, Handshake, Repeat2 } from "lucide-react";
 import {
   serverApi,
   type CatalogueMetadataOptions,
   type ReadingPerspective,
   type ReadingStatistics,
+  type LoanStatistics,
 } from "./serverApi";
 
 const EMPTY_OPTIONS: CatalogueMetadataOptions = {
@@ -24,6 +25,7 @@ export default function StatisticsWorkspace({ libraryId, perspective }: {
   perspective: ReadingPerspective;
 }) {
   const [statistics, setStatistics] = useState<ReadingStatistics | null>(null);
+  const [loanStatistics, setLoanStatistics] = useState<LoanStatistics | null>(null);
   const [options, setOptions] = useState(EMPTY_OPTIONS);
   const [filters, setFilters] = useState<{ language?: string; genre?: string; publisher?: string; reading_year?: number }>({});
   const [draft, setDraft] = useState(filters);
@@ -32,7 +34,13 @@ export default function StatisticsWorkspace({ libraryId, perspective }: {
 
   const load = useCallback(async (next = filters) => {
     setBusy(true); setError("");
-    try { setStatistics(await serverApi.readingStatistics(libraryId, perspective.user_id, next)); }
+    try {
+      const [reading, loans] = await Promise.all([
+        serverApi.readingStatistics(libraryId, perspective.user_id, next),
+        serverApi.loanStatistics(libraryId, { language: next.language, genre: next.genre, publisher: next.publisher, loan_year: next.reading_year }),
+      ]);
+      setStatistics(reading); setLoanStatistics(loans);
+    }
     catch (caught) { setError(errorMessage(caught)); }
     finally { setBusy(false); }
   }, [filters, libraryId, perspective.user_id]);
@@ -41,8 +49,9 @@ export default function StatisticsWorkspace({ libraryId, perspective }: {
     setFilters({}); setDraft({});
     void Promise.all([
       serverApi.readingStatistics(libraryId, perspective.user_id),
+      serverApi.loanStatistics(libraryId),
       serverApi.catalogueOptions(libraryId),
-    ]).then(([result, metadata]) => { setStatistics(result); setOptions(metadata); setError(""); })
+    ]).then(([result, loans, metadata]) => { setStatistics(result); setLoanStatistics(loans); setOptions(metadata); setError(""); })
       .catch((caught) => setError(errorMessage(caught))).finally(() => setBusy(false));
   }, [libraryId, perspective.user_id]);
 
@@ -83,5 +92,18 @@ export default function StatisticsWorkspace({ libraryId, perspective }: {
       </div>
       <p className="server-statistics-note">Unknown-date historical readings count as personal history, but cannot be assigned to dated page or rate statistics. Missing page counts contribute no pages.</p>
     </>}
+    {loanStatistics && <section className="server-loan-statistics">
+      <header><div><p className="server-card-eyebrow">Shared physical custody</p><h3>Loan statistics</h3><p>These totals belong to the library and do not change with reading perspective.</p></div><Handshake size={34} /></header>
+      <div className="server-statistics-cards">
+        <article><Handshake /><b>{loanStatistics.active}</b><span>Currently on loan</span></article>
+        <article><AlertTriangle /><b>{loanStatistics.overdue}</b><span>Overdue</span></article>
+        <article><BookCheck /><b>{loanStatistics.completed}</b><span>Returned loans</span></article>
+        <article><Clock3 /><b>{loanStatistics.unknown_loan_dates + loanStatistics.unknown_return_dates}</b><span>Unknown dates <small>{loanStatistics.unknown_loan_dates} loaned · {loanStatistics.unknown_return_dates} returned</small></span></article>
+      </div>
+      <div className="server-statistics-tables">
+        <section><h3>Loans by year</h3>{loanStatistics.years.length ? <table><thead><tr><th>Year</th><th>Loaned</th><th>Returned</th></tr></thead><tbody>{loanStatistics.years.map((item) => <tr key={item.year}><td>{item.year}</td><td>{item.loans}</td><td>{item.returns}</td></tr>)}</tbody></table> : <p>No dated loans match these filters.</p>}</section>
+        <section><h3>Most loaned books</h3>{loanStatistics.books.length ? <table><thead><tr><th>Book</th><th>Loans</th></tr></thead><tbody>{loanStatistics.books.map((item) => <tr key={item.book_id}><td><b>{item.title}</b><small>{item.author}</small></td><td>{item.loans}</td></tr>)}</tbody></table> : <p>No loans match these filters.</p>}</section>
+      </div>
+    </section>}
   </section>;
 }
