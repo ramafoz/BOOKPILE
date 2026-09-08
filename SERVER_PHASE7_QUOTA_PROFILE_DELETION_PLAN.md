@@ -2,7 +2,7 @@
 
 
 
-Status: planned on `feature/server-storage-quota`. Phase 6 is merged into
+Status: active on `feature/server-storage-quota`; 7A is complete. Phase 6 is merged into
 `main`. This phase changes Server only and leaves released Local v1 untouched.
 
 ## 1. Product contract
@@ -86,6 +86,10 @@ operational backups may retain tombstones for at most 30 days.
 ## 6. Increments
 
 ### 7A — accounting contract and pure allocator
+
+Status: complete. Logical accounting v1, exact object-byte charging and the
+global deterministic allocator pass worked-example, balance, retention,
+validation and insufficient-capacity tests plus the full Server regression.
 
 Implement versioned logical-size rules, entitlement and allocation value objects,
 the deterministic solver, worked examples and property/edge tests. No schema or UX.

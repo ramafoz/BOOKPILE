@@ -812,7 +812,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Merge the accepted Phase 6 branch into `main` after explicit approval.
 - [ ] Complete Server Phase 7 according to
   `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md`:
-  - [ ] 7A: versioned logical accounting and pure deterministic allocator.
+  - [x] 7A: versioned logical accounting and pure deterministic allocator.
   - [ ] 7B: additive profile, entitlement, usage, allocation and deletion schema.
   - [ ] 7C: transactional enforcement and Owner-membership integration.
   - [ ] 7D: private profile/security shell and non-numeric storage visualization.
