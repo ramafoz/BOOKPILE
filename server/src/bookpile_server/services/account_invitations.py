@@ -34,6 +34,18 @@ class CreatedAccountInvitation:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class BetaInvitationStatus:
+    active_day_count: int
+    days_required: int
+    available_credits: int
+    open_invitations: int
+
+
+class NoEarnedInvitationError(Exception):
+    pass
+
+
 class AccountInvitationError(Exception):
     pass
 
@@ -74,6 +86,49 @@ class AccountInvitationService:
         self._repository.add_event(
             "account_invitation_created",
             user_id=created_by_user_id,
+            details={"invitation_id": str(invitation.id)},
+        )
+        self._repository.commit()
+        return CreatedAccountInvitation(
+            invitation_id=invitation.id,
+            raw_token=raw_token,
+            expires_at=invitation.expires_at,
+        )
+
+    def beta_status(self, user_id: UUID) -> BetaInvitationStatus:
+        progress = self._repository.beta_progress(user_id)
+        if progress is None:
+            progress = self._repository.lock_beta_progress(user_id)
+        now = datetime.now(UTC)
+        return BetaInvitationStatus(
+            active_day_count=progress.active_day_count if progress else 0,
+            days_required=3,
+            available_credits=progress.available_credits if progress else 0,
+            open_invitations=len(
+                self._repository.open_created_invitations(user_id, now)
+            ),
+        )
+
+    def create_earned(self, user_id: UUID) -> CreatedAccountInvitation:
+        progress = self._repository.lock_beta_progress(user_id)
+        if progress is None or progress.available_credits < 1:
+            self._repository.rollback()
+            raise NoEarnedInvitationError
+        now = datetime.now(UTC)
+        raw_token = token_urlsafe(32)
+        invitation = AccountInvitation(
+            token_hash=hash_invitation_token(raw_token),
+            created_by_user_id=user_id,
+            created_at=now,
+            expires_at=now + ACCOUNT_INVITATION_LIFETIME,
+        )
+        progress.available_credits -= 1
+        progress.updated_at = now
+        self._repository.add(invitation)
+        self._repository.flush()
+        self._repository.add_event(
+            "earned_account_invitation_created",
+            user_id=user_id,
             details={"invitation_id": str(invitation.id)},
         )
         self._repository.commit()
@@ -137,7 +192,7 @@ class AccountInvitationService:
         self._repository.add_user(user)
         try:
             self._repository.flush()
-            self._repository.add_storage_entitlement(user.id)
+            self._repository.add_account_defaults(user.id)
             invitation.consumed_at = now
             invitation.consumed_by_user_id = user.id
             self._repository.add_event(

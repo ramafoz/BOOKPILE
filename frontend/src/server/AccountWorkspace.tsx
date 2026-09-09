@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   type AccountProfile,
+  type BetaInvitationStatus,
   type PrivateAccount,
   type ProfileGender,
   type ProfilePronoun,
@@ -76,6 +77,9 @@ export default function AccountWorkspace({
   const [account, setAccount] = useState<PrivateAccount | null>(null);
   const [storage, setStorage] = useState<StorageOverview | null>(null);
   const [recoverable, setRecoverable] = useState<RecoverableLibrary[]>([]);
+  const [betaInvitations, setBetaInvitations] = useState<BetaInvitationStatus | null>(null);
+  const [earnedInvitationLink, setEarnedInvitationLink] = useState("");
+  const [earnedInvitationExpiry, setEarnedInvitationExpiry] = useState("");
   const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -94,16 +98,45 @@ export default function AccountWorkspace({
   });
 
   async function load() {
-    const [nextProfile, nextStorage, nextAccount, nextRecoverable] = await Promise.all([
+    const [nextProfile, nextStorage, nextAccount, nextRecoverable, nextBetaInvitations] = await Promise.all([
       serverApi.accountProfile(),
       serverApi.accountStorage(),
       serverApi.account(),
       serverApi.recoverableLibraries(),
+      serverApi.betaInvitationStatus(),
     ]);
     setProfile(nextProfile);
     setStorage(nextStorage);
     setAccount(nextAccount);
     setRecoverable(nextRecoverable);
+    setBetaInvitations(nextBetaInvitations);
+  }
+
+  async function createBetaInvitation() {
+    setBusy(true);
+    setError("");
+    try {
+      const invitation = await serverApi.createEarnedAccountInvitation();
+      const url = new URL("/register", window.location.origin);
+      url.searchParams.set("invite", invitation.invitation_token);
+      setEarnedInvitationLink(url.toString());
+      setEarnedInvitationExpiry(invitation.expires_at);
+      setBetaInvitations(await serverApi.betaInvitationStatus());
+      setNotice("Your account invitation is ready. It is shown only in this session.");
+    } catch (caught) {
+      setError(message(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyBetaInvitation() {
+    try {
+      await navigator.clipboard.writeText(earnedInvitationLink);
+      setNotice("Account invitation link copied.");
+    } catch {
+      setError("BOOKPILE could not access the clipboard. Select and copy the visible link manually.");
+    }
   }
 
   async function restoreLibrary(event: FormEvent) {
@@ -639,6 +672,19 @@ export default function AccountWorkspace({
           </span>
         </div>
       </section>
+      {betaInvitations && (
+        <section className="server-profile-card server-beta-invitation-card">
+          <h3>Invite someone to BOOKPILE</h3>
+          <p>Every three different days you use BOOKPILE earns one beta account invitation. Each day counts once, and your progress restarts after the third active day. Created invitations expire after seven days.</p>
+          <div className="server-beta-day-progress" role="progressbar" aria-label={`${betaInvitations.active_day_count} of ${betaInvitations.days_required} active days toward the next invitation`} aria-valuemin={0} aria-valuemax={betaInvitations.days_required} aria-valuenow={betaInvitations.active_day_count}>
+            {Array.from({ length: betaInvitations.days_required }, (_, index) => <i key={index} className={index < betaInvitations.active_day_count ? "complete" : ""} />)}
+          </div>
+          <small>{betaInvitations.active_day_count} of {betaInvitations.days_required} active days toward your next invitation</small>
+          <div className="server-beta-invitation-summary"><span><b>{betaInvitations.available_credits}</b> ready to create</span><span><b>{betaInvitations.open_invitations}</b> created and still usable</span></div>
+          {betaInvitations.available_credits > 0 && <button className="server-primary-action" type="button" disabled={busy} onClick={() => void createBetaInvitation()}><KeyRound size={16} /> Create account invitation</button>}
+          {earnedInvitationLink && <div className="server-earned-invitation"><label>Account invitation link<input readOnly value={earnedInvitationLink} onFocus={(event) => event.currentTarget.select()} /></label><button type="button" onClick={() => void copyBetaInvitation()}>Copy link</button><small>Expires {new Date(earnedInvitationExpiry).toLocaleString()}. For security, copy it now; BOOKPILE stores only its hash.</small></div>}
+        </section>
+      )}
       {recoverable.length > 0 && (
         <section className="server-profile-card server-recovery-card">
           <h3>Recently deleted libraries</h3>

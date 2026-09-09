@@ -329,9 +329,9 @@ fields.
   Merge candidates with provenance and conflict review; import genuine authors
   through structured multiple authorship while keeping translators, editors,
   and illustrators out of the author list.
-- [ ] **Local v1 and Server:** remember the user's selected subset of imported
-  metadata during one Batch Add session, so each next scan initially proposes
-  the same fields without making that preference permanent or silent.
+- [N] **Local v1 and Server:** do not carry the selected subset of imported
+  metadata between Batch scans. Every provider field starts deselected for each
+  book; preserve only explicit batch-wide physical placement controls.
 - [x] Add optional OCR from a temporary front-cover photograph.
   - Let the user select or correct recognized Title and Author text.
   - Optionally resolve the corrected text against bibliographic providers.
@@ -810,7 +810,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 6E: complete compatibility review, final automated acceptance and
     documentation. All gates passed on 2026-09-08 with Local untouched.
   - [x] Merge the accepted Phase 6 branch into `main` after explicit approval.
-- [ ] Complete Server Phase 7 according to
+- [x] Complete Server Phase 7 according to
   `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md`:
   - [x] 7A: versioned logical accounting and pure deterministic allocator.
   - [x] 7B: additive profile, entitlement, usage, allocation and deletion schema,
@@ -820,10 +820,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 7D: grouped private profile/security shell, authenticated projected
     profiles, Owner-scoped library settings and non-numeric storage visualization.
   - [x] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
-  - [ ] 7F: private account deletion, dependency checks, immediate lockout,
-    email-only single-use 48-hour recovery and permanent cleanup. Implemented;
-    awaiting UX acceptance.
-  - [ ] 7G: compatibility, release gates and guarded merge.
+  - [x] 7F: private account deletion, dependency checks, immediate lockout,
+    email-only single-use 48-hour recovery and permanent cleanup.
+  - [x] 7G: three-distinct-active-day invitation credits, one-time account
+    invitation creation, and optional physical-map onboarding for empty owned
+    libraries.
+  - [x] 7H: compatibility, release gates and guarded merge.
 
 ### Privacy and social features
 
@@ -860,7 +862,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   application rate limits and defensive API headers are implemented.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
-- [ ] Accept and merge private account deletion with password reauthentication,
+- [x] Accept and merge private account deletion with password reauthentication,
   owned-library dependency checks, session revocation, email-only single-use
   48-hour recovery, and final personal-data cleanup. Keep it separate from
   library deletion.

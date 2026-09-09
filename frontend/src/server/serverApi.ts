@@ -51,6 +51,19 @@ export interface AccountDeletionResult {
   recover_until: string;
 }
 
+export interface BetaInvitationStatus {
+  active_day_count: number;
+  days_required: number;
+  available_credits: number;
+  open_invitations: number;
+}
+
+export interface EarnedAccountInvitation {
+  invitation_id: string;
+  invitation_token: string;
+  expires_at: string;
+}
+
 export interface RegistrationResult extends CurrentUser {
   state: string;
   verification_email_sent: boolean;
@@ -647,6 +660,14 @@ export const serverApi = {
   ),
   accountProfile: () => request<AccountProfile>("/account/profile"),
   account: () => request<PrivateAccount>("/account"),
+  betaInvitationStatus: () => request<BetaInvitationStatus>(
+    "/account/beta-invitations",
+  ),
+  createEarnedAccountInvitation: () => request<EarnedAccountInvitation>(
+    "/account/beta-invitations",
+    { method: "POST" },
+    true,
+  ),
   profile: (userId: string) => request<AccountProfile>(`/profiles/${userId}`),
   updateAccountProfile: (payload: Omit<AccountProfile, "user_id" | "username" | "profile_image_visible">) =>
     request<AccountProfile>(

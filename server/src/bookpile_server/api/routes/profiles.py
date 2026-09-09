@@ -8,8 +8,10 @@ from ...cover_images import InvalidCoverImage, process_cover_image
 from ...email_delivery import EmailDeliveryError
 from ...schemas import (
     ChangePasswordWrite,
+    BetaInvitationStatusResponse,
     AccountDeletionResponse,
     DeleteAccountWrite,
+    EarnedAccountInvitationResponse,
     PrivateAccountResponse,
     ProfileResponse,
     ProfileWrite,
@@ -24,11 +26,13 @@ from ...services.account_deletion import (
     AccountDeletionValidationError,
     AccountRecoveryUnavailableError,
 )
+from ...services.account_invitations import NoEarnedInvitationError
 from ...services.profiles import ProfileImageStorageError, ProfileNotFoundError
 from ...services.rate_limits import RateLimitExceededError, RateLimitPolicy
 from ..dependencies import (
     CsrfDependency,
     AuthServiceDependency,
+    AccountInvitationServiceDependency,
     AccountDeletionServiceDependency,
     CurrentAuthDependency,
     ProfileImageServiceDependency,
@@ -39,6 +43,43 @@ from ..dependencies import (
 
 
 router = APIRouter(tags=["profiles"])
+
+
+@router.get(
+    "/account/beta-invitations",
+    response_model=BetaInvitationStatusResponse,
+)
+def beta_invitation_status(
+    service: AccountInvitationServiceDependency,
+    context: CurrentAuthDependency,
+) -> BetaInvitationStatusResponse:
+    return BetaInvitationStatusResponse.model_validate(
+        service.beta_status(context.user_id).__dict__
+    )
+
+
+@router.post(
+    "/account/beta-invitations",
+    response_model=EarnedAccountInvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_earned_beta_invitation(
+    service: AccountInvitationServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> EarnedAccountInvitationResponse:
+    try:
+        invitation = service.create_earned(context.user_id)
+    except NoEarnedInvitationError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="No earned account invitation is currently available",
+        ) from exc
+    return EarnedAccountInvitationResponse(
+        invitation_id=invitation.invitation_id,
+        invitation_token=invitation.raw_token,
+        expires_at=invitation.expires_at,
+    )
 
 
 @router.delete("/account", response_model=AccountDeletionResponse)

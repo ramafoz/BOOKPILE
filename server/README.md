@@ -98,15 +98,19 @@ must not be used for Server migrations or test databases.
   gate. Phase 7D adds the responsive private account/profile workspace, grouped
   privacy, authenticated member-profile projections, profile-image processing,
   password/session controls, Owner library-settings navigation, and non-numeric
-  storage contribution/total bars. Phase 7E deletion and recovery follows.
+  storage contribution/total bars. Phase 7E adds recoverable shared-library
+  deletion; 7F adds email-only recoverable account deletion; 7G adds earned
+  beta account invitations and empty-library map onboarding. Phase 7 final
+  compatibility, migration, build and user-acceptance gates pass.
 
 The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
 edition is still not deployable because the production private-object adapter,
-backup/restore, storage quota, and production
-infrastructure have not yet been ported.
+Server ZIP backup/restore and production infrastructure have not yet been
+completed. Application-level storage quota is implemented; operational storage,
+monitoring and deployment controls remain production work.
 
 ## Development setup
 

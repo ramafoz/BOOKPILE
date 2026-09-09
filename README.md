@@ -399,9 +399,9 @@ third-party services.
   borrower privacy, migration protocol, concurrency rules, frontend increments,
   and completed acceptance gates.
 - `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md` defines private profiles,
-  entitlement-ready accounting, co-Owner allocation and safe deletion. Its
-  accounting, enforcement and private profile/storage UX increments 7A–7D are
-  complete; shared deletion and recovery remain next.
+  entitlement-ready accounting, co-Owner allocation, safe library/account
+  deletion, earned beta invitations and empty-library map onboarding. Phase 7
+  is complete through its final compatibility and acceptance gates.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
