@@ -236,3 +236,52 @@ describe("Physical library requests", () => {
     expect(JSON.parse(String(options.body))).toEqual(layout);
   });
 });
+
+describe("Library portability requests", () => {
+  it("uploads the Local ZIP and selected reading Owner with CSRF protection", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ import_id: "import-1", state: "READY" }), { status: 201 }),
+    );
+    const backup = new File(["zip"], "bookpile-full-backup.zip", { type: "application/zip" });
+
+    await serverApi.preflightLocalImport("library-1", backup, "owner-2");
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/libraries/library-1/imports/local/preflight",
+    );
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("POST");
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("import-token");
+    expect(options.body).toBeInstanceOf(FormData);
+    const body = options.body as FormData;
+    expect(body.get("reading_owner_user_id")).toBe("owner-2");
+    expect(body.get("backup")).toBe(backup);
+  });
+
+  it("requires an explicit repeated-archive decision when consolidating", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ import_id: "import-1", state: "IMPORTED" }), { status: 200 }),
+    );
+
+    await serverApi.consolidateLocalImport("library-1", "import-1", true);
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(String(options.body))).toEqual({ allow_repeated_archive: true });
+  });
+
+  it("passes a new library name without inventing memberships in the client", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ import_id: "import-1", library_id: "library-2", state: "IMPORTED" }), { status: 200 }),
+    );
+
+    await serverApi.consolidateLocalImportAsNewLibrary("library-1", "import-1", "Imported library", false);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/consolidate-new-library");
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(options.body))).toEqual({ name: "Imported library", allow_repeated_archive: false });
+  });
+});

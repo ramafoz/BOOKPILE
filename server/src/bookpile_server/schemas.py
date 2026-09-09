@@ -31,6 +31,41 @@ ProfileGender = Literal["UNSPECIFIED", "MALE", "FEMALE", "CUSTOM"]
 ProfilePronoun = Literal["MALE", "FEMALE", "NEUTRAL"]
 
 
+class LocalImportWarningResponse(BaseModel):
+    code: str
+    message: str | None = None
+    count: int | None = None
+
+
+class LocalImportPreflightResponse(BaseModel):
+    import_id: UUID
+    library_id: UUID
+    state: Literal["READY"]
+    adapter: str
+    backup_format_version: int
+    local_schema_version: int
+    source_created_at: str
+    reading_owner_user_id: UUID | None
+    counts: dict[str, int]
+    estimated_logical_bytes: int
+    capacity_available: bool
+    expires_at: datetime
+    warnings: list[LocalImportWarningResponse]
+
+
+class LocalImportJobResponse(LocalImportPreflightResponse):
+    state: Literal["READY", "IMPORTING", "IMPORTED", "FAILED", "EXPIRED"]
+    result_counts: dict[str, int] | None = None
+
+
+class ConsolidateLocalImportRequest(BaseModel):
+    allow_repeated_archive: bool = False
+
+
+class ConsolidateLocalImportAsNewLibraryRequest(ConsolidateLocalImportRequest):
+    name: str = Field(min_length=1, max_length=160)
+
+
 def optional_text(value: str | None) -> str | None:
     if value is None:
         return None

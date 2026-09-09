@@ -504,9 +504,20 @@ shelf placement remains editable through frames, closures, separators,
 alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
 alter or replace Local v1. Server personal readings and loans are now complete;
-Server backup/export and Local ZIP import remain pending for Phase 8. Their
-canonical destinations now exist, so those histories can be preserved rather
-than discarded or flattened.
+Server Phase 8 is active. Local format-1/schema-8 inspection, deterministic
+canonical adaptation, authenticated preflight, atomic consolidation and
+Owner-only portable Server-library export are implemented. Final locked quota
+allocation and private-cover compensation leave failed imports without visible
+residue. Owners can now inspect a Local backup, review warnings and capacity,
+approve an intentional repeated archive, consolidate it atomically, or download
+a portable Server ZIP from `Library settings > Data & portability` on desktop
+and mobile. Consolidation may target the selected library or create a separate
+library in the same transaction, with visible feedback throughout long work.
+Large-catalogue acceptance is complete: unmeasured shelf space is distributed
+automatically, wholly unmeasured containers retain editable visual envelopes,
+rows can fill a shelf explicitly, and statistics book tables scroll internally.
+Server-portable restore and its acceptance fixtures follow under
+[SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and

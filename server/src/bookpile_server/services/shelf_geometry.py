@@ -48,21 +48,20 @@ class ShelfProjection:
     separator_source: str | None
 
 
-def _compress(values: list[float], fallback_indexes: list[int], available: float) -> list[float]:
-    total = sum(values)
-    if total <= available + 1e-6:
-        return values
-    fixed = total - sum(values[index] for index in fallback_indexes)
+def _distribute_fallbacks(values: list[float], fallback_indexes: list[int], available: float) -> list[float]:
+    """Give unmeasured compartments equal shares of the remaining clear span."""
+    fixed = sum(value for index, value in enumerate(values) if index not in fallback_indexes)
     fallback_available = available - fixed
-    if not fallback_indexes or fallback_available < MIN_MM * len(fallback_indexes) - 1e-6:
+    if fixed > available + 1e-6 or (
+        fallback_indexes and fallback_available < MIN_MM * len(fallback_indexes) - 1e-6
+    ):
         raise ShelfGeometryError("Entered shelf dimensions do not fit inside the furniture.")
-    current = sum(values[index] for index in fallback_indexes)
-    ratio = fallback_available / current
+    if not fallback_indexes:
+        return values
     result = list(values)
+    share = fallback_available / len(fallback_indexes)
     for index in fallback_indexes:
-        result[index] = max(MIN_MM, values[index] * ratio)
-    if sum(result) > available + 1e-6:
-        raise ShelfGeometryError("Shelf fallback dimensions cannot be compressed enough to fit.")
+        result[index] = share
     return result
 
 
@@ -111,7 +110,7 @@ def project_shelves(
         heights = [item.measured_height_mm or furniture_height_mm * SHELF_SPAN_FALLBACK for item in ordered]
         fallback_indexes = [index for index, item in enumerate(ordered) if not item.measured_height_mm]
         available = furniture_height_mm - top_closure_mm - bottom_closure_mm - sum(separators)
-        heights = _compress(heights, fallback_indexes, available)
+        heights = _distribute_fallbacks(heights, fallback_indexes, available)
         residual = max(0.0, available - sum(heights))
         effective_top = top_closure_mm + (residual if direction == "BOTTOM_TO_TOP" else 0)
         effective_bottom = bottom_closure_mm + (residual if direction == "TOP_TO_BOTTOM" else 0)
@@ -148,7 +147,7 @@ def project_shelves(
         widths = [item.measured_width_mm or furniture_width_mm * SHELF_SPAN_FALLBACK for item in ordered]
         fallback_indexes = [index for index, item in enumerate(ordered) if not item.measured_width_mm]
         base_available = furniture_width_mm - frame_left_mm - frame_right_mm - sum(separators)
-        widths = _compress(widths, fallback_indexes, base_available)
+        widths = _distribute_fallbacks(widths, fallback_indexes, base_available)
         residual = max(0.0, base_available - sum(widths))
         effective_separators = list(separators)
         effective_left, effective_right = frame_left_mm, frame_right_mm

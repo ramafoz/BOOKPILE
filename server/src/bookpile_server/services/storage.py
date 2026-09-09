@@ -12,6 +12,7 @@ from .storage_domain import (
     LibraryDemand,
     LOGICAL_ACCOUNTING_VERSION,
     allocate_storage,
+    InsufficientSharedCapacity,
 )
 
 
@@ -86,6 +87,46 @@ class StorageService:
                 for item in plan.allocations
             ]
         )
+
+    def can_fit_library_growth(self, library_id: UUID, additional_bytes: int) -> bool:
+        """Advisory preflight only; final consolidation must repeat this under locks."""
+        if additional_bytes < 0:
+            return False
+        entitlements = self.repository.all_entitlements()
+        memberships = self.repository.active_owner_memberships()
+        owners: dict[UUID, list[UUID]] = defaultdict(list)
+        for membership in memberships:
+            owners[membership.library_id].append(membership.user_id)
+        if library_id not in owners:
+            return False
+        demands = [
+            LibraryDemand(
+                library_id=item_library_id,
+                logical_size_bytes=(
+                    calculate_library_logical_bytes(self.repository.session, item_library_id)
+                    + (additional_bytes if item_library_id == library_id else 0)
+                ),
+                owner_ids=tuple(owner_ids),
+            )
+            for item_library_id, owner_ids in owners.items()
+        ]
+        capacities = [
+            AccountCapacity(
+                user_id=item.user_id,
+                entitlement_bytes=item.limit_bytes,
+                account_data_bytes=calculate_account_data_bytes(self.repository.session, item.user_id),
+            )
+            for item in entitlements
+        ]
+        previous = {
+            (item.library_id, item.user_id): item.allocated_bytes
+            for item in self.repository.all_allocations()
+        }
+        try:
+            allocate_storage(capacities, demands, previous)
+        except InsufficientSharedCapacity:
+            return False
+        return True
 
     def private_overview(self, user_id: UUID) -> "StorageOverview":
         entitlement = self.repository.entitlement_for_user(user_id)

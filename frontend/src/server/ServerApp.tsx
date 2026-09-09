@@ -5,6 +5,7 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  Download,
   KeyRound,
   Layers3,
   LibraryBig,
@@ -15,6 +16,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  Upload,
   Users,
   UserRound,
 } from "lucide-react";
@@ -23,6 +25,7 @@ import {
   type LibraryMember,
   type LibraryMemberSummary,
   type LibrarySummary,
+  type LocalImportJob,
   type ReadingPerspective,
   ServerApiError,
   serverApi,
@@ -497,7 +500,14 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  const [settingsSection, setSettingsSection] = useState<"ROOT" | "MEMBERS">("ROOT");
+  const [settingsSection, setSettingsSection] = useState<"ROOT" | "MEMBERS" | "DATA">("ROOT");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importReadingOwner, setImportReadingOwner] = useState("");
+  const [importJob, setImportJob] = useState<LocalImportJob | null>(null);
+  const [allowRepeatedImport, setAllowRepeatedImport] = useState(false);
+  const [newImportLibraryName, setNewImportLibraryName] = useState("");
+  const [importOperation, setImportOperation] = useState<"" | "INSPECTING" | "IMPORTING" | "IMPORTING_NEW">("");
+  const [libraryRevision, setLibraryRevision] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<LibrarySummary | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
@@ -567,6 +577,24 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     });
     return () => { active = false; };
   }, [selected]);
+
+  useEffect(() => {
+    setImportFile(null);
+    setImportJob(null);
+    setAllowRepeatedImport(false);
+    setImportReadingOwner("");
+    setNewImportLibraryName("");
+    setImportOperation("");
+  }, [selected?.library_id]);
+
+  useEffect(() => {
+    if (importReadingOwner && members.some((item) => item.user_id === importReadingOwner && item.role === "OWNER")) return;
+    setImportReadingOwner(
+      members.find((item) => item.user_id === user.user_id && item.role === "OWNER")?.user_id
+      ?? members.find((item) => item.role === "OWNER")?.user_id
+      ?? "",
+    );
+  }, [members, importReadingOwner, user.user_id]);
 
   useEffect(() => {
     if (!controlsPanel) return;
@@ -764,6 +792,108 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     }
   }
 
+  async function preflightLocalBackup(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !importFile || !importReadingOwner) return;
+    setDataBusy(true);
+    setImportOperation("INSPECTING");
+    setError("");
+    try {
+      setImportJob(await serverApi.preflightLocalImport(
+        selected.library_id,
+        importFile,
+        importReadingOwner,
+      ));
+      setAllowRepeatedImport(false);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+      setImportOperation("");
+    }
+  }
+
+  async function cancelLocalBackup() {
+    if (!selected || !importJob) return;
+    setDataBusy(true);
+    setError("");
+    try {
+      await serverApi.cancelLocalImport(selected.library_id, importJob.import_id);
+      setImportJob(null);
+      setImportFile(null);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+      setImportOperation("");
+    }
+  }
+
+  async function consolidateLocalBackupAsNewLibrary(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !importJob || !newImportLibraryName.trim()) return;
+    setDataBusy(true);
+    setImportOperation("IMPORTING_NEW");
+    setError("");
+    try {
+      const completed = await serverApi.consolidateLocalImportAsNewLibrary(
+        selected.library_id,
+        importJob.import_id,
+        newImportLibraryName.trim(),
+        allowRepeatedImport,
+      );
+      const createdName = newImportLibraryName.trim();
+      setImportFile(null);
+      setImportJob(completed);
+      setNewImportLibraryName("");
+      setControlsPanel(null);
+      setSettingsSection("ROOT");
+      setWorkspace("CATALOGUE");
+      await reloadLibraries(completed.library_id);
+      pushNotice(`“${createdName}” was created and the Local library was imported atomically.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+      setImportOperation("");
+    }
+  }
+
+  async function consolidateLocalBackup() {
+    if (!selected || !importJob) return;
+    setDataBusy(true);
+    setImportOperation("IMPORTING");
+    setError("");
+    try {
+      const completed = await serverApi.consolidateLocalImport(
+        selected.library_id,
+        importJob.import_id,
+        allowRepeatedImport,
+      );
+      setImportJob(completed);
+      setImportFile(null);
+      setLibraryRevision((value) => value + 1);
+      await reloadLibraries(selected.library_id);
+      pushNotice(`The Local library was imported into “${selected.name}” without replacing its existing books.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+      setImportOperation("");
+    }
+  }
+
+  function downloadPortableExport() {
+    if (!selected) return;
+    const link = document.createElement("a");
+    link.href = serverApi.portableExportUrl(selected.library_id);
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    pushNotice(`Preparing a private portable export of “${selected.name}”.`);
+  }
+
   return (
     <main className={`server-account-shell ${workspace === "MAP" ? "map-active" : ""}`}>
       <header className="server-account-header">
@@ -811,12 +941,12 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div className="server-library-main">
             {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} onLibrariesChanged={reloadLibraries} onAccountDeleted={onSignedOut} /> : selected ? <>
               {workspace === "MAP" && selected.can_view_map
-                ? <ServerLibraryMap libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
+                ? <ServerLibraryMap key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
                   ? <StatisticsWorkspace libraryId={selected.library_id} perspective={(perspectives.find((item) => item.selected) ?? perspectives[0])!} />
                 : workspace === "LAYOUT" && selected.role === "OWNER"
-                  ? <PhysicalLibraryWorkspace libraryId={selected.library_id} />
-                  : <CatalogueWorkspace library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} onOpenProfile={setProfileUserId} onSetUpMap={() => setWorkspace("LAYOUT")} />}
+                  ? <PhysicalLibraryWorkspace key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} />
+                  : <CatalogueWorkspace key={`${selected.library_id}-${libraryRevision}`} library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} onOpenProfile={setProfileUserId} onSetUpMap={() => setWorkspace("LAYOUT")} />}
               <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "VIEW" ? "open" : ""}`} style={anchoredPanelStyle(560, "right")}>
                 <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close view and perspective panel">×</button>
                 <h3>View and reading perspective</h3>
@@ -839,6 +969,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   {selected.role === "OWNER" && <>
                     <button type="button" onClick={() => { setWorkspace("LAYOUT"); setControlsPanel(null); }}><Layers3 size={17} /><span><b>Manage physical structure</b><small>Create or remove furniture, shelves and containers.</small></span></button>
                     <button type="button" onClick={() => setSettingsSection(settingsSection === "MEMBERS" ? "ROOT" : "MEMBERS")}><Users size={17} /><span><b>Manage members</b><small>Members, permissions and invitations.</small></span></button>
+                    <button type="button" onClick={() => setSettingsSection(settingsSection === "DATA" ? "ROOT" : "DATA")}><Download size={17} /><span><b>Data &amp; portability</b><small>Import a BOOKPILE Local backup or export this library.</small></span></button>
                     <button className="danger" type="button" onClick={() => { setDeleteTarget(selected); setControlsPanel(null); }}><Trash2 size={17} /><span><b>Delete library</b><small>Remove it for everyone, with a 48-hour recovery window.</small></span></button>
                   </>}
                 </section>
@@ -861,6 +992,41 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   </div>}
                 </section>
                 </>}
+                {selected.role === "OWNER" && settingsSection === "DATA" && <section className="server-dashboard-panel server-portability-panel">
+                  <h3>Data &amp; portability</h3>
+                  <div className="server-portability-block">
+                    <h4><Download size={17} /> Export “{selected.name}”</h4>
+                    <p>Download a verified Server ZIP containing this library, its map, covers, loans and member-labelled reading data. Account credentials, email, profiles and other libraries are never included.</p>
+                    <button type="button" onClick={downloadPortableExport}><Download size={17} /> Download portable ZIP</button>
+                  </div>
+                  <div className="server-portability-block">
+                    <h4><Upload size={17} /> Import BOOKPILE Local</h4>
+                    <p>This adds the Local catalogue to “{selected.name}”; it never overwrites PostgreSQL. Choose the Owner who should receive the Local user's personal reading history and Goodreads links.</p>
+                    {!importJob && <form className="server-portability-form" onSubmit={preflightLocalBackup}>
+                      <label>Local full-backup ZIP<input type="file" accept=".zip,application/zip" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} required /></label>
+                      <label>Reading history belongs to<select value={importReadingOwner} onChange={(event) => setImportReadingOwner(event.target.value)} required>{members.filter((item) => item.role === "OWNER").map((item) => <option key={item.user_id} value={item.user_id}>@{item.username}{item.user_id === user.user_id ? " · you" : ""}</option>)}</select></label>
+                      <button type="submit" disabled={dataBusy || !importFile || !importReadingOwner}>{dataBusy ? "Inspecting safely…" : "Inspect backup"}</button>
+                      <small>Maximum compressed ZIP: 100 MiB. Inspection is isolated and cannot change this library until you approve its report.</small>
+                    </form>}
+                    {importOperation === "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>Uploading and inspecting the backup…</b><span aria-hidden="true"><i /></span><small>Checksums, SQLite integrity, covers and relationships are being verified. Large libraries can take a while; keep this window open.</small></div>}
+                    {importJob?.state === "READY" && <div className="server-import-report" role="status">
+                      <h4>Ready for review</h4>
+                      <p>Local format {importJob.backup_format_version}, schema {importJob.local_schema_version} · created {new Date(importJob.source_created_at).toLocaleString()}</p>
+                      <dl>{["books", "bookcases", "shelves", "containers", "book_authors", "reading_sessions", "loans", "covers"].map((key) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{importJob.counts[key] ?? 0}</dd></div>)}</dl>
+                      {importJob.warnings.map((warning) => <p className="server-import-warning" key={warning.code}>{warning.message ?? `${warning.count ?? 0} ${warning.code.toLowerCase().replaceAll("_", " ")}.`}</p>)}
+                      {!importJob.capacity_available && <Message kind="error">The final Server representation does not currently fit the shared storage available to this library's Owners.</Message>}
+                      {importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && <label className="server-check"><input type="checkbox" checked={allowRepeatedImport} onChange={(event) => setAllowRepeatedImport(event.target.checked)} /> I intend to add another set of physical copies from this same backup.</label>}
+                      {importOperation && importOperation !== "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>{importOperation === "IMPORTING_NEW" ? "Creating the library and importing atomically…" : "Importing atomically…"}</b><span aria-hidden="true"><i /></span><small>Processing {importJob.counts.books ?? 0} books, {importJob.counts.covers ?? 0} covers, {importJob.counts.reading_sessions ?? 0} readings and {importJob.counts.loans ?? 0} loans. Nothing becomes visible unless the whole operation succeeds.</small></div>}
+                      <div className="server-dialog-actions"><button type="button" onClick={() => void cancelLocalBackup()} disabled={dataBusy}>Cancel and erase staging</button><button className="confirm" type="button" onClick={() => void consolidateLocalBackup()} disabled={dataBusy || !importJob.capacity_available || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING" ? "Importing atomically…" : "Import into this library"}</button></div>
+                      <form className="server-import-new-library" onSubmit={consolidateLocalBackupAsNewLibrary}>
+                        <label>Or create a separate library<input value={newImportLibraryName} onChange={(event) => setNewImportLibraryName(event.target.value)} maxLength={160} placeholder="New library name" required /></label>
+                        <button type="submit" disabled={dataBusy || !newImportLibraryName.trim() || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING_NEW" ? "Creating and importing…" : "Import as a new library"}</button>
+                        <small>You will be its first Owner, and the Local personal reading history will belong to you. No other members are added automatically.</small>
+                      </form>
+                    </div>}
+                    {importJob?.state === "IMPORTED" && <Message kind="success">Import complete. {importJob.result_counts?.books ?? 0} books and all compatible related records were added.</Message>}
+                  </div>
+                </section>}
               </div>
             </> : <div className="server-empty-library"><LibraryBig size={48} /><h2>Create or join a library</h2><p>Accounts and libraries are separate: an account may own or view several libraries.</p></div>}
           </div>

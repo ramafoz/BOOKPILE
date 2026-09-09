@@ -716,10 +716,38 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Complete Owner and Viewer acceptance testing on desktop and mobile:
     add, display, replace, remove, HEIC upload, invalid-file rejection,
     Viewer read-only access, and cross-library denial all passed.
-- [ ] After Server personal readings and loans exist, migrate the current
+- [~] After Server personal readings and loans exist, migrate the current
   Local-v1 ZIP safely into a selected Server library and assign its implicit
   reading history to a selected Owner. The mapping contract exists, but full
   implementation must not precede the Phase 5/6 destination models.
+  - [x] Phase 8A: add strict isolated Local format-1/schema-8 ZIP inspection,
+    exact manifest/checksum/count/SQLite/cover validation, bounded archive
+    expansion, and deterministic canonical records without Server writes.
+  - [x] Phase 8B backend: Owner-only, CSRF-protected, expiring preflight jobs
+    with destination/reading-Owner validation, repeated-archive and duplicate
+    warnings, logical-size estimate, shared-quota simulation, inspection and
+    cancellation.
+  - [x] Phase 8C backend: atomic Local-v8 consolidation with fresh UUID maps,
+    reading-Owner assignment, shared loans, proportional Local-to-mm layout
+    conversion, private cover reprocessing/compensation, locked final quota
+    allocation, post-import counts, audit, and no-residue failure tests.
+  - [x] Phase 8D backend export: Owner-only canonical per-library ZIP with
+    checksums, private covers, shared/personal library records and member keys;
+    credentials, email, sessions, profiles and unrelated libraries are absent.
+  - [x] Add the Owner-facing `Data & portability` UI for portable export and
+    Local ZIP preflight, warning review, explicit repeated-archive approval,
+    visible long-operation feedback, cancellation and atomic consolidation,
+    including responsive presentation.
+  - [x] Import either additively into the selected library or atomically as a
+    new library owned by the importing user; failed imports leave neither a
+    partial catalogue nor an empty new library.
+  - [x] Complete large-catalogue acceptance: preserve editable envelopes for
+    containers with wholly unmeasured books, provide a full-shelf row shortcut,
+    divide unmeasured shelf spans automatically, retain visual overrides, and
+    constrain long statistics book lists to an internal scrollbar.
+  - [ ] Phase 8E: validate/restore Server-portable ZIPs, define explicit
+    destination-Owner mapping for member-owned data, and pass anonymized
+    real-fixture/recovery gates.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -746,8 +774,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     manipulation over that same geometry service. Interaction is
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
-  - [ ] Backup, restore, export, and Local ZIP import remain pending for Phase
-    8, after personal reading and loan histories have canonical destinations.
+  - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter,
+    authenticated preflight jobs, atomic Local consolidation, portable Server
+    export and their Owner UI are complete; Server restore and real anonymized
+    fixture gates remain.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user

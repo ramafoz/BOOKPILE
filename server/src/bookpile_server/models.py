@@ -683,6 +683,58 @@ class LibraryAuditEvent(Base):
     )
 
 
+class LibraryImportJob(Base):
+    __tablename__ = "library_import_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('READY', 'IMPORTING', 'IMPORTED', 'FAILED', 'EXPIRED')",
+            name="ck_library_import_jobs_state",
+        ),
+        CheckConstraint("archive_bytes >= 0", name="ck_library_import_jobs_archive_bytes"),
+        CheckConstraint("uncompressed_bytes >= 0", name="ck_library_import_jobs_expanded_bytes"),
+        CheckConstraint("estimated_logical_bytes >= 0", name="ck_library_import_jobs_estimate"),
+        Index(
+            "ix_library_import_jobs_fingerprint",
+            "library_id",
+            "archive_sha256",
+            "state",
+        ),
+        Index("ix_library_import_jobs_expiry", "state", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    library_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reading_owner_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="READY")
+    adapter: Mapped[str] = mapped_column(String(40), nullable=False)
+    backup_format_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    local_schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    archive_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    staging_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    staging_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    source_counts: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    warnings: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    archive_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    uncompressed_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    estimated_logical_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    capacity_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    result_counts: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Book(Base):
     __tablename__ = "books"
     __table_args__ = (
