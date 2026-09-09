@@ -716,10 +716,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Complete Owner and Viewer acceptance testing on desktop and mobile:
     add, display, replace, remove, HEIC upload, invalid-file rejection,
     Viewer read-only access, and cross-library denial all passed.
-- [ ] After Server personal readings and loans exist, migrate the current
+- [~] After Server personal readings and loans exist, migrate the current
   Local-v1 ZIP safely into a selected Server library and assign its implicit
   reading history to a selected Owner. The mapping contract exists, but full
   implementation must not precede the Phase 5/6 destination models.
+  - [x] Phase 8A: add strict isolated Local format-1/schema-8 ZIP inspection,
+    exact manifest/checksum/count/SQLite/cover validation, bounded archive
+    expansion, and deterministic canonical records without Server writes.
+  - [ ] Phase 8B–8C: authenticated preflight jobs, destination/reading-Owner
+    selection, duplicate and quota reporting, then atomic consolidation.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -746,8 +751,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     manipulation over that same geometry service. Interaction is
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
-  - [ ] Backup, restore, export, and Local ZIP import remain pending for Phase
-    8, after personal reading and loan histories have canonical destinations.
+  - [~] Phase 8 is active. Local ZIP inspection and the v8 canonical adapter
+    are complete; authenticated import jobs, consolidation, Server-portable
+    export/restore, UI, and real anonymized fixture gates remain.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user

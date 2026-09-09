@@ -504,9 +504,12 @@ shelf placement remains editable through frames, closures, separators,
 alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
 alter or replace Local v1. Server personal readings and loans are now complete;
-Server backup/export and Local ZIP import remain pending for Phase 8. Their
-canonical destinations now exist, so those histories can be preserved rather
-than discarded or flattened.
+Server Phase 8 is active. Its first increment now validates Local format-1,
+schema-8 ZIPs in bounded isolated storage and emits deterministic canonical
+hierarchy, catalogue, reading, loan, cover, and layout records without writing
+Server data. Authenticated preflight jobs, atomic consolidation, portable
+Server export/restore, and acceptance fixtures follow under
+[SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and
