@@ -143,6 +143,20 @@ class ChangePasswordWrite(BaseModel):
     confirmation: str = Field(min_length=12, max_length=128)
 
 
+class DeleteAccountWrite(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    confirmation_username: str = Field(min_length=1, max_length=30)
+    acknowledge_permanent_deletion: bool = False
+
+
+class AccountDeletionResponse(BaseModel):
+    recover_until: datetime
+
+
+class RestoreAccountWrite(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+
+
 class ContributorWrite(BaseModel):
     role_code: str = Field(min_length=1, max_length=40)
     name: str = Field(min_length=1, max_length=300)

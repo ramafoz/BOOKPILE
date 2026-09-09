@@ -66,9 +66,11 @@ function message(error: unknown) {
 export default function AccountWorkspace({
   onSignOut,
   onLibrariesChanged,
+  onAccountDeleted,
 }: {
   onSignOut: (everyDevice: boolean) => Promise<void>;
   onLibrariesChanged: (preferredId?: string) => Promise<void>;
+  onAccountDeleted: () => void;
 }) {
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [account, setAccount] = useState<PrivateAccount | null>(null);
@@ -76,6 +78,11 @@ export default function AccountWorkspace({
   const [recoverable, setRecoverable] = useState<RecoverableLibrary[]>([]);
   const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState("");
+  const [deleteAccountName, setDeleteAccountName] = useState("");
+  const [deleteAccountAcknowledged, setDeleteAccountAcknowledged] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -218,6 +225,26 @@ export default function AccountWorkspace({
       );
     } catch (caught) {
       setError(message(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccount(event: FormEvent) {
+    event.preventDefault();
+    if (!account) return;
+    setBusy(true);
+    setError("");
+    setDeleteAccountError("");
+    try {
+      await serverApi.deleteAccount({
+        current_password: deleteAccountPassword,
+        confirmation_username: deleteAccountName,
+        acknowledge_permanent_deletion: deleteAccountAcknowledged,
+      });
+      onAccountDeleted();
+    } catch (caught) {
+      setDeleteAccountError(message(caught));
     } finally {
       setBusy(false);
     }
@@ -687,6 +714,9 @@ export default function AccountWorkspace({
           <button type="button" onClick={() => void onSignOut(true)}>
             <LogOut size={16} /> Sign out everywhere
           </button>
+          <button className="danger" type="button" onClick={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}>
+            <Trash2 size={16} /> Delete account
+          </button>
         </div>
       </section>
       {restoreTarget && (
@@ -698,6 +728,22 @@ export default function AccountWorkspace({
             <form onSubmit={restoreLibrary}>
               <label>Your current password<input type="password" autoComplete="current-password" autoFocus required value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} /></label>
               <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setRestoreTarget(null)}>Cancel</button><button className="confirm" type="submit" disabled={busy || !restorePassword}>{busy ? "Restoring…" : "Restore library"}</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+      {deleteAccountOpen && (
+        <div className="server-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setDeleteAccountOpen(false); }}>
+          <section className="server-permission-dialog server-delete-library-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+            <p className="server-card-eyebrow">Danger zone</p>
+            <h2 id="delete-account-title">Delete your account?</h2>
+            <p>Your profile becomes invisible, every session is closed and your Viewer memberships are removed immediately. You must transfer or delete every library you own first. You may recover the complete account for 48 hours; after that your profile, personal readings and personal data are permanently erased.</p>
+            <form onSubmit={deleteAccount}>
+              <label>Type <b>{account.username}</b> exactly<input required autoFocus value={deleteAccountName} onChange={(event) => setDeleteAccountName(event.target.value)} /></label>
+              <label>Your current password<input required type="password" autoComplete="current-password" value={deleteAccountPassword} onChange={(event) => setDeleteAccountPassword(event.target.value)} /></label>
+              <label className="server-check"><input type="checkbox" checked={deleteAccountAcknowledged} onChange={(event) => setDeleteAccountAcknowledged(event.target.checked)} /> I understand that account recovery expires after 48 hours.</label>
+              {deleteAccountError && <div className="server-message error" role="alert">{deleteAccountError}</div>}
+              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setDeleteAccountOpen(false)}>Cancel</button><button className="danger" type="submit" disabled={busy || deleteAccountName !== account.username || !deleteAccountPassword || !deleteAccountAcknowledged}>{busy ? "Deleting…" : "Delete account"}</button></div>
             </form>
           </section>
         </div>

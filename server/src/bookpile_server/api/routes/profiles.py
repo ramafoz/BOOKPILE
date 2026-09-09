@@ -5,8 +5,11 @@ from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFil
 
 from ...config import get_settings
 from ...cover_images import InvalidCoverImage, process_cover_image
+from ...email_delivery import EmailDeliveryError
 from ...schemas import (
     ChangePasswordWrite,
+    AccountDeletionResponse,
+    DeleteAccountWrite,
     PrivateAccountResponse,
     ProfileResponse,
     ProfileWrite,
@@ -15,11 +18,18 @@ from ...schemas import (
 )
 from ...security.passwords import PasswordPolicyError
 from ...services.auth import InvalidCredentialsError, PasswordConfirmationError
+from ...services.account_deletion import (
+    AccountDeletionOwnershipError,
+    AccountDeletionReauthenticationError,
+    AccountDeletionValidationError,
+    AccountRecoveryUnavailableError,
+)
 from ...services.profiles import ProfileImageStorageError, ProfileNotFoundError
 from ...services.rate_limits import RateLimitExceededError, RateLimitPolicy
 from ..dependencies import (
     CsrfDependency,
     AuthServiceDependency,
+    AccountDeletionServiceDependency,
     CurrentAuthDependency,
     ProfileImageServiceDependency,
     ProfileServiceDependency,
@@ -29,6 +39,42 @@ from ..dependencies import (
 
 
 router = APIRouter(tags=["profiles"])
+
+
+@router.delete("/account", response_model=AccountDeletionResponse)
+def delete_account(
+    payload: DeleteAccountWrite,
+    request: Request,
+    response: Response,
+    service: AccountDeletionServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> AccountDeletionResponse:
+    try:
+        result = service.request_deletion(
+            user_id=context.user_id,
+            current_password=payload.current_password,
+            confirmation_username=payload.confirmation_username,
+            acknowledge_permanent_deletion=payload.acknowledge_permanent_deletion,
+            ip_address=request.client.host if request.client else None,
+        )
+    except AccountDeletionReauthenticationError as exc:
+        raise HTTPException(status_code=403, detail="Current password is incorrect") from exc
+    except AccountDeletionValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AccountDeletionOwnershipError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AccountRecoveryUnavailableError as exc:
+        raise HTTPException(status_code=404, detail="Account not found") from exc
+    except EmailDeliveryError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="The recovery email could not be sent. Your account was not deleted.",
+        ) from exc
+    from .auth import clear_auth_cookies
+
+    clear_auth_cookies(response)
+    return AccountDeletionResponse(recover_until=result.recover_until)
 
 
 @router.get("/account", response_model=PrivateAccountResponse)

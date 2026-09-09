@@ -45,7 +45,8 @@ type Route =
   | "verify-email"
   | "resend-verification"
   | "forgot-password"
-  | "reset-password";
+  | "reset-password"
+  | "restore-account";
 
 interface PendingMemberChange {
   member: LibraryMember;
@@ -69,6 +70,7 @@ function routeFromPath(pathname: string): Route {
     || route === "resend-verification"
     || route === "forgot-password"
     || route === "reset-password"
+    || route === "restore-account"
   ) return route;
   return "login";
 }
@@ -242,6 +244,47 @@ function LoginPage({
   );
 }
 
+function RestoreAccountPage({
+  navigate,
+}: {
+  navigate: (route: Route) => void;
+}) {
+  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [restored, setRestored] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await serverApi.restoreAccount(token);
+      window.history.replaceState({}, "", "/restore-account");
+      setRestored(true);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <AuthCard eyebrow="48-hour recovery" title="Restore account" intro="This one-time link is the only way to restore a deleted account during its 48-hour recovery window.">
+    {restored ? <>
+      <Message kind="success">Your account and available library memberships were restored.</Message>
+      <button className="server-submit" type="button" onClick={() => navigate("login")}>Continue to sign in <ArrowRight size={18} /></button>
+    </> : token ? <form className="server-form" onSubmit={submit}>
+      <p className="server-help">Confirm restoration, then sign in normally with your existing credentials.</p>
+      {error && <Message kind="error">{error}</Message>}
+      <SubmitButton busy={busy}>Restore account <ArrowRight size={18} /></SubmitButton>
+      <div className="server-card-links single"><button type="button" onClick={() => navigate("login")}>Keep deletion and return</button></div>
+    </form> : <>
+      <Message kind="error">This recovery link is incomplete. Use the exact link sent to your registered email address.</Message>
+      <button className="server-submit" type="button" onClick={() => navigate("login")}>Return to sign in</button>
+    </>}
+  </AuthCard>;
+}
+
 function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
   const inviteFromUrl = new URLSearchParams(window.location.search).get("invite") ?? "";
   const [invite, setInvite] = useState(inviteFromUrl);
@@ -280,7 +323,7 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
     <AuthCard
       eyebrow="Invitation-only beta"
       title="Create your account"
-      intro="All fields are required. Your invitation is single-use and expires after seven days."
+      intro="All fields are required. Use the single-use account invitation issued by a BOOKPILE administrator; a library invitation cannot create an account."
     >
       {complete ? (
         <div className="server-complete">
@@ -290,7 +333,7 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
         </div>
       ) : (
         <form className="server-form" onSubmit={submit}>
-          <Field label="Invitation token" icon={<KeyRound size={18} />} value={invite} onChange={(event) => setInvite(event.target.value)} autoComplete="off" />
+          <Field label="Account invitation token" icon={<KeyRound size={18} />} value={invite} onChange={(event) => setInvite(event.target.value)} autoComplete="off" />
           <Field label="Email" icon={<Mail size={18} />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
           <Field label="Username" icon={<UserRound size={18} />} value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={30} pattern="[A-Za-z0-9_]+" autoComplete="username" />
           <Field label="Password" icon={<LockKeyhole size={18} />} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
@@ -766,7 +809,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           </aside>
 
           <div className="server-library-main">
-            {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} onLibrariesChanged={reloadLibraries} /> : selected ? <>
+            {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} onLibrariesChanged={reloadLibraries} onAccountDeleted={onSignedOut} /> : selected ? <>
               {workspace === "MAP" && selected.can_view_map
                 ? <ServerLibraryMap libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
@@ -813,8 +856,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                     <button type="submit" disabled={dataBusy}>Generate invitation</button>
                   </form>
                   {generatedLink && <div className="server-generated-invitation">
-                    <label>Invitation link<span><input readOnly value={generatedLink} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedLink, "Invitation link")}>Copy link</button></span></label>
-                    <label>Token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Invitation token")}>Copy token</button></span></label>
+                    <label>Library invitation link<span><input readOnly value={generatedLink} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedLink, "Library invitation link")}>Copy link</button></span></label>
+                    <label>Library token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Library invitation token")}>Copy token</button></span></label>
                   </div>}
                 </section>
                 </>}
@@ -899,6 +942,7 @@ export default function ServerApp() {
   else if (route === "resend-verification") page = <EmailRequestPage mode="verification" navigate={navigate} />;
   else if (route === "forgot-password") page = <EmailRequestPage mode="reset" navigate={navigate} />;
   else if (route === "reset-password") page = <TokenActionPage mode="reset" navigate={navigate} />;
+  else if (route === "restore-account") page = <RestoreAccountPage navigate={navigate} />;
   else page = <LoginPage navigate={navigate} onLogin={setUser} />;
 
   return <AuthShell>{page}</AuthShell>;

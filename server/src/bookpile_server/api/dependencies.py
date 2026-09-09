@@ -17,7 +17,9 @@ from ..repositories.profiles import ProfileRepository
 from ..repositories.storage import StorageRepository
 from ..repositories.auth import AuthRepository
 from ..repositories.account_invitations import AccountInvitationRepository
+from ..repositories.account_deletion import AccountDeletionRepository
 from ..services.account_invitations import AccountInvitationService
+from ..services.account_deletion import AccountDeletionService
 from ..services.account_actions import AccountActionService
 from ..services.rate_limits import RateLimiter
 from ..config import get_settings
@@ -159,6 +161,20 @@ def get_email_sender() -> EmailSender:
 
 
 EmailSenderDependency = Annotated[EmailSender, Depends(get_email_sender)]
+
+
+def get_account_deletion_service(
+    session: SessionDependency,
+    email_sender: EmailSenderDependency,
+) -> AccountDeletionService:
+    return AccountDeletionService(
+        AccountDeletionRepository(session), email_sender, get_settings()
+    )
+
+
+AccountDeletionServiceDependency = Annotated[
+    AccountDeletionService, Depends(get_account_deletion_service)
+]
 
 
 def get_account_action_service(

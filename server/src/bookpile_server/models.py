@@ -293,6 +293,43 @@ class LibraryDeletionTombstone(Base):
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AccountDeletionTombstone(Base):
+    __tablename__ = "account_deletion_tombstones"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('PENDING', 'RECOVERED', 'FINALIZED')",
+            name="ck_account_deletion_tombstones_state",
+        ),
+        CheckConstraint(
+            "recover_until > created_at",
+            name="ck_account_deletion_tombstones_window",
+        ),
+        Index("ix_account_deletion_tombstones_recovery", "state", "recover_until"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(30))
+    email: Mapped[str | None] = mapped_column(String(320))
+    recovery_token_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True
+    )
+    recovery_token_consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="PENDING", server_default="PENDING"
+    )
+    membership_snapshot: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    object_manifest: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    recover_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class AccountInvitation(Base):
     __tablename__ = "account_invitations"
     __table_args__ = (

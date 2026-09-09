@@ -694,6 +694,7 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-profile-photo img { width: 100%; height: 100%; object-fit: cover; }
 .server-profile-photo-actions { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; }
 .server-profile-photo-actions label, .server-profile-photo-actions button, .server-security-card button { min-height: 39px; border: 1px solid #a8bdb4; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 10px; color: #28594e; background: #f5faf7; font-size: 12px; font-weight: 750; cursor: pointer; }
+.server-security-card button.danger { border-color: #d59a8b; color: #9e3f2a; background: #fff5f1; }
 .server-profile-photo-actions input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
 .server-profile-fields { grid-column: 2; grid-row: span 2; }
 .server-profile-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
