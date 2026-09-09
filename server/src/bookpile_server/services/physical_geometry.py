@@ -158,18 +158,19 @@ def project_containers(
                 unresolved.remove(container_id)
                 progressed = True
                 continue
+            if item.support_container_id not in projected:
+                # Referential validation belongs to the service layer. Keep the
+                # submitted rectangle intact so it can return a controlled 422.
+                unresolved.remove(container_id)
+                progressed = True
+                continue
             if item.support_container_id in unresolved:
                 continue
             support = projected[item.support_container_id]
             current = projected[container_id]
-            if item.kind == "ROW":
-                current.x = support.x if item.row_anchor == "LEFT" else support.x + support.width - current.width
-            elif item.pile_alignment == "LEFT":
-                current.x = support.x
-            elif item.pile_alignment == "CENTER":
-                current.x = support.x + support.width / 2 - current.width / 2
-            else:
-                current.x = support.x + support.width - current.width
+            # Support determines vertical contact, not horizontal placement.
+            # The requested x already preserves the selected growth anchor via
+            # _anchored_x(), allowing several piles to rest side by side on one row.
             current.y = support.y - current.height
             unresolved.remove(container_id)
             progressed = True

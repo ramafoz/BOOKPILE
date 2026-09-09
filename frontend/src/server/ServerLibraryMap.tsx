@@ -353,7 +353,10 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
         ...base,
         containers: base.containers.map((item) => {
           if (item.container_id !== drag.selection.id) return item;
-          if (drag.action === "MOVE") return { ...item, x: item.x + dxPercent, y: item.y + dyPercent };
+          if (drag.action === "MOVE") {
+            const verticalMoveAllowed = item.support_kind === "SHELF" && physicalRecord?.layer === "BACKGROUND";
+            return { ...item, x: item.x + dxPercent, y: verticalMoveAllowed ? item.y + dyPercent : item.y };
+          }
           if (lockSize) return item;
           const nextHeight = Math.max(.1, item.height - dyPercent);
           return { ...item, width: Math.max(.1, item.width + dxPercent), y: item.y + item.height - nextHeight, height: nextHeight };
