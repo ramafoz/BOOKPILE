@@ -2,8 +2,10 @@
 
 
 
-Status: active on `feature/server-storage-quota`; 7A–7D are complete. Phase 6 is merged into
-`main`. This phase changes Server only and leaves released Local v1 untouched.
+Status: active on `feature/server-account-deletion`; 7A–7E are complete and
+merged into `main`, while 7F is implemented pending user acceptance. Phase 6 is
+merged into `main`. This phase changes Server only and leaves released Local v1
+untouched.
 
 ## 1. Product contract
 
@@ -143,10 +145,24 @@ accessibility behaviour without leaking other Owners' usage.
 
 ### 7E — shared deletion, quarantine and recovery
 
+Status: complete and merged into `main`. Library Settings provides atomic
+reauthenticated deletion, immediate access/quota removal, a private 48-hour
+recovery panel for former Owners, allocation preflight and final cleanup.
+
 Implement reauthenticated deletion, access revocation, quota release, 48-hour
 quarantine, any-former-Owner recovery with allocation preflight and final cleanup.
 
-### 7F — final compatibility and release gates
+### 7F — private account deletion and email-only recovery
+
+Status: implemented pending user acceptance. An account with no active Owner
+responsibilities can be deleted after password, exact-username and warning
+confirmation. Sessions and Viewer memberships are revoked immediately. Deletion
+is rolled back unless the registered address receives a random, hash-at-rest,
+single-use recovery link valid for 48 hours. The link is the only recovery path;
+login deliberately reveals no pending-deletion state. Expiry permanently removes
+the account and profile objects and anonymizes the retained tombstone.
+
+### 7G — final compatibility and release gates
 
 Run full SQLite-independent Server, PostgreSQL, concurrency, privacy, migration,
 frontend and operational gates; document and request approval before merging.
@@ -157,5 +173,4 @@ frontend and operational gates; document and request approval before merging.
   smaller than its extracted/final data, so Phase 8 will enforce archive-bomb limits
   and quota against the final staged logical charge.
 - Paid billing and checkout are not Phase 7; only entitlement-ready limits are.
-- Public anonymous profiles, social features and automated deletion emails remain
-  later phases.
+- Public anonymous profiles and social features remain later phases.

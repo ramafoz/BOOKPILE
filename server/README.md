@@ -191,6 +191,14 @@ either catalogue-only Viewer access, catalogue-and-map Viewer access, or equal
 co-Ownership. The join field accepts either the displayed full link or its raw
 token.
 
+Account deletion is likewise separate from library deletion. It requires
+reauthentication and is blocked while the account owns any active library.
+BOOKPILE sends the registered address a random, single-use recovery link before
+committing deletion; if delivery fails, deletion is rolled back. PostgreSQL
+stores only the token hash. The link is the sole recovery route for 48 hours,
+after which cleanup permanently removes the account and its remaining personal
+objects. Signing in never discloses whether an account is in deletion quarantine.
+
 The seed script refuses non-development environments, remote hosts, databases
 not named exactly `bookpile`, and non-PostgreSQL targets. Its records are not
 copied from a Local catalogue.

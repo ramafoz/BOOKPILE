@@ -6,6 +6,7 @@ from ...config import get_settings
 from ...email_delivery import EmailDeliveryError
 from ...schemas import (
     AccountTokenRequest,
+    RestoreAccountWrite,
     CurrentUserResponse,
     EmailAddressRequest,
     LoginRequest,
@@ -24,6 +25,7 @@ from ...services.account_invitations import (
     RegistrationValidationError,
 )
 from ...services.auth import InvalidCredentialsError, LoginResult
+from ...services.account_deletion import AccountRecoveryUnavailableError
 from ...services.rate_limits import (
     RateLimitExceededError,
     RateLimiter,
@@ -31,6 +33,7 @@ from ...services.rate_limits import (
 )
 from ..dependencies import (
     AccountActionServiceDependency,
+    AccountDeletionServiceDependency,
     AccountInvitationServiceDependency,
     AuthServiceDependency,
     CsrfDependency,
@@ -359,6 +362,35 @@ def login(
         expires_at=result.expires_at,
         absolute_expires_at=result.absolute_expires_at,
     )
+
+
+@router.post("/account-deletion/restore", status_code=status.HTTP_204_NO_CONTENT)
+def restore_deleted_account(
+    payload: RestoreAccountWrite,
+    request: Request,
+    response: Response,
+    service: AccountDeletionServiceDependency,
+    rate_limiter: RateLimiterDependency,
+) -> Response:
+    enforce_rate_limit(
+        rate_limiter,
+        LOGIN_IP,
+        key=request_ip(request) or "unknown",
+        request=request,
+    )
+    try:
+        service.restore(
+            raw_token=payload.token,
+            ip_address=request_ip(request),
+        )
+    except AccountRecoveryUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Account recovery is unavailable or has expired",
+        ) from exc
+    clear_auth_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

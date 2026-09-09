@@ -47,6 +47,10 @@ export interface StorageOverview {
   used_share_of_entitlement: number;
 }
 
+export interface AccountDeletionResult {
+  recover_until: string;
+}
+
 export interface RegistrationResult extends CurrentUser {
   state: string;
   verification_email_sent: boolean;
@@ -653,6 +657,19 @@ export const serverApi = {
   accountStorage: () => request<StorageOverview>("/account/storage"),
   changePassword: (payload: { current_password: string; new_password: string; confirmation: string }) =>
     request<void>("/account/password", { method: "PUT", body: JSON.stringify(payload) }, true),
+  deleteAccount: (payload: {
+    current_password: string;
+    confirmation_username: string;
+    acknowledge_permanent_deletion: boolean;
+  }) => request<AccountDeletionResult>(
+    "/account",
+    { method: "DELETE", body: JSON.stringify(payload) },
+    true,
+  ),
+  restoreAccount: (token: string) => request<void>(
+    "/auth/account-deletion/restore",
+    { method: "POST", body: JSON.stringify({ token }) },
+  ),
   uploadProfileImage: (image: File) => {
     const form = new FormData();
     form.append("image", image);

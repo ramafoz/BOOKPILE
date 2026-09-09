@@ -819,8 +819,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     Owner-membership integration and PostgreSQL quota-race gate.
   - [x] 7D: grouped private profile/security shell, authenticated projected
     profiles, Owner-scoped library settings and non-numeric storage visualization.
-  - [ ] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
-  - [ ] 7F: compatibility, release gates and guarded merge.
+  - [x] 7E: atomic deletion, 48-hour quarantine and recovery by any former Owner.
+  - [ ] 7F: private account deletion, dependency checks, immediate lockout,
+    email-only single-use 48-hour recovery and permanent cleanup. Implemented;
+    awaiting UX acceptance.
+  - [ ] 7G: compatibility, release gates and guarded merge.
 
 ### Privacy and social features
 
@@ -857,9 +860,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   application rate limits and defensive API headers are implemented.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
-- [ ] Implement private account deletion with password reauthentication,
-  owned-library dependency checks, session revocation, a 48-hour recovery
-  window, and final personal-data cleanup. Keep it separate from library deletion.
+- [ ] Accept and merge private account deletion with password reauthentication,
+  owned-library dependency checks, session revocation, email-only single-use
+  48-hour recovery, and final personal-data cleanup. Keep it separate from
+  library deletion.
 - [ ] Add automated deployment, migration, test, and rollback procedures.
 - [ ] Test responsive behaviour, accessibility, browser support, and mobile
   installation requirements.
