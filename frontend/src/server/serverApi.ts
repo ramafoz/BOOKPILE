@@ -100,6 +100,7 @@ export interface LocalImportWarning {
 
 export interface LocalImportJob {
   import_id: string;
+  library_id: string;
   state: "READY" | "IMPORTING" | "IMPORTED" | "FAILED" | "EXPIRED";
   adapter: string;
   backup_format_version: number;
@@ -804,6 +805,12 @@ export const serverApi = {
     request<LocalImportJob>(
       `/libraries/${libraryId}/imports/${importId}/consolidate`,
       { method: "POST", body: JSON.stringify({ allow_repeated_archive: allowRepeatedArchive }) },
+      true,
+    ),
+  consolidateLocalImportAsNewLibrary: (libraryId: string, importId: string, name: string, allowRepeatedArchive: boolean) =>
+    request<LocalImportJob>(
+      `/libraries/${libraryId}/imports/${importId}/consolidate-new-library`,
+      { method: "POST", body: JSON.stringify({ name, allow_repeated_archive: allowRepeatedArchive }) },
       true,
     ),
   portableExportUrl: (libraryId: string) =>

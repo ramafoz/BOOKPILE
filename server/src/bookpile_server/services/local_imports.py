@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from secrets import token_urlsafe
 import shutil
 from hashlib import sha256
 from typing import BinaryIO
@@ -11,7 +12,7 @@ from ..imports.local_zip import (
     adapt_local_v8,
     inspect_local_backup,
 )
-from ..models import LibraryImportJob
+from ..models import Library, LibraryImportJob, LibraryMembership
 from ..cover_storage import CoverStorage
 from ..config import Settings
 from ..cover_images import InvalidCoverImage, process_cover_image
@@ -19,6 +20,7 @@ from ..imports.consolidation import LocalImportConflict, consolidate_local_v8
 from ..repositories.imports import LocalImportRepository
 from .storage_domain import logical_collection_bytes
 from .storage import StorageService
+from .libraries import slug_base
 
 
 class LocalImportOwnerRequired(Exception):
@@ -314,3 +316,47 @@ class LocalImportService:
             raise
         shutil.rmtree(self.staging_root / job.staging_key, ignore_errors=True)
         return job
+
+    def consolidate_as_new_library(
+        self,
+        *,
+        import_id: UUID,
+        source_library_id: UUID,
+        actor_user_id: UUID,
+        name: str,
+        allow_repeated_archive: bool,
+    ) -> LibraryImportJob:
+        """Create the destination and consolidate in one database transaction."""
+        if self.repository.owner_membership(source_library_id, actor_user_id) is None:
+            raise LocalImportOwnerRequired
+        job = self.repository.lock(import_id)
+        if job is None or job.library_id != source_library_id:
+            raise LocalImportOwnerRequired
+        clean_name = " ".join(name.split())
+        if not clean_name or len(clean_name) > 160:
+            raise LocalImportStateConflict("Library name must contain 1–160 characters.")
+        base = slug_base(clean_name)
+        slug = base
+        if self.repository.slug_exists(slug):
+            slug = f"{base}-{token_urlsafe(5).lower().replace('_', 'x').replace('-', 'x')}"
+        library = Library(id=uuid4(), name=clean_name, slug=slug, created_by_user_id=actor_user_id)
+        membership = LibraryMembership(
+            library=library,
+            user_id=actor_user_id,
+            role="OWNER",
+            selected_reading_user_id=actor_user_id,
+        )
+        self.repository.add_library(library, membership)
+        job.library_id = library.id
+        job.reading_owner_user_id = actor_user_id
+        try:
+            self.repository.flush()
+            return self.consolidate(
+                import_id=job.id,
+                library_id=library.id,
+                actor_user_id=actor_user_id,
+                allow_repeated_archive=allow_repeated_archive,
+            )
+        except Exception:
+            self.repository.rollback()
+            raise

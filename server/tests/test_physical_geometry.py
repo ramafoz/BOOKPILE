@@ -103,6 +103,23 @@ def test_physical_projection_warns_when_truthful_size_cannot_fit() -> None:
     assert {item.code for item in diagnostics} == {"OUTSIDE_SHELF"}
 
 
+def test_unmeasured_books_preserve_the_container_visual_envelope() -> None:
+    container_id, shelf_id = uuid4(), uuid4()
+    book = BookMeasurement(uuid4(), page_count=300)
+    resolved = (resolve_book_measurement(book, catalogue_dimension_defaults([book])),)
+
+    projected, diagnostics = project_containers([
+        ContainerProjectionInput(
+            container_id, shelf_id, "ROW", "BACKGROUND",
+            0, 20, 100, 55, "LEFT", None, "RIGHT", 500, 300, resolved, False,
+        ),
+    ])
+
+    assert projected[container_id].width == 100
+    assert projected[container_id].height == 55
+    assert diagnostics == []
+
+
 def test_physical_projection_warns_when_alignment_places_a_pile_outside() -> None:
     container_id, shelf_id = uuid4(), uuid4()
     book = BookMeasurement(uuid4(), 100, 240, 160, 20)

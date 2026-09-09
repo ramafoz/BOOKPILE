@@ -49,16 +49,14 @@ export interface BookVisualDefaults {
 const MIN_STRUCTURE_MM = 5;
 const SHELF_FALLBACK_FRACTION = .14;
 
-function compressShelfSpans(values: number[], fallbackIndexes: number[], available: number): number[] {
-  if (values.reduce((sum, value) => sum + value, 0) <= available + 1e-6) return values;
+function distributeShelfFallbacks(values: number[], fallbackIndexes: number[], available: number): number[] {
   const fallback = new Set(fallbackIndexes);
   const fixed = values.reduce((sum, value, index) => sum + (fallback.has(index) ? 0 : value), 0);
   const remaining = available - fixed;
-  if (!fallbackIndexes.length || remaining < MIN_STRUCTURE_MM * fallbackIndexes.length - 1e-6) throw new Error("Shelves do not fit");
-  const current = fallbackIndexes.reduce((sum, index) => sum + values[index], 0);
+  if (fixed > available + 1e-6 || (fallbackIndexes.length && remaining < MIN_STRUCTURE_MM * fallbackIndexes.length - 1e-6)) throw new Error("Shelves do not fit");
+  if (!fallbackIndexes.length) return values;
   const result = [...values];
-  fallbackIndexes.forEach((index) => { result[index] = Math.max(MIN_STRUCTURE_MM, values[index] * remaining / current); });
-  if (result.reduce((sum, value) => sum + value, 0) > available + 1e-6) throw new Error("Shelves do not fit");
+  fallbackIndexes.forEach((index) => { result[index] = remaining / fallbackIndexes.length; });
   return result;
 }
 
@@ -83,11 +81,12 @@ export function previewPhysicalShelfLayout(data: PhysicalLibrary, layout: Visual
         const fallbackIndexes: number[] = [];
         let spans = shelves.map((shelf, index) => {
           if (shelf.usable_height_mm && shelf.usable_height_mm > 0) return shelf.usable_height_mm;
+          if (current[index].height_source === "ENTERED") return current[index].height_mm;
           fallbackIndexes.push(index);
           return furniture.height_mm * SHELF_FALLBACK_FRACTION;
         });
         const available = furniture.height_mm - furniture.top_closure_mm - furniture.bottom_closure_mm - separators.reduce((sum, value) => sum + value, 0);
-        spans = compressShelfSpans(spans, fallbackIndexes, available);
+        spans = distributeShelfFallbacks(spans, fallbackIndexes, available);
         const residual = Math.max(0, available - spans.reduce((sum, value) => sum + value, 0));
         let cursor = furniture.shelf_direction === "TOP_TO_BOTTOM"
           ? furniture.height_mm - furniture.top_closure_mm
@@ -97,21 +96,22 @@ export function previewPhysicalShelfLayout(data: PhysicalLibrary, layout: Visual
           const physicalTop = furniture.shelf_direction === "TOP_TO_BOTTOM" ? index === 0 : index === current.length - 1;
           const left = item.open_top && physicalTop ? 0 : (furniture.homogeneous_structure ? furniture.frame_left_mm : item.left_frame_mm);
           const right = item.open_top && physicalTop ? 0 : (furniture.homogeneous_structure ? furniture.frame_right_mm : item.right_frame_mm);
-          const width = shelf.usable_width_mm && shelf.usable_width_mm > 0 ? shelf.usable_width_mm : furniture.width_mm - left - right;
+          const width = shelf.usable_width_mm && shelf.usable_width_mm > 0 ? shelf.usable_width_mm : item.width_source === "ENTERED" ? item.width_mm : furniture.width_mm - left - right;
           const x = item.open_top && physicalTop ? 0 : item.alignment === "LEFT" ? item.offset_mm : item.alignment === "RIGHT" ? furniture.width_mm - width + item.offset_mm : (furniture.width_mm - width) / 2 + item.offset_mm;
           const floor = furniture.shelf_direction === "TOP_TO_BOTTOM" ? cursor - spans[index] : cursor;
-          projected.set(item.shelf_id, { ...item, x_mm: x, floor_y_mm: floor, width_mm: width, height_mm: spans[index], width_source: shelf.usable_width_mm ? "ENTERED" : "FALLBACK", height_source: shelf.usable_height_mm ? "ENTERED" : "FALLBACK" });
+          projected.set(item.shelf_id, { ...item, x_mm: x, floor_y_mm: floor, width_mm: width, height_mm: spans[index], width_source: shelf.usable_width_mm || item.width_source === "ENTERED" ? "ENTERED" : "FALLBACK", height_source: shelf.usable_height_mm || item.height_source === "ENTERED" ? "ENTERED" : "FALLBACK" });
           cursor = furniture.shelf_direction === "TOP_TO_BOTTOM" ? floor - (separators[index] ?? 0) : floor + spans[index] + (separators[index] ?? 0);
         });
       } else {
         const fallbackIndexes: number[] = [];
         let spans = shelves.map((shelf, index) => {
           if (shelf.usable_width_mm && shelf.usable_width_mm > 0) return shelf.usable_width_mm;
+          if (current[index].width_source === "ENTERED") return current[index].width_mm;
           fallbackIndexes.push(index);
           return furniture.width_mm * SHELF_FALLBACK_FRACTION;
         });
         const baseAvailable = furniture.width_mm - furniture.frame_left_mm - furniture.frame_right_mm - separators.reduce((sum, value) => sum + value, 0);
-        spans = compressShelfSpans(spans, fallbackIndexes, baseAvailable);
+        spans = distributeShelfFallbacks(spans, fallbackIndexes, baseAvailable);
         const residual = Math.max(0, baseAvailable - spans.reduce((sum, value) => sum + value, 0));
         const effectiveSeparators = separators.length ? separators.map((value) => value + residual / separators.length) : separators;
         let left = furniture.frame_left_mm;
@@ -127,9 +127,9 @@ export function previewPhysicalShelfLayout(data: PhysicalLibrary, layout: Visual
           const shelf = shelves[index];
           const top = furniture.homogeneous_structure ? furniture.top_closure_mm : item.top_closure_mm;
           const bottom = furniture.homogeneous_structure ? furniture.bottom_closure_mm : item.bottom_board_mm;
-          const height = shelf.usable_height_mm && shelf.usable_height_mm > 0 ? shelf.usable_height_mm : furniture.height_mm - top - bottom;
+          const height = shelf.usable_height_mm && shelf.usable_height_mm > 0 ? shelf.usable_height_mm : item.height_source === "ENTERED" ? item.height_mm : furniture.height_mm - top - bottom;
           const x = furniture.shelf_direction === "LEFT_TO_RIGHT" ? cursor : cursor - spans[index];
-          projected.set(item.shelf_id, { ...item, x_mm: x, floor_y_mm: bottom, width_mm: spans[index], height_mm: height, width_source: shelf.usable_width_mm ? "ENTERED" : "FALLBACK", height_source: shelf.usable_height_mm ? "ENTERED" : "FALLBACK" });
+          projected.set(item.shelf_id, { ...item, x_mm: x, floor_y_mm: bottom, width_mm: spans[index], height_mm: height, width_source: shelf.usable_width_mm || item.width_source === "ENTERED" ? "ENTERED" : "FALLBACK", height_source: shelf.usable_height_mm || item.height_source === "ENTERED" ? "ENTERED" : "FALLBACK" });
           cursor = furniture.shelf_direction === "LEFT_TO_RIGHT" ? x + spans[index] + (effectiveSeparators[index] ?? 0) : x - (effectiveSeparators[index] ?? 0);
         });
       }
@@ -267,7 +267,8 @@ export function proportionalBookSegments(
   const ordered = [...books].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   const pages = ordered.map((book) => resolvedThickness(book, defaults));
   const total = pages.reduce((sum, value) => sum + value, 0) || 1;
-  if (!physical) {
+  const hasExplicitMeasurements = ordered.some((book) => [book.height_mm, book.width_mm, book.thickness_mm].some((value) => value !== null));
+  if (!physical || !hasExplicitMeasurements) {
     const span = rect.type === "ROW" ? rect.width : rect.height;
     let offset = 0;
     return ordered.map((book, index) => {

@@ -287,6 +287,18 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
         const nextFurniture = { ...furniture };
         const nextShelves = base.shelves.map((item) => ({ ...item }));
         const selected = nextShelves.find((item) => item.shelf_id === shelfRecord.id)!;
+        if (drag.action === "RESIZE") {
+          if (!shelfRecord.usable_width_mm) {
+            selected.width_mm = Math.max(minimum, projectedShelf.width_mm + dx);
+            selected.width_source = "ENTERED";
+          }
+          if (!shelfRecord.usable_height_mm) {
+            selected.height_mm = Math.max(minimum, projectedShelf.height_mm - dy);
+            selected.height_source = "ENTERED";
+          }
+          setLayoutDraft({ ...base, shelves: nextShelves });
+          return true;
+        }
         if (vertical) {
           selected.alignment = "LEFT";
           selected.offset_mm = Math.max(0, Math.min(furniture.width_mm - projectedShelf.width_mm, projectedShelf.x_mm + dx));
@@ -334,7 +346,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       const context = geometry?.containers.find((item) => item.containerId === drag.selection.id);
       if (!context) return true;
       const physicalRecord = data?.bookcases.flatMap((item) => item.shelves).flatMap((item) => item.containers).find((item) => item.id === drag.selection.id);
-      const lockSize = base.geometry_mode === "PHYSICAL" && Boolean(physicalRecord?.book_count);
+      const lockSize = base.geometry_mode === "PHYSICAL" && Boolean(physicalRecord?.book_count) && Boolean(data?.books.some((book) => book.container_id === drag.selection.id && [book.height_mm, book.width_mm, book.thickness_mm].some((value) => value !== null)));
       const dxPercent = dx / context.shelfWorldWidth * 100;
       const dyPercent = dy / context.shelfWorldHeight * 100;
       setLayoutDraft({
@@ -518,13 +530,17 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
   const selectedLayoutContainer = layoutSelection?.kind === "CONTAINER"
     ? data.bookcases.flatMap((item) => item.shelves).flatMap((item) => item.containers).find((item) => item.id === layoutSelection.id)
     : null;
+  const selectedLayoutContainerHasMeasurements = Boolean(layoutSelection?.kind === "CONTAINER" && data.books.some((book) => book.container_id === layoutSelection.id && [book.height_mm, book.width_mm, book.thickness_mm].some((value) => value !== null)));
+  const selectedLayoutShelf = layoutSelection?.kind === "SHELF"
+    ? data.bookcases.flatMap((item) => item.shelves).find((item) => item.id === layoutSelection.id)
+    : null;
   const layoutMoveAllowed = true;
   const layoutResizeAllowed = layoutSelection?.kind === "BOOKCASE"
     ? true
     : layoutSelection?.kind === "SHELF"
-      ? layoutDraft?.geometry_mode === "MANUAL"
+      ? layoutDraft?.geometry_mode === "MANUAL" || !selectedLayoutShelf?.usable_width_mm || !selectedLayoutShelf?.usable_height_mm
       : layoutSelection?.kind === "CONTAINER"
-        ? layoutDraft?.geometry_mode === "MANUAL" || !selectedLayoutContainer?.book_count
+        ? layoutDraft?.geometry_mode === "MANUAL" || !selectedLayoutContainer?.book_count || !selectedLayoutContainerHasMeasurements
         : false;
 
   return <section className="server-library-map">

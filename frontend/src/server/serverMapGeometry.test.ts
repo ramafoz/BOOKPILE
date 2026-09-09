@@ -55,6 +55,14 @@ describe("Server Library Map geometry", () => {
     expect(segments[1].width).toBeCloseTo(30);
   });
 
+  it("fills an editable container envelope when none of its books is measured", () => {
+    const geometry = physicalMapGeometry(data);
+    const books = data.books.map((book) => ({ ...book, height_mm: null, width_mm: null, thickness_mm: null }));
+    const segments = proportionalBookSegments(geometry.containers[0], books, undefined, true);
+
+    expect(segments.reduce((sum, segment) => sum + segment.width, 0)).toBeCloseTo(geometry.containers[0].width);
+  });
+
   it("previews physical shelf placement when structural controls change", () => {
     const physical = {
       ...data,
@@ -70,6 +78,27 @@ describe("Server Library Map geometry", () => {
     };
     const preview = previewPhysicalShelfLayout(physical, physical.layout);
     expect(preview.shelves[0]).toMatchObject({ x_mm: 50, floor_y_mm: 920, width_mm: 700, height_mm: 200 });
+  });
+
+  it("shares the usable furniture height equally between unmeasured shelves", () => {
+    const unmeasuredShelf = { ...data.bookcases[0].shelves[0], containers: [] };
+    const physical = {
+      ...data,
+      bookcases: [{ ...data.bookcases[0], shelves: [
+        { ...unmeasuredShelf, id: "shelf-1", shelf_number: 1 },
+        { ...unmeasuredShelf, id: "shelf-2", shelf_number: 2 },
+      ] }],
+      layout: {
+        ...data.layout,
+        geometry_mode: "PHYSICAL" as const,
+        shelves: [
+          { ...data.layout.shelves[0], shelf_id: "shelf-1", height_source: "FALLBACK" as const },
+          { ...data.layout.shelves[0], shelf_id: "shelf-2", height_source: "FALLBACK" as const },
+        ],
+      },
+    };
+    const preview = previewPhysicalShelfLayout(physical, physical.layout);
+    expect(preview.shelves.map((item) => item.height_mm)).toEqual([560, 560]);
   });
 
   it("keeps internal gaps visible and adds a selectable end target", () => {

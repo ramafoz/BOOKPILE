@@ -78,6 +78,7 @@ class ContainerProjectionInput:
     shelf_width_mm: float
     shelf_height_mm: float
     books: tuple[ResolvedBookMeasurement, ...]
+    derive_size_from_books: bool = True
 
 
 @dataclass
@@ -110,8 +111,9 @@ def project_containers(
     diagnostics: list[GeometryDiagnostic] = []
     for item in items:
         size = occupied_size(item.kind, item.books)
-        width = size.width_mm / item.shelf_width_mm * 100 if item.books else item.width
-        height = size.height_mm / item.shelf_height_mm * 100 if item.books else item.height
+        derive = bool(item.books) and item.derive_size_from_books
+        width = size.width_mm / item.shelf_width_mm * 100 if derive else item.width
+        height = size.height_mm / item.shelf_height_mm * 100 if derive else item.height
         clearance = 100 - item.y - item.height
         projected[item.id] = ProjectedContainer(
             item.id,

@@ -356,6 +356,7 @@ def test_owner_preflight_persists_report_but_not_uploaded_zip(
     assert response.status_code == 201, response.text
     report = response.json()
     assert report["state"] == "READY"
+    assert report["library_id"] == str(library.id)
     assert report["adapter"] == "local-v8"
     assert report["reading_owner_user_id"] == str(reading_owner.id)
     assert report["counts"]["books"] == 1
@@ -500,6 +501,49 @@ def test_atomic_consolidation_preserves_catalogue_readings_loans_and_layout(
     assert "password" not in data_bytes.decode("utf-8").casefold()
 
 
+def test_new_library_and_local_data_are_created_in_one_transaction(
+    session, tmp_path: Path
+) -> None:
+    owner = User(
+        email="new-import@example.test", username="new_import_owner",
+        password_hash="unused", state="active", email_verified_at=datetime.now(UTC),
+    )
+    source = Library(name="Inspection source", slug="inspection-source", created_by_user_id=owner.id)
+    session.add_all([owner, source, ContributorRole(code="AUTHOR", label="Author", sort_order=1)])
+    session.flush()
+    session.add_all([
+        AccountStorageEntitlement(user_id=owner.id),
+        LibraryMembership(library_id=source.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
+    ])
+    session.commit()
+    service = LocalImportService(
+        LocalImportRepository(session), tmp_path / "new-library-staging",
+        storage_service=StorageService(StorageRepository(session)),
+        object_storage=FilesystemCoverStorage(tmp_path / "new-library-objects"),
+        settings=get_settings(),
+    )
+    database = tmp_path / "new-library.db"
+    archive = tmp_path / "new-library.zip"
+    local_v8_database(database)
+    create_backup(archive, database)
+    with archive.open("rb") as upload:
+        job = service.preflight(
+            library_id=source.id, actor_user_id=owner.id,
+            reading_owner_user_id=owner.id, upload=upload,
+        )
+
+    completed = service.consolidate_as_new_library(
+        import_id=job.id, source_library_id=source.id, actor_user_id=owner.id,
+        name="Imported separately", allow_repeated_archive=False,
+    )
+
+    created = session.get(Library, completed.library_id)
+    assert created is not None and created.name == "Imported separately"
+    assert session.query(Book).filter_by(library_id=created.id).count() == 1
+    membership = session.query(LibraryMembership).filter_by(library_id=created.id).one()
+    assert membership.user_id == owner.id and membership.role == "OWNER"
+    assert session.query(ReadingSession).join(Book).filter(Book.library_id == created.id).one().user_id == owner.id
+
 def test_failed_final_quota_check_rolls_back_rows_and_cover_objects(
     session, tmp_path: Path
 ) -> None:
@@ -562,6 +606,18 @@ def test_failed_final_quota_check_rolls_back_rows_and_cover_objects(
     assert session.get(LibraryImportJob, job.id).state == "READY"
     assert list(object_root.rglob("*.webp")) == []
     assert (staging / str(job.id) / "extracted" / "bookpile.db").is_file()
+
+    with pytest.raises(InsufficientSharedCapacity):
+        service.consolidate_as_new_library(
+            import_id=job.id,
+            source_library_id=library.id,
+            actor_user_id=owner.id,
+            name="Must roll back",
+            allow_repeated_archive=False,
+        )
+    session.expire_all()
+    assert session.query(Library).filter_by(name="Must roll back").count() == 0
+    assert session.get(LibraryImportJob, job.id).library_id == library.id
 
 
 def test_portable_export_endpoint_is_owner_only_and_removes_temporary_zip(

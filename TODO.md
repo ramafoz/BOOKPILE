@@ -726,7 +726,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Phase 8B backend: Owner-only, CSRF-protected, expiring preflight jobs
     with destination/reading-Owner validation, repeated-archive and duplicate
     warnings, logical-size estimate, shared-quota simulation, inspection and
-    cancellation. The frontend remains gated until atomic import exists.
+    cancellation.
   - [x] Phase 8C backend: atomic Local-v8 consolidation with fresh UUID maps,
     reading-Owner assignment, shared loans, proportional Local-to-mm layout
     conversion, private cover reprocessing/compensation, locked final quota
@@ -736,7 +736,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     credentials, email, sessions, profiles and unrelated libraries are absent.
   - [x] Add the Owner-facing `Data & portability` UI for portable export and
     Local ZIP preflight, warning review, explicit repeated-archive approval,
-    cancellation and atomic consolidation, including responsive presentation.
+    visible long-operation feedback, cancellation and atomic consolidation,
+    including responsive presentation.
+  - [x] Import either additively into the selected library or atomically as a
+    new library owned by the importing user; failed imports leave neither a
+    partial catalogue nor an empty new library.
+  - [x] Complete large-catalogue acceptance: preserve editable envelopes for
+    containers with wholly unmeasured books, provide a full-shelf row shortcut,
+    divide unmeasured shelf spans automatically, retain visual overrides, and
+    constrain long statistics book lists to an internal scrollbar.
   - [ ] Phase 8E: validate/restore Server-portable ZIPs, define explicit
     destination-Owner mapping for member-owned data, and pass anonymized
     real-fixture/recovery gates.

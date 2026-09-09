@@ -379,9 +379,11 @@ class PhysicalLibraryService:
                     use_physical = payload.geometry_mode == "PHYSICAL"
                     specs.append(ShelfSpec(
                         child.id, child.shelf_number,
-                        (float(child.usable_width_mm) if child.usable_width_mm else None)
+                        (float(child.usable_width_mm) if child.usable_width_mm else
+                         (current.width_mm if current.width_source == "ENTERED" else None))
                         if use_physical else (current.width_mm if current.width_source == "ENTERED" else None),
-                        (float(child.usable_height_mm) if child.usable_height_mm else None)
+                        (float(child.usable_height_mm) if child.usable_height_mm else
+                         (current.height_mm if current.height_source == "ENTERED" else None))
                         if use_physical else (current.height_mm if current.height_source == "ENTERED" else None),
                         current.alignment, current.offset_mm, current.open_top,
                         current.left_frame_mm, current.right_frame_mm,
@@ -426,9 +428,12 @@ class PhysicalLibraryService:
         defaults = catalogue_dimension_defaults(measurements)
         resolved = {item.id: resolve_book_measurement(item, defaults) for item in measurements}
         books_by_container: dict[UUID, list] = {}
+        explicitly_measured_containers: set[UUID] = set()
         for book in hierarchy.books:
             if book.container_id is not None:
                 books_by_container.setdefault(book.container_id, []).append(resolved[book.id])
+                if any(value is not None for value in (book.height_mm, book.width_mm, book.thickness_mm)):
+                    explicitly_measured_containers.add(book.container_id)
         inputs = []
         for item in payload.containers:
             container = containers[item.container_id]
@@ -442,6 +447,7 @@ class PhysicalLibraryService:
                 shelf_layout.width_mm,
                 shelf_layout.height_mm,
                 tuple(books_by_container.get(item.container_id, [])),
+                item.container_id in explicitly_measured_containers,
             ))
         projected, raw_diagnostics = project_containers(inputs)
         container_layouts = [item.model_copy(update={

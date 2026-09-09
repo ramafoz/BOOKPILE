@@ -22,7 +22,7 @@ contain credentials, sessions, account profiles, or unrelated libraries.
 - Support the published Local backup format 1 / schema 8 first and emit a
   deterministic, non-sensitive preflight report without writing Server data.
 
-### 8B — Authenticated preflight jobs (backend completed 2026-09-09)
+### 8B — Authenticated preflight jobs (completed and accepted 2026-09-09)
 
 - Add short-lived import jobs owned by the uploading Owner.
 - Let the Owner select an existing destination library or create a new one,
@@ -36,7 +36,7 @@ Temporary quarantine and processing bytes are operational workspace and are
 not charged to an account. The final logical Server representation is checked
 against the shared Owner quota before consolidation.
 
-### 8C — Atomic Local-to-Server consolidation (backend completed 2026-09-09)
+### 8C — Atomic Local-to-Server consolidation (completed and accepted 2026-09-09)
 
 - Generate fresh UUIDs and explicit source-ID maps.
 - Import hierarchy, books, ordered authors, placement and map geometry.
@@ -50,7 +50,7 @@ against the shared Owner quota before consolidation.
 Duplicate ISBN/title candidates are warnings, not automatic merges. Import is
 additive unless the later restore workflow explicitly says otherwise.
 
-### 8D — Server-portable library export (backend completed 2026-09-09)
+### 8D — Server-portable library export (completed and accepted 2026-09-09)
 
 - Define a versioned canonical Server ZIP with manifest and checksums.
 - Export one selected library, its physical/map data, cover objects, loans,
@@ -62,6 +62,21 @@ additive unless the later restore workflow explicitly says otherwise.
 The Owner-facing `Data & portability` workspace is also implemented. It can
 download this export and run the Local preflight/consolidation flow without
 exposing either operation to Viewers.
+
+The accepted Local-import experience provides visible long-operation feedback,
+source counts, warning review, cancellation with staging erasure, import into
+the selected library, and atomic creation/import of a separate new library.
+The importing user is the new library's first Owner and receives the implicit
+Local personal history; no membership is inferred. A failure rolls back both
+the new library and all imported records and objects.
+
+Acceptance with a substantially larger real Local catalogue also exposed and
+closed two general presentation issues: unmeasured physical shelves divide the
+available furniture span equally and retain optional visual overrides, while
+containers whose books have no explicit measurements retain an editable visual
+envelope. An unmeasured row can explicitly fill its complete shelf; once any
+book measurement exists, truthful physical projection governs again. Long book
+tables in statistics show approximately ten rows with their own scrollbar.
 
 ### 8E — Server restore and acceptance gate
 

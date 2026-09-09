@@ -271,4 +271,17 @@ describe("Library portability requests", () => {
     expect(options.method).toBe("POST");
     expect(JSON.parse(String(options.body))).toEqual({ allow_repeated_archive: true });
   });
+
+  it("passes a new library name without inventing memberships in the client", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ import_id: "import-1", library_id: "library-2", state: "IMPORTED" }), { status: 200 }),
+    );
+
+    await serverApi.consolidateLocalImportAsNewLibrary("library-1", "import-1", "Imported library", false);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/consolidate-new-library");
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(options.body))).toEqual({ name: "Imported library", allow_repeated_archive: false });
+  });
 });

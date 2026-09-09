@@ -3,7 +3,12 @@ from uuid import UUID
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from ...imports.local_zip import LocalImportValidationError
-from ...schemas import ConsolidateLocalImportRequest, LocalImportJobResponse, LocalImportPreflightResponse
+from ...schemas import (
+    ConsolidateLocalImportAsNewLibraryRequest,
+    ConsolidateLocalImportRequest,
+    LocalImportJobResponse,
+    LocalImportPreflightResponse,
+)
 from ...imports.consolidation import LocalImportConflict
 from ...services.storage_domain import InsufficientSharedCapacity
 from ...services.local_imports import (
@@ -22,6 +27,7 @@ router = APIRouter(tags=["imports"])
 def response_for(job) -> LocalImportJobResponse:
     return LocalImportJobResponse(
         import_id=job.id,
+        library_id=job.library_id,
         state=job.state,
         adapter=job.adapter,
         backup_format_version=job.backup_format_version,
@@ -140,3 +146,33 @@ def consolidate_import_job(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InsufficientSharedCapacity as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The import no longer fits the Owners' shared storage capacity.") from exc
+
+
+@router.post(
+    "/libraries/{library_id}/imports/{import_id}/consolidate-new-library",
+    response_model=LocalImportJobResponse,
+)
+def consolidate_import_job_as_new_library(
+    library_id: UUID,
+    import_id: UUID,
+    payload: ConsolidateLocalImportAsNewLibraryRequest,
+    service: LocalImportServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> LocalImportJobResponse:
+    try:
+        return response_for(
+            service.consolidate_as_new_library(
+                import_id=import_id,
+                source_library_id=library_id,
+                actor_user_id=context.user_id,
+                name=payload.name,
+                allow_repeated_archive=payload.allow_repeated_archive,
+            )
+        )
+    except LocalImportOwnerRequired as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import not found") from exc
+    except (LocalImportStateConflict, LocalImportConflict) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InsufficientSharedCapacity as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The import does not fit your available storage capacity.") from exc

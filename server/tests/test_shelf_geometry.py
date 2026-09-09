@@ -48,7 +48,7 @@ def test_horizontal_residual_is_shared_between_separators() -> None:
     assert result[0].separator_after_mm == 460
 
 
-def test_fallbacks_compress_but_entered_dimensions_do_not() -> None:
+def test_unmeasured_shelves_share_the_available_span_but_entered_dimensions_do_not() -> None:
     result = project_shelves(
         furniture_width_mm=800, furniture_height_mm=100,
         direction="TOP_TO_BOTTOM", homogeneous=True,
@@ -57,6 +57,7 @@ def test_fallbacks_compress_but_entered_dimensions_do_not() -> None:
         shelves=[shelf(index) for index in range(1, 8)],
     )
     assert all(item.height_mm >= 5 for item in result)
+    assert len({round(item.height_mm, 6) for item in result}) == 1
     with pytest.raises(ShelfGeometryError):
         project_shelves(
             furniture_width_mm=800, furniture_height_mm=100,
@@ -65,6 +66,17 @@ def test_fallbacks_compress_but_entered_dimensions_do_not() -> None:
             bottom_closure_mm=5, separator_thickness_mm=5,
             shelves=[shelf(1, height=60), shelf(2, height=60)],
         )
+
+
+def test_unmeasured_shelves_share_space_left_by_a_measured_shelf() -> None:
+    result = project_shelves(
+        furniture_width_mm=800, furniture_height_mm=1000,
+        direction="TOP_TO_BOTTOM", homogeneous=True,
+        frame_left_mm=20, frame_right_mm=20, top_closure_mm=20,
+        bottom_closure_mm=20, separator_thickness_mm=20,
+        shelves=[shelf(1, height=200), shelf(2), shelf(3)],
+    )
+    assert [item.height_mm for item in result] == [200, 360, 360]
 
 
 def test_only_top_shelf_can_be_open() -> None:

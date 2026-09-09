@@ -511,7 +511,12 @@ allocation and private-cover compensation leave failed imports without visible
 residue. Owners can now inspect a Local backup, review warnings and capacity,
 approve an intentional repeated archive, consolidate it atomically, or download
 a portable Server ZIP from `Library settings > Data & portability` on desktop
-and mobile. Server-portable restore and its acceptance fixtures follow under
+and mobile. Consolidation may target the selected library or create a separate
+library in the same transaction, with visible feedback throughout long work.
+Large-catalogue acceptance is complete: unmeasured shelf space is distributed
+automatically, wholly unmeasured containers retain editable visual envelopes,
+rows can fill a shelf explicitly, and statistics book tables scroll internally.
+Server-portable restore and its acceptance fixtures follow under
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 The compact Server workspace increment is complete and accepted on desktop and

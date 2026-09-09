@@ -505,6 +505,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [importReadingOwner, setImportReadingOwner] = useState("");
   const [importJob, setImportJob] = useState<LocalImportJob | null>(null);
   const [allowRepeatedImport, setAllowRepeatedImport] = useState(false);
+  const [newImportLibraryName, setNewImportLibraryName] = useState("");
+  const [importOperation, setImportOperation] = useState<"" | "INSPECTING" | "IMPORTING" | "IMPORTING_NEW">("");
   const [libraryRevision, setLibraryRevision] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<LibrarySummary | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -581,6 +583,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     setImportJob(null);
     setAllowRepeatedImport(false);
     setImportReadingOwner("");
+    setNewImportLibraryName("");
+    setImportOperation("");
   }, [selected?.library_id]);
 
   useEffect(() => {
@@ -792,6 +796,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     event.preventDefault();
     if (!selected || !importFile || !importReadingOwner) return;
     setDataBusy(true);
+    setImportOperation("INSPECTING");
     setError("");
     try {
       setImportJob(await serverApi.preflightLocalImport(
@@ -804,6 +809,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setError(friendlyError(caught));
     } finally {
       setDataBusy(false);
+      setImportOperation("");
     }
   }
 
@@ -819,12 +825,44 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setError(friendlyError(caught));
     } finally {
       setDataBusy(false);
+      setImportOperation("");
+    }
+  }
+
+  async function consolidateLocalBackupAsNewLibrary(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !importJob || !newImportLibraryName.trim()) return;
+    setDataBusy(true);
+    setImportOperation("IMPORTING_NEW");
+    setError("");
+    try {
+      const completed = await serverApi.consolidateLocalImportAsNewLibrary(
+        selected.library_id,
+        importJob.import_id,
+        newImportLibraryName.trim(),
+        allowRepeatedImport,
+      );
+      const createdName = newImportLibraryName.trim();
+      setImportFile(null);
+      setImportJob(completed);
+      setNewImportLibraryName("");
+      setControlsPanel(null);
+      setSettingsSection("ROOT");
+      setWorkspace("CATALOGUE");
+      await reloadLibraries(completed.library_id);
+      pushNotice(`“${createdName}” was created and the Local library was imported atomically.`);
+    } catch (caught) {
+      setError(friendlyError(caught));
+    } finally {
+      setDataBusy(false);
+      setImportOperation("");
     }
   }
 
   async function consolidateLocalBackup() {
     if (!selected || !importJob) return;
     setDataBusy(true);
+    setImportOperation("IMPORTING");
     setError("");
     try {
       const completed = await serverApi.consolidateLocalImport(
@@ -841,6 +879,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setError(friendlyError(caught));
     } finally {
       setDataBusy(false);
+      setImportOperation("");
     }
   }
 
@@ -969,6 +1008,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                       <button type="submit" disabled={dataBusy || !importFile || !importReadingOwner}>{dataBusy ? "Inspecting safely…" : "Inspect backup"}</button>
                       <small>Maximum compressed ZIP: 100 MiB. Inspection is isolated and cannot change this library until you approve its report.</small>
                     </form>}
+                    {importOperation === "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>Uploading and inspecting the backup…</b><span aria-hidden="true"><i /></span><small>Checksums, SQLite integrity, covers and relationships are being verified. Large libraries can take a while; keep this window open.</small></div>}
                     {importJob?.state === "READY" && <div className="server-import-report" role="status">
                       <h4>Ready for review</h4>
                       <p>Local format {importJob.backup_format_version}, schema {importJob.local_schema_version} · created {new Date(importJob.source_created_at).toLocaleString()}</p>
@@ -976,7 +1016,13 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                       {importJob.warnings.map((warning) => <p className="server-import-warning" key={warning.code}>{warning.message ?? `${warning.count ?? 0} ${warning.code.toLowerCase().replaceAll("_", " ")}.`}</p>)}
                       {!importJob.capacity_available && <Message kind="error">The final Server representation does not currently fit the shared storage available to this library's Owners.</Message>}
                       {importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && <label className="server-check"><input type="checkbox" checked={allowRepeatedImport} onChange={(event) => setAllowRepeatedImport(event.target.checked)} /> I intend to add another set of physical copies from this same backup.</label>}
-                      <div className="server-dialog-actions"><button type="button" onClick={() => void cancelLocalBackup()} disabled={dataBusy}>Cancel and erase staging</button><button className="confirm" type="button" onClick={() => void consolidateLocalBackup()} disabled={dataBusy || !importJob.capacity_available || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{dataBusy ? "Importing atomically…" : "Import into library"}</button></div>
+                      {importOperation && importOperation !== "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>{importOperation === "IMPORTING_NEW" ? "Creating the library and importing atomically…" : "Importing atomically…"}</b><span aria-hidden="true"><i /></span><small>Processing {importJob.counts.books ?? 0} books, {importJob.counts.covers ?? 0} covers, {importJob.counts.reading_sessions ?? 0} readings and {importJob.counts.loans ?? 0} loans. Nothing becomes visible unless the whole operation succeeds.</small></div>}
+                      <div className="server-dialog-actions"><button type="button" onClick={() => void cancelLocalBackup()} disabled={dataBusy}>Cancel and erase staging</button><button className="confirm" type="button" onClick={() => void consolidateLocalBackup()} disabled={dataBusy || !importJob.capacity_available || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING" ? "Importing atomically…" : "Import into this library"}</button></div>
+                      <form className="server-import-new-library" onSubmit={consolidateLocalBackupAsNewLibrary}>
+                        <label>Or create a separate library<input value={newImportLibraryName} onChange={(event) => setNewImportLibraryName(event.target.value)} maxLength={160} placeholder="New library name" required /></label>
+                        <button type="submit" disabled={dataBusy || !newImportLibraryName.trim() || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING_NEW" ? "Creating and importing…" : "Import as a new library"}</button>
+                        <small>You will be its first Owner, and the Local personal reading history will belong to you. No other members are added automatically.</small>
+                      </form>
                     </div>}
                     {importJob?.state === "IMPORTED" && <Message kind="success">Import complete. {importJob.result_counts?.books ?? 0} books and all compatible related records were added.</Message>}
                   </div>

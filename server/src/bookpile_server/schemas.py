@@ -39,6 +39,7 @@ class LocalImportWarningResponse(BaseModel):
 
 class LocalImportPreflightResponse(BaseModel):
     import_id: UUID
+    library_id: UUID
     state: Literal["READY"]
     adapter: str
     backup_format_version: int
@@ -59,6 +60,10 @@ class LocalImportJobResponse(LocalImportPreflightResponse):
 
 class ConsolidateLocalImportRequest(BaseModel):
     allow_repeated_archive: bool = False
+
+
+class ConsolidateLocalImportAsNewLibraryRequest(ConsolidateLocalImportRequest):
+    name: str = Field(min_length=1, max_length=160)
 
 
 def optional_text(value: str | None) -> str | None:

@@ -2,7 +2,7 @@ from uuid import UUID
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Book, Library, LibraryImportJob, LibraryMembership
@@ -28,6 +28,16 @@ class LocalImportRepository:
                 select(Book).where(Book.library_id == library_id).order_by(Book.id)
             )
         )
+
+    def slug_exists(self, slug: str) -> bool:
+        return bool(
+            self.session.scalar(
+                select(func.count()).select_from(Library).where(Library.slug == slug)
+            )
+        )
+
+    def add_library(self, library: Library, membership: LibraryMembership) -> None:
+        self.session.add_all((library, membership))
 
     def prior_jobs(self, library_id: UUID, archive_sha256: str) -> list[LibraryImportJob]:
         return list(
