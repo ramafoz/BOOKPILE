@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
     private_object_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "private-objects"
+    import_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "import-staging"
+    import_staging_ttl_minutes: int = 30
     cover_max_upload_bytes: int = 12 * 1024 * 1024
     cover_max_pixels: int = 40_000_000
     cover_max_width: int = 900

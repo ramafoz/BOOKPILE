@@ -31,6 +31,31 @@ ProfileGender = Literal["UNSPECIFIED", "MALE", "FEMALE", "CUSTOM"]
 ProfilePronoun = Literal["MALE", "FEMALE", "NEUTRAL"]
 
 
+class LocalImportWarningResponse(BaseModel):
+    code: str
+    message: str | None = None
+    count: int | None = None
+
+
+class LocalImportPreflightResponse(BaseModel):
+    import_id: UUID
+    state: Literal["READY"]
+    adapter: str
+    backup_format_version: int
+    local_schema_version: int
+    source_created_at: str
+    reading_owner_user_id: UUID
+    counts: dict[str, int]
+    estimated_logical_bytes: int
+    capacity_available: bool
+    expires_at: datetime
+    warnings: list[LocalImportWarningResponse]
+
+
+class LocalImportJobResponse(LocalImportPreflightResponse):
+    state: Literal["READY", "IMPORTING", "IMPORTED", "FAILED", "EXPIRED"]
+
+
 def optional_text(value: str | None) -> str | None:
     if value is None:
         return None

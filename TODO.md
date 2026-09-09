@@ -723,8 +723,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Phase 8A: add strict isolated Local format-1/schema-8 ZIP inspection,
     exact manifest/checksum/count/SQLite/cover validation, bounded archive
     expansion, and deterministic canonical records without Server writes.
-  - [ ] Phase 8B–8C: authenticated preflight jobs, destination/reading-Owner
-    selection, duplicate and quota reporting, then atomic consolidation.
+  - [x] Phase 8B backend: Owner-only, CSRF-protected, expiring preflight jobs
+    with destination/reading-Owner validation, repeated-archive and duplicate
+    warnings, logical-size estimate, shared-quota simulation, inspection and
+    cancellation. The frontend remains gated until atomic import exists.
+  - [ ] Phase 8C: atomic consolidation with fresh UUID maps, cover-object
+    compensation, final locked quota validation and post-import verification.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -751,8 +755,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     manipulation over that same geometry service. Interaction is
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
-  - [~] Phase 8 is active. Local ZIP inspection and the v8 canonical adapter
-    are complete; authenticated import jobs, consolidation, Server-portable
+  - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter and
+    authenticated preflight jobs are complete; consolidation, Server-portable
     export/restore, UI, and real anonymized fixture gates remain.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected

@@ -1,0 +1,51 @@
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ..models import Book, Library, LibraryImportJob, LibraryMembership
+
+
+class LocalImportRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def owner_membership(self, library_id: UUID, user_id: UUID) -> LibraryMembership | None:
+        return self.session.scalar(
+            select(LibraryMembership).join(Library).where(
+                LibraryMembership.library_id == library_id,
+                LibraryMembership.user_id == user_id,
+                LibraryMembership.role == "OWNER",
+                Library.state == "active",
+            )
+        )
+
+    def destination_books(self, library_id: UUID) -> list[Book]:
+        return list(
+            self.session.scalars(
+                select(Book).where(Book.library_id == library_id).order_by(Book.id)
+            )
+        )
+
+    def prior_jobs(self, library_id: UUID, archive_sha256: str) -> list[LibraryImportJob]:
+        return list(
+            self.session.scalars(
+                select(LibraryImportJob).where(
+                    LibraryImportJob.library_id == library_id,
+                    LibraryImportJob.archive_sha256 == archive_sha256,
+                    LibraryImportJob.state.in_(("READY", "IMPORTING", "IMPORTED")),
+                )
+            )
+        )
+
+    def add(self, job: LibraryImportJob) -> None:
+        self.session.add(job)
+
+    def find(self, import_id: UUID) -> LibraryImportJob | None:
+        return self.session.get(LibraryImportJob, import_id)
+
+    def commit(self) -> None:
+        self.session.commit()
+
+    def rollback(self) -> None:
+        self.session.rollback()

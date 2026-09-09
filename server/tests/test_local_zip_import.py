@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import sqlite3
 import zipfile
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 from PIL import Image
 import pytest
@@ -14,6 +16,15 @@ from bookpile_server.imports.local_zip import (
     inspect_local_backup,
     adapt_local_v8,
 )
+from bookpile_server.api.dependencies import get_local_import_service
+from bookpile_server.config import get_settings
+from bookpile_server.models import Library, LibraryImportJob, LibraryMembership, User, UserSession
+from bookpile_server.repositories.imports import LocalImportRepository
+from bookpile_server.services.auth import hash_session_secret
+from bookpile_server.services.local_imports import LocalImportService
+
+
+CSRF = "local-import-csrf"
 
 
 def webp_bytes() -> bytes:
@@ -240,3 +251,114 @@ def test_rejects_missing_referenced_cover(tmp_path: Path) -> None:
     with pytest.raises(LocalImportValidationError, match="Archived covers"):
         inspect_local_backup(archive, tmp_path / "isolated")
     assert not (tmp_path / "isolated").exists()
+
+
+def authenticated_user(client, session, username: str) -> User:
+    user = User(
+        email=f"{username}@example.test",
+        username=username,
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    session.add(user)
+    session.flush()
+    raw_token = f"import-{uuid4().hex}"
+    now = datetime.now(UTC)
+    session.add(
+        UserSession(
+            user_id=user.id,
+            token_hash=hash_session_secret(raw_token),
+            csrf_token_hash=hash_session_secret(CSRF),
+            last_seen_at=now,
+            expires_at=now + timedelta(days=7),
+            absolute_expires_at=now + timedelta(days=30),
+        )
+    )
+    session.commit()
+    settings = get_settings()
+    client.cookies.set(settings.session_cookie_name, raw_token)
+    client.cookies.set(settings.csrf_cookie_name, CSRF)
+    return user
+
+
+def test_owner_preflight_persists_report_but_not_uploaded_zip(
+    client, session, tmp_path: Path
+) -> None:
+    owner = authenticated_user(client, session, "import_owner")
+    reading_owner = User(
+        email="reader@example.test",
+        username="import_reader",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    library = Library(name="Imported home", slug="imported-home", created_by_user_id=owner.id)
+    session.add_all([reading_owner, library])
+    session.flush()
+    session.add_all(
+        [
+            LibraryMembership(
+                library_id=library.id,
+                user_id=owner.id,
+                role="OWNER",
+                selected_reading_user_id=owner.id,
+            ),
+            LibraryMembership(
+                library_id=library.id,
+                user_id=reading_owner.id,
+                role="OWNER",
+                selected_reading_user_id=reading_owner.id,
+            ),
+        ]
+    )
+    session.commit()
+    staging = tmp_path / "staging"
+    client.app.dependency_overrides[get_local_import_service] = lambda: LocalImportService(
+        LocalImportRepository(session), staging
+    )
+    database = tmp_path / "source.db"
+    archive = tmp_path / "local.zip"
+    local_v8_database(database)
+    create_backup(archive, database)
+
+    with archive.open("rb") as source:
+        response = client.post(
+            f"/api/v1/libraries/{library.id}/imports/local/preflight",
+            data={"reading_owner_user_id": str(reading_owner.id)},
+            files={"backup": ("BOOKPILE.zip", source, "application/zip")},
+            headers={"X-CSRF-Token": CSRF},
+        )
+
+    assert response.status_code == 201, response.text
+    report = response.json()
+    assert report["state"] == "READY"
+    assert report["adapter"] == "local-v8"
+    assert report["reading_owner_user_id"] == str(reading_owner.id)
+    assert report["counts"]["books"] == 1
+    job = session.get(LibraryImportJob, UUID(report["import_id"]))
+    assert job is not None and job.state == "READY"
+    directory = staging / str(job.id)
+    assert not (directory / "upload.zip").exists()
+    assert (directory / "extracted" / "bookpile.db").is_file()
+
+    with archive.open("rb") as source:
+        repeated = client.post(
+            f"/api/v1/libraries/{library.id}/imports/local/preflight",
+            data={"reading_owner_user_id": str(reading_owner.id)},
+            files={"backup": ("BOOKPILE.zip", source, "application/zip")},
+            headers={"X-CSRF-Token": CSRF},
+        )
+    assert repeated.status_code == 201
+    assert "REPEATED_ARCHIVE" in {item["code"] for item in repeated.json()["warnings"]}
+
+    fetched = client.get(f"/api/v1/libraries/{library.id}/imports/{job.id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["capacity_available"] is True
+    cancelled = client.delete(
+        f"/api/v1/libraries/{library.id}/imports/{job.id}",
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["state"] == "EXPIRED"
+    assert not directory.exists()

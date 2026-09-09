@@ -10,7 +10,7 @@ contain credentials, sessions, account profiles, or unrelated libraries.
 
 ## Delivery slices
 
-### 8A — Local ZIP inspection and adapter foundation
+### 8A — Local ZIP inspection and adapter foundation (completed 2026-09-09)
 
 - Enforce a 100 MiB compressed upload limit, bounded entry count, bounded
   expanded size, suspicious compression-ratio checks, safe paths, and no
@@ -22,7 +22,7 @@ contain credentials, sessions, account profiles, or unrelated libraries.
 - Support the published Local backup format 1 / schema 8 first and emit a
   deterministic, non-sensitive preflight report without writing Server data.
 
-### 8B — Authenticated preflight jobs
+### 8B — Authenticated preflight jobs (backend completed 2026-09-09)
 
 - Add short-lived import jobs owned by the uploading Owner.
 - Let the Owner select an existing destination library or create a new one,

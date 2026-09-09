@@ -11,6 +11,7 @@ from ..repositories.books import BookRepository
 from ..repositories.covers import CoverRepository
 from ..repositories.libraries import LibraryRepository
 from ..repositories.loans import LoanRepository
+from ..repositories.imports import LocalImportRepository
 from ..repositories.physical_library import PhysicalLibraryRepository
 from ..repositories.readings import ReadingRepository
 from ..repositories.profiles import ProfileRepository
@@ -35,6 +36,7 @@ from ..cover_storage import FilesystemCoverStorage
 from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
 from ..services.loans import LoanService
+from ..services.local_imports import LocalImportService
 from ..services.physical_library import PhysicalLibraryService
 from ..services.readings import ReadingService
 from ..services.profiles import ProfileImageService, ProfileService
@@ -109,6 +111,21 @@ def get_loan_service(session: SessionDependency) -> LoanService:
 
 
 LoanServiceDependency = Annotated[LoanService, Depends(get_loan_service)]
+
+
+def get_local_import_service(session: SessionDependency) -> LocalImportService:
+    settings = get_settings()
+    return LocalImportService(
+        LocalImportRepository(session),
+        settings.import_staging_root,
+        ttl_minutes=settings.import_staging_ttl_minutes,
+        storage_service=StorageService(StorageRepository(session)),
+    )
+
+
+LocalImportServiceDependency = Annotated[
+    LocalImportService, Depends(get_local_import_service)
+]
 
 
 def get_profile_service(session: SessionDependency) -> ProfileService:

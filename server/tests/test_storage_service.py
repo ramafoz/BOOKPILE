@@ -84,3 +84,22 @@ def test_rebuild_updates_revision_and_preserves_allocation_total(session: Sessio
     assert initial.revision == 1
     assert allocation is not None
     assert allocation.allocated_bytes == initial.logical_size_bytes
+
+
+def test_growth_preflight_is_advisory_and_respects_shared_capacity(session: Session) -> None:
+    owner = make_owner(session, "preflight")
+    library = Library(name="Preflight", slug="preflight-storage")
+    session.add(library)
+    session.flush()
+    session.add(LibraryMembership(library_id=library.id, user_id=owner.id, role="OWNER"))
+    session.commit()
+    service = StorageService(StorageRepository(session))
+    service.rebuild_owned_library_usage()
+    entitlement = session.get(AccountStorageEntitlement, owner.id)
+    current = calculate_library_logical_bytes(session, library.id)
+    entitlement.limit_bytes = current + 100
+    session.commit()
+
+    assert service.can_fit_library_growth(library.id, 100) is True
+    assert service.can_fit_library_growth(library.id, 101) is False
+    assert calculate_library_logical_bytes(session, library.id) == current

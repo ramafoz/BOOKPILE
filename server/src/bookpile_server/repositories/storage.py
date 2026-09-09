@@ -75,6 +75,29 @@ class StorageRepository:
     def entitlement_for_user(self, user_id: UUID) -> AccountStorageEntitlement | None:
         return self.session.get(AccountStorageEntitlement, user_id)
 
+    def all_entitlements(self) -> list[AccountStorageEntitlement]:
+        return list(self.session.scalars(select(AccountStorageEntitlement).order_by(AccountStorageEntitlement.user_id)))
+
+    def active_owner_memberships(self) -> list[LibraryMembership]:
+        return list(
+            self.session.scalars(
+                select(LibraryMembership)
+                .join(Library)
+                .where(LibraryMembership.role == "OWNER", Library.state == "active")
+                .order_by(LibraryMembership.library_id, LibraryMembership.user_id)
+            )
+        )
+
+    def all_allocations(self) -> list[LibraryStorageAllocation]:
+        return list(
+            self.session.scalars(
+                select(LibraryStorageAllocation).order_by(
+                    LibraryStorageAllocation.library_id,
+                    LibraryStorageAllocation.user_id,
+                )
+            )
+        )
+
     def allocations_for_user(
         self, user_id: UUID
     ) -> list[tuple[LibraryStorageAllocation, Library]]:
