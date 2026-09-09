@@ -44,7 +44,7 @@ class LocalImportPreflightResponse(BaseModel):
     backup_format_version: int
     local_schema_version: int
     source_created_at: str
-    reading_owner_user_id: UUID
+    reading_owner_user_id: UUID | None
     counts: dict[str, int]
     estimated_logical_bytes: int
     capacity_available: bool
@@ -54,6 +54,11 @@ class LocalImportPreflightResponse(BaseModel):
 
 class LocalImportJobResponse(LocalImportPreflightResponse):
     state: Literal["READY", "IMPORTING", "IMPORTED", "FAILED", "EXPIRED"]
+    result_counts: dict[str, int] | None = None
+
+
+class ConsolidateLocalImportRequest(BaseModel):
+    allow_repeated_archive: bool = False
 
 
 def optional_text(value: str | None) -> str | None:

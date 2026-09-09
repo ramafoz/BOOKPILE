@@ -37,6 +37,7 @@ from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
 from ..services.loans import LoanService
 from ..services.local_imports import LocalImportService
+from ..services.portable_exports import PortableExportService
 from ..services.physical_library import PhysicalLibraryService
 from ..services.readings import ReadingService
 from ..services.profiles import ProfileImageService, ProfileService
@@ -120,11 +121,27 @@ def get_local_import_service(session: SessionDependency) -> LocalImportService:
         settings.import_staging_root,
         ttl_minutes=settings.import_staging_ttl_minutes,
         storage_service=StorageService(StorageRepository(session)),
+        object_storage=FilesystemCoverStorage(settings.private_object_root),
+        settings=settings,
     )
 
 
 LocalImportServiceDependency = Annotated[
     LocalImportService, Depends(get_local_import_service)
+]
+
+
+def get_portable_export_service(session: SessionDependency) -> PortableExportService:
+    settings = get_settings()
+    return PortableExportService(
+        LocalImportRepository(session),
+        FilesystemCoverStorage(settings.private_object_root),
+        settings.export_staging_root,
+    )
+
+
+PortableExportServiceDependency = Annotated[
+    PortableExportService, Depends(get_portable_export_service)
 ]
 
 

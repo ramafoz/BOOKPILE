@@ -727,8 +727,15 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     with destination/reading-Owner validation, repeated-archive and duplicate
     warnings, logical-size estimate, shared-quota simulation, inspection and
     cancellation. The frontend remains gated until atomic import exists.
-  - [ ] Phase 8C: atomic consolidation with fresh UUID maps, cover-object
-    compensation, final locked quota validation and post-import verification.
+  - [x] Phase 8C backend: atomic Local-v8 consolidation with fresh UUID maps,
+    reading-Owner assignment, shared loans, proportional Local-to-mm layout
+    conversion, private cover reprocessing/compensation, locked final quota
+    allocation, post-import counts, audit, and no-residue failure tests.
+  - [x] Phase 8D backend export: Owner-only canonical per-library ZIP with
+    checksums, private covers, shared/personal library records and member keys;
+    credentials, email, sessions, profiles and unrelated libraries are absent.
+  - [ ] Phase 8E: validate/restore Server-portable ZIPs, add the Owner-facing
+    portability UI, and pass anonymized real-fixture/recovery gates.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -756,8 +763,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
   - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter and
-    authenticated preflight jobs are complete; consolidation, Server-portable
-    export/restore, UI, and real anonymized fixture gates remain.
+    authenticated preflight jobs, atomic Local consolidation and portable
+    Server export are complete; Server restore, UI, and real anonymized fixture
+    gates remain.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user

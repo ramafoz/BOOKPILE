@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -43,6 +45,26 @@ class LocalImportRepository:
 
     def find(self, import_id: UUID) -> LibraryImportJob | None:
         return self.session.get(LibraryImportJob, import_id)
+
+    def lock(self, import_id: UUID) -> LibraryImportJob | None:
+        return self.session.scalar(
+            select(LibraryImportJob)
+            .where(LibraryImportJob.id == import_id)
+            .with_for_update()
+        )
+
+    def expired_staged_jobs(self, now: datetime) -> list[LibraryImportJob]:
+        return list(
+            self.session.scalars(
+                select(LibraryImportJob).where(
+                    LibraryImportJob.state.in_(("READY", "IMPORTING", "FAILED")),
+                    LibraryImportJob.expires_at <= now,
+                )
+            )
+        )
+
+    def flush(self) -> None:
+        self.session.flush()
 
     def commit(self) -> None:
         self.session.commit()

@@ -36,7 +36,7 @@ Temporary quarantine and processing bytes are operational workspace and are
 not charged to an account. The final logical Server representation is checked
 against the shared Owner quota before consolidation.
 
-### 8C — Atomic Local-to-Server consolidation
+### 8C — Atomic Local-to-Server consolidation (backend completed 2026-09-09)
 
 - Generate fresh UUIDs and explicit source-ID maps.
 - Import hierarchy, books, ordered authors, placement and map geometry.
@@ -50,7 +50,7 @@ against the shared Owner quota before consolidation.
 Duplicate ISBN/title candidates are warnings, not automatic merges. Import is
 additive unless the later restore workflow explicitly says otherwise.
 
-### 8D — Server-portable library export
+### 8D — Server-portable library export (backend completed 2026-09-09)
 
 - Define a versioned canonical Server ZIP with manifest and checksums.
 - Export one selected library, its physical/map data, cover objects, loans,

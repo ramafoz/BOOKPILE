@@ -16,12 +16,33 @@ from bookpile_server.imports.local_zip import (
     inspect_local_backup,
     adapt_local_v8,
 )
-from bookpile_server.api.dependencies import get_local_import_service
+from bookpile_server.api.dependencies import get_local_import_service, get_portable_export_service
 from bookpile_server.config import get_settings
-from bookpile_server.models import Library, LibraryImportJob, LibraryMembership, User, UserSession
+from bookpile_server.models import (
+    Book,
+    AccountStorageEntitlement,
+    BookContributor,
+    Bookcase,
+    ContributorRole,
+    Library,
+    LibraryImportJob,
+    LibraryMembership,
+    Loan,
+    ReadingSession,
+    User,
+    UserSession,
+    VisualBookcaseLayout,
+    VisualShelfLayout,
+)
+from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.repositories.imports import LocalImportRepository
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.local_imports import LocalImportService
+from bookpile_server.repositories.storage import StorageRepository
+from bookpile_server.services.storage import StorageService
+from bookpile_server.services.storage_domain import InsufficientSharedCapacity
+from bookpile_server.exports.server_library import create_server_library_export
+from bookpile_server.services.portable_exports import PortableExportService
 
 
 CSRF = "local-import-csrf"
@@ -105,11 +126,13 @@ def local_v8_database(path: Path, *, cover_filename: str | None = "cover.webp") 
         INSERT INTO shelves VALUES (2, 1, 1);
         INSERT INTO containers VALUES (3, 2, 'ROW', 'BACKGROUND', 1);
         INSERT INTO books (
-            id, title, author, cover_filename, container_id, position,
+            id, title, author, has_multiple_authors, status, is_read_date_unknown,
+            cover_filename, container_id, position,
             created_at, updated_at
-        ) VALUES (4, 'A book', 'An author', NULL, 3, 1,
+        ) VALUES (4, 'A book', 'Multiple authors', 1, 'READ', 1, NULL, 3, 1,
                   '2026-01-01 00:00:00', '2026-01-01 00:00:00');
-        INSERT INTO book_authors VALUES (4, 1, 'An author');
+        INSERT INTO book_authors VALUES (4, 1, 'First author');
+        INSERT INTO book_authors VALUES (4, 2, 'Second author');
         INSERT INTO reading_sessions VALUES
             (5, 4, 1, 'COMPLETED', NULL, NULL, 1,
              '2026-01-01 00:00:00', '2026-01-01 00:00:00');
@@ -156,7 +179,7 @@ def create_backup(
             "shelves": 1,
             "containers": 1,
             "books": 1,
-            "book_authors": 1,
+            "book_authors": 2,
             "reading_sessions": 1,
             "loans": 1,
             "covers": 1,
@@ -193,7 +216,7 @@ def test_inspects_valid_local_v8_backup_without_server_writes(tmp_path: Path) ->
         "source_book_id": 4,
         "role_code": "AUTHOR",
         "position": 1,
-        "name": "An author",
+        "name": "First author",
     }
     assert canonical.readings[0]["source_book_id"] == 4
     assert canonical.loans[0]["loaned_to"] == "A friend"
@@ -362,3 +385,224 @@ def test_owner_preflight_persists_report_but_not_uploaded_zip(
     assert cancelled.status_code == 200
     assert cancelled.json()["state"] == "EXPIRED"
     assert not directory.exists()
+
+
+def test_atomic_consolidation_preserves_catalogue_readings_loans_and_layout(
+    session, tmp_path: Path
+) -> None:
+    owner = User(
+        email="atomic@example.test",
+        username="atomic_owner",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    library = Library(name="Atomic destination", slug="atomic-destination", created_by_user_id=owner.id)
+    session.add_all([owner, library, ContributorRole(code="AUTHOR", label="Author", sort_order=1)])
+    session.flush()
+    session.add(AccountStorageEntitlement(user_id=owner.id))
+    session.add(
+        LibraryMembership(
+            library_id=library.id,
+            user_id=owner.id,
+            role="OWNER",
+            selected_reading_user_id=owner.id,
+        )
+    )
+    session.commit()
+    staging = tmp_path / "atomic-staging"
+    objects = FilesystemCoverStorage(tmp_path / "objects")
+    service = LocalImportService(
+        LocalImportRepository(session),
+        staging,
+        storage_service=StorageService(StorageRepository(session)),
+        object_storage=objects,
+        settings=get_settings(),
+    )
+    database = tmp_path / "atomic-source.db"
+    archive = tmp_path / "atomic-local.zip"
+    local_v8_database(database)
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "UPDATE books SET goodreads_url = 'https://www.goodreads.com/review/show/123'"
+    )
+    connection.commit()
+    connection.close()
+    create_backup(archive, database)
+    with archive.open("rb") as source:
+        job = service.preflight(
+            library_id=library.id,
+            actor_user_id=owner.id,
+            reading_owner_user_id=owner.id,
+            upload=source,
+        )
+
+    completed = service.consolidate(
+        import_id=job.id,
+        library_id=library.id,
+        actor_user_id=owner.id,
+        allow_repeated_archive=False,
+    )
+
+    assert completed.state == "IMPORTED"
+    assert completed.result_counts == {
+        "bookcases": 1,
+        "shelves": 1,
+        "containers": 1,
+        "books": 1,
+        "contributors": 2,
+        "readings": 1,
+        "loans": 1,
+        "covers": 1,
+    }
+    imported_book = session.query(Book).filter_by(library_id=library.id).one()
+    assert imported_book.title == "A book"
+    assert [item.name for item in session.query(BookContributor).filter_by(book_id=imported_book.id).order_by(BookContributor.position)] == ["First author", "Second author"]
+    assert session.query(ReadingSession).filter_by(book_id=imported_book.id).one().user_id == owner.id
+    assert session.query(Loan).filter_by(book_id=imported_book.id).one().loaned_to == "A friend"
+    imported_case = session.query(Bookcase).filter_by(library_id=library.id).one()
+    case_layout = session.get(VisualBookcaseLayout, (library.id, imported_case.id))
+    assert case_layout is not None and float(case_layout.width_mm) == 2500
+    shelf_layout = session.query(VisualShelfLayout).filter_by(library_id=library.id).one()
+    assert float(shelf_layout.width_mm) == 2375
+    assert not (staging / str(job.id)).exists()
+    cover = imported_book.cover
+    assert cover is not None and objects.read(cover.object_key)
+
+    export_path = tmp_path / "portable.zip"
+    manifest = create_server_library_export(
+        session=session,
+        storage=objects,
+        library_id=library.id,
+        destination=export_path,
+    )
+    assert manifest["format"] == "BOOKPILE_SERVER_LIBRARY"
+    with zipfile.ZipFile(export_path) as portable:
+        assert set(portable.namelist()) == {
+            "manifest.json",
+            "library.json",
+            f"covers/{imported_book.id}.webp",
+        }
+        data_bytes = portable.read("library.json")
+        exported = json.loads(data_bytes)
+    assert exported["library"]["name"] == "Atomic destination"
+    assert exported["members"] == [
+        {
+            "member_key": str(owner.id),
+            "role": "OWNER",
+            "selected_reading_member_key": str(owner.id),
+            "username": "atomic_owner",
+            "viewer_scope": None,
+        }
+    ]
+    assert exported["readings"][0]["user_id"] == str(owner.id)
+    assert "atomic@example.test" not in data_bytes.decode("utf-8")
+    assert "password" not in data_bytes.decode("utf-8").casefold()
+
+
+def test_failed_final_quota_check_rolls_back_rows_and_cover_objects(
+    session, tmp_path: Path
+) -> None:
+    owner = User(
+        email="rollback@example.test",
+        username="rollback_owner",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    library = Library(name="Rollback", slug="rollback-import", created_by_user_id=owner.id)
+    session.add_all([owner, library, ContributorRole(code="AUTHOR", label="Author", sort_order=1)])
+    session.flush()
+    session.add_all(
+        [
+            AccountStorageEntitlement(user_id=owner.id, limit_bytes=100),
+            LibraryMembership(
+                library_id=library.id,
+                user_id=owner.id,
+                role="OWNER",
+                selected_reading_user_id=owner.id,
+            ),
+        ]
+    )
+    session.commit()
+    staging = tmp_path / "rollback-staging"
+    object_root = tmp_path / "rollback-objects"
+    objects = FilesystemCoverStorage(object_root)
+    service = LocalImportService(
+        LocalImportRepository(session),
+        staging,
+        storage_service=StorageService(StorageRepository(session)),
+        object_storage=objects,
+        settings=get_settings(),
+    )
+    database = tmp_path / "rollback.db"
+    archive = tmp_path / "rollback.zip"
+    local_v8_database(database)
+    create_backup(archive, database)
+    with archive.open("rb") as source:
+        job = service.preflight(
+            library_id=library.id,
+            actor_user_id=owner.id,
+            reading_owner_user_id=owner.id,
+            upload=source,
+        )
+    assert job.capacity_available is False
+
+    with pytest.raises(InsufficientSharedCapacity):
+        service.consolidate(
+            import_id=job.id,
+            library_id=library.id,
+            actor_user_id=owner.id,
+            allow_repeated_archive=False,
+        )
+
+    session.expire_all()
+    assert session.query(Book).filter_by(library_id=library.id).count() == 0
+    assert session.query(Bookcase).filter_by(library_id=library.id).count() == 0
+    assert session.get(LibraryImportJob, job.id).state == "READY"
+    assert list(object_root.rglob("*.webp")) == []
+    assert (staging / str(job.id) / "extracted" / "bookpile.db").is_file()
+
+
+def test_portable_export_endpoint_is_owner_only_and_removes_temporary_zip(
+    client, session, tmp_path: Path
+) -> None:
+    owner = authenticated_user(client, session, "export_owner")
+    library = Library(name="Owner export", slug="owner-export", created_by_user_id=owner.id)
+    session.add(library)
+    session.flush()
+    session.add(
+        LibraryMembership(
+            library_id=library.id,
+            user_id=owner.id,
+            role="OWNER",
+            selected_reading_user_id=owner.id,
+        )
+    )
+    session.commit()
+    export_root = tmp_path / "exports"
+    client.app.dependency_overrides[get_portable_export_service] = lambda: PortableExportService(
+        LocalImportRepository(session),
+        FilesystemCoverStorage(tmp_path / "export-objects"),
+        export_root,
+    )
+
+    response = client.get(f"/api/v1/libraries/{library.id}/exports/portable")
+
+    assert response.status_code == 200
+    assert response.content.startswith(b"PK")
+    assert response.headers["content-type"] == "application/zip"
+    assert list(export_root.glob("*.zip")) == []
+
+    viewer = authenticated_user(client, session, "export_viewer")
+    session.add(
+        LibraryMembership(
+            library_id=library.id,
+            user_id=viewer.id,
+            role="VIEWER",
+            viewer_scope="CATALOG_AND_MAP",
+            selected_reading_user_id=owner.id,
+        )
+    )
+    session.commit()
+    assert client.get(f"/api/v1/libraries/{library.id}/exports/portable").status_code == 404

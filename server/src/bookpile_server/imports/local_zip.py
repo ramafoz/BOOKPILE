@@ -261,6 +261,92 @@ def _table_names(connection: sqlite3.Connection) -> set[str]:
     }
 
 
+def _validate_v8_semantics(connection: sqlite3.Connection) -> None:
+    invalid_author = connection.execute(
+        """SELECT b.id FROM books b
+           LEFT JOIN book_authors a ON a.book_id = b.id
+           GROUP BY b.id
+           HAVING (b.has_multiple_authors = 1 AND (b.author <> 'Multiple authors' OR COUNT(a.book_id) < 2))
+               OR (b.has_multiple_authors = 0 AND COUNT(a.book_id) <> 0)
+               OR COUNT(a.book_id) <> COUNT(DISTINCT a.position)
+           LIMIT 1"""
+    ).fetchone()
+    if invalid_author:
+        _fail("Local structured-author data is inconsistent.")
+    for book_id, positions, names in (
+        (
+            book_id,
+            [row[0] for row in rows],
+            [" ".join(str(row[1]).split()).casefold() for row in rows],
+        )
+        for book_id, rows in _group_rows(
+            connection.execute(
+                "SELECT book_id, position, name FROM book_authors ORDER BY book_id, position"
+            )
+        ).items()
+    ):
+        if positions != list(range(1, len(positions) + 1)) or len(names) != len(set(names)):
+            _fail(f"Local structured-author ordering is invalid for book {book_id}.")
+    if connection.execute(
+        """SELECT id FROM reading_sessions WHERE
+             (state = 'ACTIVE' AND (started_date IS NULL OR finished_date IS NOT NULL OR dates_unknown <> 0))
+          OR (state = 'COMPLETED' AND NOT (
+                (started_date IS NOT NULL AND finished_date IS NOT NULL AND dates_unknown = 0 AND started_date <= finished_date)
+             OR (started_date IS NULL AND finished_date IS NULL AND dates_unknown = 1)))
+          LIMIT 1"""
+    ).fetchone():
+        _fail("Local reading-session dates are inconsistent.")
+    if connection.execute(
+        """SELECT book_id FROM reading_sessions GROUP BY book_id
+           HAVING MIN(session_number) <> 1 OR MAX(session_number) <> COUNT(*)
+              OR SUM(state = 'ACTIVE') > 1 OR SUM(dates_unknown = 1) > 1
+           LIMIT 1"""
+    ).fetchone():
+        _fail("Local reading-session ordering is inconsistent.")
+    if connection.execute(
+        """SELECT b.id FROM books b
+           LEFT JOIN reading_sessions active ON active.book_id = b.id AND active.state = 'ACTIVE'
+           LEFT JOIN reading_sessions latest ON latest.book_id = b.id
+             AND latest.session_number = (SELECT MAX(r.session_number) FROM reading_sessions r WHERE r.book_id = b.id)
+           WHERE (active.id IS NOT NULL AND (
+                    b.status <> 'CURRENTLY_READING' OR b.reading_started_date IS NOT active.started_date
+                    OR b.read_date IS NOT NULL OR b.is_read_date_unknown <> 0))
+              OR (active.id IS NULL AND latest.id IS NOT NULL AND (
+                    b.status <> 'READ' OR b.reading_started_date IS NOT latest.started_date
+                    OR b.read_date IS NOT latest.finished_date OR b.is_read_date_unknown <> latest.dates_unknown))
+              OR (latest.id IS NULL AND (
+                    b.status <> 'PENDING' OR b.reading_started_date IS NOT NULL
+                    OR b.read_date IS NOT NULL OR b.is_read_date_unknown <> 0))
+           LIMIT 1"""
+    ).fetchone():
+        _fail("Local reading projections do not match their session history.")
+    if connection.execute(
+        """SELECT id FROM loans WHERE length(trim(loaned_to)) NOT BETWEEN 1 AND 300
+             OR length(COALESCE(notes, '')) > 4000 OR state NOT IN ('ACTIVE', 'RETURNED')
+             OR (state = 'ACTIVE' AND returned_date IS NOT NULL)
+             OR (loaned_date IS NOT NULL AND returned_date IS NOT NULL AND loaned_date > returned_date)
+             OR (loaned_date IS NOT NULL AND expected_return_date IS NOT NULL AND loaned_date > expected_return_date)
+           LIMIT 1"""
+    ).fetchone():
+        _fail("Local loan history is inconsistent.")
+    if connection.execute(
+        "SELECT book_id FROM loans WHERE state = 'ACTIVE' GROUP BY book_id HAVING COUNT(*) > 1 LIMIT 1"
+    ).fetchone():
+        _fail("A Local book has more than one active loan.")
+    if connection.execute(
+        """SELECT r.book_id FROM reading_sessions r JOIN loans l ON l.book_id = r.book_id
+           WHERE r.state = 'ACTIVE' AND l.state = 'ACTIVE' LIMIT 1"""
+    ).fetchone():
+        _fail("A Local physical copy cannot be actively read and on loan simultaneously.")
+
+
+def _group_rows(rows) -> dict[int, list[tuple[int, str]]]:
+    grouped: dict[int, list[tuple[int, str]]] = {}
+    for book_id, position, name in rows:
+        grouped.setdefault(int(book_id), []).append((int(position), str(name)))
+    return grouped
+
+
 def _validate_database(path: Path, schema_version: int) -> tuple[dict[str, int], set[str]]:
     try:
         uri = f"{path.resolve().as_uri()}?mode=ro"
@@ -295,6 +381,7 @@ def _validate_database(path: Path, schema_version: int) -> tuple[dict[str, int],
                 ]
                 if versions != list(range(1, schema_version + 1)):
                     _fail("Manifest and SQLite schema versions do not match.")
+            _validate_v8_semantics(connection)
             counts = {
                 table: connection.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
                 for table in COUNTED_TABLES
@@ -499,7 +586,7 @@ def adapt_local_v8(extraction_directory: Path) -> CanonicalLocalV8Records:
     )
     outside_areas = tuple(
         {
-            "area_kind": "ON_LOAN" if item["item_id"] == 1 else "READING",
+            "area_kind": "LOANED" if item["item_id"] == 1 else "READING",
             **{key: item[key] for key in ("x", "y", "width", "height")},
         }
         for item in visual_items

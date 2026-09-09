@@ -706,11 +706,11 @@ class LibraryImportJob(Base):
     library_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False
     )
-    created_by_user_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
     )
-    reading_owner_user_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    reading_owner_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
     )
     state: Mapped[str] = mapped_column(String(16), nullable=False, default="READY")
     adapter: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -719,6 +719,7 @@ class LibraryImportJob(Base):
     source_created_at: Mapped[str] = mapped_column(String(64), nullable=False)
     archive_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     source_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    staging_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     staging_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     source_counts: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     warnings: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
@@ -726,6 +727,7 @@ class LibraryImportJob(Base):
     uncompressed_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     estimated_logical_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     capacity_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    result_counts: Mapped[dict[str, object] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
