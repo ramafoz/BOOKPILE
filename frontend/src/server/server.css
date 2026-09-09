@@ -367,6 +367,13 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-empty-catalogue { min-height: 180px; display: grid; place-content: center; justify-items: center; color: #71817b; text-align: center; }
 .server-empty-catalogue h4 { margin: 10px 0 0; }
 .server-empty-catalogue p { margin: 6px 0; }
+.server-map-onboarding { max-width: 640px; margin: 0 auto; padding: 30px 20px; }
+.server-map-onboarding > span { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; color: #285f52; background: #e5f0eb; }
+.server-map-onboarding .server-card-eyebrow { margin: 14px 0 0; color: #ae5429; }
+.server-map-onboarding h4 { margin-top: 5px; color: #173d34; font: 700 25px/1.15 Georgia, "Times New Roman", serif; }
+.server-map-onboarding > p:last-of-type { max-width: 570px; color: #536b64; line-height: 1.55; }
+.server-map-onboarding button { min-height: 43px; margin-top: 12px; padding: 9px 15px; border: 1px solid #24584c; border-radius: 7px; display: inline-flex; align-items: center; gap: 7px; color: #fff; background: #24584c; font-weight: 750; }
+.server-map-onboarding small { margin-top: 10px; color: #71817b; }
 .server-pagination { display: flex; align-items: center; justify-content: center; gap: 13px; padding-top: 15px; }
 .server-pagination button { border: 1px solid #b5c4bd; border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; color: #315b51; background: #f8fbf9; }
 .server-pagination button:disabled { opacity: .4; cursor: default; }
@@ -703,6 +710,16 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-privacy-card > label { grid-template-columns: 1fr; align-items: center; padding: 9px 0; border-top: 1px solid #eee4d8; }
 .server-privacy-card .server-primary-action { width: 100%; justify-content: center; margin-top: 14px; }
 .server-storage-card { overflow: hidden; }
+.server-beta-day-progress { max-width: 420px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin: 8px 0; }
+.server-beta-day-progress i { height: 12px; border-radius: 99px; background: #e2dbcf; }
+.server-beta-day-progress i.complete { background: #d7a33f; }
+.server-beta-invitation-card > small { color: #64756f; }
+.server-beta-invitation-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 17px 0; color: #49655d; }
+.server-beta-invitation-summary span { display: inline-flex; align-items: baseline; gap: 6px; }
+.server-beta-invitation-summary b { color: #173d34; font-size: 20px; }
+.server-earned-invitation { margin-top: 16px; padding: 14px; border: 1px solid #d9c18d; border-radius: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; background: #fff8e8; }
+.server-earned-invitation button { min-height: 42px; padding: 8px 13px; border: 1px solid #467064; border-radius: 7px; color: #214d42; background: #f5faf7; font-weight: 750; }
+.server-earned-invitation small { grid-column: 1 / -1; color: #6b746f; }
 .server-storage-library-list { display: grid; gap: 14px; }
 .server-storage-library-list > div { display: grid; grid-template-columns: minmax(150px, 240px) 1fr; align-items: center; gap: 15px; }
 .server-storage-library-list span { display: flex; align-items: center; gap: 8px; font-weight: 750; }
@@ -806,6 +823,8 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
   .server-password-form, .server-account-data-grid { grid-template-columns: 1fr; }
   .server-privacy-card > label { grid-template-columns: 1fr; }
   .server-storage-library-list > div { grid-template-columns: 1fr; gap: 6px; }
+  .server-earned-invitation { grid-template-columns: 1fr; }
+  .server-earned-invitation small { grid-column: 1; }
   .server-security-card, .server-security-card > div:last-child { align-items: stretch; flex-direction: column; }
   .server-security-card > div:last-child { width: 100%; }
   .server-library-dashboard { margin-top: 12px; padding: 14px 9px; }

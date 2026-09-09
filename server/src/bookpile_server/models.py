@@ -85,6 +85,9 @@ class User(Base):
     account_action_tokens: Mapped[list["AccountActionToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    beta_invitation_progress: Mapped["BetaInvitationProgress | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
     library_memberships: Mapped[list["LibraryMembership"]] = relationship(
         foreign_keys="LibraryMembership.user_id",
         back_populates="user",
@@ -361,6 +364,36 @@ class AccountInvitation(Base):
         foreign_keys=[consumed_by_user_id],
         back_populates="consumed_account_invitation",
     )
+
+
+class BetaInvitationProgress(Base):
+    __tablename__ = "beta_invitation_progress"
+    __table_args__ = (
+        CheckConstraint(
+            "active_day_count BETWEEN 0 AND 2",
+            name="ck_beta_invitation_progress_active_days",
+        ),
+        CheckConstraint(
+            "available_credits >= 0",
+            name="ck_beta_invitation_progress_credits",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    active_day_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    available_credits: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    last_active_on: Mapped[date | None] = mapped_column(Date)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="beta_invitation_progress")
 
 
 class AccountActionToken(Base):

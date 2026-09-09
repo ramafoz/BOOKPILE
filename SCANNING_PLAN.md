@@ -21,9 +21,10 @@ changed until the user reviews the result and explicitly saves a book.
 ## Current phase versus future metadata
 
 The schema-v4 implementation applies field-by-field reviewed identifiers,
-edition metadata, and supported classifications. Direct provider values start
-selected; inferred genre, fiction category, and publication type suggestions
-start unchecked. Every applied value remains editable before saving.
+edition metadata, and supported classifications. In the dedicated mobile scan
+flows, every arriving provider value starts unchecked; the user deliberately
+selects each value to transfer into the editable book form. Every applied value
+remains editable before saving.
 
 The lookup layer should use a future-ready result shape so it can later supply:
 
@@ -67,9 +68,8 @@ offers that choice and the user confirms it.
 - Preserve provider provenance and visible conflicts, and never overwrite a
   field the user has already edited, accepted, or deselected when a later
   provider responds.
-- During one Batch Add session, carry the user's accepted-field subset forward
-  as the next book's initial selection without turning it into silent saving
-  or a permanent preference.
+- During Batch scan, preserve physical placement progression but reset all
+  provider-field selections for every new book. Metadata never carries silently.
 
 ## Shared recognition and matching pipeline
 
@@ -100,7 +100,7 @@ Every input method should feed the same pipeline:
    - `Not found in catalogue`: offer **Add to BOOKPILE**.
 6. **Apply only after review**
    - Accepting an ISBN candidate copies only checked values into Add Book, Edit
-     Book, or Batch Add; inferred classifications start unchecked.
+     Book, or Batch Add; every proposed field starts unchecked.
    - Saving remains the existing, explicit final action.
 
 ### Common lookup result
@@ -362,6 +362,35 @@ physical-cataloguing behaviour:
 
 An existing-book match must not advance Batch Add's position because no new
 book has been saved.
+
+## Server mobile Add menu and dedicated scan pages
+
+On mobile, the Server catalogue's **Add** menu will expose exactly four primary
+paths:
+
+1. **Add single book**.
+2. **Batch add**.
+3. **Scan single barcode**.
+4. **Batch scan**.
+
+The two scan paths open dedicated mobile pages rather than crowding the normal
+editor. A scan page captures a temporary barcode photograph, never stores it,
+decodes and validates the ISBN, and starts the shared bibliographic-provider
+lookup. Results may arrive progressively. Every proposed metadata value is
+initially deselected and visibly retains its source; the user selects the fields
+they trust and presses **OK** to copy only those values into the normal editable
+book form. Nothing reaches the catalogue database until **Save book**.
+
+Single scan returns to the catalogue after saving. Batch scan offers **Save and
+scan next**, preserving only the approved batch placement progression and other
+batch-wide physical controls. Book metadata, provider selections, and personal
+`My reading` data do not silently carry to the next scanned book. Cancellation,
+lookup failure, or a duplicate warning preserves the current draft and always
+allows manual continuation.
+
+These four menu entries are required only at the mobile breakpoint. Desktop may
+continue to expose scanning inside the existing add workflow unless a later UX
+review finds dedicated desktop scan pages useful.
 
 ## Error and edge cases
 

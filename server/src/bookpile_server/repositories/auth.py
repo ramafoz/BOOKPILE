@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import SecurityEvent, User, UserSession
+from ..models import BetaInvitationProgress, SecurityEvent, User, UserSession
 
 
 class AuthRepository:
@@ -31,6 +31,30 @@ class AuthRepository:
             .options(joinedload(UserSession.user))
             .where(UserSession.token_hash == token_hash)
         )
+
+    def record_beta_activity_day(self, user_id: UUID, active_on: date) -> bool:
+        progress = self._session.scalar(
+            select(BetaInvitationProgress)
+            .where(BetaInvitationProgress.user_id == user_id)
+            .with_for_update()
+        )
+        if progress is None:
+            progress = BetaInvitationProgress(
+                user_id=user_id, active_day_count=1, last_active_on=active_on
+            )
+            self._session.add(progress)
+            return True
+        if progress.last_active_on == active_on:
+            return False
+        next_count = progress.active_day_count + 1
+        if next_count >= 3:
+            progress.active_day_count = 0
+            progress.available_credits += 1
+        else:
+            progress.active_day_count = next_count
+        progress.last_active_on = active_on
+        progress.updated_at = datetime.now(UTC)
+        return True
 
     def add_security_event(
         self,

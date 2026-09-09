@@ -137,6 +137,19 @@ class PrivateAccountResponse(BaseModel):
     password_protected: bool = True
 
 
+class BetaInvitationStatusResponse(BaseModel):
+    active_day_count: int = Field(ge=0, le=2)
+    days_required: int = 3
+    available_credits: int = Field(ge=0)
+    open_invitations: int = Field(ge=0)
+
+
+class EarnedAccountInvitationResponse(BaseModel):
+    invitation_id: UUID
+    invitation_token: str
+    expires_at: datetime
+
+
 class ChangePasswordWrite(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=12, max_length=128)

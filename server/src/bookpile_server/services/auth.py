@@ -141,6 +141,9 @@ class AuthService:
         ):
             raise InvalidSessionError
 
+        activity_recorded = self._repository.record_beta_activity_day(
+            user_session.user.id, now.date()
+        )
         # Avoid one database write per request while still enforcing the
         # seven-day inactivity window accurately enough for interactive use.
         if now - utc_value(user_session.last_seen_at) >= timedelta(minutes=5):
@@ -149,6 +152,8 @@ class AuthService:
                 now + INACTIVITY_LIFETIME,
                 utc_value(user_session.absolute_expires_at),
             )
+            self._repository.commit()
+        elif activity_recorded:
             self._repository.commit()
         return AuthContext(
             user_id=user_session.user.id,

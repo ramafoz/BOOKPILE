@@ -4,7 +4,13 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import AccountInvitation, AccountStorageEntitlement, SecurityEvent, User
+from ..models import (
+    AccountInvitation,
+    AccountStorageEntitlement,
+    BetaInvitationProgress,
+    SecurityEvent,
+    User,
+)
 
 
 class AccountInvitationRepository:
@@ -42,8 +48,31 @@ class AccountInvitationRepository:
     def add_user(self, user: User) -> None:
         self._session.add(user)
 
-    def add_storage_entitlement(self, user_id: UUID) -> None:
+    def add_account_defaults(self, user_id: UUID) -> None:
         self._session.add(AccountStorageEntitlement(user_id=user_id))
+        self._session.add(BetaInvitationProgress(user_id=user_id))
+
+    def lock_beta_progress(self, user_id: UUID) -> BetaInvitationProgress | None:
+        return self._session.scalar(
+            select(BetaInvitationProgress)
+            .where(BetaInvitationProgress.user_id == user_id)
+            .with_for_update()
+        )
+
+    def beta_progress(self, user_id: UUID) -> BetaInvitationProgress | None:
+        return self._session.get(BetaInvitationProgress, user_id)
+
+    def open_created_invitations(self, user_id: UUID, now: datetime) -> list[AccountInvitation]:
+        return list(
+            self._session.scalars(
+                select(AccountInvitation).where(
+                    AccountInvitation.created_by_user_id == user_id,
+                    AccountInvitation.consumed_at.is_(None),
+                    AccountInvitation.revoked_at.is_(None),
+                    AccountInvitation.expires_at > now,
+                )
+            )
+        )
 
     def add_event(
         self,

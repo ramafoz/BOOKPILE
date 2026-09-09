@@ -2,10 +2,9 @@
 
 
 
-Status: active on `feature/server-account-deletion`; 7A–7E are complete and
-merged into `main`, while 7F is implemented pending user acceptance. Phase 6 is
-merged into `main`. This phase changes Server only and leaves released Local v1
-untouched.
+Status: complete. Increments 7A–7F are merged into `main`; 7G passed user
+acceptance and final gates on 2026-09-09 and is ready for its guarded merge.
+This phase changes Server only and leaves released Local v1 untouched.
 
 ## 1. Product contract
 
@@ -154,7 +153,7 @@ quarantine, any-former-Owner recovery with allocation preflight and final cleanu
 
 ### 7F — private account deletion and email-only recovery
 
-Status: implemented pending user acceptance. An account with no active Owner
+Status: complete and merged into `main`. An account with no active Owner
 responsibilities can be deleted after password, exact-username and warning
 confirmation. Sessions and Viewer memberships are revoked immediately. Deletion
 is rolled back unless the registered address receives a random, hash-at-rest,
@@ -162,7 +161,25 @@ single-use recovery link valid for 48 hours. The link is the only recovery path;
 login deliberately reveals no pending-deletion state. Expiry permanently removes
 the account and profile objects and anonymizes the retained tombstone.
 
-### 7G — final compatibility and release gates
+### 7G — earned beta invitations and empty-library onboarding
+
+Status: complete and accepted. Each distinct UTC activity date
+counts once. After three active dates, progress resets and the account earns one
+invitation credit; dates need not be consecutive and credits may accumulate.
+Redeeming a credit creates a hash-at-rest, single-use account invitation that is
+shown once and expires after seven days. This remains categorically separate from
+Owner-issued library-membership invitations.
+
+An empty catalogue owned by the signed-in user now explains why the physical map
+is BOOKPILE's distinguishing feature and offers a direct route to structural map
+setup. Mapping remains optional and ordinary book addition remains available.
+
+### 7H — final compatibility and release gates
+
+Status: complete. The final gate passed 143 backend tests with one intentional
+skip in the ordinary suite, the opt-in PostgreSQL migration/integration test,
+34 frontend tests, the optimized Server build, `git diff --check`, live migration
+through `0018`, and desktop/mobile user acceptance. Local v1 remains untouched.
 
 Run full SQLite-independent Server, PostgreSQL, concurrency, privacy, migration,
 frontend and operational gates; document and request approval before merging.
