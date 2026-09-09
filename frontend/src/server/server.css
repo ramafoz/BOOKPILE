@@ -267,6 +267,7 @@ button { cursor: pointer; }
 .server-members-control-stack .server-dashboard-panel { position: static; display: block; overflow: visible; margin: 11px 0 0; box-shadow: none; }
 .server-settings-menu { display: grid !important; gap: 8px; }
 .server-settings-menu button, .server-view-choices button { min-height: 41px; border: 1px solid #a9bdb4; border-radius: 7px; display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #28594e; background: #f7faf8; font-weight: 750; }
+.server-settings-menu button.danger { border-color: #d59a8b; color: #9e3f2a; background: #fff5f1; }
 .server-view-choices { display: flex; gap: 8px; margin-bottom: 13px; }
 .server-view-choices button.active { color: #fff; background: #285f52; }
 .server-member-list { display: grid; }
@@ -682,6 +683,13 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-profile-card > p { margin: 0 0 16px; color: #65766f; line-height: 1.5; }
 .server-profile-card label { display: grid; gap: 6px; color: #39564e; font-size: 12px; font-weight: 750; }
 .server-profile-card input, .server-profile-card select { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid #cdbfac; border-radius: 7px; color: #173a31; background: #fffdf9; }
+.server-recovery-list { display: grid; gap: 9px; }
+.server-recovery-list > div { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px; border: 1px solid #e0b5a8; border-radius: 8px; background: #fff6f2; }
+.server-recovery-list span { display: grid; gap: 3px; }
+.server-recovery-list small { color: #786b66; }
+.server-recovery-list button { min-height: 39px; padding: 8px 14px; border: 1px solid #a95d4b; border-radius: 7px; color: #8e3b28; background: #fffdf9; font-weight: 750; }
+.server-delete-library-dialog .server-check { grid-template-columns: auto 1fr; align-items: start; line-height: 1.45; }
+.server-delete-library-dialog .server-check input { width: 18px; min-height: 18px; }
 .server-profile-photo { width: 132px; height: 132px; display: grid; place-items: center; overflow: hidden; margin: 17px auto; border: 1px solid #b9cbc3; border-radius: 50%; color: #54746b; background: #eaf2ee; }
 .server-profile-photo img { width: 100%; height: 100%; object-fit: cover; }
 .server-profile-photo-actions { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; }

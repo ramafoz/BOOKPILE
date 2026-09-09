@@ -857,6 +857,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   application rate limits and defensive API headers are implemented.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
+- [ ] Implement private account deletion with password reauthentication,
+  owned-library dependency checks, session revocation, a 48-hour recovery
+  window, and final personal-data cleanup. Keep it separate from library deletion.
 - [ ] Add automated deployment, migration, test, and rollback procedures.
 - [ ] Test responsive behaviour, accessibility, browser support, and mobile
   installation requirements.

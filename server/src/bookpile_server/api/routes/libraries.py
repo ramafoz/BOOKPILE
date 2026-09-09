@@ -9,10 +9,13 @@ from ...schemas import (
     CreateLibraryInvitationRequest,
     CreateLibraryRequest,
     CreatedLibraryInvitationResponse,
+    DeleteLibraryRequest,
     LibraryMemberResponse,
     LibraryMemberSummaryResponse,
     LibrarySummaryResponse,
     ReadingPerspectiveResponse,
+    RecoverableLibraryResponse,
+    RestoreLibraryRequest,
     SelectReadingPerspectiveRequest,
 )
 from ...services.libraries import (
@@ -20,6 +23,7 @@ from ...services.libraries import (
     LibraryConflictError,
     FinalOwnerError,
     LibraryReauthenticationError,
+    LibraryRecoveryExpiredError,
     LibraryService,
     LibraryValidationError,
 )
@@ -27,6 +31,7 @@ from ...services.library_access import (
     LibraryNotFoundError,
     LibraryOwnerRequiredError,
 )
+from ...services.storage_domain import InsufficientSharedCapacity
 from ..dependencies import (
     CsrfDependency,
     CurrentAuthDependency,
@@ -84,6 +89,10 @@ def translate_library_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="The final Owner cannot be removed or downgraded.",
         )
+    if isinstance(exc, LibraryRecoveryExpiredError):
+        return HTTPException(status_code=status.HTTP_410_GONE, detail="The 48-hour recovery window has expired.")
+    if isinstance(exc, InsufficientSharedCapacity):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The library cannot be restored because its Owners do not currently have enough shared storage capacity.")
     raise exc
 
 
@@ -111,6 +120,81 @@ def create_library(
     except (LibraryValidationError, LibraryConflictError) as exc:
         raise translate_library_error(exc) from exc
     return library_summary(membership)
+
+
+def recoverable_response(item) -> RecoverableLibraryResponse:
+    return RecoverableLibraryResponse(
+        deletion_id=item.id,
+        library_id=item.library_id,
+        name=item.library_name,
+        deleted_at=item.created_at,
+        recover_until=item.recover_until,
+    )
+
+
+@router.delete("/libraries/{library_id}", response_model=RecoverableLibraryResponse)
+def delete_library(
+    library_id: UUID,
+    payload: DeleteLibraryRequest,
+    service: LibraryServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> RecoverableLibraryResponse:
+    try:
+        return recoverable_response(service.delete_library(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            current_password=payload.current_password,
+            confirmation_name=payload.confirmation_name,
+            acknowledge_permanent_deletion=payload.acknowledge_permanent_deletion,
+        ))
+    except (
+        LibraryNotFoundError,
+        LibraryOwnerRequiredError,
+        LibraryValidationError,
+        LibraryReauthenticationError,
+    ) as exc:
+        raise translate_library_error(exc) from exc
+
+
+@router.get("/account/deleted-libraries", response_model=list[RecoverableLibraryResponse])
+def recoverable_libraries(
+    service: LibraryServiceDependency,
+    context: CurrentAuthDependency,
+) -> list[RecoverableLibraryResponse]:
+    return [
+        recoverable_response(item)
+        for item in service.recoverable_libraries(user_id=context.user_id)
+    ]
+
+
+@router.post(
+    "/account/deleted-libraries/{deletion_id}/restore",
+    response_model=LibrarySummaryResponse,
+)
+def restore_library(
+    deletion_id: UUID,
+    payload: RestoreLibraryRequest,
+    service: LibraryServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> LibrarySummaryResponse:
+    try:
+        membership = service.restore_library(
+            tombstone_id=deletion_id,
+            actor_user_id=context.user_id,
+            current_password=payload.current_password,
+        )
+        return library_summary(membership)
+    except (
+        LibraryNotFoundError,
+        LibraryValidationError,
+        LibraryReauthenticationError,
+        LibraryRecoveryExpiredError,
+        LibraryConflictError,
+        InsufficientSharedCapacity,
+    ) as exc:
+        raise translate_library_error(exc) from exc
 
 
 @router.get(
