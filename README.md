@@ -556,8 +556,8 @@ locking, redacted audit, and structurally separate Owner-full and Viewer-safe
 book/catalogue API projections. Phases 6C–6D add the accepted responsive
 Owner/Viewer loan workflow, atomic loan-at-creation, advanced loan search,
 On-loan map custody and shared statistics. Phase 6E compatibility, privacy,
-test, lint, build and PostgreSQL gates pass; the feature branch is ready for
-the explicitly approved merge into `main`.
+test, lint, build and PostgreSQL gates passed, and Phase 6 is merged into
+`main`.
 The complete implementation boundary and migration gates are defined in
 [SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
 
