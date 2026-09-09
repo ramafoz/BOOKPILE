@@ -59,15 +59,25 @@ additive unless the later restore workflow explicitly says otherwise.
   entitlements, and every unrelated library.
 - Allow only Owners to create a full portable export.
 
+The Owner-facing `Data & portability` workspace is also implemented. It can
+download this export and run the Local preflight/consolidation flow without
+exposing either operation to Viewers.
+
 ### 8E — Server restore and acceptance gate
 
 - Restore a Server-portable ZIP through the same quarantine, report, quota,
   duplicate-decision, staging, and atomic-consolidation guarantees.
-- Add the Owner-facing Data & portability UI and progress/error recovery.
+- Extend the existing Owner-facing Data & portability UI with Server restore,
+  member mapping, progress, and recoverable errors.
 - Repeatedly import anonymized real Local-v8 fixtures and restore Server
   exports into fresh libraries.
 - Prove preserved counts/values and prove that every induced failure leaves no
   database rows, charged bytes, or private objects behind.
+
+Before restore is implemented, define how each exported stable member key is
+mapped to a current destination Owner. The shared catalogue may be restored
+independently, but personal readings and Goodreads links must never be assigned
+implicitly and restoring an archive must never grant library membership.
 
 ## Non-goals
 

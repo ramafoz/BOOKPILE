@@ -508,7 +508,10 @@ Server Phase 8 is active. Local format-1/schema-8 inspection, deterministic
 canonical adaptation, authenticated preflight, atomic consolidation and
 Owner-only portable Server-library export are implemented. Final locked quota
 allocation and private-cover compensation leave failed imports without visible
-residue. Server-portable restore, the Owner UI and acceptance fixtures follow under
+residue. Owners can now inspect a Local backup, review warnings and capacity,
+approve an intentional repeated archive, consolidate it atomically, or download
+a portable Server ZIP from `Library settings > Data & portability` on desktop
+and mobile. Server-portable restore and its acceptance fixtures follow under
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 The compact Server workspace increment is complete and accepted on desktop and

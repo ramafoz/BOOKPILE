@@ -92,6 +92,28 @@ export interface RecoverableLibrary {
   recover_until: string;
 }
 
+export interface LocalImportWarning {
+  code: string;
+  message: string | null;
+  count: number | null;
+}
+
+export interface LocalImportJob {
+  import_id: string;
+  state: "READY" | "IMPORTING" | "IMPORTED" | "FAILED" | "EXPIRED";
+  adapter: string;
+  backup_format_version: number;
+  local_schema_version: number;
+  source_created_at: string;
+  reading_owner_user_id: string | null;
+  counts: Record<string, number>;
+  estimated_logical_bytes: number;
+  capacity_available: boolean;
+  expires_at: string;
+  warnings: LocalImportWarning[];
+  result_counts: Record<string, number> | null;
+}
+
 export interface LibraryMember {
   user_id: string;
   username: string;
@@ -760,6 +782,32 @@ export const serverApi = {
       { method: "POST", body: JSON.stringify({ current_password: currentPassword }) },
       true,
     ),
+  preflightLocalImport: (libraryId: string, backup: File, readingOwnerUserId: string) => {
+    const body = new FormData();
+    body.append("reading_owner_user_id", readingOwnerUserId);
+    body.append("backup", backup);
+    return request<LocalImportJob>(
+      `/libraries/${libraryId}/imports/local/preflight`,
+      { method: "POST", body },
+      true,
+    );
+  },
+  localImportJob: (libraryId: string, importId: string) =>
+    request<LocalImportJob>(`/libraries/${libraryId}/imports/${importId}`),
+  cancelLocalImport: (libraryId: string, importId: string) =>
+    request<LocalImportJob>(
+      `/libraries/${libraryId}/imports/${importId}`,
+      { method: "DELETE" },
+      true,
+    ),
+  consolidateLocalImport: (libraryId: string, importId: string, allowRepeatedArchive: boolean) =>
+    request<LocalImportJob>(
+      `/libraries/${libraryId}/imports/${importId}/consolidate`,
+      { method: "POST", body: JSON.stringify({ allow_repeated_archive: allowRepeatedArchive }) },
+      true,
+    ),
+  portableExportUrl: (libraryId: string) =>
+    `${API_URL}/libraries/${libraryId}/exports/portable`,
   libraryMembers: (libraryId: string) =>
     request<LibraryMember[]>(`/libraries/${libraryId}/members`),
   libraryMemberSummary: (libraryId: string) =>

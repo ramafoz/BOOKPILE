@@ -734,8 +734,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Phase 8D backend export: Owner-only canonical per-library ZIP with
     checksums, private covers, shared/personal library records and member keys;
     credentials, email, sessions, profiles and unrelated libraries are absent.
-  - [ ] Phase 8E: validate/restore Server-portable ZIPs, add the Owner-facing
-    portability UI, and pass anonymized real-fixture/recovery gates.
+  - [x] Add the Owner-facing `Data & portability` UI for portable export and
+    Local ZIP preflight, warning review, explicit repeated-archive approval,
+    cancellation and atomic consolidation, including responsive presentation.
+  - [ ] Phase 8E: validate/restore Server-portable ZIPs, define explicit
+    destination-Owner mapping for member-owned data, and pass anonymized
+    real-fixture/recovery gates.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -762,10 +766,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     manipulation over that same geometry service. Interaction is
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
-  - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter and
-    authenticated preflight jobs, atomic Local consolidation and portable
-    Server export are complete; Server restore, UI, and real anonymized fixture
-    gates remain.
+  - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter,
+    authenticated preflight jobs, atomic Local consolidation, portable Server
+    export and their Owner UI are complete; Server restore and real anonymized
+    fixture gates remain.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user
