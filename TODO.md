@@ -324,6 +324,16 @@ fields.
 - [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
   while preserving its current container, position, direction, and collision
   handling.
+- [ ] Accept and merge Server temporary-photo barcode scanning on real mobile
+  hardware. Implementation is complete on `feature/server-barcode-scanning`:
+  - [x] Add Owner-only, library-scoped and rate-limited provider lookup with
+    exact ISBN catalogue warnings and mocked backend tests.
+  - [x] Reuse local ZXing decoding without uploading or storing the photograph.
+  - [x] Make field transfer opt-in from an initially empty selection in Add,
+    Batch Add, and Edit Book.
+  - [x] Add mobile-only `Scan single barcode` and `Batch scan` entry points;
+    preserve placement but clear metadata, selections and `My reading` between
+    batch records.
 - [ ] **Local v1 and Server:** enrich barcode/ISBN scanning from every
   configured bibliographic source rather than accepting only one result.
   Merge candidates with provenance and conflict review; import genuine authors

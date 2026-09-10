@@ -658,6 +658,49 @@ class BookWrite(BaseModel):
         return self
 
 
+class BibliographicIdentifiers(BaseModel):
+    isbn_10: str | None = None
+    isbn_13: str | None = None
+
+
+class BibliographicCatalogueMatch(BaseModel):
+    book_id: UUID
+    title: str
+    author: str
+    match_class: Literal["strong", "possible"]
+    reason: str
+
+
+class BibliographicCandidate(BaseModel):
+    source: str
+    source_record_id: str | None = None
+    identifiers: BibliographicIdentifiers
+    title: str
+    subtitle: str | None = None
+    authors: list[str]
+    publisher: str | None = None
+    current_ed_year: int | None = None
+    original_publication_year: int | None = None
+    page_count: int | None = None
+    subjects: list[str]
+    language: str | None = None
+    edition_number: int | None = None
+    fiction_category: FictionCategory | None = None
+    binding: Binding | None = None
+    publication_type: PublicationType | None = None
+    genre_text: str | None = None
+    series_name: str | None = None
+    series_volume: str | None = None
+    confidence_or_match_notes: str | None = None
+    catalogue_matches: list[BibliographicCatalogueMatch] = Field(default_factory=list)
+
+
+class ISBNLookupResponse(BaseModel):
+    isbn: str
+    candidates: list[BibliographicCandidate]
+    catalogue_matches: list[BibliographicCatalogueMatch] = Field(default_factory=list)
+
+
 class BookWithPlacementWrite(BaseModel):
     """One atomic catalogue-and-physical-copy write."""
 

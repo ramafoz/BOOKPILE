@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -14,9 +14,12 @@ import {
   Plus,
   Search,
   BookMarked,
+  Camera,
   Handshake,
   Sparkles,
   RefreshCw,
+  LoaderCircle,
+  ScanBarcode,
   SlidersHorizontal,
   Trash2,
   X,
@@ -37,9 +40,12 @@ import {
   type LoanOverview,
   type BookLoans,
   type LoanWrite,
+  type BibliographicCandidate,
+  type ISBNLookupResult,
   ServerApiError,
   serverApi,
 } from "./serverApi";
+import { decodeIsbnBarcodePhoto } from "../barcode";
 import { cataloguePrivacyLabel, catalogueTitle, hasActiveCatalogueFilters } from "./workspacePresentation";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
@@ -237,7 +243,51 @@ const EMPTY_INITIAL_LOAN: InitialLoanWrite = {
   expected_return_date: null,
 };
 
-function BookEditor({ initial, initialCover, roles, options, physical, bookId, initialPlacement, batchMode, batchAddedCount = 0, onClose, onSave }: {
+type CandidateMetadataKey = "title" | "author" | "isbn_10" | "isbn_13" |
+  "subtitle" | "page_count" | "publisher" | "current_ed_year" |
+  "original_publication_year" | "language" | "edition_number" |
+  "fiction_category" | "binding" | "publication_type" | "genre_text" |
+  "series_name" | "series_volume";
+
+function CandidateReview({ candidate, onApply }: {
+  candidate: BibliographicCandidate;
+  onApply: (selected: Set<CandidateMetadataKey>) => void;
+}) {
+  const allValues: Array<[CandidateMetadataKey, string, string | number | null]> = [
+    ["title", "Title", candidate.title],
+    ["author", "Authors", candidate.authors.join(" · ")],
+    ["isbn_10", "ISBN-10", candidate.identifiers.isbn_10],
+    ["isbn_13", "ISBN-13", candidate.identifiers.isbn_13],
+    ["subtitle", "Subtitle", candidate.subtitle],
+    ["page_count", "Pages", candidate.page_count],
+    ["publisher", "Publisher", candidate.publisher],
+    ["current_ed_year", "Edition year", candidate.current_ed_year],
+    ["original_publication_year", "Original year", candidate.original_publication_year],
+    ["language", "Language", candidate.language],
+    ["edition_number", "Edition", candidate.edition_number],
+    ["fiction_category", "Category", candidate.fiction_category],
+    ["binding", "Binding", candidate.binding],
+    ["publication_type", "Publication type", candidate.publication_type],
+    ["genre_text", "Genres / categories", candidate.genre_text],
+    ["series_name", "Series", candidate.series_name],
+    ["series_volume", "Series volume", candidate.series_volume],
+  ];
+  const values = allValues.filter((entry) => entry[2] !== null && entry[2] !== "");
+  const [selected, setSelected] = useState<Set<CandidateMetadataKey>>(new Set());
+  return <div className="server-candidate-review">
+    <p><b>Choose the values to transfer</b><small>Nothing is selected or saved automatically.</small></p>
+    <div>{values.map(([key, label, value]) => <label key={key}>
+      <input type="checkbox" checked={selected.has(key)} onChange={(event) => setSelected((current) => {
+        const next = new Set(current); if (event.target.checked) next.add(key); else next.delete(key); return next;
+      })} />
+      <span><b>{label}</b>{String(value).replaceAll("_", " ")}</span>
+    </label>)}</div>
+    <button type="button" disabled={!selected.size} onClick={() => onApply(selected)}>Apply selected metadata</button>
+  </div>;
+}
+
+function BookEditor({ libraryId, initial, initialCover, roles, options, physical, bookId, initialPlacement, batchMode, scanFlow, batchAddedCount = 0, onClose, onOpenExisting, onSave }: {
+  libraryId: string;
   initial: ServerBookWrite;
   initialCover: ServerBook["cover"];
   roles: CatalogueMetadataOptions["contributor_roles"];
@@ -246,8 +296,10 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   bookId: string | null;
   initialPlacement?: PlacementWrite | null;
   batchMode?: boolean;
+  scanFlow?: boolean;
   batchAddedCount?: number;
   onClose: () => void;
+  onOpenExisting: (bookId: string) => void;
   onSave: (book: ServerBookWrite, cover: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, loan: InitialLoanWrite | null, reportProgress: (message: string) => void) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ServerBookWrite>(initial);
@@ -259,6 +311,12 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [personal, setPersonal] = useState<InitialPersonalReadingWrite>(EMPTY_INITIAL_PERSONAL_READING);
   const [loan, setLoan] = useState<InitialLoanWrite>(EMPTY_INITIAL_LOAN);
+  const [isbnInput, setIsbnInput] = useState(initial.isbn_13 ?? initial.isbn_10 ?? "");
+  const [isbnLookup, setIsbnLookup] = useState<ISBNLookupResult | null>(null);
+  const [isbnBusy, setIsbnBusy] = useState(false);
+  const [isbnError, setIsbnError] = useState("");
+  const [barcodeBusy, setBarcodeBusy] = useState(false);
+  const barcodeInput = useRef<HTMLInputElement>(null);
   const [creatingAtOpen] = useState(!bookId);
   const placed = physical?.books.find((item) => item.id === bookId);
   const initialContainerId = initialPlacement?.containerId ?? placed?.container_id ?? "";
@@ -284,6 +342,53 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
     else if (author === "Multiple authors") author = "";
     setDraft({ ...draft, contributors, author });
   }
+  async function lookUpIsbn(value = isbnInput) {
+    if (!value.trim()) { setIsbnError("Enter or scan an ISBN first."); return; }
+    setIsbnBusy(true); setIsbnError(""); setIsbnLookup(null);
+    try {
+      const result = await serverApi.lookupIsbn(libraryId, value);
+      setIsbnInput(result.isbn); setIsbnLookup(result);
+    } catch (caught) { setIsbnError(message(caught)); }
+    finally { setIsbnBusy(false); }
+  }
+  async function decodeBarcode(file: File | null) {
+    if (!file) return;
+    setBarcodeBusy(true); setIsbnError(""); setIsbnLookup(null);
+    try {
+      const isbn = await decodeIsbnBarcodePhoto(file);
+      setIsbnInput(isbn);
+      await lookUpIsbn(isbn);
+    } catch (caught) { setIsbnError(message(caught)); }
+    finally { setBarcodeBusy(false); if (barcodeInput.current) barcodeInput.current.value = ""; }
+  }
+  function applyCandidate(candidate: BibliographicCandidate, selected: Set<CandidateMetadataKey>) {
+    const authors = candidate.authors.map((value) => value.trim()).filter(Boolean);
+    const contributorAuthors = authors.map((name) => ({ role_code: "AUTHOR", name }));
+    const author = authors.length > 1 ? "Multiple authors" : authors[0] ?? draft.author;
+    const transferable: Partial<ServerBookWrite> = {
+      subtitle: candidate.subtitle, page_count: candidate.page_count,
+      publisher: candidate.publisher, current_ed_year: candidate.current_ed_year,
+      original_publication_year: candidate.original_publication_year,
+      language: candidate.language, edition_number: candidate.edition_number,
+      fiction_category: candidate.fiction_category, binding: candidate.binding,
+      publication_type: candidate.publication_type, genre_text: candidate.genre_text,
+      series_name: candidate.series_name, series_volume: candidate.series_volume,
+    };
+    const optional = Object.fromEntries(
+      (Object.keys(transferable) as CandidateMetadataKey[])
+        .filter((key) => selected.has(key)).map((key) => [key, transferable[key as keyof ServerBookWrite]]),
+    ) as Partial<ServerBookWrite>;
+    setDraft((current) => ({
+      ...current,
+      ...(selected.has("title") ? { title: candidate.title } : {}),
+      ...(selected.has("author") ? { author, contributors: [
+        ...current.contributors.filter((item) => item.role_code !== "AUTHOR"), ...contributorAuthors,
+      ] } : {}),
+      ...(selected.has("isbn_10") ? { isbn_10: candidate.identifiers.isbn_10 } : {}),
+      ...(selected.has("isbn_13") ? { isbn_13: candidate.identifiers.isbn_13 } : {}),
+      ...optional,
+    }));
+  }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(""); setProgress("Saving book…");
     try {
@@ -297,6 +402,18 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
     {batchMode && <p className="server-field-help"><b>{batchAddedCount} {batchAddedCount === 1 ? "book" : "books"} added in this batch.</b> After saving, BOOKPILE clears the book data but retains this container and suggests the next position.</p>}
     {error && <div className="server-message error">{error}</div>}
     <form onSubmit={submit} className="server-book-form">
+      <fieldset className={`server-isbn-identify${scanFlow ? " scan-flow" : ""}`}><legend>Identify by ISBN or barcode</legend>
+        <p className="server-field-help">The barcode photograph is decoded on this device and immediately discarded. Review provider values before transferring them.</p>
+        <div className="server-isbn-actions"><label>ISBN-10 or ISBN-13<input value={isbnInput} maxLength={40} inputMode="text" placeholder="978-…" onChange={(event) => { setIsbnInput(event.target.value); setIsbnLookup(null); setIsbnError(""); }} /></label>
+          <button type="button" disabled={isbnBusy || barcodeBusy} onClick={() => void lookUpIsbn()}><ScanBarcode size={17} /> {isbnBusy ? "Looking up…" : "Look up ISBN"}</button>
+          <label className={`server-barcode-photo${barcodeBusy ? " busy" : ""}`}><Camera size={17} /> {barcodeBusy ? "Reading photo…" : "Take barcode photo"}<input ref={barcodeInput} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={isbnBusy || barcodeBusy} onChange={(event) => void decodeBarcode(event.target.files?.[0] ?? null)} /></label>
+        </div>
+        {(isbnBusy || barcodeBusy) && <div className="server-isbn-progress" role="status"><LoaderCircle size={18} /> {barcodeBusy ? "Reading the barcode locally…" : "Checking bibliographic sources and this library…"}</div>}
+        {isbnError && <div className="server-message error">{isbnError}</div>}
+        {isbnLookup?.catalogue_matches.length ? <div className="server-isbn-matches"><b>This ISBN is already in this library</b>{isbnLookup.catalogue_matches.map((match) => <button type="button" key={match.book_id} onClick={() => onOpenExisting(match.book_id)}>{match.title} · {match.author}</button>)}</div> : null}
+        {isbnLookup && !isbnLookup.candidates.length && !isbnLookup.catalogue_matches.length ? <div className="server-message">No bibliographic record was found. You can continue manually.</div> : null}
+        {isbnLookup?.candidates.map((candidate, index) => <article className="server-isbn-candidate" key={`${candidate.source}-${candidate.source_record_id ?? index}`}><header><small>{candidate.source.replaceAll("_", " ")}</small><b>{candidate.title}</b><span>{candidate.authors.join(" · ")}</span></header><CandidateReview candidate={candidate} onApply={(selected) => applyCandidate(candidate, selected)} /></article>)}
+      </fieldset>
       <fieldset><legend>Required information</legend><div className="server-form-grid">
         <label>Title *<input required maxLength={500} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label>Author display *<input required maxLength={500} value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })} readOnly={draft.contributors.filter((item) => item.role_code === "AUTHOR").length >= 2} /></label>
@@ -380,7 +497,7 @@ function BookEditor({ initial, initialCover, roles, options, physical, bookId, i
       </fieldset>}
       <datalist id="server-publishers">{options.publishers.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-genres">{options.genres.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-series">{options.series_names.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-languages">{options.languages.map((v) => <option key={v} value={v} />)}</datalist><datalist id="server-original-languages">{options.original_languages.map((v) => <option key={v} value={v} />)}</datalist>
       {progress && <div className="server-save-progress" role="status">{progress}<small>{progress.startsWith("Processing") ? "Large phone photos can take several seconds. Please keep this window open." : ""}</small></div>}
-      <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>{batchMode ? "Finish batch" : "Cancel"}</button><button className="confirm" disabled={busy} type="submit">{busy ? "Please wait…" : batchMode ? "Save and add next" : "Save book"}</button></div>
+      <div className="server-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>{batchMode ? "Finish batch" : "Cancel"}</button><button className="confirm" disabled={busy} type="submit">{busy ? "Please wait…" : batchMode ? scanFlow ? "Save and scan next" : "Save and add next" : "Save book"}</button></div>
     </form>
   </section></div>;
 }
@@ -407,6 +524,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   const [physical, setPhysical] = useState<PhysicalLibrary | null>(null);
   const [addMenu, setAddMenu] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
+  const [scanFlow, setScanFlow] = useState(false);
   const [batchPlacement, setBatchPlacement] = useState<PlacementWrite | null>(null);
   const [editorSequence, setEditorSequence] = useState(0);
   const [batchAddedCount, setBatchAddedCount] = useState(0);
@@ -475,11 +593,12 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     setOptions(loaded);
     return loaded;
   }
-  async function add(asBatch = false) {
+  async function add(asBatch = false, asScan = false) {
     setError("");
     try {
       await requireOptions();
       setBatchMode(asBatch);
+      setScanFlow(asScan);
       setBatchAddedCount(0);
       setBatchPlacement(null);
       setEditorSequence((value) => value + 1);
@@ -522,7 +641,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     } catch (caught) { setError(message(caught)); }
     finally { setBusy(false); }
   }
-  async function edit(bookId: string) { setBusy(true); setBatchMode(false); setBatchPlacement(null); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book), cover: book.cover }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
+  async function edit(bookId: string) { setBusy(true); setBatchMode(false); setScanFlow(false); setBatchPlacement(null); try { const [book] = await Promise.all([serverApi.book(library.library_id, bookId), requireOptions()]); setDetails(null); setEditing({ id: book.id, book: writeFromBook(book), cover: book.cover }); } catch (caught) { setError(message(caught)); } finally { setBusy(false); } }
   async function save(book: ServerBookWrite, coverFile: File | null, removeCover: boolean, placement: PlacementWrite | null, personal: InitialPersonalReadingWrite | null, loan: InitialLoanWrite | null, reportProgress: (message: string) => void) {
     const wasNew = !editing?.id;
     const placementPosition = placement?.containerId
@@ -610,7 +729,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   const filtered = hasActiveCatalogueFilters(query);
   const activeLoans = Object.fromEntries((loanOverview?.loans ?? []).filter((item) => item.state === "ACTIVE").map((item) => [item.book_id, item]));
   return <section className="server-catalogue-workspace">
-    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><button className="server-username-link" type="button" onClick={() => onOpenProfile(member.user_id)}>@{member.username}</button><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small>{readingOverview && <span className="server-reading-overview"><b>{readingOverview.pending}</b> pending <b>{readingOverview.active_display}</b> reading <b>{readingOverview.read + readingOverview.rereading}</b> read</span>}</span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> New read</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">Reading suggestion</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> Another</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>Start reading</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label="Close suggestion"><X size={15} /></button></div>}</div>}</header>
+    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><button className="server-username-link" type="button" onClick={() => onOpenProfile(member.user_id)}>@{member.username}</button><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small>{readingOverview && <span className="server-reading-overview"><b>{readingOverview.pending}</b> pending <b>{readingOverview.active_display}</b> reading <b>{readingOverview.read + readingOverview.rereading}</b> read</span>}</span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> New read</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button><button className="server-mobile-add" type="button" onClick={() => void add(false, true)}><ScanBarcode size={16} /> Scan single barcode</button><button className="server-mobile-add" type="button" onClick={() => void add(true, true)}><Camera size={16} /> Batch scan</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">Reading suggestion</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> Another</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>Start reading</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label="Close suggestion"><X size={15} /></button></div>}</div>}</header>
     {error && <div className="server-message error">{error}</div>}<TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
     <form className="server-catalogue-search" onSubmit={apply}><label><Search size={18} /><input value={draftQuery.search ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, search: e.target.value })} placeholder="Search title, author, contributor or series" /></label><button type="submit">Search</button><button type="button" className={advanced ? "active" : ""} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={17} /> Advanced</button></form>
     {advanced && <form className="server-advanced-search" onSubmit={apply}>
@@ -633,7 +752,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     </form>}
     <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); const reading = readings[book.id]; const activeLoan = activeLoans[book.id]; const custody = activeLoan ? `${activeLoan.loaned_to ? `On loan to ${activeLoan.loaned_to}` : "On loan"}${location ? ` · returns to ${location}` : ""}` : reading?.active_reader_present ? `Being read${location ? ` · returns to ${location}` : ""}` : (location ?? "No physical location"); const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className={`server-book-location ${activeLoan ? activeLoan.overdue ? "on-loan overdue" : "on-loan" : reading?.active_reader_present ? "being-read" : ""}`}><MapPin size={16} /><span>{custody}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={`${selectedPerspective?.username ?? "Owner"}'s Goodreads review`}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title="My reading"><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => setLoanManager(book)} title={activeLoan ? "Manage or return loan" : "Loan this book"}><Handshake size={17} /></button><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && (!filtered && total === 0 && library.role === "OWNER" ? <div className="server-empty-catalogue server-map-onboarding"><span><Layers3 size={34} /></span><p className="server-card-eyebrow">A place for every book</p><h4>Build your physical library</h4><p>BOOKPILE's map connects every catalogue record to its real place. It is optional, but spending a few minutes defining your furniture, shelves and containers now will make adding and finding books much easier.</p><button type="button" onClick={onSetUpMap}><Layers3 size={17} /> Set up the Library Map</button><small>You can also skip this and add books directly whenever you prefer.</small></div> : <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{filtered ? "Try another page or filter." : "This library has no catalogue records yet."}</p></div>)}</div>
     {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
-    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} loans={detailsLoans} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} batchAddedCount={batchAddedCount} onClose={() => { setEditing(null); setBatchMode(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
+    {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} loans={detailsLoans} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} libraryId={library.library_id} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} scanFlow={scanFlow} batchAddedCount={batchAddedCount} onOpenExisting={(bookId) => { setEditing(null); setBatchMode(false); setScanFlow(false); void openDetails(bookId); }} onClose={() => { setEditing(null); setBatchMode(false); setScanFlow(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
     {readingAction && <ReadingActionDialog libraryId={library.library_id} book={readingAction.book} reading={readingAction.reading} onClose={() => setReadingAction(null)} onChanged={refreshPersonalData} />}
     {readingManager && <ReadingManager libraryId={library.library_id} book={readingManager} onClose={() => setReadingManager(null)} onChanged={refreshPersonalData} />}
     {loanManager && <LoanManager libraryId={library.library_id} book={loanManager} onClose={() => setLoanManager(null)} onChanged={refreshLoanData} />}

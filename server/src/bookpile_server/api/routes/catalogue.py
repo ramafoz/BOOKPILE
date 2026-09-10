@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile, status
 
 from ...schemas import (
+    ISBNLookupResponse,
     BookResponse,
     BookSummary,
     BookWithPlacementWrite,
@@ -18,6 +19,8 @@ from ...schemas import (
     CoverMetadataResponse,
     DeleteBookRequest,
 )
+from ...bibliography import BibliographicProvidersUnavailable, lookup_isbn
+from ...isbn import InvalidISBN, normalize_isbn
 from ...services.catalogue import (
     BookRecord,
     CatalogueConflictError,
@@ -58,6 +61,22 @@ from ..dependencies import (
 
 
 router = APIRouter(prefix="/libraries/{library_id}/catalogue", tags=["catalogue"])
+
+
+def _isbn_matches(service, library_id: UUID, isbn: str) -> list[dict[str, object]]:
+    page = service.list_books(
+        library_id, isbn=isbn, limit=5, offset=0, sort_by="title", sort_order="asc"
+    )
+    return [
+        {
+            "book_id": record.book.id,
+            "title": record.book.title,
+            "author": record.display_author,
+            "match_class": "strong",
+            "reason": "Exact ISBN already stored in this library",
+        }
+        for record in page.records
+    ]
 
 
 def catalogue_error(exc: Exception) -> HTTPException:
@@ -304,6 +323,49 @@ def get_metadata_options(
             for role in options.roles
         ],
     )
+
+
+@router.get("/isbn-lookup", response_model=ISBNLookupResponse)
+def get_isbn_lookup(
+    library_id: UUID,
+    request: Request,
+    service: CatalogueServiceDependency,
+    access_service: LibraryAccessServiceDependency,
+    limiter: RateLimiterDependency,
+    context: CurrentAuthDependency,
+    isbn: str = Query(min_length=1, max_length=40),
+) -> ISBNLookupResponse:
+    try:
+        access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        try:
+            limiter.enforce(
+                RateLimitPolicy("bibliographic_lookup", 180, timedelta(hours=1)),
+                key=str(context.user_id),
+                ip_address=request.client.host if request.client else None,
+            )
+        except RateLimitExceededError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many bibliographic lookups. Try again later.",
+                headers={"Retry-After": str(exc.retry_after)},
+            ) from exc
+        normalized = normalize_isbn(isbn)
+        matches = _isbn_matches(service, library_id, normalized)
+        candidates = lookup_isbn(normalized)
+    except (LibraryNotFoundError, LibraryOwnerRequiredError) as exc:
+        raise catalogue_error(exc) from exc
+    except InvalidISBN as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except BibliographicProvidersUnavailable as exc:
+        if matches:
+            return ISBNLookupResponse(isbn=normalized, candidates=[], catalogue_matches=matches)
+        raise HTTPException(
+            status_code=503,
+            detail="Bibliographic lookup services are temporarily unavailable",
+        ) from exc
+    for candidate in candidates:
+        candidate["catalogue_matches"] = matches
+    return ISBNLookupResponse(isbn=normalized, candidates=candidates, catalogue_matches=matches)
 
 
 @router.get("/{book_id}", response_model=BookResponse)

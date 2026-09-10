@@ -32,6 +32,19 @@ describe("empty accepted responses", () => {
 });
 
 describe("Server catalogue requests", () => {
+  it("keeps ISBN lookup scoped to the active library", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ isbn: "9780306406157", candidates: [], catalogue_matches: [] }), { status: 200 }),
+    );
+
+    await serverApi.lookupIsbn("library-1", "978-0-306-40615-7");
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), "http://bookpile.test");
+    expect(url.pathname).toContain("/libraries/library-1/catalogue/isbn-lookup");
+    expect(url.searchParams.get("isbn")).toBe("978-0-306-40615-7");
+    expect((fetchMock.mock.calls[0][1] as RequestInit | undefined)?.method).toBeUndefined();
+  });
+
   it("loads one book through the selected reading perspective", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ state: "PENDING", sessions: [] }), { status: 200 }),

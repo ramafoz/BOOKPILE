@@ -363,6 +363,44 @@ export interface CatalogueMetadataOptions {
   contributor_roles: ContributorRole[];
 }
 
+export interface BibliographicCatalogueMatch {
+  book_id: string;
+  title: string;
+  author: string;
+  match_class: "strong" | "possible";
+  reason: string;
+}
+
+export interface BibliographicCandidate {
+  source: string;
+  source_record_id: string | null;
+  identifiers: { isbn_10: string | null; isbn_13: string | null };
+  title: string;
+  subtitle: string | null;
+  authors: string[];
+  publisher: string | null;
+  current_ed_year: number | null;
+  original_publication_year: number | null;
+  page_count: number | null;
+  subjects: string[];
+  language: string | null;
+  edition_number: number | null;
+  fiction_category: string | null;
+  binding: string | null;
+  publication_type: string | null;
+  genre_text: string | null;
+  series_name: string | null;
+  series_volume: string | null;
+  confidence_or_match_notes: string | null;
+  catalogue_matches: BibliographicCatalogueMatch[];
+}
+
+export interface ISBNLookupResult {
+  isbn: string;
+  candidates: BibliographicCandidate[];
+  catalogue_matches: BibliographicCatalogueMatch[];
+}
+
 export interface LibraryMemberSummary {
   user_id: string;
   username: string;
@@ -1048,6 +1086,12 @@ export const serverApi = {
       { method: "POST", body: JSON.stringify(book) },
       true,
     ),
+  lookupIsbn: (libraryId: string, isbn: string) => {
+    const parameters = new URLSearchParams({ isbn });
+    return request<ISBNLookupResult>(
+      `/libraries/${libraryId}/catalogue/isbn-lookup?${parameters}`,
+    );
+  },
   createBookWithPlacement: (
     libraryId: string,
     book: ServerBookWrite,
