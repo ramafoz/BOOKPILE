@@ -1,0 +1,102 @@
+name: bookpile-production
+
+x-api-environment: &api-environment
+  env_file:
+    - ${BOOKPILE_ENV_FILE:-.env.production}
+  environment:
+    BOOKPILE_SERVER_PRIVATE_OBJECT_ROOT: /var/lib/bookpile/private-objects
+    BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
+    BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
+
+services:
+  db:
+    image: postgres:17.6-alpine3.22
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookpile
+      POSTGRES_USER: bookpile
+      POSTGRES_PASSWORD: ${BOOKPILE_POSTGRES_PASSWORD:?Set BOOKPILE_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookpile -d bookpile"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [backend]
+
+  migrate:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - private-objects:/var/lib/bookpile/private-objects
+      - import-staging:/var/lib/bookpile/import-staging
+      - export-staging:/var/lib/bookpile/export-staging
+    networks: [backend]
+    restart: "no"
+
+  api:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - private-objects:/var/lib/bookpile/private-objects
+      - import-staging:/var/lib/bookpile/import-staging
+      - export-staging:/var/lib/bookpile/export-staging
+    networks: [backend]
+
+  web:
+    image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/web.Dockerfile
+    restart: unless-stopped
+    read_only: true
+    environment:
+      BOOKPILE_SITE_ADDRESS: ${BOOKPILE_SITE_ADDRESS:?Set BOOKPILE_SITE_ADDRESS}
+      BOOKPILE_TLS_EMAIL: ${BOOKPILE_TLS_EMAIL:?Set BOOKPILE_TLS_EMAIL}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge, backend]
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+volumes:
+  postgres-data:
+  private-objects:
+  import-staging:
+  export-staging:
+  caddy-data:
+  caddy-config:

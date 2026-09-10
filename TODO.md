@@ -324,8 +324,8 @@ fields.
 - [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
   while preserving its current container, position, direction, and collision
   handling.
-- [ ] Accept and merge Server temporary-photo barcode scanning on real mobile
-  hardware. Implementation is complete on `feature/server-barcode-scanning`:
+- [x] Accept and merge Server temporary-photo barcode scanning on real mobile
+  hardware. It is merged into `main`:
   - [x] Add Owner-only, library-scoped and rate-limited provider lookup with
     exact ISBN catalogue warnings and mocked backend tests.
   - [x] Reuse local ZXing decoding without uploading or storing the photograph.
@@ -881,6 +881,19 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 
 ### Publishable web/app infrastructure
 
+- [ ] Complete Server Phase 9 according to
+  `SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md`.
+  - [x] 9A implementation/local gates: strict hosted configuration, trusted
+    hosts, secure headers, request IDs, privacy-safe logs, health boundaries,
+    pooling, pinned non-root images, private-network Compose/Caddy, CI and the
+    rehearsal runbook. The clean staging-host proof remains in 9F.
+  - [ ] 9B private S3-compatible storage and reconcile/migration tooling.
+  - [ ] 9C durable PostgreSQL email outbox and retrying worker.
+  - [ ] 9D encrypted off-site backup, retention and restore automation.
+  - [ ] 9E edge security, observability and scheduled operations.
+  - [ ] 9F Spanish staging deployment and measured recovery drill.
+  - [ ] 9G production-readiness review and explicit go/no-go.
+
 - [ ] Add a localization framework only after the main interface and data
   model are mature; keep the current interface in English until then.
   - Planned interface languages: Galician, Portuguese, Spanish, Italian,
@@ -888,8 +901,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Design normalization and display rules for free-text metadata before
     localized labels or translated controlled vocabularies are introduced.
 
-- [ ] Replace local-only assumptions with production configuration for the
-  database, cover storage, API URLs, and secrets.
+- [ ] Replace local-only assumptions with production adapters and providers.
+  Phase 9A configuration/database/runtime handling is complete; private S3
+  storage and durable email remain 9B/9C.
 - [ ] Choose the Spanish VPS, private object storage, domain, email service,
   and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
 - [ ] Add authorization checks to every user-owned backend operation.
@@ -907,7 +921,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   owned-library dependency checks, session revocation, email-only single-use
   48-hour recovery, and final personal-data cleanup. Keep it separate from
   library deletion.
-- [ ] Add automated deployment, migration, test, and rollback procedures.
+- [ ] Complete automated deployment and rollback. CI, explicit migration,
+  reproducible images and a manual rehearsal/rollback runbook exist; registry
+  publication and staging automation follow provider selection.
 - [ ] Test responsive behaviour, accessibility, browser support, and mobile
   installation requirements.
 - [ ] Prepare terms of use, privacy information, and any required consent or

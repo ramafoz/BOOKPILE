@@ -524,7 +524,7 @@ an explicit omission confirmation. Migration `0020`, automated round-trip and
 real-export UX acceptance gates pass; Phase 8 is complete as documented in
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
-Server barcode capture is implemented pending mobile acceptance. Owners can
+Server barcode capture is implemented, accepted on mobile, and merged. Owners can
 type an ISBN or decode an EAN-13 from a temporary phone photograph while adding
 one book, running Batch Add, or editing an existing record. The photograph is
 decoded locally and discarded; only the ISBN reaches the authenticated,

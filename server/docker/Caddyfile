@@ -1,0 +1,38 @@
+{
+	http_port 8080
+	https_port 8443
+	admin off
+	email {$BOOKPILE_TLS_EMAIL}
+}
+
+{$BOOKPILE_SITE_ADDRESS} {
+	encode zstd gzip
+
+	request_body {
+		max_size 256MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:8100
+	}
+
+	handle /health* {
+		reverse_proxy api:8100
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; img-src 'self' blob: data:; media-src 'self' blob:; script-src 'self'; style-src 'self'; connect-src 'self'; worker-src 'self' blob:"
+	}
+}
+

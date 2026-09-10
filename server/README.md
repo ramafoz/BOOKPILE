@@ -107,8 +107,11 @@ The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
-edition is still not deployable because the production private-object adapter
-and production infrastructure have not yet been completed. Owner-only Server
+edition is not production-ready because private S3-compatible objects, durable
+email, off-site recovery and staging drills are not complete. Phase 9A now
+provides strict hosted configuration, health boundaries, privacy-safe request
+logs, CI, pinned non-root images and a private-network Caddy/Compose rehearsal
+topology; see `SERVER_PRODUCTION_RUNBOOK.md`. Owner-only Server
 ZIP export and explicit-mapping restore are implemented and accepted with bounded
 inspection, atomic quota enforcement and object compensation. Phase 8 is
 complete. Application-level storage quota is implemented;

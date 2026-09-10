@@ -181,5 +181,19 @@ def test_health_identifies_server_edition(client: TestClient) -> None:
     assert client.get("/health").json() == {
         "status": "ok",
         "edition": "server",
+        "revision": "development",
     }
+
+    live = client.get("/health/live")
+    assert live.status_code == 200
+    assert live.json() == {"status": "alive", "revision": "development"}
+
+    ready = client.get("/health/ready")
+    assert ready.status_code == 200
+    assert ready.json()["checks"] == {
+        "database": "ready",
+        "private_objects": "ready",
+    }
+    assert len(ready.headers["x-request-id"]) == 32
+    assert ready.headers["permissions-policy"] == "camera=(self), microphone=(), geolocation=()"
 

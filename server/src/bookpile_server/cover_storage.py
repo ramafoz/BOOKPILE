@@ -6,6 +6,7 @@ class CoverStorage(Protocol):
     def put(self, object_key: str, content: bytes) -> None: ...
     def read(self, object_key: str) -> bytes: ...
     def delete(self, object_key: str) -> None: ...
+    def check_ready(self) -> None: ...
 
 
 class FilesystemCoverStorage:
@@ -34,3 +35,8 @@ class FilesystemCoverStorage:
 
     def delete(self, object_key: str) -> None:
         self._path(object_key).unlink(missing_ok=True)
+
+    def check_ready(self) -> None:
+        self._root.mkdir(parents=True, exist_ok=True)
+        if not self._root.is_dir():
+            raise OSError("Private object storage root is not a directory")

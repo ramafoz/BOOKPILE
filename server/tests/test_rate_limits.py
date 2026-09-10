@@ -93,13 +93,17 @@ def test_production_rejects_development_security_defaults() -> None:
     with pytest.raises(ValueError, match="SESSION_COOKIE_SECURE"):
         Settings(
             environment="production",
-            rate_limit_key_secret="a-private-production-secret",
+            rate_limit_key_secret="a-private-production-secret-with-32-characters",
         )
 
     settings = Settings(
         environment="production",
-        rate_limit_key_secret="a-private-production-secret",
+        rate_limit_key_secret="a-private-production-secret-with-32-characters",
         session_cookie_secure=True,
         public_base_url="https://bookpile.example",
+        database_url="postgresql+psycopg://bookpile:private@db/bookpile",
+        deployment_revision="git-1234567",
+        api_docs_enabled=False,
+        allowed_hosts="bookpile.example",
     )
     assert settings.session_cookie_secure is True

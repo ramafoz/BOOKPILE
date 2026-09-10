@@ -1,0 +1,120 @@
+name: BOOKPILE quality gates
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    name: Python tests (Local and Server)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.7"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements*.txt
+            server/pyproject.toml
+      - name: Install Local test dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Test Local backend
+        working-directory: backend
+        run: python -m pytest tests
+      - name: Install Server test dependencies
+        run: python -m pip install -e "server[dev]"
+      - name: Test Server API
+        run: python -m pytest server/tests
+
+  frontend:
+    name: Frontend tests, lint and both editions
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.15.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Test Local edition
+        run: npm run test:local
+      - name: Test Server edition
+        run: npm run test:server
+      - name: Lint
+        run: npm run lint
+      - name: Build both editions
+        run: npm run build:all
+
+  postgres-migrations:
+    name: PostgreSQL migration rehearsal
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.22
+        env:
+          POSTGRES_DB: bookpile_ci_test
+          POSTGRES_USER: bookpile_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bookpile_ci -d bookpile_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      BOOKPILE_SERVER_DATABASE_URL: postgresql+psycopg://bookpile_ci:ci-only-password@127.0.0.1:5432/bookpile_ci_test
+      BOOKPILE_SERVER_TEST_DATABASE_URL: postgresql+psycopg://bookpile_ci:ci-only-password@127.0.0.1:5432/bookpile_ci_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.7"
+          cache: pip
+          cache-dependency-path: server/pyproject.toml
+      - run: python -m pip install -e "server[dev]"
+      - name: Rehearse migrations, constraints and concurrent writes
+        working-directory: server
+        run: python -m pytest tests/test_postgresql_integration.py
+      - name: Upgrade the cleaned database to current schema
+        working-directory: server
+        run: alembic upgrade head
+      - name: Verify current migration
+        working-directory: server
+        run: test "$(alembic current 2>/dev/null | grep -c '(head)')" -eq 1
+      - name: Re-run upgrade to prove idempotence
+        working-directory: server
+        run: alembic upgrade head
+
+  production-images:
+    name: Build production images
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/docker/api.Dockerfile
+          push: false
+          tags: bookpile-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/docker/web.Dockerfile
+          push: false
+          tags: bookpile-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
