@@ -127,6 +127,9 @@ borrower, token or credential data.
 
 ### 9F — Spanish staging deployment and recovery drill
 
+The dated shortlist, recommended separation of failure domains and unresolved
+contracting decisions are in `SERVER_STAGING_PROVIDER_DECISION.md`.
+
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.
 - Provision staging from an empty host using the checked-in artefacts.
