@@ -363,7 +363,7 @@ physical-cataloguing behaviour:
 An existing-book match must not advance Batch Add's position because no new
 book has been saved.
 
-## Server mobile Add menu and dedicated scan pages
+## Server mobile Add menu and scan-first editor
 
 On mobile, the Server catalogue's **Add** menu will expose exactly four primary
 paths:
@@ -373,10 +373,12 @@ paths:
 3. **Scan single barcode**.
 4. **Batch scan**.
 
-The two scan paths open dedicated mobile pages rather than crowding the normal
-editor. A scan page captures a temporary barcode photograph, never stores it,
-decodes and validates the ISBN, and starts the shared bibliographic-provider
-lookup. Results may arrive progressively. Every proposed metadata value is
+The two scan paths open the full-screen mobile book editor with its scan panel
+highlighted first. This keeps capture, review and final editing in one
+continuous dialog without duplicating the normal book form. The same panel is
+also available when editing an existing book. It captures a temporary barcode
+photograph, never stores or uploads it, decodes and validates the ISBN on the
+device, and starts the shared Server bibliographic-provider lookup. Every proposed metadata value is
 initially deselected and visibly retains its source; the user selects the fields
 they trust and presses **OK** to copy only those values into the normal editable
 book form. Nothing reaches the catalogue database until **Save book**.
@@ -391,6 +393,25 @@ allows manual continuation.
 These four menu entries are required only at the mobile breakpoint. Desktop may
 continue to expose scanning inside the existing add workflow unless a later UX
 review finds dedicated desktop scan pages useful.
+
+### Server implementation status — 2026-09-10
+
+Implemented on `feature/server-barcode-scanning`, pending device acceptance:
+
+- Owner-only, library-scoped ISBN lookup with checksum validation, exact stored
+  ISBN warnings, Open Library plus Google Books fallback, normalized provider
+  output, and a per-account external-lookup limit.
+- Browser-side EAN-13 decoding through the already shared ZXing adapter; the
+  selected photograph is released locally and never sent to Server storage.
+- Shared Add, Batch Add and Edit review panel. Provider fields begin unchecked
+  on every result and transfer only after explicit field selection.
+- Mobile-only `Scan single barcode` and `Batch scan` Add shortcuts. Batch scan
+  retains physical placement progression but remounts a blank metadata,
+  selection and personal-reading state after each successful save.
+
+Continuous live-camera scanning and multi-provider conflict merging remain
+separate future enhancements; temporary-photo scanning remains the dependable
+fallback even after either is added.
 
 ## Error and edge cases
 

@@ -354,6 +354,7 @@ button { cursor: pointer; }
 .server-add-menu { position: absolute; z-index: 8; top: calc(100% + 7px); right: 0; width: 210px; display: grid; gap: 4px; padding: 7px; border: 1px solid #cdbfab; border-radius: 8px; background: #fffaf2; box-shadow: 0 16px 38px #173a3135; }
 .server-add-menu button { min-height: 40px; border: 0; border-radius: 6px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; color: #28594e; background: transparent; font-weight: 750; text-align: left; }
 .server-add-menu button:hover { background: #e8f1ed; }
+.server-mobile-add { display: none !important; }
 .server-primary-action, .server-catalogue-search button, .server-advanced-actions button { min-height: 42px; border: 1px solid #24584c; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 13px; color: #fff; background: #24584c; font-weight: 750; }
 .server-catalogue-search { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto; gap: 9px; }
 .server-catalogue-search > label { min-height: 44px; border: 1px solid #d3c5b3; border-radius: 8px; display: flex; align-items: center; gap: 9px; padding: 0 12px; background: #fff; }
@@ -436,6 +437,28 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-book-form legend { padding: 0 7px; font: 700 18px Georgia, "Times New Roman", serif; }
 .server-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .server-form-grid .wide { grid-column: 1 / -1; }
+.server-isbn-identify.scan-flow { border-color: #d39e3c; box-shadow: inset 4px 0 #e5b957; }
+.server-isbn-actions { display: grid; grid-template-columns: minmax(210px, 1fr) auto auto; gap: 10px; align-items: end; }
+.server-isbn-actions label:first-child { display: grid; gap: 5px; font-weight: 700; }
+.server-isbn-actions button, .server-barcode-photo { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 13px; border: 1px solid #8cac9f; border-radius: 7px; color: #1e594d; background: #f8fcfa; font-weight: 750; cursor: pointer; }
+.server-barcode-photo input { display: none; }
+.server-barcode-photo.busy { opacity: .6; pointer-events: none; }
+.server-isbn-progress { display: flex; align-items: center; gap: 9px; margin-top: 12px; color: #536d66; }
+.server-isbn-progress svg { animation: server-spin .85s linear infinite; }
+.server-isbn-matches { display: grid; gap: 7px; margin-top: 12px; padding: 12px; border-radius: 7px; background: #fff0cf; }
+.server-isbn-matches button { text-align: left; }
+.server-isbn-candidate { margin-top: 13px; padding: 13px; border: 1px solid #d9ccba; border-radius: 8px; background: #fffdf8; }
+.server-isbn-candidate > header { display: grid; gap: 3px; }
+.server-isbn-candidate > header small { color: #a14f2a; font-weight: 800; letter-spacing: .08em; }
+.server-candidate-review { margin-top: 12px; }
+.server-candidate-review > p { display: grid; gap: 2px; }
+.server-candidate-review > p small { font-weight: 400; }
+.server-candidate-review > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+.server-candidate-review label { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid #e1d5c5; border-radius: 6px; background: #fffaf2; }
+.server-candidate-review label span { display: grid; min-width: 0; overflow-wrap: anywhere; font-weight: 400; }
+.server-candidate-review label span b { font-size: 11px; text-transform: uppercase; color: #687a75; }
+#root input[type="checkbox"], #root input[type="radio"] { box-sizing: border-box; flex: 0 0 18px; width: 18px !important; min-width: 18px; height: 18px !important; min-height: 18px !important; margin: 2px 0 0; padding: 0 !important; accent-color: #285f52; }
+@keyframes server-spin { to { transform: rotate(360deg); } }
 .server-inline-check { display: flex !important; align-items: center; align-content: center; gap: 8px !important; min-height: 41px; padding-top: 17px; }
 .server-inline-check input { width: 18px; min-height: 18px; accent-color: #285f52; }
 .server-compact-check { width: fit-content; min-height: 32px; display: inline-flex !important; grid-template-columns: auto auto; align-items: center; align-content: center !important; gap: 8px !important; padding: 3px 0; }
@@ -797,6 +820,7 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-profile-loading { display: flex; gap: 10px; align-items: center; }
 
 @media (max-width: 850px) {
+  .server-mobile-add { display: flex !important; }
   .server-shell { display: block; }
   .server-story { min-height: 300px; padding: 26px 25px 36px; }
   .server-story-copy { padding-top: 44px; }
@@ -831,6 +855,7 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 }
 
 @media (max-width: 480px) {
+  .server-isbn-actions, .server-candidate-review > div { grid-template-columns: 1fr; }
   .server-story { min-height: 270px; }
   .server-brand-mark { width: 41px; height: 41px; }
   .server-story-copy { padding-top: 35px; }

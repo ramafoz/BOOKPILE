@@ -524,6 +524,16 @@ an explicit omission confirmation. Migration `0020`, automated round-trip and
 real-export UX acceptance gates pass; Phase 8 is complete as documented in
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
+Server barcode capture is implemented pending mobile acceptance. Owners can
+type an ISBN or decode an EAN-13 from a temporary phone photograph while adding
+one book, running Batch Add, or editing an existing record. The photograph is
+decoded locally and discarded; only the ISBN reaches the authenticated,
+library-scoped provider lookup. Every proposed metadata field starts unchecked
+and remains editable after explicit transfer. Mobile Add also exposes scan-first
+single and batch shortcuts; batch scanning preserves placement progression but
+clears book and personal-reading data between records. See
+[SCANNING_PLAN.md](SCANNING_PLAN.md).
+
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and
 perspective-aware catalogue headings, atomic physical placement inside Add and
