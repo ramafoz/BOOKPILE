@@ -73,6 +73,7 @@ class ReadingStatisticsBook:
     author: str
     reading_events: int
     pages_read: int
+    reading_days: int
     average_pages_per_day: float | None
     latest_finished_date: date | None
 
@@ -342,7 +343,7 @@ class ReadingService:
             total_events += len(completed)
             rereadings += max(0, len(completed) - (1 if completed_all and completed_all[0] in completed else 0))
             book_pages = 0
-            book_rates: list[float] = []
+            book_reading_days: list[int] = []
             for session in completed:
                 if session.dates_unknown or session.finished_date is None:
                     reading_excluded += 1
@@ -352,9 +353,10 @@ class ReadingService:
                 book_pages += pages
                 if book.page_count and session.started_date:
                     days = (session.finished_date - session.started_date).days + 1
-                    reading_days.append(max(1, days))
-                    rate = book.page_count / max(1, days)
-                    book_rates.append(rate)
+                    measured_days = max(1, days)
+                    reading_days.append(measured_days)
+                    book_reading_days.append(measured_days)
+                    rate = book.page_count / measured_days
                     all_rates.append(rate)
                     timeline_dates.extend([session.started_date, session.finished_date])
                 elif session.started_date:
@@ -376,7 +378,11 @@ class ReadingService:
                     author=book.author,
                     reading_events=len(completed),
                     pages_read=book_pages,
-                    average_pages_per_day=(sum(book_rates) / len(book_rates)) if book_rates else None,
+                    reading_days=sum(book_reading_days),
+                    average_pages_per_day=(
+                        book.page_count * len(book_reading_days) / sum(book_reading_days)
+                        if book.page_count and book_reading_days else None
+                    ),
                     latest_finished_date=max(
                         (item.finished_date for item in completed if item.finished_date),
                         default=None,

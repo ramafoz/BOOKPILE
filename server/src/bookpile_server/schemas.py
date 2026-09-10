@@ -945,6 +945,7 @@ class ReadingStatisticsBookResponse(BaseModel):
     author: str
     reading_events: int
     pages_read: int
+    reading_days: int
     average_pages_per_day: float | None
     latest_finished_date: date | None
 

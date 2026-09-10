@@ -379,6 +379,8 @@ def test_perspective_filters_statistics_and_shared_availability(
         "sample_size": 2,
         "excluded": 0,
     }
+    assert body["books"][0]["reading_days"] == 4
+    assert body["books"][0]["average_pages_per_day"] == 150
     assert [item["year"] for item in body["years"]] == [2026, 2025]
 
     authenticate(client, session, second)
