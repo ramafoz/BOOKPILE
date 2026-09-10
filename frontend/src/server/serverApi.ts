@@ -205,6 +205,7 @@ export interface ReadingStatistics {
     author: string;
     reading_events: number;
     pages_read: number;
+    reading_days: number;
     average_pages_per_day: number | null;
     latest_finished_date: string | null;
   }>;
