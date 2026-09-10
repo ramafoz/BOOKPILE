@@ -16,6 +16,7 @@ from bookpile_server.imports.local_zip import (
     inspect_local_backup,
     adapt_local_v8,
 )
+from bookpile_server.imports.server_zip import inspect_server_library
 from bookpile_server.api.dependencies import get_local_import_service, get_portable_export_service
 from bookpile_server.config import get_settings
 from bookpile_server.models import (
@@ -37,7 +38,7 @@ from bookpile_server.models import (
 from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.repositories.imports import LocalImportRepository
 from bookpile_server.services.auth import hash_session_secret
-from bookpile_server.services.local_imports import LocalImportService
+from bookpile_server.services.local_imports import LocalImportService, LocalImportStateConflict
 from bookpile_server.repositories.storage import StorageRepository
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
@@ -662,3 +663,130 @@ def test_portable_export_endpoint_is_owner_only_and_removes_temporary_zip(
     )
     session.commit()
     assert client.get(f"/api/v1/libraries/{library.id}/exports/portable").status_code == 404
+
+
+def test_server_export_round_trip_requires_explicit_identity_mapping(
+    session, tmp_path: Path
+) -> None:
+    owner = User(
+        email="roundtrip@example.test", username="roundtrip_owner",
+        password_hash="unused", state="active", email_verified_at=datetime.now(UTC),
+    )
+    source_library = Library(name="Portable source", slug="portable-source", created_by_user_id=owner.id)
+    destination = Library(name="Portable destination", slug="portable-destination", created_by_user_id=owner.id)
+    session.add_all([owner, source_library, destination, ContributorRole(code="AUTHOR", label="Author", sort_order=1)])
+    session.flush()
+    session.add_all([
+        AccountStorageEntitlement(user_id=owner.id),
+        LibraryMembership(library_id=source_library.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
+        LibraryMembership(library_id=destination.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
+    ])
+    session.commit()
+    objects = FilesystemCoverStorage(tmp_path / "roundtrip-objects")
+    service = LocalImportService(
+        LocalImportRepository(session), tmp_path / "roundtrip-staging",
+        storage_service=StorageService(StorageRepository(session)),
+        object_storage=objects, settings=get_settings(),
+    )
+    database = tmp_path / "roundtrip.db"
+    local_archive = tmp_path / "roundtrip-local.zip"
+    local_v8_database(database)
+    create_backup(local_archive, database)
+    with local_archive.open("rb") as upload:
+        local_job = service.preflight(
+            library_id=source_library.id, actor_user_id=owner.id,
+            reading_owner_user_id=owner.id, upload=upload,
+        )
+    service.consolidate(
+        import_id=local_job.id, library_id=source_library.id,
+        actor_user_id=owner.id, allow_repeated_archive=False,
+    )
+    portable = tmp_path / "roundtrip-server.zip"
+    create_server_library_export(
+        session=session, storage=objects, library_id=source_library.id,
+        destination=portable,
+    )
+
+    with portable.open("rb") as upload:
+        job = service.preflight_server(
+            library_id=destination.id, actor_user_id=owner.id, upload=upload,
+        )
+    assert job.source_kind == "SERVER"
+    assert job.source_library_name == "Portable source"
+    assert job.source_members[0]["reading_count"] == 1
+    with pytest.raises(LocalImportStateConflict, match="unmapped personal"):
+        service.consolidate(
+            import_id=job.id, library_id=destination.id,
+            actor_user_id=owner.id, allow_repeated_archive=False,
+        )
+
+    completed = service.consolidate(
+        import_id=job.id, library_id=destination.id,
+        actor_user_id=owner.id, allow_repeated_archive=False,
+        member_mapping={str(owner.id): owner.id},
+    )
+    assert completed.state == "IMPORTED"
+    assert completed.result_counts["books"] == 1
+    assert completed.result_counts["readings"] == 1
+    restored = session.query(Book).filter_by(library_id=destination.id).one()
+    assert session.query(ReadingSession).filter_by(book_id=restored.id).one().user_id == owner.id
+    restored_case = session.query(Bookcase).filter_by(library_id=destination.id).one()
+    restored_layout = session.get(VisualBookcaseLayout, (destination.id, restored_case.id))
+    assert restored_layout is not None and float(restored_layout.width_mm) == 2500
+
+
+def test_server_export_rejects_a_tampered_declared_file(tmp_path: Path) -> None:
+    archive = tmp_path / "tampered-server.zip"
+    data = b'{}'
+    manifest = {
+        "format": "BOOKPILE_SERVER_LIBRARY", "export_format_version": 1,
+        "data_schema_version": 1, "created_at": datetime.now(UTC).isoformat(),
+        "library_name": "Tampered", "counts": {},
+        "files": {"library.json": {"size": len(data), "sha256": "0" * 64}},
+    }
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as target:
+        target.writestr("manifest.json", json.dumps(manifest))
+        target.writestr("library.json", data)
+    with pytest.raises(LocalImportValidationError, match="Checksum or size mismatch"):
+        inspect_server_library(archive, tmp_path / "tampered-extracted")
+
+
+def test_server_preflight_endpoint_exposes_source_members_without_assigning_them(
+    client, session, tmp_path: Path
+) -> None:
+    owner = authenticated_user(client, session, "server_restore_owner")
+    source = Library(name="Exported room", slug="exported-room", created_by_user_id=owner.id)
+    destination = Library(name="Restore target", slug="restore-target", created_by_user_id=owner.id)
+    session.add_all([source, destination])
+    session.flush()
+    session.add_all([
+        LibraryMembership(library_id=source.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
+        LibraryMembership(library_id=destination.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
+    ])
+    session.commit()
+    objects = FilesystemCoverStorage(tmp_path / "endpoint-server-objects")
+    portable = tmp_path / "endpoint-server.zip"
+    create_server_library_export(
+        session=session, storage=objects, library_id=source.id, destination=portable,
+    )
+    staging = tmp_path / "endpoint-server-staging"
+    client.app.dependency_overrides[get_local_import_service] = lambda: LocalImportService(
+        LocalImportRepository(session), staging
+    )
+
+    with portable.open("rb") as upload:
+        response = client.post(
+            f"/api/v1/libraries/{destination.id}/imports/server/preflight",
+            files={"backup": ("Exported-room.zip", upload, "application/zip")},
+            headers={"X-CSRF-Token": CSRF},
+        )
+
+    assert response.status_code == 201, response.text
+    report = response.json()
+    assert report["source_kind"] == "SERVER"
+    assert report["source_library_name"] == "Exported room"
+    assert report["reading_owner_user_id"] is None
+    assert report["source_members"] == [{
+        "member_key": str(owner.id), "username": owner.username, "role": "OWNER",
+        "reading_count": 0, "review_count": 0,
+    }]

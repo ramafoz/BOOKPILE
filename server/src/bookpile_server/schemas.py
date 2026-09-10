@@ -51,6 +51,9 @@ class LocalImportPreflightResponse(BaseModel):
     capacity_available: bool
     expires_at: datetime
     warnings: list[LocalImportWarningResponse]
+    source_kind: Literal["LOCAL", "SERVER"] = "LOCAL"
+    source_library_name: str | None = None
+    source_members: list[dict[str, object]] = Field(default_factory=list)
 
 
 class LocalImportJobResponse(LocalImportPreflightResponse):
@@ -60,6 +63,8 @@ class LocalImportJobResponse(LocalImportPreflightResponse):
 
 class ConsolidateLocalImportRequest(BaseModel):
     allow_repeated_archive: bool = False
+    member_mapping: dict[str, UUID] = Field(default_factory=dict)
+    allow_unmapped_personal_data: bool = False
 
 
 class ConsolidateLocalImportAsNewLibraryRequest(ConsolidateLocalImportRequest):

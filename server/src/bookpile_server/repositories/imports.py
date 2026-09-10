@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import Book, Library, LibraryImportJob, LibraryMembership
+from ..models import Book, Bookcase, Library, LibraryImportJob, LibraryMembership, VisualOutsideArea
 
 
 class LocalImportRepository:
@@ -22,12 +22,36 @@ class LocalImportRepository:
             )
         )
 
+    def owner_user_ids(self, library_id: UUID) -> set[UUID]:
+        return set(self.session.scalars(
+            select(LibraryMembership.user_id).join(Library).where(
+                LibraryMembership.library_id == library_id,
+                LibraryMembership.role == "OWNER",
+                Library.state == "active",
+            )
+        ))
+
     def destination_books(self, library_id: UUID) -> list[Book]:
         return list(
             self.session.scalars(
                 select(Book).where(Book.library_id == library_id).order_by(Book.id)
             )
         )
+
+    def destination_bookcase_names(self, library_id: UUID) -> set[str]:
+        return {
+            name.casefold()
+            for name in self.session.scalars(
+                select(Bookcase.name).where(Bookcase.library_id == library_id)
+            )
+        }
+
+    def destination_outside_area_kinds(self, library_id: UUID) -> set[str]:
+        return set(self.session.scalars(
+            select(VisualOutsideArea.area_kind).where(
+                VisualOutsideArea.library_id == library_id
+            )
+        ))
 
     def slug_exists(self, slug: str) -> bool:
         return bool(

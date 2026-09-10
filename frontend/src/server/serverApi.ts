@@ -113,6 +113,15 @@ export interface LocalImportJob {
   expires_at: string;
   warnings: LocalImportWarning[];
   result_counts: Record<string, number> | null;
+  source_kind: "LOCAL" | "SERVER";
+  source_library_name: string | null;
+  source_members: Array<{
+    member_key: string;
+    username: string;
+    role: "OWNER" | "VIEWER";
+    reading_count: number;
+    review_count: number;
+  }>;
 }
 
 export interface LibraryMember {
@@ -793,6 +802,15 @@ export const serverApi = {
       true,
     );
   },
+  preflightServerImport: (libraryId: string, backup: File) => {
+    const body = new FormData();
+    body.append("backup", backup);
+    return request<LocalImportJob>(
+      `/libraries/${libraryId}/imports/server/preflight`,
+      { method: "POST", body },
+      true,
+    );
+  },
   localImportJob: (libraryId: string, importId: string) =>
     request<LocalImportJob>(`/libraries/${libraryId}/imports/${importId}`),
   cancelLocalImport: (libraryId: string, importId: string) =>
@@ -801,16 +819,38 @@ export const serverApi = {
       { method: "DELETE" },
       true,
     ),
-  consolidateLocalImport: (libraryId: string, importId: string, allowRepeatedArchive: boolean) =>
+  consolidateLocalImport: (
+    libraryId: string,
+    importId: string,
+    allowRepeatedArchive: boolean,
+    memberMapping: Record<string, string> = {},
+    allowUnmappedPersonalData = false,
+  ) =>
     request<LocalImportJob>(
       `/libraries/${libraryId}/imports/${importId}/consolidate`,
-      { method: "POST", body: JSON.stringify({ allow_repeated_archive: allowRepeatedArchive }) },
+      { method: "POST", body: JSON.stringify({
+        allow_repeated_archive: allowRepeatedArchive,
+        member_mapping: memberMapping,
+        allow_unmapped_personal_data: allowUnmappedPersonalData,
+      }) },
       true,
     ),
-  consolidateLocalImportAsNewLibrary: (libraryId: string, importId: string, name: string, allowRepeatedArchive: boolean) =>
+  consolidateLocalImportAsNewLibrary: (
+    libraryId: string,
+    importId: string,
+    name: string,
+    allowRepeatedArchive: boolean,
+    memberMapping: Record<string, string> = {},
+    allowUnmappedPersonalData = false,
+  ) =>
     request<LocalImportJob>(
       `/libraries/${libraryId}/imports/${importId}/consolidate-new-library`,
-      { method: "POST", body: JSON.stringify({ name, allow_repeated_archive: allowRepeatedArchive }) },
+      { method: "POST", body: JSON.stringify({
+        name,
+        allow_repeated_archive: allowRepeatedArchive,
+        member_mapping: memberMapping,
+        allow_unmapped_personal_data: allowUnmappedPersonalData,
+      }) },
       true,
     ),
   portableExportUrl: (libraryId: string) =>

@@ -259,6 +259,25 @@ describe("Library portability requests", () => {
     expect(body.get("backup")).toBe(backup);
   });
 
+  it("uploads a portable Server ZIP without inferring a reading Owner", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ import_id: "import-2", state: "READY" }), { status: 201 }),
+    );
+    const backup = new File(["zip"], "library-server.zip", { type: "application/zip" });
+
+    await serverApi.preflightServerImport("library-1", backup);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/libraries/library-1/imports/server/preflight",
+    );
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe("POST");
+    const body = options.body as FormData;
+    expect(body.get("backup")).toBe(backup);
+    expect(body.has("reading_owner_user_id")).toBe(false);
+  });
+
   it("requires an explicit repeated-archive decision when consolidating", async () => {
     vi.stubGlobal("document", { cookie: "bookpile_csrf=import-token" });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -269,7 +288,11 @@ describe("Library portability requests", () => {
 
     const options = fetchMock.mock.calls[0][1] as RequestInit;
     expect(options.method).toBe("POST");
-    expect(JSON.parse(String(options.body))).toEqual({ allow_repeated_archive: true });
+    expect(JSON.parse(String(options.body))).toEqual({
+      allow_repeated_archive: true,
+      member_mapping: {},
+      allow_unmapped_personal_data: false,
+    });
   });
 
   it("passes a new library name without inventing memberships in the client", async () => {
@@ -282,6 +305,11 @@ describe("Library portability requests", () => {
 
     expect(String(fetchMock.mock.calls[0][0])).toContain("/consolidate-new-library");
     const options = fetchMock.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(String(options.body))).toEqual({ name: "Imported library", allow_repeated_archive: false });
+    expect(JSON.parse(String(options.body))).toEqual({
+      name: "Imported library",
+      allow_repeated_archive: false,
+      member_mapping: {},
+      allow_unmapped_personal_data: false,
+    });
   });
 });

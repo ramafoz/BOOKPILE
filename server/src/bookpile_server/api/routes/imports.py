@@ -40,6 +40,9 @@ def response_for(job) -> LocalImportJobResponse:
         expires_at=job.expires_at,
         warnings=job.warnings,
         result_counts=job.result_counts,
+        source_kind=job.source_kind,
+        source_library_name=job.source_library_name,
+        source_members=job.source_members,
     )
 
 
@@ -67,6 +70,35 @@ def preflight_local_import(
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
     except (LocalImportOwnerRequired, LocalImportReadingOwnerInvalid) as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library or selected Owner not found") from exc
+    except LocalImportValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    finally:
+        backup.file.close()
+    return response_for(job)
+
+
+@router.post(
+    "/libraries/{library_id}/imports/server/preflight",
+    response_model=LocalImportPreflightResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def preflight_server_import(
+    library_id: UUID,
+    service: LocalImportServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+    backup: UploadFile = File(...),
+) -> LocalImportPreflightResponse:
+    try:
+        job = service.preflight_server(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            upload=backup.file,
+        )
+    except LocalImportUploadTooLarge as exc:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(exc)) from exc
+    except LocalImportOwnerRequired as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library not found") from exc
     except LocalImportValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     finally:
@@ -138,6 +170,8 @@ def consolidate_import_job(
                 library_id=library_id,
                 actor_user_id=context.user_id,
                 allow_repeated_archive=payload.allow_repeated_archive,
+                member_mapping=payload.member_mapping,
+                allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
             )
         )
     except (LocalImportOwnerRequired, LocalImportReadingOwnerInvalid) as exc:
@@ -168,6 +202,8 @@ def consolidate_import_job_as_new_library(
                 actor_user_id=context.user_id,
                 name=payload.name,
                 allow_repeated_archive=payload.allow_repeated_archive,
+                member_mapping=payload.member_mapping,
+                allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
             )
         )
     except LocalImportOwnerRequired as exc:

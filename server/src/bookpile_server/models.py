@@ -690,6 +690,10 @@ class LibraryImportJob(Base):
             "state IN ('READY', 'IMPORTING', 'IMPORTED', 'FAILED', 'EXPIRED')",
             name="ck_library_import_jobs_state",
         ),
+        CheckConstraint(
+            "source_kind IN ('LOCAL', 'SERVER')",
+            name="ck_library_import_jobs_source_kind",
+        ),
         CheckConstraint("archive_bytes >= 0", name="ck_library_import_jobs_archive_bytes"),
         CheckConstraint("uncompressed_bytes >= 0", name="ck_library_import_jobs_expanded_bytes"),
         CheckConstraint("estimated_logical_bytes >= 0", name="ck_library_import_jobs_estimate"),
@@ -722,6 +726,9 @@ class LibraryImportJob(Base):
     staging_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     staging_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     source_counts: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="LOCAL")
+    source_library_name: Mapped[str | None] = mapped_column(String(160))
+    source_members: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     warnings: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
     archive_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     uncompressed_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)

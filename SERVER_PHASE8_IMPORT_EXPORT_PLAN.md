@@ -78,7 +78,7 @@ envelope. An unmeasured row can explicitly fill its complete shelf; once any
 book measurement exists, truthful physical projection governs again. Long book
 tables in statistics show approximately ten rows with their own scrollbar.
 
-### 8E — Server restore and acceptance gate
+### 8E — Server restore and acceptance gate (completed and accepted 2026-09-10)
 
 - Restore a Server-portable ZIP through the same quarantine, report, quota,
   duplicate-decision, staging, and atomic-consolidation guarantees.
@@ -93,6 +93,25 @@ Before restore is implemented, define how each exported stable member key is
 mapped to a current destination Owner. The shared catalogue may be restored
 independently, but personal readings and Goodreads links must never be assigned
 implicitly and restoring an archive must never grant library membership.
+
+Implementation status (2026-09-10): portable Server ZIPs now pass the same
+bounded quarantine and checksum/image/relationship inspection as Local imports.
+The importer preserves physical hierarchy, books, contributors, loans, map
+geometry, outside areas and private covers under fresh UUIDs. It presents every
+source identity and its personal-record counts, accepts only a one-to-one map to
+current destination Owners, and requires explicit confirmation before omitting
+unmapped readings or Goodreads records. It never creates memberships. Restoring
+as a new library creates only the importing Owner and permits at most one source
+identity to map to that user.
+
+An existing destination must use the same geometry mode and coordinate-system
+version; otherwise the report directs the Owner to restore as a new library so
+the exported map cannot be reinterpreted incorrectly. Consolidation remains one
+locked quota transaction with private-object compensation. Migration
+`0020_server_restore_jobs` stores source kind, source library name and the
+non-sensitive member-mapping report; its PostgreSQL upgrade/downgrade gate and
+a Server export/restore round trip pass. The Owner-facing workflow was accepted
+against a real portable export on desktop and mobile.
 
 ## Non-goals
 

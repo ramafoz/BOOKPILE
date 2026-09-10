@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import Date, DateTime, Numeric, func, select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
@@ -29,6 +29,7 @@ from ..models import (
     VisualShelfLayout,
 )
 from .local_zip import CanonicalLocalV8Records
+from .server_zip import CanonicalServerV1Records
 
 
 LOCAL_WORLD_SCALE_MM = Decimal("25")
@@ -440,6 +441,206 @@ def consolidate_local_v8(
             if actual != expected:
                 raise LocalImportConflict(
                     f"Post-import verification failed for {name}: expected {expected}, found {actual}."
+                )
+    except Exception:
+        for key in stored_keys:
+            try:
+                storage.delete(key)
+            except OSError:
+                pass
+        raise
+    return counts, stored_keys
+
+
+def _portable_values(model, source: dict[str, Any], excluded: set[str]) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for column in model.__table__.columns:
+        if column.name in excluded or column.computed is not None or column.name not in source:
+            continue
+        value = source[column.name]
+        if value is not None and isinstance(column.type, DateTime):
+            value = _datetime(value)
+        elif value is not None and isinstance(column.type, Date):
+            value = _date(value)
+        elif value is not None and isinstance(column.type, Numeric):
+            value = _decimal(value)
+        values[column.name] = value
+    return values
+
+
+def consolidate_server_v1(
+    *,
+    session: Session,
+    storage: CoverStorage,
+    settings: Settings,
+    records: CanonicalServerV1Records,
+    extracted: Path,
+    library_id: UUID,
+    member_mapping: dict[str, UUID],
+    actor_user_id: UUID,
+) -> tuple[dict[str, int], list[str]]:
+    """Restore one portable Server library with fresh shared-domain UUIDs."""
+    existing_names = {
+        name.casefold()
+        for name in session.scalars(select(Bookcase.name).where(Bookcase.library_id == library_id))
+    }
+    conflicts = [str(item["name"]) for item in records.bookcases if str(item["name"]).casefold() in existing_names]
+    if conflicts:
+        raise LocalImportConflict(
+            "Furniture names already exist in the destination: " + ", ".join(conflicts)
+        )
+
+    bookcase_ids = {str(item["id"]): uuid4() for item in records.bookcases}
+    shelf_ids = {str(item["id"]): uuid4() for item in records.shelves}
+    container_ids = {str(item["id"]): uuid4() for item in records.containers}
+    book_ids = {str(item["id"]): uuid4() for item in records.books}
+
+    session.add_all([
+        Bookcase(
+            id=bookcase_ids[str(item["id"])], library_id=library_id,
+            **_portable_values(Bookcase, item, {"id", "library_id"}),
+        ) for item in records.bookcases
+    ])
+    session.flush()
+    session.add_all([
+        Shelf(
+            id=shelf_ids[str(item["id"])], library_id=library_id,
+            bookcase_id=bookcase_ids[str(item["bookcase_id"])],
+            **_portable_values(Shelf, item, {"id", "library_id", "bookcase_id"}),
+        ) for item in records.shelves
+    ])
+    session.flush()
+    session.add_all([
+        Container(
+            id=container_ids[str(item["id"])], library_id=library_id,
+            shelf_id=shelf_ids[str(item["shelf_id"])],
+            **_portable_values(Container, item, {"id", "library_id", "shelf_id"}),
+        ) for item in records.containers
+    ])
+    session.flush()
+    session.add_all([
+        Book(
+            id=book_ids[str(item["id"])], library_id=library_id,
+            container_id=container_ids[str(item["container_id"])] if item.get("container_id") else None,
+            **_portable_values(Book, item, {"id", "library_id", "container_id"}),
+        ) for item in records.books
+    ])
+    session.flush()
+    session.add_all([
+        BookContributor(
+            id=uuid4(), library_id=library_id,
+            book_id=book_ids[str(item["book_id"])],
+            **_portable_values(BookContributor, item, {"id", "library_id", "book_id", "normalized_name"}),
+        ) for item in records.contributors
+    ])
+
+    mapped_readings = [item for item in records.readings if str(item["user_id"]) in member_mapping]
+    mapped_personal = [item for item in records.personal_book_records if str(item["user_id"]) in member_mapping]
+    session.add_all([
+        ReadingSession(
+            id=uuid4(), library_id=library_id,
+            book_id=book_ids[str(item["book_id"])],
+            user_id=member_mapping[str(item["user_id"])],
+            **_portable_values(ReadingSession, item, {"id", "library_id", "book_id", "user_id"}),
+        ) for item in mapped_readings
+    ])
+    session.add_all([
+        Loan(
+            id=uuid4(), library_id=library_id,
+            book_id=book_ids[str(item["book_id"])],
+            **_portable_values(Loan, item, {"id", "library_id", "book_id"}),
+        ) for item in records.loans
+    ])
+    session.add_all([
+        PersonalBookRecord(
+            id=uuid4(), library_id=library_id,
+            book_id=book_ids[str(item["book_id"])],
+            user_id=member_mapping[str(item["user_id"])],
+            **_portable_values(PersonalBookRecord, item, {"id", "library_id", "book_id", "user_id"}),
+        ) for item in mapped_personal
+    ])
+    session.add_all([
+        VisualBookcaseLayout(
+            library_id=library_id,
+            bookcase_id=bookcase_ids[str(item["bookcase_id"])],
+            **_portable_values(VisualBookcaseLayout, item, {"library_id", "bookcase_id"}),
+        ) for item in records.bookcase_layouts
+    ])
+    session.add_all([
+        VisualShelfLayout(
+            library_id=library_id,
+            shelf_id=shelf_ids[str(item["shelf_id"])],
+            **_portable_values(VisualShelfLayout, item, {"library_id", "shelf_id"}),
+        ) for item in records.shelf_layouts
+    ])
+    session.add_all([
+        VisualContainerLayout(
+            library_id=library_id,
+            container_id=container_ids[str(item["container_id"])],
+            support_container_id=(container_ids[str(item["support_container_id"])] if item.get("support_container_id") else None),
+            **_portable_values(VisualContainerLayout, item, {"library_id", "container_id", "support_container_id"}),
+        ) for item in records.container_layouts
+    ])
+    existing_outside = set(session.scalars(
+        select(VisualOutsideArea.area_kind).where(VisualOutsideArea.library_id == library_id)
+    ))
+    imported_outside = [item for item in records.outside_areas if item["area_kind"] not in existing_outside]
+    session.add_all([
+        VisualOutsideArea(
+            library_id=library_id,
+            **_portable_values(VisualOutsideArea, item, {"library_id"}),
+        ) for item in imported_outside
+    ])
+
+    stored_keys: list[str] = []
+    try:
+        for item in records.covers:
+            processed = process_cover_image((extracted / str(item["archive_name"])).read_bytes(), settings)
+            object_key = f"covers/{uuid4().hex}.webp"
+            storage.put(object_key, processed.content)
+            stored_keys.append(object_key)
+            uploader = item.get("uploaded_by_member_key")
+            session.add(BookCover(
+                id=uuid4(), library_id=library_id,
+                book_id=book_ids[str(item["book_id"])],
+                object_key=object_key, byte_size=len(processed.content),
+                width_px=processed.width_px, height_px=processed.height_px,
+                sha256=processed.sha256,
+                uploaded_by_user_id=member_mapping.get(str(uploader)) if uploader else None,
+                created_at=_datetime(item["created_at"]), updated_at=_datetime(item["updated_at"]),
+            ))
+        counts = {
+            "bookcases": len(records.bookcases), "shelves": len(records.shelves),
+            "containers": len(records.containers), "books": len(records.books),
+            "contributors": len(records.contributors), "readings": len(mapped_readings),
+            "loans": len(records.loans), "personal_book_records": len(mapped_personal),
+            "covers": len(stored_keys), "outside_areas": len(imported_outside),
+            "omitted_readings": len(records.readings) - len(mapped_readings),
+            "omitted_personal_book_records": len(records.personal_book_records) - len(mapped_personal),
+        }
+        session.add(LibraryAuditEvent(
+            library_id=library_id, actor_user_id=actor_user_id,
+            event_type="server_zip_restored",
+            details={
+                "source_fingerprint": records.source_fingerprint,
+                "mapped_member_count": len(member_mapping), "counts": counts,
+            },
+        ))
+        session.flush()
+        checks = (
+            (Bookcase, Bookcase.id, tuple(bookcase_ids.values()), counts["bookcases"]),
+            (Shelf, Shelf.id, tuple(shelf_ids.values()), counts["shelves"]),
+            (Container, Container.id, tuple(container_ids.values()), counts["containers"]),
+            (Book, Book.id, tuple(book_ids.values()), counts["books"]),
+            (ReadingSession, ReadingSession.book_id, tuple(book_ids.values()), counts["readings"]),
+            (Loan, Loan.book_id, tuple(book_ids.values()), counts["loans"]),
+            (BookCover, BookCover.book_id, tuple(book_ids.values()), counts["covers"]),
+        )
+        for model, column, identifiers, expected in checks:
+            actual = session.scalar(select(func.count()).select_from(model).where(column.in_(identifiers))) if identifiers else 0
+            if actual != expected:
+                raise LocalImportConflict(
+                    f"Post-restore verification failed: expected {expected}, found {actual}."
                 )
     except Exception:
         for key in stored_keys:

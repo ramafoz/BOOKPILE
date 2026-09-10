@@ -107,10 +107,12 @@ The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
-edition is still not deployable because the production private-object adapter,
-Server ZIP backup/restore and production infrastructure have not yet been
-completed. Application-level storage quota is implemented; operational storage,
-monitoring and deployment controls remain production work.
+edition is still not deployable because the production private-object adapter
+and production infrastructure have not yet been completed. Owner-only Server
+ZIP export and explicit-mapping restore are implemented and accepted with bounded
+inspection, atomic quota enforcement and object compensation. Phase 8 is
+complete. Application-level storage quota is implemented;
+operational storage, monitoring and deployment controls remain production work.
 
 ## Development setup
 

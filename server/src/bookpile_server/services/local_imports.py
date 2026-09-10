@@ -12,11 +12,12 @@ from ..imports.local_zip import (
     adapt_local_v8,
     inspect_local_backup,
 )
+from ..imports.server_zip import adapt_server_v1, inspect_server_library
 from ..models import Library, LibraryImportJob, LibraryMembership
 from ..cover_storage import CoverStorage
 from ..config import Settings
 from ..cover_images import InvalidCoverImage, process_cover_image
-from ..imports.consolidation import LocalImportConflict, consolidate_local_v8
+from ..imports.consolidation import LocalImportConflict, consolidate_local_v8, consolidate_server_v1
 from ..repositories.imports import LocalImportRepository
 from .storage_domain import logical_collection_bytes
 from .storage import StorageService
@@ -90,6 +91,21 @@ class LocalImportService:
                 ) from exc
         return total
 
+    def _processed_server_cover_bytes(self, extracted: Path, records, fallback: int) -> int:
+        if self.settings is None:
+            return fallback
+        total = 0
+        for cover in records.covers:
+            try:
+                total += len(process_cover_image(
+                    (extracted / str(cover["archive_name"])).read_bytes(), self.settings
+                ).content)
+            except (InvalidCoverImage, OSError) as exc:
+                raise LocalImportValidationError(
+                    f"A Server cover cannot enter private storage: {cover.get('archive_name')}."
+                ) from exc
+        return total
+
     def _write_upload(self, source: BinaryIO, destination: Path) -> None:
         written = 0
         with destination.open("xb") as output:
@@ -97,7 +113,7 @@ class LocalImportService:
                 written += len(chunk)
                 if written > self.limits.max_archive_bytes:
                     raise LocalImportUploadTooLarge(
-                        "Local BOOKPILE ZIP backups must be 100 MiB or smaller."
+                        "BOOKPILE ZIP archives must be 100 MiB or smaller."
                     )
                 output.write(chunk)
 
@@ -125,6 +141,8 @@ class LocalImportService:
             ("visual_shelf_layouts", records.shelf_layouts),
             ("visual_container_layouts", records.container_layouts),
         )
+        if hasattr(records, "personal_book_records"):
+            groups = (*groups, ("personal_book_records", records.personal_book_records))
         return logical_collection_bytes(
             [(kind, record) for kind, items in groups for record in items],
             object_bytes=[cover_bytes],
@@ -136,7 +154,7 @@ class LocalImportService:
             warnings.append(
                 {
                     "code": "REPEATED_ARCHIVE",
-                    "message": "This exact Local backup was already prepared or imported into this library.",
+                    "message": "This exact ZIP was already prepared or imported into this library.",
                 }
             )
         existing = self.repository.destination_books(library_id)
@@ -218,6 +236,9 @@ class LocalImportService:
                 staging_sha256=self._staging_fingerprint(extracted),
                 staging_key=str(job_id),
                 source_counts=inspection.counts,
+                source_kind="LOCAL",
+                source_library_name=None,
+                source_members=[],
                 warnings=warnings,
                 archive_bytes=inspection.archive_bytes,
                 uncompressed_bytes=inspection.uncompressed_bytes,
@@ -232,6 +253,142 @@ class LocalImportService:
             self.repository.rollback()
             shutil.rmtree(directory, ignore_errors=True)
             raise
+
+    def preflight_server(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        upload: BinaryIO,
+    ) -> LibraryImportJob:
+        self.cleanup_expired()
+        if self.repository.owner_membership(library_id, actor_user_id) is None:
+            raise LocalImportOwnerRequired
+        job_id = uuid4()
+        directory = self.staging_root / str(job_id)
+        archive = directory / "upload.zip"
+        extracted = directory / "extracted"
+        directory.mkdir(parents=True, exist_ok=False)
+        try:
+            self._write_upload(upload, archive)
+            inspection = inspect_server_library(archive, extracted, limits=self.limits)
+            records = adapt_server_v1(extracted)
+            repeated = bool(self.repository.prior_jobs(library_id, inspection.archive_sha256))
+            warnings = self._warnings(library_id, records, repeated)
+            destination = self.repository.session.get(Library, library_id)
+            source_mode = str(records.library.get("geometry_mode") or "MANUAL")
+            source_coordinates = int(records.library.get("coordinate_system_version") or 2)
+            if destination is not None and (
+                destination.geometry_mode != source_mode
+                or destination.coordinate_system_version != source_coordinates
+            ):
+                warnings.append({
+                    "code": "INCOMPATIBLE_MAP_COORDINATES",
+                    "message": (
+                        "This library uses a different map mode or coordinate system. "
+                        "Restore the ZIP as a new library to preserve its geometry."
+                    ),
+                })
+            furniture_conflicts = sorted(
+                str(item["name"])
+                for item in records.bookcases
+                if str(item["name"]).casefold()
+                in self.repository.destination_bookcase_names(library_id)
+            )
+            if furniture_conflicts:
+                warnings.append({
+                    "code": "FURNITURE_NAME_CONFLICT",
+                    "message": (
+                        "Furniture names already exist in this library: "
+                        + ", ".join(furniture_conflicts)
+                        + ". Rename them or restore as a new library."
+                    ),
+                })
+            retained_areas = {
+                str(item["area_kind"]) for item in records.outside_areas
+            } & self.repository.destination_outside_area_kinds(library_id)
+            if retained_areas:
+                warnings.append({
+                    "code": "OUTSIDE_AREAS_RETAINED",
+                    "message": (
+                        "Existing outside-library areas take precedence for: "
+                        + ", ".join(sorted(retained_areas))
+                        + ". The imported books and shared data are unaffected."
+                    ),
+                })
+            archive.unlink(missing_ok=True)
+            cover_bytes = self._processed_server_cover_bytes(
+                extracted, records, inspection.estimated_cover_bytes
+            )
+            estimate = self._estimate(records, cover_bytes)
+            capacity_available = (
+                self.storage_service.can_fit_library_growth(library_id, estimate)
+                if self.storage_service is not None else True
+            )
+            if not capacity_available:
+                warnings.append({
+                    "code": "INSUFFICIENT_SHARED_CAPACITY",
+                    "message": "The restored library data does not currently fit the Owners' shared storage capacity.",
+                })
+            job = LibraryImportJob(
+                id=job_id, library_id=library_id, created_by_user_id=actor_user_id,
+                reading_owner_user_id=None, state="READY", adapter=inspection.adapter,
+                backup_format_version=inspection.export_format_version,
+                local_schema_version=inspection.data_schema_version,
+                source_created_at=inspection.created_at,
+                archive_sha256=inspection.archive_sha256,
+                source_fingerprint=records.source_fingerprint,
+                staging_sha256=self._staging_fingerprint(extracted), staging_key=str(job_id),
+                source_counts=inspection.counts, source_kind="SERVER",
+                source_library_name=inspection.library_name,
+                source_members=list(inspection.source_members), warnings=warnings,
+                archive_bytes=inspection.archive_bytes,
+                uncompressed_bytes=inspection.uncompressed_bytes,
+                estimated_logical_bytes=estimate, capacity_available=capacity_available,
+                expires_at=datetime.now(UTC) + timedelta(minutes=self.ttl_minutes),
+            )
+            self.repository.add(job)
+            self.repository.commit()
+            return job
+        except Exception:
+            self.repository.rollback()
+            shutil.rmtree(directory, ignore_errors=True)
+            raise
+
+    def _server_mapping(
+        self,
+        *,
+        records,
+        library_id: UUID,
+        member_mapping: dict[str, UUID],
+        allow_unmapped_personal_data: bool,
+    ) -> dict[str, UUID]:
+        source_keys = {str(item["member_key"]) for item in records.members}
+        destination = self.repository.session.get(Library, library_id)
+        if destination is None or (
+            destination.geometry_mode != str(records.library.get("geometry_mode") or "MANUAL")
+            or destination.coordinate_system_version
+            != int(records.library.get("coordinate_system_version") or 2)
+        ):
+            raise LocalImportStateConflict(
+                "The destination map mode is incompatible; restore this ZIP as a new library."
+            )
+        if set(member_mapping) - source_keys:
+            raise LocalImportStateConflict("The member mapping contains an unknown source identity.")
+        if len(set(member_mapping.values())) != len(member_mapping):
+            raise LocalImportStateConflict("Each destination Owner may receive at most one source identity.")
+        owners = self.repository.owner_user_ids(library_id)
+        if set(member_mapping.values()) - owners:
+            raise LocalImportReadingOwnerInvalid
+        personal_keys = {
+            *(str(item["user_id"]) for item in records.readings),
+            *(str(item["user_id"]) for item in records.personal_book_records),
+        }
+        if personal_keys - set(member_mapping) and not allow_unmapped_personal_data:
+            raise LocalImportStateConflict(
+                "Confirm that unmapped personal readings and Goodreads links should be omitted."
+            )
+        return member_mapping
 
     def find_ready(self, *, import_id: UUID, library_id: UUID, actor_user_id: UUID) -> LibraryImportJob:
         if self.repository.owner_membership(library_id, actor_user_id) is None:
@@ -264,6 +421,8 @@ class LocalImportService:
         library_id: UUID,
         actor_user_id: UUID,
         allow_repeated_archive: bool,
+        member_mapping: dict[str, UUID] | None = None,
+        allow_unmapped_personal_data: bool = False,
     ) -> LibraryImportJob:
         if self.repository.owner_membership(library_id, actor_user_id) is None:
             raise LocalImportOwnerRequired
@@ -273,7 +432,10 @@ class LocalImportService:
         expires_at = job.expires_at.replace(tzinfo=job.expires_at.tzinfo or UTC)
         if job.state != "READY" or expires_at <= datetime.now(UTC):
             raise LocalImportStateConflict("This import is no longer ready.")
-        if job.reading_owner_user_id is None or self.repository.owner_membership(library_id, job.reading_owner_user_id) is None:
+        if job.source_kind == "LOCAL" and (
+            job.reading_owner_user_id is None
+            or self.repository.owner_membership(library_id, job.reading_owner_user_id) is None
+        ):
             raise LocalImportReadingOwnerInvalid
         repeated = any(item.get("code") == "REPEATED_ARCHIVE" for item in job.warnings)
         if repeated and not allow_repeated_archive:
@@ -283,7 +445,7 @@ class LocalImportService:
         extracted = self.staging_root / job.staging_key / "extracted"
         if not extracted.is_dir() or self._staging_fingerprint(extracted) != job.staging_sha256:
             raise LocalImportStateConflict("The validated import staging data changed or expired.")
-        records = adapt_local_v8(extracted)
+        records = adapt_server_v1(extracted) if job.source_kind == "SERVER" else adapt_local_v8(extracted)
         if records.source_fingerprint != job.source_fingerprint:
             raise LocalImportStateConflict("The canonical import data changed after preflight.")
 
@@ -291,16 +453,29 @@ class LocalImportService:
         try:
             job.state = "IMPORTING"
             self.repository.flush()
-            counts, stored_keys = consolidate_local_v8(
-                session=self.repository.session,
-                storage=self.object_storage,
-                settings=self.settings,
-                records=records,
-                extracted=extracted,
-                library_id=library_id,
-                reading_owner_user_id=job.reading_owner_user_id,
-                actor_user_id=actor_user_id,
-            )
+            if job.source_kind == "SERVER":
+                mapping = self._server_mapping(
+                    records=records, library_id=library_id,
+                    member_mapping=member_mapping or {},
+                    allow_unmapped_personal_data=allow_unmapped_personal_data,
+                )
+                counts, stored_keys = consolidate_server_v1(
+                    session=self.repository.session, storage=self.object_storage,
+                    settings=self.settings, records=records, extracted=extracted,
+                    library_id=library_id, member_mapping=mapping,
+                    actor_user_id=actor_user_id,
+                )
+            else:
+                counts, stored_keys = consolidate_local_v8(
+                    session=self.repository.session,
+                    storage=self.object_storage,
+                    settings=self.settings,
+                    records=records,
+                    extracted=extracted,
+                    library_id=library_id,
+                    reading_owner_user_id=job.reading_owner_user_id,
+                    actor_user_id=actor_user_id,
+                )
             job.result_counts = counts
             job.state = "IMPORTED"
             job.completed_at = datetime.now(UTC)
@@ -325,6 +500,8 @@ class LocalImportService:
         actor_user_id: UUID,
         name: str,
         allow_repeated_archive: bool,
+        member_mapping: dict[str, UUID] | None = None,
+        allow_unmapped_personal_data: bool = False,
     ) -> LibraryImportJob:
         """Create the destination and consolidate in one database transaction."""
         if self.repository.owner_membership(source_library_id, actor_user_id) is None:
@@ -351,11 +528,17 @@ class LocalImportService:
         job.reading_owner_user_id = actor_user_id
         try:
             self.repository.flush()
+            if job.source_kind == "SERVER":
+                records = adapt_server_v1(self.staging_root / job.staging_key / "extracted")
+                library.geometry_mode = str(records.library.get("geometry_mode") or "MANUAL")
+                library.coordinate_system_version = int(records.library.get("coordinate_system_version") or 2)
             return self.consolidate(
                 import_id=job.id,
                 library_id=library.id,
                 actor_user_id=actor_user_id,
                 allow_repeated_archive=allow_repeated_archive,
+                member_mapping=member_mapping,
+                allow_unmapped_personal_data=allow_unmapped_personal_data,
             )
         except Exception:
             self.repository.rollback()
