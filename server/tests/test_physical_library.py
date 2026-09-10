@@ -612,14 +612,15 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     row_layout.update({"x": 0, "y": 60, "width": 100, "height": 30, "row_anchor": "RIGHT"})
     pile_layout.update(
         {
-            "x": 0,
+            "x": 15,
             "y": 10,
-            "width": 50,
-            "height": 50,
+            "width": 20,
+            "height": 20,
             "support_kind": "CONTAINER",
             "support_container_id": row["id"],
         }
     )
+    layout["geometry_mode"] = "PHYSICAL"
     saved = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
     assert saved.status_code == 200, saved.text
     saved_layout = saved.json()["layout"]
@@ -632,6 +633,8 @@ def test_visual_layout_saves_explicit_anchor_support_and_rejects_stale_writes(
     assert saved_row["row_anchor"] == "RIGHT"
     assert saved_pile["support_kind"] == "CONTAINER"
     assert saved_pile["support_container_id"] == row["id"]
+    assert saved_pile["x"] == pytest.approx(15)
+    assert saved_pile["y"] + saved_pile["height"] == pytest.approx(saved_row["y"])
 
     stale = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
     assert stale.status_code == 409

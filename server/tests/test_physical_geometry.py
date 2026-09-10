@@ -91,6 +91,30 @@ def test_physical_projection_preserves_anchor_and_places_supported_pile() -> Non
     assert diagnostics == []
 
 
+def test_supported_piles_keep_distinct_horizontal_anchor_positions() -> None:
+    row_id, left_id, right_id, shelf_id = uuid4(), uuid4(), uuid4(), uuid4()
+    projected, diagnostics = project_containers([
+        ContainerProjectionInput(
+            row_id, shelf_id, "ROW", "BACKGROUND",
+            0, 40, 100, 60, "LEFT", None, "RIGHT", 500, 300, (), False,
+        ),
+        ContainerProjectionInput(
+            left_id, shelf_id, "PILE", "BACKGROUND",
+            10, 20, 20, 20, "LEFT", row_id, "RIGHT", 500, 300, (), False,
+        ),
+        ContainerProjectionInput(
+            right_id, shelf_id, "PILE", "BACKGROUND",
+            60, 20, 20, 20, "LEFT", row_id, "RIGHT", 500, 300, (), False,
+        ),
+    ])
+
+    assert projected[left_id].x == 10
+    assert projected[right_id].x == 60
+    assert projected[left_id].y + projected[left_id].height == projected[row_id].y
+    assert projected[right_id].y + projected[right_id].height == projected[row_id].y
+    assert diagnostics == []
+
+
 def test_physical_projection_warns_when_truthful_size_cannot_fit() -> None:
     container_id, shelf_id = uuid4(), uuid4()
     book = BookMeasurement(uuid4(), 100, 400, 200, 600)
