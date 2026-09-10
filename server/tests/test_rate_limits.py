@@ -105,5 +105,11 @@ def test_production_rejects_development_security_defaults() -> None:
         deployment_revision="git-1234567",
         api_docs_enabled=False,
         allowed_hosts="bookpile.example",
+        private_object_backend="s3",
+        private_object_s3_endpoint_url="https://objects.example",
+        private_object_s3_region="eu-test-1",
+        private_object_s3_bucket="bookpile-private",
+        private_object_s3_access_key_id="test-access-key",
+        private_object_s3_secret_access_key="test-secret-key",
     )
     assert settings.session_cookie_secure is True

@@ -887,7 +887,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     hosts, secure headers, request IDs, privacy-safe logs, health boundaries,
     pooling, pinned non-root images, private-network Compose/Caddy, CI and the
     rehearsal runbook. The clean staging-host proof remains in 9F.
-  - [ ] 9B private S3-compatible storage and reconcile/migration tooling.
+  - [ ] 9B private S3-compatible storage: adapter, strict configuration,
+    verified/chunked I/O, inventory audit and restartable copy-without-switching
+    migration tooling are implemented. Close after the chosen provider passes
+    an isolated private-bucket round trip and staging reconciliation.
   - [ ] 9C durable PostgreSQL email outbox and retrying worker.
   - [ ] 9D encrypted off-site backup, retention and restore automation.
   - [ ] 9E edge security, observability and scheduled operations.

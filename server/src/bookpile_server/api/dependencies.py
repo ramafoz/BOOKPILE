@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -32,7 +33,7 @@ from ..services.auth import (
 )
 from ..services.catalogue import CatalogueService
 from ..services.covers import CoverService
-from ..cover_storage import CoverStorage, FilesystemCoverStorage
+from ..cover_storage import CoverStorage, FilesystemCoverStorage, S3PrivateObjectStorage
 from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
 from ..services.loans import LoanService
@@ -47,8 +48,12 @@ from ..services.storage import StorageService
 SessionDependency = Annotated[Session, Depends(get_session)]
 
 
+@lru_cache(maxsize=1)
 def get_private_object_storage() -> CoverStorage:
-    return FilesystemCoverStorage(get_settings().private_object_root)
+    settings = get_settings()
+    if settings.private_object_backend == "s3":
+        return S3PrivateObjectStorage.from_settings(settings)
+    return FilesystemCoverStorage(settings.private_object_root)
 
 
 PrivateObjectStorageDependency = Annotated[

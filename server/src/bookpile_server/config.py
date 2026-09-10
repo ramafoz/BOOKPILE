@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     cover_max_height: int = 1400
     cover_webp_quality: int = 82
     cover_upload_attempts_per_hour: int = 30
+    private_object_backend: Literal["filesystem", "s3"] = "filesystem"
+    private_object_s3_endpoint_url: str | None = None
+    private_object_s3_region: str | None = None
+    private_object_s3_bucket: str | None = None
+    private_object_s3_access_key_id: str | None = None
+    private_object_s3_secret_access_key: SecretStr | None = None
+    private_object_s3_prefix: str = "bookpile"
+    private_object_s3_addressing_style: Literal["auto", "path", "virtual"] = "auto"
+    private_object_s3_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
+    private_object_s3_read_timeout_seconds: int = Field(default=10, ge=1, le=120)
+    private_object_s3_max_attempts: int = Field(default=3, ge=1, le=10)
+    private_object_s3_max_connections: int = Field(default=10, ge=1, le=100)
 
     @property
     def is_hosted(self) -> bool:
@@ -111,6 +123,41 @@ class Settings(BaseSettings):
                 raise ValueError("Hosted allowed hosts must include the public hostname")
             if any("://" in host or "/" in host for host in hosts):
                 raise ValueError("Allowed hosts contain hostnames only, without scheme or path")
+            if self.private_object_backend != "s3":
+                raise ValueError("Hosted environments require private S3-compatible object storage")
+        if self.private_object_backend == "s3":
+            required = {
+                "HTTPS endpoint": self.private_object_s3_endpoint_url,
+                "region": self.private_object_s3_region,
+                "bucket": self.private_object_s3_bucket,
+                "access key": self.private_object_s3_access_key_id,
+                "secret key": (
+                    self.private_object_s3_secret_access_key.get_secret_value()
+                    if self.private_object_s3_secret_access_key
+                    else None
+                ),
+            }
+            missing = [name for name, value in required.items() if not value or not value.strip()]
+            if missing:
+                raise ValueError(f"S3 private storage requires: {', '.join(missing)}")
+            endpoint = self.private_object_s3_endpoint_url or ""
+            parsed_endpoint = urlsplit(endpoint)
+            if (
+                parsed_endpoint.scheme != "https"
+                or not parsed_endpoint.hostname
+                or parsed_endpoint.username
+                or parsed_endpoint.password
+                or parsed_endpoint.path not in {"", "/"}
+                or parsed_endpoint.query
+                or parsed_endpoint.fragment
+            ):
+                raise ValueError("The S3 endpoint must be one HTTPS origin")
+            bucket = self.private_object_s3_bucket or ""
+            if "/" in bucket or "://" in bucket:
+                raise ValueError("The S3 bucket setting must contain one bucket name")
+            prefix = self.private_object_s3_prefix.strip("/")
+            if not prefix or any(part in {"", ".", ".."} for part in prefix.split("/")):
+                raise ValueError("The S3 object prefix must be a safe non-empty path")
         return self
 
 

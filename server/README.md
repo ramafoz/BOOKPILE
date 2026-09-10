@@ -117,6 +117,11 @@ inspection, atomic quota enforcement and object compensation. Phase 8 is
 complete. Application-level storage quota is implemented;
 operational storage, monitoring and deployment controls remain production work.
 
+Phase 9B's provider-neutral private S3 adapter and guarded filesystem migration
+are implemented without changing authenticated media URLs. Production still
+waits for provider acceptance and staging reconciliation; see
+`SERVER_PRIVATE_OBJECT_STORAGE.md`.
+
 ## Development setup
 
 Create an isolated environment from the repository root:

@@ -4,7 +4,6 @@ x-api-environment: &api-environment
   env_file:
     - ${BOOKPILE_ENV_FILE:-.env.production}
   environment:
-    BOOKPILE_SERVER_PRIVATE_OBJECT_ROOT: /var/lib/bookpile/private-objects
     BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
     BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
 
@@ -36,7 +35,6 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - private-objects:/var/lib/bookpile/private-objects
       - import-staging:/var/lib/bookpile/import-staging
       - export-staging:/var/lib/bookpile/export-staging
     networks: [backend]
@@ -62,7 +60,6 @@ services:
       retries: 12
       start_period: 10s
     volumes:
-      - private-objects:/var/lib/bookpile/private-objects
       - import-staging:/var/lib/bookpile/import-staging
       - export-staging:/var/lib/bookpile/export-staging
     networks: [backend]
@@ -95,7 +92,6 @@ networks:
 
 volumes:
   postgres-data:
-  private-objects:
   import-staging:
   export-staging:
   caddy-data:

@@ -59,6 +59,11 @@ The remaining clean-host rehearsal belongs to 9F. It does not block 9B.
 
 ### 9B — private S3-compatible object storage
 
+Status: provider-neutral implementation and simulated corruption/migration
+gates complete. Provider contract and procedure are documented in
+`SERVER_PRIVATE_OBJECT_STORAGE.md`; real provider selection, isolated-bucket
+acceptance and staging inventory reconciliation remain open.
+
 - Add an adapter selected by configuration without changing object keys or API
   URLs.
 - Require TLS, a private bucket, explicit region/endpoint, bounded timeouts, and

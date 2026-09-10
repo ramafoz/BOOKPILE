@@ -66,6 +66,12 @@ def _hosted_settings(**changes) -> Settings:
         "deployment_revision": "git-1234567",
         "api_docs_enabled": False,
         "allowed_hosts": "staging.bookpile.example",
+        "private_object_backend": "s3",
+        "private_object_s3_endpoint_url": "https://objects.example",
+        "private_object_s3_region": "eu-test-1",
+        "private_object_s3_bucket": "bookpile-private",
+        "private_object_s3_access_key_id": "test-access-key",
+        "private_object_s3_secret_access_key": "test-secret-key",
     }
     values.update(changes)
     return Settings(**values)
@@ -89,6 +95,8 @@ def test_hosted_app_hides_docs_and_adds_transport_security(monkeypatch) -> None:
     {"database_url": "sqlite:///bookpile.db"},
     {"api_docs_enabled": True},
     {"deployment_revision": "development"},
+    {"private_object_backend": "filesystem"},
+    {"private_object_s3_endpoint_url": "http://objects.example"},
 ])
 def test_hosted_configuration_rejects_unsafe_values(changes) -> None:
     with pytest.raises(ValueError):
