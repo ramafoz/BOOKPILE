@@ -189,12 +189,19 @@ export default function AccountWorkspace({
     setError("");
     setNotice("");
     try {
-      const {
-        user_id: _userId,
-        username: _username,
-        profile_image_visible: _image,
-        ...payload
-      } = profile;
+      const payload = {
+        display_name: profile.display_name,
+        timezone: profile.timezone,
+        gender: profile.gender,
+        custom_gender: profile.custom_gender,
+        preferred_pronoun: profile.preferred_pronoun,
+        neutral_pronoun: profile.neutral_pronoun,
+        city: profile.city,
+        state: profile.state,
+        country: profile.country,
+        date_of_birth: profile.date_of_birth,
+        visibilities: profile.visibilities,
+      };
       setProfile(await serverApi.updateAccountProfile(payload));
       setStorage(await serverApi.accountStorage());
       setNotice("Your profile and privacy choices were saved.");

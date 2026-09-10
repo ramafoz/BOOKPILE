@@ -716,7 +716,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] Complete Owner and Viewer acceptance testing on desktop and mobile:
     add, display, replace, remove, HEIC upload, invalid-file rejection,
     Viewer read-only access, and cross-library denial all passed.
-- [~] After Server personal readings and loans exist, migrate the current
+- [x] After Server personal readings and loans exist, migrate the current
   Local-v1 ZIP safely into a selected Server library and assign its implicit
   reading history to a selected Owner. The mapping contract exists, but full
   implementation must not precede the Phase 5/6 destination models.
@@ -745,9 +745,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     containers with wholly unmeasured books, provide a full-shelf row shortcut,
     divide unmeasured shelf spans automatically, retain visual overrides, and
     constrain long statistics book lists to an internal scrollbar.
-  - [ ] Phase 8E: validate/restore Server-portable ZIPs, define explicit
-    destination-Owner mapping for member-owned data, and pass anonymized
-    real-fixture/recovery gates.
+  - [x] Phase 8E: validate/restore Server-portable ZIPs, map
+    source identities one-to-one to current destination Owners, require
+    explicit omission of unmapped personal data, preserve Server geometry,
+    and never infer membership. Synthetic round-trip, rollback, frontend,
+    migration, PostgreSQL and real-export UX acceptance gates pass.
 - [ ] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
@@ -774,10 +776,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     manipulation over that same geometry service. Interaction is
     selection-first: select one furniture, shelf, or container and show handles
     only for that object.
-  - [~] Phase 8 is active. Local ZIP inspection, the v8 canonical adapter,
-    authenticated preflight jobs, atomic Local consolidation, portable Server
-    export and their Owner UI are complete; Server restore and real anonymized
-    fixture gates remain.
+  - [x] Phase 8 is complete and accepted: Local import, Server export and
+    Server restore all pass their transactional, mapping, migration,
+    compatibility and real-export UX gates.
 - [x] Compact the Server workspace header and catalogue presentation:
   - Replace the large welcome/library heading with top controls for selected
     library, combined catalogue/map plus reading perspective, signed-in user

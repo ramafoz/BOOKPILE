@@ -504,7 +504,7 @@ shelf placement remains editable through frames, closures, separators,
 alignment and offset and is projected live in the draft;
 Apply is atomic and Cancel discards the draft. This does not
 alter or replace Local v1. Server personal readings and loans are now complete;
-Server Phase 8 is active. Local format-1/schema-8 inspection, deterministic
+Server Phase 8 is complete. Local format-1/schema-8 inspection, deterministic
 canonical adaptation, authenticated preflight, atomic consolidation and
 Owner-only portable Server-library export are implemented. Final locked quota
 allocation and private-cover compensation leave failed imports without visible
@@ -516,7 +516,12 @@ library in the same transaction, with visible feedback throughout long work.
 Large-catalogue acceptance is complete: unmeasured shelf space is distributed
 automatically, wholly unmeasured containers retain editable visual envelopes,
 rows can fill a shelf explicitly, and statistics book tables scroll internally.
-Server-portable restore and its acceptance fixtures follow under
+Server-portable restore is now implemented behind the same isolated preflight
+and atomic quota boundary. It restores hierarchy, map, covers and shared data,
+never recreates memberships, and maps source personal records only through an
+explicit one-to-one selection of current Owners; unmapped personal data requires
+an explicit omission confirmation. Migration `0020`, automated round-trip and
+real-export UX acceptance gates pass; Phase 8 is complete as documented in
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 The compact Server workspace increment is complete and accepted on desktop and

@@ -502,8 +502,12 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [settingsSection, setSettingsSection] = useState<"ROOT" | "MEMBERS" | "DATA">("ROOT");
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSourceKind, setImportSourceKind] = useState<"LOCAL" | "SERVER">("LOCAL");
   const [importReadingOwner, setImportReadingOwner] = useState("");
   const [importJob, setImportJob] = useState<LocalImportJob | null>(null);
+  const [importMemberMapping, setImportMemberMapping] = useState<Record<string, string>>({});
+  const [newImportSourceMember, setNewImportSourceMember] = useState("");
+  const [allowUnmappedPersonalData, setAllowUnmappedPersonalData] = useState(false);
   const [allowRepeatedImport, setAllowRepeatedImport] = useState(false);
   const [newImportLibraryName, setNewImportLibraryName] = useState("");
   const [importOperation, setImportOperation] = useState<"" | "INSPECTING" | "IMPORTING" | "IMPORTING_NEW">("");
@@ -514,6 +518,20 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [deleteAcknowledged, setDeleteAcknowledged] = useState(false);
 
   const selected = libraries.find((library) => library.library_id === selectedId) ?? null;
+  const importPersonalMembers = importJob?.source_kind === "SERVER"
+    ? importJob.source_members.filter((member) => member.reading_count > 0 || member.review_count > 0)
+    : [];
+  const hasUnmappedPersonalData = importPersonalMembers.some(
+    (member) => !importMemberMapping[member.member_key],
+  );
+  const hasUnmappedPersonalDataForNewLibrary = importPersonalMembers.some(
+    (member) => member.member_key !== newImportSourceMember,
+  );
+  const mappedOwnerIds = Object.values(importMemberMapping).filter(Boolean);
+  const hasDuplicateMappedOwner = new Set(mappedOwnerIds).size !== mappedOwnerIds.length;
+  const hasBlockingServerConflict = importJob?.warnings.some(
+    (warning) => ["INCOMPATIBLE_MAP_COORDINATES", "FURNITURE_NAME_CONFLICT"].includes(warning.code),
+  ) ?? false;
 
   function toggleControlsPanel(panel: NonNullable<typeof controlsPanel>, button: HTMLButtonElement) {
     if (controlsPanel === panel) {
@@ -581,6 +599,9 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   useEffect(() => {
     setImportFile(null);
     setImportJob(null);
+    setImportMemberMapping({});
+    setNewImportSourceMember("");
+    setAllowUnmappedPersonalData(false);
     setAllowRepeatedImport(false);
     setImportReadingOwner("");
     setNewImportLibraryName("");
@@ -792,18 +813,21 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     }
   }
 
-  async function preflightLocalBackup(event: FormEvent) {
+  async function preflightBackup(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !importFile || !importReadingOwner) return;
+    if (!selected || !importFile || (importSourceKind === "LOCAL" && !importReadingOwner)) return;
     setDataBusy(true);
     setImportOperation("INSPECTING");
     setError("");
     try {
-      setImportJob(await serverApi.preflightLocalImport(
-        selected.library_id,
-        importFile,
-        importReadingOwner,
-      ));
+      const inspected = importSourceKind === "SERVER"
+        ? await serverApi.preflightServerImport(selected.library_id, importFile)
+        : await serverApi.preflightLocalImport(selected.library_id, importFile, importReadingOwner);
+      setImportJob(inspected);
+      setNewImportLibraryName(inspected.source_library_name ?? "");
+      setImportMemberMapping({});
+      setNewImportSourceMember("");
+      setAllowUnmappedPersonalData(false);
       setAllowRepeatedImport(false);
     } catch (caught) {
       setError(friendlyError(caught));
@@ -821,6 +845,9 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await serverApi.cancelLocalImport(selected.library_id, importJob.import_id);
       setImportJob(null);
       setImportFile(null);
+      setImportMemberMapping({});
+      setNewImportSourceMember("");
+      setAllowUnmappedPersonalData(false);
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -841,6 +868,10 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
         importJob.import_id,
         newImportLibraryName.trim(),
         allowRepeatedImport,
+        importJob.source_kind === "SERVER" && newImportSourceMember
+          ? { [newImportSourceMember]: user.user_id }
+          : {},
+        allowUnmappedPersonalData,
       );
       const createdName = newImportLibraryName.trim();
       setImportFile(null);
@@ -850,7 +881,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setSettingsSection("ROOT");
       setWorkspace("CATALOGUE");
       await reloadLibraries(completed.library_id);
-      pushNotice(`“${createdName}” was created and the Local library was imported atomically.`);
+      pushNotice(`“${createdName}” was created and the ${importJob.source_kind === "SERVER" ? "Server" : "Local"} library was imported atomically.`);
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -869,12 +900,14 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
         selected.library_id,
         importJob.import_id,
         allowRepeatedImport,
+        importJob.source_kind === "SERVER" ? importMemberMapping : {},
+        allowUnmappedPersonalData,
       );
       setImportJob(completed);
       setImportFile(null);
       setLibraryRevision((value) => value + 1);
       await reloadLibraries(selected.library_id);
-      pushNotice(`The Local library was imported into “${selected.name}” without replacing its existing books.`);
+      pushNotice(`The ${importJob.source_kind === "SERVER" ? "Server" : "Local"} library was imported into “${selected.name}” without replacing its existing books.`);
     } catch (caught) {
       setError(friendlyError(caught));
     } finally {
@@ -1000,28 +1033,38 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                     <button type="button" onClick={downloadPortableExport}><Download size={17} /> Download portable ZIP</button>
                   </div>
                   <div className="server-portability-block">
-                    <h4><Upload size={17} /> Import BOOKPILE Local</h4>
-                    <p>This adds the Local catalogue to “{selected.name}”; it never overwrites PostgreSQL. Choose the Owner who should receive the Local user's personal reading history and Goodreads links.</p>
-                    {!importJob && <form className="server-portability-form" onSubmit={preflightLocalBackup}>
-                      <label>Local full-backup ZIP<input type="file" accept=".zip,application/zip" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} required /></label>
-                      <label>Reading history belongs to<select value={importReadingOwner} onChange={(event) => setImportReadingOwner(event.target.value)} required>{members.filter((item) => item.role === "OWNER").map((item) => <option key={item.user_id} value={item.user_id}>@{item.username}{item.user_id === user.user_id ? " · you" : ""}</option>)}</select></label>
-                      <button type="submit" disabled={dataBusy || !importFile || !importReadingOwner}>{dataBusy ? "Inspecting safely…" : "Inspect backup"}</button>
+                    <h4><Upload size={17} /> Restore or import a BOOKPILE ZIP</h4>
+                    <p>Local backups add a catalogue and assign its personal history to one Owner. Portable Server exports restore shared structure exactly and let you map each source identity to a current Owner.</p>
+                    {!importJob && <form className="server-portability-form" onSubmit={preflightBackup}>
+                      <label>ZIP source<select value={importSourceKind} onChange={(event) => { setImportSourceKind(event.target.value as "LOCAL" | "SERVER"); setImportFile(null); }}><option value="LOCAL">BOOKPILE Local full backup</option><option value="SERVER">BOOKPILE Server portable export</option></select></label>
+                      <label>{importSourceKind === "LOCAL" ? "Local full-backup ZIP" : "Server portable ZIP"}<input key={importSourceKind} type="file" accept=".zip,application/zip" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} required /></label>
+                      {importSourceKind === "LOCAL" && <label>Reading history belongs to<select value={importReadingOwner} onChange={(event) => setImportReadingOwner(event.target.value)} required>{members.filter((item) => item.role === "OWNER").map((item) => <option key={item.user_id} value={item.user_id}>@{item.username}{item.user_id === user.user_id ? " · you" : ""}</option>)}</select></label>}
+                      <button type="submit" disabled={dataBusy || !importFile || (importSourceKind === "LOCAL" && !importReadingOwner)}>{dataBusy ? "Inspecting safely…" : "Inspect ZIP"}</button>
                       <small>Maximum compressed ZIP: 100 MiB. Inspection is isolated and cannot change this library until you approve its report.</small>
                     </form>}
-                    {importOperation === "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>Uploading and inspecting the backup…</b><span aria-hidden="true"><i /></span><small>Checksums, SQLite integrity, covers and relationships are being verified. Large libraries can take a while; keep this window open.</small></div>}
+                    {importOperation === "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>Uploading and inspecting the ZIP…</b><span aria-hidden="true"><i /></span><small>Checksums, covers, data integrity and relationships are being verified. Large libraries can take a while; keep this window open.</small></div>}
                     {importJob?.state === "READY" && <div className="server-import-report" role="status">
                       <h4>Ready for review</h4>
-                      <p>Local format {importJob.backup_format_version}, schema {importJob.local_schema_version} · created {new Date(importJob.source_created_at).toLocaleString()}</p>
-                      <dl>{["books", "bookcases", "shelves", "containers", "book_authors", "reading_sessions", "loans", "covers"].map((key) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{importJob.counts[key] ?? 0}</dd></div>)}</dl>
+                      <p>{importJob.source_kind === "SERVER" ? `Server export “${importJob.source_library_name}”` : "Local backup"} · format {importJob.backup_format_version}, schema {importJob.local_schema_version} · created {new Date(importJob.source_created_at).toLocaleString()}</p>
+                      <dl>{["books", "bookcases", "shelves", "containers", importJob.source_kind === "SERVER" ? "contributors" : "book_authors", importJob.source_kind === "SERVER" ? "readings" : "reading_sessions", "loans", "covers"].map((key) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{importJob.counts[key] ?? 0}</dd></div>)}</dl>
                       {importJob.warnings.map((warning) => <p className="server-import-warning" key={warning.code}>{warning.message ?? `${warning.count ?? 0} ${warning.code.toLowerCase().replaceAll("_", " ")}.`}</p>)}
                       {!importJob.capacity_available && <Message kind="error">The final Server representation does not currently fit the shared storage available to this library's Owners.</Message>}
                       {importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && <label className="server-check"><input type="checkbox" checked={allowRepeatedImport} onChange={(event) => setAllowRepeatedImport(event.target.checked)} /> I intend to add another set of physical copies from this same backup.</label>}
-                      {importOperation && importOperation !== "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>{importOperation === "IMPORTING_NEW" ? "Creating the library and importing atomically…" : "Importing atomically…"}</b><span aria-hidden="true"><i /></span><small>Processing {importJob.counts.books ?? 0} books, {importJob.counts.covers ?? 0} covers, {importJob.counts.reading_sessions ?? 0} readings and {importJob.counts.loans ?? 0} loans. Nothing becomes visible unless the whole operation succeeds.</small></div>}
-                      <div className="server-dialog-actions"><button type="button" onClick={() => void cancelLocalBackup()} disabled={dataBusy}>Cancel and erase staging</button><button className="confirm" type="button" onClick={() => void consolidateLocalBackup()} disabled={dataBusy || !importJob.capacity_available || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING" ? "Importing atomically…" : "Import into this library"}</button></div>
+                      {importJob.source_kind === "SERVER" && <div className="server-import-member-map">
+                        <h4>Personal data in “{selected.name}”</h4>
+                        <p>Memberships are never restored. Map a source person to a current Owner to restore that person's readings and Goodreads links.</p>
+                        {importJob.source_members.map((source) => <label key={source.member_key}>@{source.username} · {source.reading_count} readings · {source.review_count} personal records<select value={importMemberMapping[source.member_key] ?? ""} onChange={(event) => setImportMemberMapping((current) => ({ ...current, [source.member_key]: event.target.value }))}><option value="">Do not restore personal data</option>{members.filter((item) => item.role === "OWNER").map((owner) => <option key={owner.user_id} value={owner.user_id} disabled={Object.entries(importMemberMapping).some(([key, value]) => key !== source.member_key && value === owner.user_id)}>@{owner.username}{owner.user_id === user.user_id ? " · you" : ""}</option>)}</select></label>)}
+                        {hasDuplicateMappedOwner && <Message kind="error">Each destination Owner can receive only one source identity.</Message>}
+                        {hasUnmappedPersonalData && <label className="server-check"><input type="checkbox" checked={allowUnmappedPersonalData} onChange={(event) => setAllowUnmappedPersonalData(event.target.checked)} /> I understand that the unmapped readings and Goodreads links will be omitted.</label>}
+                      </div>}
+                      {importOperation && importOperation !== "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>{importOperation === "IMPORTING_NEW" ? "Creating the library and importing atomically…" : "Importing atomically…"}</b><span aria-hidden="true"><i /></span><small>Processing {importJob.counts.books ?? 0} books, {importJob.counts.covers ?? 0} covers, {importJob.counts[importJob.source_kind === "SERVER" ? "readings" : "reading_sessions"] ?? 0} readings and {importJob.counts.loans ?? 0} loans. Nothing becomes visible unless the whole operation succeeds.</small></div>}
+                      <div className="server-dialog-actions"><button type="button" onClick={() => void cancelLocalBackup()} disabled={dataBusy}>Cancel and erase staging</button><button className="confirm" type="button" onClick={() => void consolidateLocalBackup()} disabled={dataBusy || !importJob.capacity_available || hasBlockingServerConflict || hasDuplicateMappedOwner || (hasUnmappedPersonalData && !allowUnmappedPersonalData) || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING" ? "Importing atomically…" : importJob.source_kind === "SERVER" ? "Restore into this library" : "Import into this library"}</button></div>
                       <form className="server-import-new-library" onSubmit={consolidateLocalBackupAsNewLibrary}>
                         <label>Or create a separate library<input value={newImportLibraryName} onChange={(event) => setNewImportLibraryName(event.target.value)} maxLength={160} placeholder="New library name" required /></label>
-                        <button type="submit" disabled={dataBusy || !newImportLibraryName.trim() || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING_NEW" ? "Creating and importing…" : "Import as a new library"}</button>
-                        <small>You will be its first Owner, and the Local personal reading history will belong to you. No other members are added automatically.</small>
+                        {importJob.source_kind === "SERVER" && <label>Source identity to restore as you<select value={newImportSourceMember} onChange={(event) => setNewImportSourceMember(event.target.value)}><option value="">None — omit all personal data</option>{importJob.source_members.map((source) => <option key={source.member_key} value={source.member_key}>@{source.username} · {source.reading_count} readings</option>)}</select></label>}
+                        {importJob.source_kind === "SERVER" && hasUnmappedPersonalDataForNewLibrary && <label className="server-check"><input type="checkbox" checked={allowUnmappedPersonalData} onChange={(event) => setAllowUnmappedPersonalData(event.target.checked)} /> I understand that all other source members' readings and Goodreads links will be omitted.</label>}
+                        <button type="submit" disabled={dataBusy || !newImportLibraryName.trim() || (importJob.source_kind === "SERVER" && hasUnmappedPersonalDataForNewLibrary && !allowUnmappedPersonalData) || (importJob.warnings.some((warning) => warning.code === "REPEATED_ARCHIVE") && !allowRepeatedImport)}>{importOperation === "IMPORTING_NEW" ? "Creating and importing…" : "Import as a new library"}</button>
+                        <small>You will be its only initial Owner. Server memberships are never recreated; invite people afterwards.</small>
                       </form>
                     </div>}
                     {importJob?.state === "IMPORTED" && <Message kind="success">Import complete. {importJob.result_counts?.books ?? 0} books and all compatible related records were added.</Message>}

@@ -304,8 +304,12 @@ button { cursor: pointer; }
 .server-import-progress small { color: #60746c; line-height: 1.4; }
 .server-import-new-library { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; padding-top: 11px; border-top: 1px solid #d9ded9; }
 .server-import-new-library label { display: grid; gap: 5px; color: #536760; font-size: 12px; font-weight: 700; }
-.server-import-new-library input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
+.server-import-new-library input, .server-import-new-library select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
+.server-import-new-library .server-check input { width: auto; min-height: 0; padding: 0; }
 .server-import-new-library small { grid-column: 1 / -1; color: #657870; line-height: 1.4; }
+.server-import-member-map { display: grid; gap: 9px; padding: 12px; border: 1px solid #d6ded9; border-radius: 7px; background: #fffdf9; }
+.server-import-member-map > label:not(.server-check) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, .65fr); align-items: center; gap: 10px; color: #536760; font-size: 12px; font-weight: 700; }
+.server-import-member-map select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
 @keyframes server-import-progress { from { transform: translateX(-15%); } to { transform: translateX(180%); } }
 .server-empty-library { min-height: 330px; display: grid; place-content: center; justify-items: center; color: #577068; text-align: center; }
 .server-empty-library h2 { margin-bottom: 4px; font-size: 31px; }
@@ -874,6 +878,7 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
   .server-import-report dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .server-import-new-library { grid-template-columns: 1fr; }
   .server-import-new-library button { width: 100%; }
+  .server-import-member-map > label:not(.server-check) { grid-template-columns: 1fr; }
   .server-catalogue-workspace { padding: 15px 11px; }
   .server-statistics-workspace { padding: 16px 11px; }
   .server-statistics-workspace > header h2 { font-size: 27px; }
