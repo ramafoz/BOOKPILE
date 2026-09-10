@@ -102,6 +102,25 @@ services:
     networks: [backend]
     restart: "no"
 
+  maintenance:
+    profiles: ["operations"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command: ["bookpile-maintenance", "run"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - import-staging:/var/lib/bookpile/import-staging
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+
   web:
     image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}
     build:

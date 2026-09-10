@@ -1,0 +1,10 @@
+[Unit]
+Description=Reconcile BOOKPILE private objects daily
+
+[Timer]
+OnCalendar=*-*-* 04:05:00
+Persistent=true
+Unit=bookpile-deep-check.service
+
+[Install]
+WantedBy=timers.target

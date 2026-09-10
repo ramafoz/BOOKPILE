@@ -23,6 +23,7 @@ from .config import get_settings
 
 
 request_logger = logging.getLogger("bookpile.requests")
+error_logger = logging.getLogger("bookpile.errors")
 
 
 def create_app() -> FastAPI:
@@ -65,6 +66,27 @@ def create_app() -> FastAPI:
         try:
             response = await call_next(request)
             status_code = response.status_code
+        except Exception as exc:
+            if not settings.is_hosted:
+                raise
+            error_logger.error(
+                json.dumps(
+                    {
+                        "event": "unhandled_request_error",
+                        "request_id": request_id,
+                        "error_type": type(exc).__name__,
+                        "deployment_revision": settings.deployment_revision,
+                    },
+                    separators=(",", ":"),
+                )
+            )
+            response = JSONResponse(
+                status_code=500,
+                content={
+                    "detail": "BOOKPILE could not complete that request.",
+                    "request_id": request_id,
+                },
+            )
         finally:
             route = request.scope.get("route")
             route_path = getattr(route, "path", "unmatched")
@@ -84,7 +106,11 @@ def create_app() -> FastAPI:
         response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=()"
         if settings.is_hosted:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        if request.url.path.startswith("/api/v1/auth") or request.url.path.endswith("/cover"):
+        if (
+            status_code >= 400
+            or request.url.path.startswith("/api/v1/auth")
+            or request.url.path.endswith("/cover")
+        ):
             response.headers["Cache-Control"] = "no-store"
         return response
 

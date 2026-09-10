@@ -92,6 +92,32 @@ def test_hosted_app_hides_docs_and_adds_transport_security(monkeypatch) -> None:
     assert response.headers["strict-transport-security"].startswith("max-age=31536000")
 
 
+def test_hosted_unhandled_error_is_correlatable_without_leaking_message(
+    monkeypatch, caplog
+) -> None:
+    monkeypatch.setattr(main, "get_settings", lambda: _hosted_settings())
+    app = main.create_app()
+
+    @app.get("/test-unhandled")
+    def fail():
+        raise RuntimeError("private-value-must-not-appear")
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(
+        app,
+        base_url="https://staging.bookpile.example",
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.get("/test-unhandled")
+
+    assert response.status_code == 500
+    assert response.json()["request_id"] == response.headers["x-request-id"]
+    assert response.headers["cache-control"] == "no-store"
+    assert "RuntimeError" in caplog.text
+    assert "private-value-must-not-appear" not in caplog.text
+
+
 @pytest.mark.parametrize("changes", [
     {"allowed_hosts": "*"},
     {"allowed_hosts": "other.example"},

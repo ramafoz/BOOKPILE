@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_bytes
@@ -31,6 +32,22 @@ RETRY_DELAYS = (
     timedelta(hours=6),
     timedelta(hours=12),
 )
+outbox_logger = logging.getLogger("bookpile.email_outbox")
+
+
+def log_delivery(event: str, message: EmailOutboxMessage) -> None:
+    outbox_logger.info(
+        json.dumps(
+            {
+                "event": event,
+                "message_id": str(message.id),
+                "purpose": message.purpose,
+                "attempt": message.attempt_count,
+                "state": message.state,
+            },
+            separators=(",", ":"),
+        )
+    )
 
 
 def utc_value(value: datetime) -> datetime:
@@ -121,6 +138,7 @@ class EmailOutboxWorker:
                 message.lease_until = None
                 message.updated_at = moment
                 session.commit()
+                log_delivery("email_cancelled", message)
                 return True
             try:
                 outgoing = self._cipher.decrypt(message)
@@ -150,6 +168,7 @@ class EmailOutboxWorker:
             message.updated_at = moment
             self._extend_recovery_window(session, message, moment)
             session.commit()
+            log_delivery("email_sent", message)
         return True
 
     def _claim(self, moment: datetime) -> UUID | None:
@@ -212,6 +231,10 @@ class EmailOutboxWorker:
             delay_index = min(message.attempt_count - 1, len(RETRY_DELAYS) - 1)
             message.available_at = moment + RETRY_DELAYS[delay_index]
         session.commit()
+        log_delivery(
+            "email_failed" if message.state == "FAILED" else "email_retry_scheduled",
+            message,
+        )
 
     @staticmethod
     def _mark_terminal(
@@ -226,6 +249,7 @@ class EmailOutboxWorker:
         message.last_error_code = code
         message.updated_at = moment
         session.commit()
+        log_delivery("email_failed", message)
 
     @staticmethod
     def _extend_recovery_window(
@@ -247,4 +271,3 @@ class EmailOutboxWorker:
                 delivered_until = moment + ACCOUNT_DELETION_RECOVERY_LIFETIME
                 if utc_value(tombstone.recover_until) < delivered_until:
                     tombstone.recover_until = delivered_until
-

@@ -900,7 +900,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     29-day compliance retention, guarded restore and local 36-table/869-object
     recovery rehearsal are implemented. Close after real-provider Object Lock,
     lifecycle and staging restore acceptance.
-  - [ ] 9E edge security, observability and scheduled operations.
+  - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
+    retention maintenance, light/deep invariant checks, backup freshness,
+    privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
+    SYSTEM_ADMIN boundary are complete. Close after provider firewall, alert,
+    capacity and external error-reporting acceptance in staging.
   - [ ] 9F Spanish staging deployment and measured recovery drill.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
@@ -922,10 +926,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   accounts, abuse/security operations, and service health. Platform operators
   must remain separate from library `OWNER`/`VIEWER` membership and receive no
   implicit private-library access.
-- [ ] Complete the production security/operations layer: upload validation,
-  reverse-proxy rate limits, stale rate-bucket pruning, CSP/HSTS, asynchronous
-  email delivery, audit operations, monitoring, and error reporting. Baseline
-  application rate limits and defensive API headers are implemented.
+- [ ] Complete provider-bound production security/operations acceptance:
+  firewall and volumetric controls, paging delivery, disk/capacity thresholds
+  and external error reporting. Upload validation, shared PostgreSQL rate
+  limits, stale-bucket pruning, CSP/HSTS, asynchronous email, aggregate
+  monitoring and privacy-safe request correlation are implemented. Stock Caddy
+  deliberately has no misleading per-process rate limiter.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,

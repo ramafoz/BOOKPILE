@@ -201,10 +201,12 @@ def main() -> int:
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("backup_id", type=UUID)
     subparsers.add_parser("prune")
+    subparsers.add_parser("status")
     restore_parser = subparsers.add_parser("restore")
     restore_parser.add_argument("backup_id", type=UUID)
     restore_parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
+    exit_code = 0
     if args.command == "create":
         payload = create_snapshot()
     elif args.command == "restore":
@@ -216,11 +218,21 @@ def main() -> int:
         if args.command == "verify":
             manifest = service.verify(args.backup_id)
             payload = {"backup_id": str(args.backup_id), "verified": True, "object_count": len(manifest["objects"])}
-        else:
+            exit_code = 0
+        elif args.command == "prune":
             removed = service.prune(retention_days=settings.operational_backup_retention_days)
             payload = {"removed": len(removed)}
+            exit_code = 0
+        else:
+            freshness = service.freshness()
+            payload = {
+                "healthy": freshness.healthy,
+                "latest_backup_id": str(freshness.latest_backup_id) if freshness.latest_backup_id else None,
+                "age_seconds": freshness.age_seconds,
+            }
+            exit_code = 0 if freshness.healthy else 1
     print(json.dumps(payload, sort_keys=True))
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

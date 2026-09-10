@@ -29,6 +29,13 @@ class SnapshotResult:
     database_bytes: int
 
 
+@dataclass(frozen=True)
+class BackupFreshness:
+    healthy: bool
+    latest_backup_id: UUID | None
+    age_seconds: int | None
+
+
 def file_digest(path: Path) -> str:
     digest = sha256()
     with path.open("rb") as stream:
@@ -270,6 +277,25 @@ class OperationalBackupService:
                 self.repository.delete_keys(self.repository.list_keys(f"snapshots/{backup_id}"))
                 removed.append(backup_id)
         return removed
+
+    def freshness(
+        self, *, max_age_hours: int = 25, now: datetime | None = None
+    ) -> BackupFreshness:
+        moment = now or datetime.now(UTC)
+        latest: tuple[datetime, UUID] | None = None
+        for key in self.repository.list_keys("snapshots"):
+            if not key.endswith("/complete.json"):
+                continue
+            marker = json.loads(self.repository.get_bytes(key))
+            created = datetime.fromisoformat(marker["created_at"])
+            backup_id = UUID(marker["backup_id"])
+            if latest is None or created > latest[0]:
+                latest = (created, backup_id)
+        if latest is None:
+            return BackupFreshness(False, None, None)
+        age = int((moment - latest[0]).total_seconds())
+        healthy = -300 <= age <= max_age_hours * 3600
+        return BackupFreshness(healthy, latest[1], age)
 
     def restore_objects(self, backup_id: UUID, target: CoverStorage) -> dict:
         if next(iter(target.iter_objects()), None) is not None:

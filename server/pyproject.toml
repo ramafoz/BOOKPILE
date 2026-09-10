@@ -33,6 +33,7 @@ dev = [
 bookpile-private-objects = "bookpile_server.cli.private_objects:main"
 bookpile-email-worker = "bookpile_server.cli.email_worker:main"
 bookpile-operational-backup = "bookpile_server.cli.operational_backup:main"
+bookpile-maintenance = "bookpile_server.cli.maintenance:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

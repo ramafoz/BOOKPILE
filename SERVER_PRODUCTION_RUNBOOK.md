@@ -42,6 +42,10 @@ ignored by Git and must also be protected and backed up as a secret.
 Before certificate issuance, point DNS at the host and allow inbound TCP 80/443
 only. Never publish 5432 or 8100.
 
+Install and enable the reviewed timers under `server/deploy/systemd` after
+following `SERVER_OPERATIONS_AND_SECURITY.md`. Connect failed units to the
+selected alert route; timers without observed failures are not monitoring.
+
 ## Preflight and build
 
 Run from the repository root:

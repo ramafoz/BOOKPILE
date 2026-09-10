@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import logging
 from uuid import uuid4
 
 from sqlalchemy.orm import sessionmaker
@@ -47,7 +48,8 @@ def enqueue(session, *, revoked: bool = False) -> EmailOutboxMessage:
     return session.query(EmailOutboxMessage).one()
 
 
-def test_worker_delivers_encrypted_message_and_marks_it_sent(session) -> None:
+def test_worker_delivers_encrypted_message_and_marks_it_sent(session, caplog) -> None:
+    caplog.set_level(logging.INFO, logger="bookpile.email_outbox")
     message = enqueue(session)
     assert b"secret-link-token" not in message.payload_ciphertext
     delivery = Delivery()
@@ -58,6 +60,9 @@ def test_worker_delivers_encrypted_message_and_marks_it_sent(session) -> None:
     session.expire_all()
     assert session.get(EmailOutboxMessage, message.id).state == "SENT"
     assert delivery.emails[0].text == "secret-link-token"
+    assert "email_sent" in caplog.text
+    assert "secret-link-token" not in caplog.text
+    assert delivery.emails[0].recipient not in caplog.text
 
 
 def test_worker_retries_transient_delivery_failure(session) -> None:

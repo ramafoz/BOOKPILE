@@ -250,3 +250,16 @@ def test_postgres_tools_keep_password_out_of_process_arguments(monkeypatch, tmp_
     assert "private-password" not in " ".join(captured["command"])
     assert captured["environment"]["PGPASSWORD"] == "private-password"
     assert captured["environment"]["PGSSLMODE"] == "require"
+
+
+def test_backup_freshness_requires_recent_completion_marker(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    service, _, recent = create_snapshot(tmp_path / "recent", now=now - timedelta(hours=24))
+    assert service.freshness(now=now).healthy is True
+    assert service.freshness(now=now).latest_backup_id == recent.backup_id
+    assert service.freshness(now=now + timedelta(hours=2)).healthy is False
+
+    empty = OperationalBackupService(
+        MemoryRepository(), encryption_secret="test-secret", staging_root=tmp_path / "empty"
+    )
+    assert empty.freshness(now=now).healthy is False

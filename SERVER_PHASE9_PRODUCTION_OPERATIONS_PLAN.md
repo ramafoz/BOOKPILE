@@ -109,6 +109,12 @@ memberships and application invariants.
 
 ### 9E — edge security, observability and scheduled operations
 
+Status: provider-neutral edge limits, aggregate health commands, retention
+maintenance, systemd schedules, privacy-safe email events, dependency update
+automation and the administration boundary are implemented. Host firewall,
+alert delivery, external error reporting and capacity thresholds require the
+chosen staging provider; see `SERVER_OPERATIONS_AND_SECURITY.md`.
+
 - Finalize automatic HTTPS, firewall policy, proxy rate limits, body/time
   limits, dependency scanning and security update policy.
 - Add structured application/proxy logs, metrics, alerting, disk/capacity
