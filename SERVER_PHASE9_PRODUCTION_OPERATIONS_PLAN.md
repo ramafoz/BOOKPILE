@@ -78,6 +78,10 @@ object exactly; interruption leaves the active reference valid.
 
 ### 9C — durable transactional email
 
+Status: encrypted transactional outbox, leased worker, bounded retries,
+delivery-relative recovery windows and local/CI gates complete. Provider
+delivery and alerting remain staging/9E gates; see `SERVER_EMAIL_OUTBOX.md`.
+
 - Replace request-blocking SMTP sends with a PostgreSQL outbox and a separate
   retrying worker.
 - Configure authenticated TLS delivery, deterministic message identity,
@@ -88,6 +92,10 @@ Gate: provider outage never rolls back an accepted domain transaction or loses
 the queued email; retries do not create uncontrolled duplicates.
 
 ### 9D — backup, restore and retention automation
+
+Status: provider-neutral implementation and a complete local PostgreSQL 17/S3
+recovery rehearsal pass. Real-provider Object Lock/lifecycle acceptance and the
+Spanish staging disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.

@@ -1,0 +1,10 @@
+[Unit]
+Description=BOOKPILE encrypted off-site operational backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/bookpile
+ExecStart=/usr/bin/docker compose --env-file server/.env.production -f server/compose.production.yaml --profile operations run --rm backup create
+TimeoutStartSec=4h

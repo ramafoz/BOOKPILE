@@ -14,4 +14,6 @@ maintenance/reports/
 *.tsbuildinfo
 *.egg-info/
 .env
+server/.env.production
+server/.env.backup
 .DS_Store

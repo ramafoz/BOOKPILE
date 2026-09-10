@@ -80,6 +80,28 @@ services:
         condition: service_completed_successfully
     networks: [backend]
 
+  backup:
+    profiles: ["operations"]
+    image: ${BOOKPILE_BACKUP_IMAGE:-bookpile-backup:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/backup.Dockerfile
+    env_file:
+      - ${BOOKPILE_BACKUP_ENV_FILE:-.env.backup}
+    environment:
+      BOOKPILE_SERVER_OPERATIONAL_BACKUP_STAGING_ROOT: /var/lib/bookpile/operational-backups
+    command: ["create"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - operational-backup-staging:/var/lib/bookpile/operational-backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+
   web:
     image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}
     build:
@@ -112,3 +134,4 @@ volumes:
   export-staging:
   caddy-data:
   caddy-config:
+  operational-backup-staging:

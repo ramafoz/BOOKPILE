@@ -534,6 +534,14 @@ single and batch shortcuts; batch scanning preserves placement progression but
 clears book and personal-reading data between records. See
 [SCANNING_PLAN.md](SCANNING_PLAN.md).
 
+Server Phase 9A–9D foundations now provide hardened hosted configuration,
+reproducible non-root images, private S3-compatible objects, an encrypted
+transactional email outbox, and encrypted off-site disaster recovery. A local
+PostgreSQL 17/S3 rehearsal restored 36 tables and 869 private objects exactly.
+This is not yet permission to publish: real-provider acceptance, edge
+observability, Spanish staging deployment and the final go/no-go remain open in
+[SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md](SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
+
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and
 perspective-aware catalogue headings, atomic physical placement inside Add and

@@ -1,8 +1,8 @@
 # BOOKPILE Server production rehearsal runbook
 
-This is the provider-neutral Phase 9A procedure for rehearsals and the future
-staging host. It is **not** permission to publish BOOKPILE yet: private object
-storage, durable email, off-site backup and a recovery drill remain gates.
+This is the provider-neutral procedure for rehearsals and the future staging
+host. It is **not** permission to publish BOOKPILE yet: real-provider
+acceptance, observability and the Spanish staging recovery drill remain gates.
 
 ## Package and boundaries
 
@@ -12,7 +12,8 @@ storage, durable email, off-site backup and a recovery drill remain gates.
 - `server/docker/Caddyfile` is the only public entry point: it terminates HTTPS,
   serves the SPA and proxies API/health traffic over a private network.
 - `server/compose.production.yaml` connects PostgreSQL, one-shot migrations,
-  API and web. PostgreSQL and FastAPI publish no host ports.
+  API, email worker, web and an operations-profile backup job. PostgreSQL and
+  FastAPI publish no host ports.
 - `server/.env.production.example` names required settings but has no usable
   secrets.
 
@@ -29,7 +30,8 @@ cp server/.env.production.example server/.env.production
 chmod 600 server/.env.production
 ```
 
-Replace every example value. Set the deployment revision to the exact commit;
+Replace every example value. Separately copy `.env.backup.example` to
+`.env.backup`, mode `600`; API services never receive those secrets. Set the deployment revision to the exact commit;
 use the final HTTPS origin and bare allowed hostname; create independent random
 secrets of at least 32 characters; and use one new PostgreSQL password in both
 the Compose variable and encoded database URL. Never reuse development,
@@ -57,7 +59,7 @@ immutable registry tags through `BOOKPILE_API_IMAGE` and `BOOKPILE_WEB_IMAGE`.
 ## Backup, migrate and start
 
 For an existing environment, first create and verify the Phase 9D database and
-object backup. Until 9D is complete, this is not a production-ready procedure.
+object backup according to `SERVER_OPERATIONAL_BACKUP.md`.
 
 ```bash
 docker compose --env-file server/.env.production \
@@ -65,7 +67,7 @@ docker compose --env-file server/.env.production \
 docker compose --env-file server/.env.production \
   -f server/compose.production.yaml run --rm migrate
 docker compose --env-file server/.env.production \
-  -f server/compose.production.yaml up -d api web
+  -f server/compose.production.yaml up -d api email-worker web
 ```
 
 The API remains unready until PostgreSQL and the configured private-object
@@ -119,4 +121,3 @@ restore drill.
 - 11 Local and 30 Server frontend tests, lint and both builds pass.
 - Compose and Caddy validate; both pinned images build and declare
   unprivileged runtime users.
-

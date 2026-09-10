@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     private_object_s3_read_timeout_seconds: int = Field(default=10, ge=1, le=120)
     private_object_s3_max_attempts: int = Field(default=3, ge=1, le=10)
     private_object_s3_max_connections: int = Field(default=10, ge=1, le=100)
+    operational_backup_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "operational-backups"
+    operational_backup_encryption_secret: SecretStr = SecretStr(DEVELOPMENT_OUTBOX_SECRET)
+    operational_backup_encryption_key_id: str = "development"
+    operational_backup_retention_days: int = Field(default=29, ge=1, le=29)
+    operational_backup_s3_endpoint_url: str | None = None
+    operational_backup_s3_region: str | None = None
+    operational_backup_s3_bucket: str | None = None
+    operational_backup_s3_access_key_id: str | None = None
+    operational_backup_s3_secret_access_key: SecretStr | None = None
+    operational_backup_s3_prefix: str = "bookpile-operational-backups"
+    operational_backup_allow_insecure_endpoint: bool = False
+    operational_backup_object_lock_enabled: bool = True
 
     @property
     def is_hosted(self) -> bool:

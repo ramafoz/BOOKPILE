@@ -107,8 +107,8 @@ The authentication and library-membership foundations are complete through
 Phase 3, and the shared catalogue, private-cover, and physical-library
 foundations are complete through Phase 4D. Catalogue access requires an
 authenticated membership; a library ID is never authorization. The Server
-edition is not production-ready because private S3-compatible objects, durable
-email, off-site recovery and staging drills are not complete. Phase 9A now
+edition is not production-ready because real storage/email provider acceptance,
+operational monitoring and staging recovery drills are not complete. Phase 9A
 provides strict hosted configuration, health boundaries, privacy-safe request
 logs, CI, pinned non-root images and a private-network Caddy/Compose rehearsal
 topology; see `SERVER_PRODUCTION_RUNBOOK.md`. Owner-only Server
@@ -125,6 +125,11 @@ waits for provider acceptance and staging reconciliation; see
 Phase 9C replaces request-bound hosted email with an encrypted transactional
 PostgreSQL outbox and a separately supervised worker. Development deliberately
 keeps immediate Mailpit delivery. See `SERVER_EMAIL_OUTBOX.md`.
+
+Phase 9D adds a separately credentialed, non-root backup image, encrypted
+off-site snapshots, compliance retention and empty-target disaster recovery.
+The complete local PostgreSQL/S3 rehearsal passes; provider and staging gates
+remain. See `SERVER_OPERATIONAL_BACKUP.md`.
 
 ## Development setup
 

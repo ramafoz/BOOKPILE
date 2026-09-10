@@ -118,3 +118,12 @@ jobs:
           tags: bookpile-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+      - name: Build operational backup image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/docker/backup.Dockerfile
+          push: false
+          tags: bookpile-backup:ci
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
