@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -425,6 +426,53 @@ class AccountActionToken(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="account_action_tokens")
+
+
+class EmailOutboxMessage(Base):
+    __tablename__ = "email_outbox_messages"
+    __table_args__ = (
+        CheckConstraint(
+            "purpose IN ('EMAIL_VERIFICATION', 'PASSWORD_RESET', "
+            "'ACCOUNT_DELETION_RECOVERY')",
+            name="ck_email_outbox_purpose",
+        ),
+        CheckConstraint(
+            "state IN ('PENDING', 'PROCESSING', 'SENT', 'FAILED', 'CANCELLED')",
+            name="ck_email_outbox_state",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_email_outbox_attempts"),
+        Index("ix_email_outbox_delivery", "state", "available_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    message_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    purpose: Mapped[str] = mapped_column(String(40), nullable=False)
+    payload_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="PENDING", server_default="PENDING"
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))
+    account_action_token_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("account_action_tokens.id", ondelete="CASCADE")
+    )
+    account_deletion_tombstone_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("account_deletion_tombstones.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class RateLimitBucket(Base):

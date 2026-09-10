@@ -891,7 +891,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     verified/chunked I/O, inventory audit and restartable copy-without-switching
     migration tooling are implemented. Close after the chosen provider passes
     an isolated private-bucket round trip and staging reconciliation.
-  - [ ] 9C durable PostgreSQL email outbox and retrying worker.
+  - [x] 9C implementation/local gates: encrypted transactional PostgreSQL
+    outbox, leased retrying worker, stale-action cancellation, deterministic
+    message IDs and delivery-relative recovery windows. Provider delivery and
+    worker monitoring are exercised in staging during 9F.
   - [ ] 9D encrypted off-site backup, retention and restore automation.
   - [ ] 9E edge security, observability and scheduled operations.
   - [ ] 9F Spanish staging deployment and measured recovery drill.
@@ -905,8 +908,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     localized labels or translated controlled vocabularies are introduced.
 
 - [ ] Replace local-only assumptions with production adapters and providers.
-  Phase 9A configuration/database/runtime handling is complete; private S3
-  storage and durable email remain 9B/9C.
+  Phase 9A configuration/database/runtime handling and the 9B/9C private-object
+  and durable-email implementations are complete. Provider acceptance remains
+  part of the staging gates.
 - [ ] Choose the Spanish VPS, private object storage, domain, email service,
   and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
 - [ ] Add authorization checks to every user-owned backend operation.

@@ -175,6 +175,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "security_events",
             "account_invitations",
             "account_action_tokens",
+            "email_outbox_messages",
             "rate_limit_buckets",
             "library_memberships",
             "library_invitations",

@@ -11,6 +11,7 @@ dependencies = [
   "alembic==1.16.5",
   "argon2-cffi==25.1.0",
   "boto3==1.43.91",
+  "cryptography==50.0.1",
   "email-validator==2.3.0",
   "fastapi==0.115.12",
   "httpx==0.28.1",
@@ -30,6 +31,7 @@ dev = [
 
 [project.scripts]
 bookpile-private-objects = "bookpile_server.cli.private_objects:main"
+bookpile-email-worker = "bookpile_server.cli.email_worker:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -64,6 +64,22 @@ services:
       - export-staging:/var/lib/bookpile/export-staging
     networks: [backend]
 
+  email-worker:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command: ["bookpile-email-worker", "--poll-seconds", "2"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend]
+
   web:
     image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}
     build:

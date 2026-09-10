@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
 from urllib.parse import urlencode
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..models import AccountDeletionTombstone, LibraryMembership
 from ..config import Settings
@@ -85,6 +85,7 @@ class AccountDeletionService:
         raw_recovery_token = token_urlsafe(32)
         image = self.repository.profile_image(user_id)
         tombstone = AccountDeletionTombstone(
+            id=uuid4(),
             user_id=user.id,
             username=user.username,
             email=user.email,
@@ -140,6 +141,9 @@ class AccountDeletionService:
                         "will be permanently deleted. This single-use link is the only "
                         "way to restore the account."
                     ),
+                    message_key=f"account-deletion:{tombstone.id}",
+                    purpose="ACCOUNT_DELETION_RECOVERY",
+                    account_deletion_tombstone_id=tombstone.id,
                 )
             )
         except EmailDeliveryError:

@@ -122,6 +122,10 @@ are implemented without changing authenticated media URLs. Production still
 waits for provider acceptance and staging reconciliation; see
 `SERVER_PRIVATE_OBJECT_STORAGE.md`.
 
+Phase 9C replaces request-bound hosted email with an encrypted transactional
+PostgreSQL outbox and a separately supervised worker. Development deliberately
+keeps immediate Mailpit delivery. See `SERVER_EMAIL_OUTBOX.md`.
+
 ## Development setup
 
 Create an isolated environment from the repository root:

@@ -2,11 +2,17 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..cover_storage import CoverStorage
-from ..models import AccountDeletionTombstone, Library, LibraryDeletionTombstone, User
+from ..models import (
+    AccountDeletionTombstone,
+    EmailOutboxMessage,
+    Library,
+    LibraryDeletionTombstone,
+    User,
+)
 
 
 TOMBSTONE_RETENTION = timedelta(days=30)
@@ -68,12 +74,30 @@ def finalize_expired_account_deletions(
     """Erase expired accounts and their profile objects, then anonymize tombstones."""
 
     moment = now or datetime.now(UTC)
+    recovery_email_exists = (
+        select(EmailOutboxMessage.id)
+        .where(
+            EmailOutboxMessage.account_deletion_tombstone_id
+            == AccountDeletionTombstone.id
+        )
+        .exists()
+    )
+    recovery_email_sent = (
+        select(EmailOutboxMessage.id)
+        .where(
+            EmailOutboxMessage.account_deletion_tombstone_id
+            == AccountDeletionTombstone.id,
+            EmailOutboxMessage.state == "SENT",
+        )
+        .exists()
+    )
     pending = list(
         session.scalars(
             select(AccountDeletionTombstone)
             .where(
                 AccountDeletionTombstone.state == "PENDING",
                 AccountDeletionTombstone.recover_until <= moment,
+                or_(~recovery_email_exists, recovery_email_sent),
             )
             .order_by(AccountDeletionTombstone.recover_until)
             .with_for_update(skip_locked=True)

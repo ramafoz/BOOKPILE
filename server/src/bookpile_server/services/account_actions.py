@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
 from urllib.parse import urlencode
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..config import Settings
 from ..email_delivery import EmailSender, OutgoingEmail
@@ -49,7 +49,7 @@ class AccountActionService:
         user = self._repository.get_user(user_id)
         if user is None or user.state != "pending_verification":
             return False
-        raw_token = self._issue_token(
+        raw_token, token = self._issue_token(
             user=user,
             purpose="email_verification",
             lifetime=EMAIL_VERIFICATION_LIFETIME,
@@ -66,8 +66,12 @@ class AccountActionService:
                     f"{self._settings.public_base_url.rstrip('/')}/verify-email?{query}\n\n"
                     "This link expires in 24 hours."
                 ),
+                message_key=f"account-action:{token.id}",
+                purpose="EMAIL_VERIFICATION",
+                account_action_token_id=token.id,
             )
         )
+        self._repository.commit()
         return True
 
     def resend_verification(
@@ -118,7 +122,7 @@ class AccountActionService:
         user = self._repository.find_user_by_email(normalized)
         if user is None or user.state != "active":
             return
-        raw_token = self._issue_token(
+        raw_token, token = self._issue_token(
             user=user,
             purpose="password_reset",
             lifetime=PASSWORD_RESET_LIFETIME,
@@ -136,8 +140,12 @@ class AccountActionService:
                     "This link expires in 30 minutes. If you did not request it, "
                     "you can ignore this email."
                 ),
+                message_key=f"account-action:{token.id}",
+                purpose="PASSWORD_RESET",
+                account_action_token_id=token.id,
             )
         )
+        self._repository.commit()
 
     def reset_password(
         self,
@@ -186,26 +194,25 @@ class AccountActionService:
         lifetime: timedelta,
         event_type: str,
         ip_address: str | None,
-    ) -> str:
+    ) -> tuple[str, AccountActionToken]:
         now = datetime.now(UTC)
         self._repository.revoke_open_tokens(
             user_id=user.id, purpose=purpose, now=now
         )
         raw_token = token_urlsafe(32)
-        self._repository.add_token(
-            AccountActionToken(
-                user_id=user.id,
-                purpose=purpose,
-                token_hash=hash_action_token(raw_token),
-                created_at=now,
-                expires_at=now + lifetime,
-            )
+        token = AccountActionToken(
+            id=uuid4(),
+            user_id=user.id,
+            purpose=purpose,
+            token_hash=hash_action_token(raw_token),
+            created_at=now,
+            expires_at=now + lifetime,
         )
+        self._repository.add_token(token)
         self._repository.add_event(
             event_type, user_id=user.id, ip_address=ip_address
         )
-        self._repository.commit()
-        return raw_token
+        return raw_token, token
 
     @staticmethod
     def _is_usable(token: AccountActionToken, *, now: datetime) -> bool:

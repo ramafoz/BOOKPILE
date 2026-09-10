@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_session
 from ..email_delivery import EmailSender, SmtpEmailSender
+from ..email_outbox import TransactionalOutboxEmailSender
 from ..repositories.account_actions import AccountActionRepository
 from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
@@ -215,8 +216,11 @@ AccountInvitationServiceDependency = Annotated[
 ]
 
 
-def get_email_sender() -> EmailSender:
-    return SmtpEmailSender(get_settings())
+def get_email_sender(session: SessionDependency) -> EmailSender:
+    settings = get_settings()
+    if settings.email_delivery_mode == "outbox":
+        return TransactionalOutboxEmailSender(session, settings)
+    return SmtpEmailSender(settings)
 
 
 EmailSenderDependency = Annotated[EmailSender, Depends(get_email_sender)]

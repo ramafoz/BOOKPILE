@@ -111,5 +111,10 @@ def test_production_rejects_development_security_defaults() -> None:
         private_object_s3_bucket="bookpile-private",
         private_object_s3_access_key_id="test-access-key",
         private_object_s3_secret_access_key="test-secret-key",
+        smtp_starttls=True,
+        smtp_username="smtp-user",
+        smtp_password="smtp-password",
+        email_delivery_mode="outbox",
+        email_outbox_encryption_secret="private-outbox-secret-with-at-least-32-characters",
     )
     assert settings.session_cookie_secure is True

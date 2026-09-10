@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SERVER_DIRECTORY = Path(__file__).resolve().parents[2]
 DEVELOPMENT_RATE_LIMIT_SECRET = "bookpile-development-rate-limit-secret"
+DEVELOPMENT_OUTBOX_SECRET = "bookpile-development-outbox-encryption-secret"
 
 
 class Settings(BaseSettings):
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"
+    smtp_starttls: bool = False
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_timeout_seconds: int = Field(default=10, ge=1, le=60)
+    email_delivery_mode: Literal["immediate", "outbox"] = "immediate"
+    email_outbox_encryption_secret: SecretStr = SecretStr(DEVELOPMENT_OUTBOX_SECRET)
+    email_outbox_max_attempts: int = Field(default=8, ge=1, le=20)
+    email_outbox_lease_seconds: int = Field(default=120, ge=30, le=900)
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
     private_object_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "private-objects"
     import_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "import-staging"
@@ -125,6 +134,18 @@ class Settings(BaseSettings):
                 raise ValueError("Allowed hosts contain hostnames only, without scheme or path")
             if self.private_object_backend != "s3":
                 raise ValueError("Hosted environments require private S3-compatible object storage")
+            if (
+                self.email_outbox_encryption_secret.get_secret_value()
+                == DEVELOPMENT_OUTBOX_SECRET
+                or len(self.email_outbox_encryption_secret.get_secret_value()) < 32
+            ):
+                raise ValueError("Hosted environments require a private outbox encryption secret")
+            if not self.smtp_starttls:
+                raise ValueError("Hosted SMTP delivery requires STARTTLS")
+            if not self.smtp_username or not self.smtp_password:
+                raise ValueError("Hosted SMTP delivery requires authentication")
+            if self.email_delivery_mode != "outbox":
+                raise ValueError("Hosted email delivery requires the durable outbox")
         if self.private_object_backend == "s3":
             required = {
                 "HTTPS endpoint": self.private_object_s3_endpoint_url,
