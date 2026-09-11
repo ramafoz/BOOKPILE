@@ -24,8 +24,17 @@ Application startup never migrates the schema implicitly. The separate
 
 ## One-time host preparation
 
-Install Git and a current Docker Engine with its Compose plugin. Check out the
-exact approved revision, then create the private configuration:
+Install Git and a current Docker Engine with its Compose plugin. On the accepted
+Ubuntu 24.04 host, the reviewed idempotent installer adds Docker's official apt
+repository and grants the invoking administrator access to the Docker socket:
+
+```bash
+sudo bash server/deploy/provision-ubuntu-host.sh
+```
+
+Reconnect after it completes so the new group membership takes effect. The
+Docker group is root-equivalent and is limited to the trusted host operator.
+Then check out the exact approved revision and create the private configuration:
 
 ```bash
 cp server/.env.production.example server/.env.production

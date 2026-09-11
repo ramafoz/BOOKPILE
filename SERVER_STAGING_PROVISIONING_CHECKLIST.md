@@ -27,7 +27,9 @@ be an additional convenience only.
   Add `AAAA` only after IPv6 firewall and reachability are deliberately tested.
 - [ ] Keep `bookpile.gal` unchanged and reserved for the later production gate.
 - [ ] Install security updates, key-only SSH, Docker Engine and Compose from
-  their official repositories.
+  their official repositories. On Ubuntu 24.04, run the reviewed
+  `server/deploy/provision-ubuntu-host.sh` installer as the trusted administrator
+  and reconnect before validating Docker access.
 - [ ] Restrict SSH to the operator network where practical; allow inbound
   80/443 and deny public 5432/8100.
 - [ ] Create `/opt/bookpile`, check out the exact approved commit and verify the
