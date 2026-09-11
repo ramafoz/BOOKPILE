@@ -129,6 +129,11 @@ borrower, token or credential data.
 
 The dated shortlist, recommended separation of failure domains and unresolved
 contracting decisions are in `SERVER_STAGING_PROVIDER_DECISION.md`.
+The individual-account and EU-boundary decisions are accepted; Dinahosting
+manages `bookpile.gal`, with `staging.bookpile.gal` reserved for this rehearsal.
+Provider-specific environment templates, purchase safeguards and the evidence
+sequence are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Provisioning is the
+next gate and has not happened yet.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

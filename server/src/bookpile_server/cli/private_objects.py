@@ -12,6 +12,7 @@ from ..private_object_operations import (
     audit_private_objects,
     expected_private_objects,
     migrate_private_objects,
+    probe_private_object_storage,
 )
 
 
@@ -32,18 +33,25 @@ def audit_payload(audit) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("audit", "migrate-from-filesystem"))
+    parser.add_argument(
+        "command", choices=("probe", "audit", "migrate-from-filesystem")
+    )
     parser.add_argument(
         "--apply",
         action="store_true",
         help="Copy after source validation; omitted means a read-only plan.",
     )
     args = parser.parse_args()
-    if args.command == "audit" and args.apply:
+    if args.command != "migrate-from-filesystem" and args.apply:
         parser.error("--apply is valid only for migrate-from-filesystem")
 
     settings = get_settings()
     selected = get_private_object_storage()
+    if args.command == "probe":
+        byte_size = probe_private_object_storage(selected)
+        print(json.dumps({"ready": True, "verified_bytes": byte_size}, sort_keys=True))
+        return 0
+
     with SessionFactory() as session:
         expected = expected_private_objects(session)
         if args.command == "audit":
@@ -74,4 +82,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

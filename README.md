@@ -543,6 +543,9 @@ tables and 869 private objects exactly. This is not yet permission to publish:
 real-provider acceptance, alert delivery, capacity thresholds, Spanish staging
 deployment and the final go/no-go remain open in
 [SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md](SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
+The agreed Spanish/EU staging topology and guarded provisioning sequence are in
+[SERVER_STAGING_PROVIDER_DECISION.md](SERVER_STAGING_PROVIDER_DECISION.md) and
+[SERVER_STAGING_PROVISIONING_CHECKLIST.md](SERVER_STAGING_PROVISIONING_CHECKLIST.md).
 
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and

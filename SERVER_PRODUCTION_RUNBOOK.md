@@ -14,8 +14,10 @@ acceptance, observability and the Spanish staging recovery drill remain gates.
 - `server/compose.production.yaml` connects PostgreSQL, one-shot migrations,
   API, email worker, web and an operations-profile backup job. PostgreSQL and
   FastAPI publish no host ports.
-- `server/.env.production.example` names required settings but has no usable
-  secrets.
+- `server/.env.production.example` names production settings but has no usable
+  secrets. The accepted Phase 9F rehearsal instead uses
+  `server/.env.staging.example` and `.env.staging.backup.example`, with isolated
+  cookies, object prefixes and `https://staging.bookpile.gal`.
 
 Application startup never migrates the schema implicitly. The separate
 `migrate` service must succeed before the API starts.
@@ -38,6 +40,19 @@ the Compose variable and encoded database URL. Never reuse development,
 staging or test credentials. Keep API documentation disabled and secure cookies
 enabled. `openssl rand -hex 32` creates URL-safe secrets. The real env file is
 ignored by Git and must also be protected and backed up as a secret.
+
+For Phase 9F use the staging pair instead:
+
+```bash
+cp server/.env.staging.example server/.env.staging
+cp server/.env.staging.backup.example server/.env.staging.backup
+chmod 600 server/.env.staging server/.env.staging.backup
+```
+
+The staging file selects both paths for Compose. In every command below replace
+`server/.env.production` with `server/.env.staging`. Never copy staging secrets
+into the later production files. Follow
+`SERVER_STAGING_PROVISIONING_CHECKLIST.md` before starting the stack.
 
 Before certificate issuance, point DNS at the host and allow inbound TCP 80/443
 only. Never publish 5432 or 8100.

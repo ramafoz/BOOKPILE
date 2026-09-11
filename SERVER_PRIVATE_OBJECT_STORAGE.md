@@ -42,7 +42,19 @@ production credentials from CI, Local or a developer workstation.
 
 ## Audit command
 
-The installed command compares PostgreSQL with the selected adapter:
+Before a new provider or credential can be accepted, run the isolated probe:
+
+```bash
+bookpile-private-objects probe
+```
+
+It performs one verified random write/read/delete cycle below a temporary probe
+key and confirms cleanup. It does not open PostgreSQL, enumerate library objects
+or print the key/content. Success returns only `ready` and the verified byte
+count. Use a staging-only bucket/prefix for the first provider acceptance.
+
+After application data exists, the installed audit command compares PostgreSQL
+with the selected adapter:
 
 ```bash
 bookpile-private-objects audit
@@ -90,4 +102,3 @@ The adapter, configuration, compensation contract, corruption tests, dry-run /
 apply migration and inventory reconciliation are implemented. Phase 9B is not
 formally closed until the chosen provider passes an isolated real-bucket round
 trip and the complete development inventory is migrated/reconciled in staging.
-

@@ -905,7 +905,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
     SYSTEM_ADMIN boundary are complete. Close after provider firewall, alert,
     capacity and external error-reporting acceptance in staging.
-  - [ ] 9F Spanish staging deployment and measured recovery drill.
+  - [ ] 9F Spanish staging deployment and measured recovery drill. The
+    individual contracting identity, Spain/EU data boundary and
+    `staging.bookpile.gal` are fixed; isolated environment templates,
+    provisioning checklist and a safe S3 provider probe are ready. Purchase,
+    provider acceptance, deployment and measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data

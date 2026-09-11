@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from hashlib import sha256
+from secrets import token_bytes
 from typing import Iterable
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -36,6 +38,32 @@ class PrivateObjectMigration:
     copied: int
     planned: int
     final_audit: PrivateObjectAudit | None
+
+
+def probe_private_object_storage(storage: CoverStorage, *, byte_size: int = 1024) -> int:
+    """Verify an isolated write/read/delete cycle without touching library objects."""
+    if byte_size < 1:
+        raise ValueError("Probe byte size must be positive")
+    storage.check_ready()
+    object_key = f"_provider-probe/{uuid4().hex}.bin"
+    if storage.stat(object_key) is not None:
+        raise RuntimeError("Private-object probe key unexpectedly exists")
+    content = token_bytes(byte_size)
+    try:
+        storage.put(object_key, content)
+        info = storage.stat(object_key)
+        if (
+            info is None
+            or info.byte_size != byte_size
+            or info.sha256 != sha256(content).hexdigest()
+            or storage.read(object_key) != content
+        ):
+            raise RuntimeError("Private-object provider probe verification failed")
+    finally:
+        storage.delete(object_key)
+    if storage.stat(object_key) is not None:
+        raise RuntimeError("Private-object provider probe cleanup failed")
+    return byte_size
 
 
 def expected_private_objects(session: Session) -> list[ExpectedPrivateObject]:

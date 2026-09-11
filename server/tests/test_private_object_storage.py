@@ -12,6 +12,7 @@ from bookpile_server.private_object_operations import (
     ExpectedPrivateObject,
     audit_private_objects,
     migrate_private_objects,
+    probe_private_object_storage,
 )
 
 
@@ -141,6 +142,20 @@ def test_filesystem_inventory_uses_the_same_logical_contract(tmp_path) -> None:
     info = objects.stat("covers/opaque.webp")
     assert info is not None
     assert list(objects.iter_objects()) == [info]
+
+
+def test_provider_probe_verifies_round_trip_and_leaves_no_object(tmp_path) -> None:
+    objects = FilesystemCoverStorage(tmp_path / "private")
+
+    assert probe_private_object_storage(objects, byte_size=37) == 37
+    assert list(objects.iter_objects()) == []
+
+
+def test_provider_probe_rejects_invalid_size(tmp_path) -> None:
+    objects = FilesystemCoverStorage(tmp_path / "private")
+
+    with pytest.raises(ValueError, match="positive"):
+        probe_private_object_storage(objects, byte_size=0)
 
 
 def test_inventory_identifies_missing_orphaned_and_mismatched_objects(tmp_path) -> None:

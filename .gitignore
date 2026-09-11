@@ -16,4 +16,6 @@ maintenance/reports/
 .env
 server/.env.production
 server/.env.backup
+server/.env.staging
+server/.env.staging.backup
 .DS_Store
