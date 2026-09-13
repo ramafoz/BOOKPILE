@@ -1,5 +1,7 @@
 import json
 import logging
+from pathlib import Path
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +44,22 @@ def test_readiness_reports_dependencies_without_exposing_exceptions(client) -> N
 
 def test_untrusted_host_is_rejected(client) -> None:
     assert client.get("/health", headers={"Host": "attacker.example"}).status_code == 400
+
+
+def test_production_compose_preserves_host_validation_and_explicit_egress() -> None:
+    compose = (Path(__file__).resolve().parents[1] / "compose.production.yaml").read_text()
+
+    assert "headers={'Host': host}" in compose
+    assert "BOOKPILE_SERVER_ALLOWED_HOSTS" in compose
+    assert compose.count("networks: [backend, egress]") == 4
+    assert "backend:\n    internal: true" in compose
+
+
+def test_production_healthcheck_uses_the_configured_trusted_host() -> None:
+    compose = (Path(__file__).resolve().parents[1] / "compose.production.yaml").read_text()
+
+    assert "BOOKPILE_SERVER_ALLOWED_HOSTS" in compose
+    assert "headers={'Host': host}" in compose
 
 
 def test_request_log_uses_route_template_and_omits_query(client, caplog) -> None:

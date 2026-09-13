@@ -78,6 +78,9 @@ evidence is saved without credentials:
   returned `403 AccessDenied`.
 - IONOS hosts the Ubuntu 24.04 staging VPS in Spain at the recorded public IPv4
   address; only the DNS hostname belongs in application configuration.
+- Backblaze B2 EU Central accepted a real 1,024-byte per-version COMPLIANCE
+  probe and rejected deletion before its 2026-09-14 18:04 UTC expiry. Deletion
+  after expiry and the final 29-day bucket remain acceptance gates.
 
 The exact recurring-budget ceiling and private alert destination remain to be
 confirmed before purchase and monitoring activation.

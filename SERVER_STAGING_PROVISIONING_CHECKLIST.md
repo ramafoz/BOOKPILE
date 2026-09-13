@@ -63,10 +63,12 @@ be an additional convenience only.
   enabled at `s3.eu-central-003.backblazeb2.com`. Never test lock policy first
   on the final 29-day prefix.
 - [ ] Use a disposable acceptance prefix/bucket to prove a short COMPLIANCE
-  retention cannot be bypassed and that deletion succeeds after expiry. Run
-  `bookpile-operational-backup probe-lock` with a one-day retention; it targets
-  the returned version ID so a versioning delete marker cannot produce a false
-  pass.
+  retention cannot be bypassed and that deletion succeeds after expiry. On
+  2026-09-13, `bookpile-operational-backup probe-lock` verified a 1,024-byte
+  version and proved that Backblaze rejected its deletion through
+  2026-09-14 18:04 UTC. Deletion after expiry remains to be proved before this
+  item can close. The probe targets the returned version ID so a versioning
+  delete marker cannot produce a false pass.
 - [ ] Create a bucket-scoped application key with only the capabilities needed
   by create/verify/prune/restore.
 - [ ] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
@@ -74,9 +76,11 @@ be an additional convenience only.
 
 ## 5. Transactional email and alerts
 
-- [ ] Add and authenticate `bookpile.gal` in Mailjet using Dinahosting DNS.
-- [ ] Publish the provider's SPF and DKIM records and a deliberate DMARC policy;
-  wait for provider validation before sending account links.
+- [x] Add and authenticate `bookpile.gal` in Mailjet using Dinahosting DNS.
+- [x] Publish the provider's SPF and DKIM records and a deliberate DMARC policy.
+  Mailjet accepted SPF and 2,048-bit DKIM on 2026-09-13; independent public DNS
+  queries also resolved both plus the initial relaxed-alignment `p=none` DMARC
+  policy. Add a private aggregate-report destination before production.
 - [ ] Create a staging-only SMTP/API credential and put it only in
   `.env.staging`.
 - [ ] Select a private operator mailbox for TLS notices, failed systemd units,
