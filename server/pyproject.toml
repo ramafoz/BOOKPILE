@@ -34,6 +34,7 @@ bookpile-private-objects = "bookpile_server.cli.private_objects:main"
 bookpile-email-worker = "bookpile_server.cli.email_worker:main"
 bookpile-operational-backup = "bookpile_server.cli.operational_backup:main"
 bookpile-maintenance = "bookpile_server.cli.maintenance:main"
+bookpile-account-invitations = "bookpile_server.cli.account_invitations:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

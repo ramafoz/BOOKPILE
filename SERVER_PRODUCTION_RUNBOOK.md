@@ -121,6 +121,20 @@ Then perform a staging smoke path: sign in, open a test-owned library, read a
 private cover, make one reversible test write and confirm its audit event. Do
 not use production member data for smoke tests.
 
+On a new invitation-only installation, create the initial single-use account
+invitation from the trusted host. The command prints the raw registration URL
+once; do not put it in logs, issues or chat:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml run --rm --no-deps \
+  api bookpile-account-invitations create
+```
+
+Only a host operator with Docker access can run this bootstrap command. The
+database stores only the token hash, and the resulting account owns no library
+until it creates one through the normal UI.
+
 ## Rollback and stop
 
 Application rollback selects the previous approved immutable API/web tags and
