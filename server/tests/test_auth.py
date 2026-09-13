@@ -58,6 +58,7 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
 
     assert response.status_code == 200
     assert response.json()["username"] == "reader_one"
+    assert response.json()["csrf_cookie_name"] == "bookpile_csrf"
     cookie = response.cookies.get("bookpile_session")
     csrf_token = response.cookies.get("bookpile_csrf")
     assert cookie
@@ -86,6 +87,7 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
     assert client.get("/api/v1/auth/me").json() == {
         "user_id": str(user.id),
         "username": "reader_one",
+        "csrf_cookie_name": "bookpile_csrf",
     }
 
     rejected_logout = client.post("/api/v1/auth/logout")

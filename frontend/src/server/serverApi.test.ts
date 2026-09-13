@@ -31,6 +31,35 @@ describe("empty accepted responses", () => {
   });
 });
 
+describe("configured CSRF cookie", () => {
+  it("uses the cookie name advertised by the hosted API", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_staging_csrf=staging-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        user_id: "user-1",
+        username: "reader",
+        csrf_cookie_name: "bookpile_staging_csrf",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        library_id: "library-1",
+        name: "Salon",
+      }), { status: 201 }));
+
+    await serverApi.me();
+    await serverApi.createLibrary("Salon");
+
+    const options = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("staging-token");
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      user_id: "user-1",
+      username: "reader",
+      csrf_cookie_name: "bookpile_csrf",
+    }), { status: 200 }));
+    await serverApi.me();
+  });
+});
+
 describe("Server catalogue requests", () => {
   it("keeps ISBN lookup scoped to the active library", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(

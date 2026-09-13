@@ -3,6 +3,7 @@ const API_URL = import.meta.env.VITE_SERVER_API_URL ?? "/api/v1";
 export interface CurrentUser {
   user_id: string;
   username: string;
+  csrf_cookie_name: string;
 }
 
 export type ProfileVisibility = "PRIVATE" | "SHARED_LIBRARY_MEMBERS" | "AUTHENTICATED";
@@ -64,7 +65,9 @@ export interface EarnedAccountInvitation {
   expires_at: string;
 }
 
-export interface RegistrationResult extends CurrentUser {
+export interface RegistrationResult {
+  user_id: string;
+  username: string;
   state: string;
   verification_email_sent: boolean;
 }
@@ -673,6 +676,13 @@ export function cookieValue(cookieHeader: string, name: string): string | null {
   return item ? decodeURIComponent(item.slice(prefix.length)) : null;
 }
 
+let csrfCookieName = "bookpile_csrf";
+
+function rememberCsrfCookieName<T extends CurrentUser>(user: T): T {
+  csrfCookieName = user.csrf_cookie_name;
+  return user;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -683,7 +693,7 @@ async function request<T>(
     headers.set("Content-Type", "application/json");
   }
   if (csrf) {
-    const token = cookieValue(document.cookie, "bookpile_csrf");
+    const token = cookieValue(document.cookie, csrfCookieName);
     if (token) headers.set("X-CSRF-Token", token);
   }
   const response = await fetch(`${API_URL}${path}`, {
@@ -717,12 +727,12 @@ async function request<T>(
 }
 
 export const serverApi = {
-  me: () => request<CurrentUser>("/auth/me"),
+  me: () => request<CurrentUser>("/auth/me").then(rememberCsrfCookieName),
   login: (identifier: string, password: string, rememberMe: boolean) =>
     request<LoginResult>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ identifier, password, remember_me: rememberMe }),
-    }),
+    }).then(rememberCsrfCookieName),
   logout: () => request<void>("/auth/logout", { method: "POST" }, true),
   revokeAll: () => request<void>(
     "/auth/sessions/revoke-all",

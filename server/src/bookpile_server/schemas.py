@@ -795,6 +795,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     user_id: UUID
     username: str
+    csrf_cookie_name: str
     expires_at: datetime
     absolute_expires_at: datetime
 
@@ -802,6 +803,7 @@ class LoginResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     user_id: UUID
     username: str
+    csrf_cookie_name: str
 
 
 class RegisterAccountRequest(BaseModel):
