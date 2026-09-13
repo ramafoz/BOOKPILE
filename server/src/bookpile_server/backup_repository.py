@@ -1,11 +1,15 @@
 """Off-site repository boundary for encrypted operational snapshots."""
 
-from pathlib import Path, PurePosixPath
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from os import urandom
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
+from uuid import uuid4
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 if TYPE_CHECKING:
     from .config import Settings
@@ -76,6 +80,59 @@ class S3BackupRepository:
             )
             if versioning.get("Status") != "Enabled" or object_lock_enabled != "Enabled":
                 raise OSError("Backup bucket requires versioning and Object Lock")
+
+    def probe_compliance_lock(self, *, byte_size: int = 1024) -> dict[str, str | int]:
+        """Prove that a provider preserves and enforces per-version COMPLIANCE lock."""
+        if self._object_lock_days < 1:
+            raise RuntimeError("Compliance-lock probe requires a positive retention period")
+        self.check_ready()
+        content = urandom(byte_size)
+        digest = sha256(content).hexdigest()
+        logical_key = f"_compliance-probe/{uuid4().hex}.bin"
+        remote_key = self._remote(logical_key)
+        response = self._client.put_object(
+            Bucket=self._bucket,
+            Key=remote_key,
+            Body=content,
+            Metadata={self.checksum_metadata_key: digest},
+            **self._lock_args(),
+        )
+        version_id = response.get("VersionId")
+        if not version_id:
+            raise OSError("Object Lock probe upload did not return a version ID")
+        head = self._client.head_object(
+            Bucket=self._bucket,
+            Key=remote_key,
+            VersionId=version_id,
+        )
+        retain_until = head.get("ObjectLockRetainUntilDate")
+        if (
+            int(head.get("ContentLength", -1)) != byte_size
+            or head.get("Metadata", {}).get(self.checksum_metadata_key) != digest
+            or head.get("ObjectLockMode") != "COMPLIANCE"
+            or not isinstance(retain_until, datetime)
+            or retain_until <= datetime.now(UTC)
+        ):
+            raise OSError("Provider did not preserve the expected COMPLIANCE lock")
+        try:
+            self._client.delete_object(
+                Bucket=self._bucket,
+                Key=remote_key,
+                VersionId=version_id,
+            )
+        except ClientError as error:
+            code = str(error.response.get("Error", {}).get("Code", ""))
+            if code not in {"AccessDenied", "InvalidRequest"}:
+                raise
+        else:
+            raise OSError("Provider allowed deletion during COMPLIANCE retention")
+        self._client.head_object(Bucket=self._bucket, Key=remote_key, VersionId=version_id)
+        return {
+            "verified_bytes": byte_size,
+            "key": logical_key,
+            "version_id": version_id,
+            "retain_until": retain_until.isoformat(),
+        }
 
     def _lock_args(self) -> dict:
         if not self._object_lock_days:

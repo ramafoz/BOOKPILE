@@ -10,7 +10,7 @@ issues or chat.
 - [ ] Recheck the regular (not promotional) IONOS VPS M+ monthly price, setup
   fee, minimum term, cancellation process and Spain location before purchase.
 - [ ] Choose monthly billing for the first rehearsal where offered.
-- [ ] Enable MFA on IONOS, Arsys, Backblaze, Mailjet and Dinahosting before
+- [ ] Enable MFA on IONOS, Backblaze, Mailjet and Dinahosting before
   creating service credentials.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
   record.
@@ -23,10 +23,10 @@ be an additional convenience only.
 
 ## 2. DNS and host
 
-- [ ] Create only an `A` record for `staging.bookpile.gal` pointing to the VPS.
+- [x] Create only an `A` record for `staging.bookpile.gal` pointing to the VPS.
   Add `AAAA` only after IPv6 firewall and reachability are deliberately tested.
 - [ ] Keep `bookpile.gal` unchanged and reserved for the later production gate.
-- [ ] Install security updates, key-only SSH, Docker Engine and Compose from
+- [x] Install security updates, key-only SSH, Docker Engine and Compose from
   their official repositories. On Ubuntu 24.04, run the reviewed
   `server/deploy/provision-ubuntu-host.sh` installer as the trusted administrator
   and reconnect before validating Docker access.
@@ -37,10 +37,18 @@ be an additional convenience only.
 
 ## 3. Active private objects in Spain
 
-- [ ] Create a private Arsys bucket dedicated to staging; disable website and
-  anonymous/public access.
-- [ ] Create one application credential restricted to list/get/put/delete only
-  under the staging prefix.
+- [x] Create a private Dinahosting bucket dedicated to the isolated 1 GB
+  staging account; disable sharing and anonymous/public access.
+- [x] Prove the provider signing region (`us-east-1`) and path-style addressing
+  against `https://objects.dinaserver.com`; do not infer them from AWS defaults.
+- [ ] Confirm whether Dinahosting can issue a distinct read-only credential for
+  the same bucket. Record a provider gap and stop before production acceptance
+  if application-key reuse would otherwise be required.
+- [x] Create an isolated application account/credential capped to 1 GB. Its
+  effective put/stat/read/list/delete access and metadata preservation passed a
+  1,024-byte round trip under the `staging` prefix on 2026-09-13; the probe
+  object was deleted. An unauthenticated bucket request returned `403
+  AccessDenied`.
 - [ ] Create a distinct backup-reader credential restricted to list/get only.
 - [ ] Copy `server/.env.staging.example` to `.env.staging`, fill the endpoint,
   region and credentials, and set mode `600`.
@@ -49,12 +57,16 @@ be an additional convenience only.
 
 ## 4. Immutable backup in a separate EU failure domain
 
-- [ ] Create a Backblaze account in **EU Central**; region selection is fixed at
+- [x] Create a Backblaze account in **EU Central**; region selection is fixed at
   account creation.
-- [ ] Create the backup bucket with Object Lock enabled. Never test lock policy
-  first on the final 29-day prefix.
+- [x] Create a private, encrypted disposable acceptance bucket with Object Lock
+  enabled at `s3.eu-central-003.backblazeb2.com`. Never test lock policy first
+  on the final 29-day prefix.
 - [ ] Use a disposable acceptance prefix/bucket to prove a short COMPLIANCE
-  retention cannot be bypassed and that deletion succeeds after expiry.
+  retention cannot be bypassed and that deletion succeeds after expiry. Run
+  `bookpile-operational-backup probe-lock` with a one-day retention; it targets
+  the returned version ID so a versioning delete marker cannot produce a false
+  pass.
 - [ ] Create a bucket-scoped application key with only the capabilities needed
   by create/verify/prune/restore.
 - [ ] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode

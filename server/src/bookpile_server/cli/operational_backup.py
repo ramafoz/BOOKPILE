@@ -198,6 +198,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create")
+    subparsers.add_parser("probe-lock")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("backup_id", type=UUID)
     subparsers.add_parser("prune")
@@ -207,7 +208,14 @@ def main() -> int:
     restore_parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     exit_code = 0
-    if args.command == "create":
+    if args.command == "probe-lock":
+        settings = get_settings()
+        repository = S3BackupRepository.from_settings(settings)
+        payload = {
+            "ready": True,
+            **repository.probe_compliance_lock(),
+        }
+    elif args.command == "create":
         payload = create_snapshot()
     elif args.command == "restore":
         if not args.apply:

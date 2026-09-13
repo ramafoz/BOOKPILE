@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from botocore.exceptions import ClientError
 
 from bookpile_server.backup_crypto import BackupIntegrityError, decrypt_file, encrypt_file
 from bookpile_server.backup_repository import S3BackupRepository
@@ -77,6 +78,32 @@ class FakeS3:
         return {"Status": "Enabled"}
     def get_object_lock_configuration(self, Bucket):
         return {"ObjectLockConfiguration": {"ObjectLockEnabled": "Enabled"}}
+
+
+class FakeComplianceS3(FakeS3):
+    def __init__(self) -> None:
+        super().__init__()
+        self.head: dict = {}
+
+    def put_object(self, Bucket, Key, Body, Metadata, **kwargs):
+        self.items[Key] = (Body, Metadata)
+        self.head = {
+            "ContentLength": len(Body),
+            "Metadata": Metadata,
+            "ObjectLockMode": kwargs["ObjectLockMode"],
+            "ObjectLockRetainUntilDate": kwargs["ObjectLockRetainUntilDate"],
+        }
+        return {"VersionId": "locked-version"}
+
+    def head_object(self, Bucket, Key, VersionId=None):
+        assert VersionId == "locked-version"
+        return self.head
+
+    def delete_object(self, Bucket, Key, VersionId=None):
+        raise ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "retained"}},
+            "DeleteObject",
+        )
 
 
 def object_entry(key: str, content: bytes) -> ExpectedPrivateObject:
@@ -232,6 +259,21 @@ def test_s3_repository_requires_and_applies_compliance_lock(tmp_path: Path) -> N
     repository.put_file("snapshots/id/data", source, sha256=sha256(source.read_bytes()).hexdigest())
     assert client.last_upload_args["ObjectLockMode"] == "COMPLIANCE"
     assert client.last_upload_args["ObjectLockRetainUntilDate"] > datetime.now(UTC) + timedelta(days=28)
+
+
+def test_s3_repository_probe_proves_compliance_delete_is_rejected() -> None:
+    repository = S3BackupRepository(
+        FakeComplianceS3(),
+        bucket="backups",
+        prefix="acceptance",
+        object_lock_days=1,
+    )
+
+    result = repository.probe_compliance_lock()
+
+    assert result["verified_bytes"] == 1024
+    assert result["version_id"] == "locked-version"
+    assert str(result["key"]).startswith("_compliance-probe/")
 
 
 def test_postgres_tools_keep_password_out_of_process_arguments(monkeypatch, tmp_path: Path) -> None:

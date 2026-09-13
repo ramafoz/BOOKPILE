@@ -26,6 +26,20 @@ deletion. BOOKPILE writes objects in `COMPLIANCE` mode for 29 days; lifecycle
 must permanently expire versions after the lock releases and no later than the
 documented 30-day operational ceiling. Test provider semantics before staging.
 
+Before using a final backup bucket, set up a disposable Object Lock bucket and
+temporary bucket/prefix-scoped key. Configure a one-day retention and run:
+
+```bash
+docker run --rm --env-file ~/bookpile-b2-lock-probe.env \
+  bookpile-api:phase9 bookpile-operational-backup probe-lock
+```
+
+The command uploads 1,024 random bytes, verifies their hash, size, version ID,
+future COMPLIANCE expiry and then attempts to delete that exact version. It
+succeeds only when deletion is denied and the protected version remains. Keep
+the returned key/version receipt until deletion after expiry is separately
+confirmed; then remove the disposable bucket and temporary key.
+
 Copy `server/.env.backup.example` to `server/.env.backup`, mode `600`. This file
 is supplied only to the backup container. Use:
 
