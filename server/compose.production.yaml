@@ -70,7 +70,12 @@ services:
       context: ..
       dockerfile: server/docker/api.Dockerfile
     <<: *api-environment
-    command: ["bookpile-email-worker", "--poll-seconds", "2"]
+    command:
+      - "bookpile-email-worker"
+      - "--poll-seconds"
+      - "2"
+      - "--processed-delay-seconds"
+      - "${BOOKPILE_EMAIL_WORKER_PROCESSED_DELAY_SECONDS:-0}"
     restart: unless-stopped
     read_only: true
     tmpfs:

@@ -1,4 +1,5 @@
 import argparse
+import logging
 from time import sleep
 
 from ..config import get_settings
@@ -8,12 +9,16 @@ from ..email_outbox import EmailOutboxWorker
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--poll-seconds", type=float, default=2.0)
+    parser.add_argument("--processed-delay-seconds", type=float, default=0.0)
     args = parser.parse_args()
     if args.poll_seconds < 0.25 or args.poll_seconds > 60:
         parser.error("--poll-seconds must be between 0.25 and 60")
+    if args.processed_delay_seconds < 0 or args.processed_delay_seconds > 3600:
+        parser.error("--processed-delay-seconds must be between 0 and 3600")
     settings = get_settings()
     worker = EmailOutboxWorker(
         SessionFactory,
@@ -23,10 +28,9 @@ def main() -> int:
     if args.once:
         return 0 if worker.process_one() else 2
     while True:
-        if not worker.process_one():
-            sleep(args.poll_seconds)
+        processed = worker.process_one()
+        sleep(args.processed_delay_seconds if processed else args.poll_seconds)
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

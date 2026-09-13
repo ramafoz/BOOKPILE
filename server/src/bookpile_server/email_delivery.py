@@ -43,10 +43,16 @@ class SmtpEmailSender:
         message["Message-ID"] = f"<{message_hash}@{sender_domain or 'bookpile.invalid'}>"
         message.set_content(email.text)
         try:
-            with smtplib.SMTP(
-                self._settings.smtp_host,
-                self._settings.smtp_port,
-                timeout=self._settings.smtp_timeout_seconds,
+            smtp_client = smtplib.SMTP_SSL if self._settings.smtp_implicit_tls else smtplib.SMTP
+            client_options = {
+                "host": self._settings.smtp_host,
+                "port": self._settings.smtp_port,
+                "timeout": self._settings.smtp_timeout_seconds,
+            }
+            if self._settings.smtp_implicit_tls:
+                client_options["context"] = ssl.create_default_context()
+            with smtp_client(
+                **client_options,
             ) as smtp:
                 if self._settings.smtp_starttls:
                     smtp.starttls(context=ssl.create_default_context())

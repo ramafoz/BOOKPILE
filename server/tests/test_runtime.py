@@ -150,3 +150,14 @@ def test_hosted_unhandled_error_is_correlatable_without_leaking_message(
 def test_hosted_configuration_rejects_unsafe_values(changes) -> None:
     with pytest.raises(ValueError):
         _hosted_settings(**changes)
+
+
+def test_hosted_configuration_accepts_implicit_smtp_tls() -> None:
+    settings = _hosted_settings(smtp_starttls=False, smtp_implicit_tls=True)
+
+    assert settings.smtp_implicit_tls
+
+
+def test_configuration_rejects_two_smtp_tls_modes() -> None:
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        _hosted_settings(smtp_implicit_tls=True)

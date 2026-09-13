@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"
     smtp_starttls: bool = False
+    smtp_implicit_tls: bool = False
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
     smtp_timeout_seconds: int = Field(default=10, ge=1, le=60)
@@ -104,6 +105,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_production_security_settings(self) -> "Settings":
+        if self.smtp_starttls and self.smtp_implicit_tls:
+            raise ValueError("SMTP STARTTLS and implicit TLS are mutually exclusive")
         if self.is_hosted:
             if self.rate_limit_key_secret == DEVELOPMENT_RATE_LIMIT_SECRET:
                 raise ValueError(
@@ -152,8 +155,8 @@ class Settings(BaseSettings):
                 or len(self.email_outbox_encryption_secret.get_secret_value()) < 32
             ):
                 raise ValueError("Hosted environments require a private outbox encryption secret")
-            if not self.smtp_starttls:
-                raise ValueError("Hosted SMTP delivery requires STARTTLS")
+            if not (self.smtp_starttls or self.smtp_implicit_tls):
+                raise ValueError("Hosted SMTP delivery requires encrypted transport")
             if not self.smtp_username or not self.smtp_password:
                 raise ValueError("Hosted SMTP delivery requires authentication")
             if self.email_delivery_mode != "outbox":

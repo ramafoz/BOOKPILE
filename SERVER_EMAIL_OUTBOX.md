@@ -3,7 +3,8 @@
 Hosted BOOKPILE records email intent in PostgreSQL in the same transaction as
 the account action. A separate `bookpile-email-worker` process claims one row
 with a lease, decrypts it only in memory, sends it through authenticated
-STARTTLS SMTP and marks it sent. Development remains synchronous so Mailpit is
+encrypted SMTP and marks it sent. Both STARTTLS and implicit TLS are supported;
+development remains synchronous so Mailpit is
 simple to use.
 
 The payload (recipient, subject and URL-bearing body) is AES-GCM encrypted with
@@ -30,6 +31,13 @@ Run continuously (the production Compose file already defines this service):
 
 ```powershell
 bookpile-email-worker --poll-seconds 2
+```
+
+Providers with a low delivery quota can impose a delay after every processed
+row without slowing empty-queue polling:
+
+```bash
+bookpile-email-worker --poll-seconds 2 --processed-delay-seconds 11
 ```
 
 Operational alerts must cover a stopped worker, old `PENDING` rows, reclaimed
