@@ -64,13 +64,14 @@ be an additional convenience only.
 - [x] Create a private, encrypted disposable acceptance bucket with Object Lock
   enabled at `s3.eu-central-003.backblazeb2.com`. Never test lock policy first
   on the final 29-day prefix.
-- [ ] Use a disposable acceptance prefix/bucket to prove a short COMPLIANCE
+- [x] Use a disposable acceptance prefix/bucket to prove a short COMPLIANCE
   retention cannot be bypassed and that deletion succeeds after expiry. On
   2026-09-13, `bookpile-operational-backup probe-lock` verified a 1,024-byte
   version and proved that Backblaze rejected its deletion through
-  2026-09-14 18:04 UTC. Deletion after expiry remains to be proved before this
-  item can close. The probe targets the returned version ID so a versioning
-  delete marker cannot produce a false pass.
+  2026-09-14 18:04 UTC. After expiry,
+  `delete-expired-lock-probe` deleted that exact version and verified it was
+  absent. Targeting the version ID prevented a delete marker from producing a
+  false pass.
 - [ ] Create a bucket-scoped application key with only the capabilities needed
   by create/verify/prune/restore.
 - [ ] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode

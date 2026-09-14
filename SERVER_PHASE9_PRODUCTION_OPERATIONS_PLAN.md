@@ -102,9 +102,9 @@ the queued email; retries do not create uncontrolled duplicates.
 
 Status: provider-neutral implementation and a complete local PostgreSQL 17/S3
 recovery rehearsal pass. Backblaze B2 EU Central accepted a versioned
-COMPLIANCE probe and rejected premature deletion through its recorded expiry.
-Post-expiry deletion, final credentials/lifecycle and the Spanish staging
-disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
+COMPLIANCE probe, rejected premature deletion and allowed verified deletion of
+that exact version after expiry. Final credentials/lifecycle and the Spanish
+staging disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.

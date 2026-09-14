@@ -142,6 +142,16 @@ credentials, and securely delete the restore environment file.
 - The isolated image runs as UID/GID 10001 with PostgreSQL 17.6 tools.
 - A real development snapshot encrypted and verified a 412,316-byte PostgreSQL
   custom dump and 869 private objects.
+
+## Backblaze acceptance evidence (2026-09-13/14)
+
+- An EU Central disposable bucket preserved a 1,024-byte version, checksum,
+  version ID and one-day COMPLIANCE retention timestamp.
+- Deletion of the exact version was rejected before its 2026-09-14 18:04 UTC
+  expiry.
+- After expiry, `delete-expired-lock-probe` deleted the same version and a
+  version-specific HEAD confirmed its absence. No delete-marker-only result was
+  accepted.
 - A clean disposable PostgreSQL database restored 36 tables and a separate
   disposable S3-compatible bucket restored all 869 objects with exact hashes.
 - The disposable restore database, bucket/container and local staging were

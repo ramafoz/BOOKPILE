@@ -898,8 +898,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [ ] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
     authenticated chunk encryption, separate S3 repository, completion marker,
     29-day compliance retention, guarded restore and local 36-table/869-object
-    recovery rehearsal are implemented. Close after real-provider Object Lock,
-    lifecycle and staging restore acceptance.
+    recovery rehearsal are implemented. Backblaze EU passed exact-version
+    COMPLIANCE enforcement and post-expiry deletion. Close after final lifecycle
+    and staging restore acceptance.
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
