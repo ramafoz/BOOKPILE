@@ -907,9 +907,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     capacity and external error-reporting acceptance in staging.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
-    `staging.bookpile.gal` are fixed; isolated environment templates,
-    provisioning checklist and a safe S3 provider probe are ready. Purchase,
-    provider acceptance, deployment and measured recovery remain.
+    `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
+    purchased; HTTPS deployment, active S3, transactional verification email
+    and an authenticated library write pass in staging. Scheduled operations,
+    complete provider acceptance and measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -923,8 +924,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
   Provider acceptance remains part of the staging gates.
-- [ ] Choose the Spanish VPS, private object storage, domain, email service,
-  and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
+- [x] Choose and provision the Spanish VPS, active private object storage,
+  domain, transactional email and HTTPS staging deployment: IONOS hosts the
+  VPS; Dinahosting supplies domain/DNS, active S3 and email; Backblaze B2 EU
+  Central holds immutable encrypted backups.
 - [ ] Add authorization checks to every user-owned backend operation.
 - [ ] Add a restricted platform-administration panel for account invitations,
   accounts, abuse/security operations, and service health. Platform operators

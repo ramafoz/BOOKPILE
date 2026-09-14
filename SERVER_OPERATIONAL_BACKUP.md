@@ -37,8 +37,19 @@ docker run --rm --env-file ~/bookpile-b2-lock-probe.env \
 The command uploads 1,024 random bytes, verifies their hash, size, version ID,
 future COMPLIANCE expiry and then attempts to delete that exact version. It
 succeeds only when deletion is denied and the protected version remains. Keep
-the returned key/version receipt until deletion after expiry is separately
-confirmed; then remove the disposable bucket and temporary key.
+the returned key/version receipt. After its recorded expiry, delete and verify
+that exact version with the same temporary environment:
+
+```bash
+docker run --rm --env-file ~/bookpile-b2-lock-probe.env \
+  bookpile-api:phase9 bookpile-operational-backup \
+  delete-expired-lock-probe PROBE_KEY PROBE_VERSION_ID
+```
+
+The cleanup command rejects every key outside BOOKPILE's generated
+`_compliance-probe/` namespace and refuses a version whose COMPLIANCE retention
+has not expired. After it returns `{"deleted": true, ...}`, remove the
+disposable bucket and temporary key.
 
 Copy `server/.env.backup.example` to `server/.env.backup`, mode `600`. This file
 is supplied only to the backup container. Use:

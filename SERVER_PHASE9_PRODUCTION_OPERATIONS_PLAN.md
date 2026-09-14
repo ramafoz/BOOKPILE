@@ -28,8 +28,11 @@ backups and its measured recovery result is documented.
 
 ### 9A — reproducible runtime and configuration foundation
 
-Status: implementation and local gates complete; awaiting the first clean-host
-rehearsal. Commands and evidence are in `SERVER_PRODUCTION_RUNBOOK.md`.
+Status: implementation and local gates complete. The first IONOS staging-host
+deployment passed explicit migration, HTTPS liveness/readiness and an
+authenticated library write on 2026-09-13/14. Scheduled operations, rollback
+and recovery evidence remain in 9F. Commands are in
+`SERVER_PRODUCTION_RUNBOOK.md`.
 
 - Add production startup validation, trusted-host/origin enforcement, secure
   headers, request IDs, and non-sensitive structured request logs.
@@ -60,9 +63,10 @@ The remaining clean-host rehearsal belongs to 9F. It does not block 9B.
 ### 9B — private S3-compatible object storage
 
 Status: provider-neutral implementation and simulated corruption/migration
-gates complete. Provider contract and procedure are documented in
-`SERVER_PRIVATE_OBJECT_STORAGE.md`; real provider selection, isolated-bucket
-acceptance and staging inventory reconciliation remain open.
+gates complete. A private Dinahosting staging bucket passed authenticated
+put/stat/read/list/delete, metadata integrity and anonymous-access rejection on
+2026-09-13. Exact staging inventory reconciliation and a distinct read-only
+operational credential remain open; see `SERVER_PRIVATE_OBJECT_STORAGE.md`.
 
 - Add an adapter selected by configuration without changing object keys or API
   URLs.
@@ -79,8 +83,11 @@ object exactly; interruption leaves the active reference valid.
 ### 9C — durable transactional email
 
 Status: encrypted transactional outbox, leased worker, bounded retries,
-delivery-relative recovery windows and local/CI gates complete. Provider
-delivery and alerting remain staging/9E gates; see `SERVER_EMAIL_OUTBOX.md`.
+delivery-relative recovery windows and local/CI gates complete. Authenticated
+implicit TLS through Dinahosting delivered and completed a real account
+verification on 2026-09-14. Password reset, deletion recovery, induced retry,
+terminal failure and operator alerting remain staging/9E gates; see
+`SERVER_EMAIL_OUTBOX.md`.
 
 - Replace request-blocking SMTP sends with a PostgreSQL outbox and a separate
   retrying worker.
@@ -94,8 +101,10 @@ the queued email; retries do not create uncontrolled duplicates.
 ### 9D — backup, restore and retention automation
 
 Status: provider-neutral implementation and a complete local PostgreSQL 17/S3
-recovery rehearsal pass. Real-provider Object Lock/lifecycle acceptance and the
-Spanish staging disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
+recovery rehearsal pass. Backblaze B2 EU Central accepted a versioned
+COMPLIANCE probe and rejected premature deletion through its recorded expiry.
+Post-expiry deletion, final credentials/lifecycle and the Spanish staging
+disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.
@@ -129,11 +138,13 @@ borrower, token or credential data.
 
 The dated shortlist, recommended separation of failure domains and unresolved
 contracting decisions are in `SERVER_STAGING_PROVIDER_DECISION.md`.
-The individual-account and EU-boundary decisions are accepted; Dinahosting
-manages `bookpile.gal`, with `staging.bookpile.gal` reserved for this rehearsal.
-Provider-specific environment templates, purchase safeguards and the evidence
-sequence are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Provisioning is the
-next gate and has not happened yet.
+The individual-account and EU-boundary decisions are accepted. Dinahosting
+manages `bookpile.gal`, active private objects and transactional email;
+`staging.bookpile.gal` runs on the IONOS rehearsal VPS. Provider-specific
+environment templates, purchase safeguards and the remaining evidence sequence
+are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Initial provisioning and the
+first authenticated smoke path have passed; automated operations and measured
+disaster recovery remain open.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

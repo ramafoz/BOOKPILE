@@ -1,5 +1,6 @@
 """Off-site repository boundary for encrypted operational snapshots."""
 
+import re
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from os import urandom
@@ -33,6 +34,7 @@ class BackupRepository(Protocol):
 
 class S3BackupRepository:
     checksum_metadata_key = "bookpile-sha256"
+    compliance_probe_key = re.compile(r"_compliance-probe/[0-9a-f]{32}\.bin")
 
     def __init__(self, client: Any, *, bucket: str, prefix: str, object_lock_days: int = 0) -> None:
         self._client = client
@@ -133,6 +135,43 @@ class S3BackupRepository:
             "version_id": version_id,
             "retain_until": retain_until.isoformat(),
         }
+
+    def delete_expired_compliance_probe(self, key: str, version_id: str) -> dict[str, str | bool]:
+        """Delete only one exact, expired version created by the lock probe."""
+        logical_key = validate_backup_key(key)
+        if not self.compliance_probe_key.fullmatch(logical_key):
+            raise ValueError("Cleanup is restricted to BOOKPILE compliance-probe keys")
+        if not version_id or len(version_id) > 512:
+            raise ValueError("A valid compliance-probe version ID is required")
+        remote_key = self._remote(logical_key)
+        head = self._client.head_object(
+            Bucket=self._bucket,
+            Key=remote_key,
+            VersionId=version_id,
+        )
+        retain_until = head.get("ObjectLockRetainUntilDate")
+        if head.get("ObjectLockMode") != "COMPLIANCE" or not isinstance(retain_until, datetime):
+            raise OSError("Object is not a versioned COMPLIANCE probe")
+        if retain_until > datetime.now(UTC):
+            raise RuntimeError("Compliance-probe retention has not expired")
+        self._client.delete_object(
+            Bucket=self._bucket,
+            Key=remote_key,
+            VersionId=version_id,
+        )
+        try:
+            self._client.head_object(
+                Bucket=self._bucket,
+                Key=remote_key,
+                VersionId=version_id,
+            )
+        except ClientError as error:
+            code = str(error.response.get("Error", {}).get("Code", ""))
+            if code not in {"404", "NoSuchKey", "NoSuchVersion", "NotFound"}:
+                raise
+        else:
+            raise OSError("Provider retained the compliance-probe version after deletion")
+        return {"deleted": True, "key": logical_key, "version_id": version_id}
 
     def _lock_args(self) -> dict:
         if not self._object_lock_days:

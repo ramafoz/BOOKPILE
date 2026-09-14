@@ -199,6 +199,9 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("create")
     subparsers.add_parser("probe-lock")
+    cleanup_probe_parser = subparsers.add_parser("delete-expired-lock-probe")
+    cleanup_probe_parser.add_argument("key")
+    cleanup_probe_parser.add_argument("version_id")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("backup_id", type=UUID)
     subparsers.add_parser("prune")
@@ -215,6 +218,10 @@ def main() -> int:
             "ready": True,
             **repository.probe_compliance_lock(),
         }
+    elif args.command == "delete-expired-lock-probe":
+        settings = get_settings()
+        repository = S3BackupRepository.from_settings(settings)
+        payload = repository.delete_expired_compliance_probe(args.key, args.version_id)
     elif args.command == "create":
         payload = create_snapshot()
     elif args.command == "restore":

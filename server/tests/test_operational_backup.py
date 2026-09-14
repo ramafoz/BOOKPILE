@@ -106,6 +106,31 @@ class FakeComplianceS3(FakeS3):
         )
 
 
+class FakeExpiredComplianceS3(FakeComplianceS3):
+    def __init__(self) -> None:
+        super().__init__()
+        self.deleted = False
+        self.head = {
+            "ObjectLockMode": "COMPLIANCE",
+            "ObjectLockRetainUntilDate": datetime.now(UTC) - timedelta(minutes=1),
+        }
+
+    def head_object(self, Bucket, Key, VersionId=None):
+        assert Key == "acceptance/_compliance-probe/0123456789abcdef0123456789abcdef.bin"
+        assert VersionId == "expired-version"
+        if self.deleted:
+            raise ClientError(
+                {"Error": {"Code": "NoSuchVersion", "Message": "gone"}},
+                "HeadObject",
+            )
+        return self.head
+
+    def delete_object(self, Bucket, Key, VersionId=None):
+        assert Key == "acceptance/_compliance-probe/0123456789abcdef0123456789abcdef.bin"
+        assert VersionId == "expired-version"
+        self.deleted = True
+
+
 def object_entry(key: str, content: bytes) -> ExpectedPrivateObject:
     return ExpectedPrivateObject(key, len(content), sha256(content).hexdigest())
 
@@ -274,6 +299,39 @@ def test_s3_repository_probe_proves_compliance_delete_is_rejected() -> None:
     assert result["verified_bytes"] == 1024
     assert result["version_id"] == "locked-version"
     assert str(result["key"]).startswith("_compliance-probe/")
+
+
+def test_s3_repository_deletes_only_the_exact_expired_compliance_probe() -> None:
+    client = FakeExpiredComplianceS3()
+    repository = S3BackupRepository(
+        client,
+        bucket="backups",
+        prefix="acceptance",
+        object_lock_days=1,
+    )
+
+    result = repository.delete_expired_compliance_probe(
+        "_compliance-probe/0123456789abcdef0123456789abcdef.bin",
+        "expired-version",
+    )
+
+    assert result["deleted"] is True
+    assert client.deleted is True
+
+
+def test_compliance_probe_cleanup_rejects_non_probe_keys() -> None:
+    repository = S3BackupRepository(
+        FakeExpiredComplianceS3(),
+        bucket="backups",
+        prefix="acceptance",
+        object_lock_days=1,
+    )
+
+    with pytest.raises(ValueError, match="restricted"):
+        repository.delete_expired_compliance_probe(
+            "snapshots/real-backup/database.dump.enc",
+            "expired-version",
+        )
 
 
 def test_postgres_tools_keep_password_out_of_process_arguments(monkeypatch, tmp_path: Path) -> None:

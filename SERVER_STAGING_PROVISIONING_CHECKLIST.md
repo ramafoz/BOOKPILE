@@ -10,7 +10,7 @@ issues or chat.
 - [ ] Recheck the regular (not promotional) IONOS VPS M+ monthly price, setup
   fee, minimum term, cancellation process and Spain location before purchase.
 - [ ] Choose monthly billing for the first rehearsal where offered.
-- [ ] Enable MFA on IONOS, Backblaze, Mailjet and Dinahosting before
+- [ ] Enable MFA on IONOS, Backblaze and Dinahosting before
   creating service credentials.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
   record.
@@ -50,10 +50,12 @@ be an additional convenience only.
   object was deleted. An unauthenticated bucket request returned `403
   AccessDenied`.
 - [ ] Create a distinct backup-reader credential restricted to list/get only.
-- [ ] Copy `server/.env.staging.example` to `.env.staging`, fill the endpoint,
+- [x] Copy `server/.env.staging.example` to `.env.staging`, fill the endpoint,
   region and credentials, and set mode `600`.
-- [ ] Run `bookpile-private-objects probe`, then the exact inventory acceptance
-  from `SERVER_PRIVATE_OBJECT_STORAGE.md` before application startup.
+- [x] Run `bookpile-private-objects probe` before application startup. It
+  returned `{"ready": true, "verified_bytes": 1024}` against Dinahosting.
+- [ ] Run the exact non-empty inventory acceptance from
+  `SERVER_PRIVATE_OBJECT_STORAGE.md` after adding a synthetic private image.
 
 ## 4. Immutable backup in a separate EU failure domain
 
@@ -76,22 +78,28 @@ be an additional convenience only.
 
 ## 5. Transactional email and alerts
 
-- [x] Add and authenticate `bookpile.gal` in Mailjet using Dinahosting DNS.
-- [x] Publish the provider's SPF and DKIM records and a deliberate DMARC policy.
-  Mailjet accepted SPF and 2,048-bit DKIM on 2026-09-13; independent public DNS
-  queries also resolved both plus the initial relaxed-alignment `p=none` DMARC
-  policy. Add a private aggregate-report destination before production.
-- [ ] Create a staging-only SMTP/API credential and put it only in
-  `.env.staging`.
+- [x] Provision and authenticate the staging-only `hello@bookpile.gal`
+  Dinahosting SMTP account over implicit TLS on port 465; keep its credential
+  only in `.env.staging`.
+- [x] Publish Dinahosting-compatible SPF, enable its DKIM and retain a deliberate
+  relaxed-alignment `p=none` DMARC observation policy. Add a private aggregate-
+  report destination before production.
+- [x] Deliver a real verification message through the durable worker and
+  complete the account-verification link. The worker recorded `SENT` on its
+  first attempt on 2026-09-14.
+- [ ] Remove the obsolete Mailjet verification and DKIM DNS records after
+  recording final DNS evidence; Mailjet is no longer an authorized sender.
 - [ ] Select a private operator mailbox for TLS notices, failed systemd units,
   failed outbox delivery and backup freshness.
-- [ ] Exercise verification, reset and deletion-recovery messages, including an
+- [ ] Exercise password-reset and deletion-recovery messages, including an
   induced temporary SMTP failure and a terminal failure alert.
 
 ## 6. First deployment and evidence
 
-- [ ] Follow `SERVER_PRODUCTION_RUNBOOK.md`: Compose preflight, explicit
-  migration, API/worker/web startup, readiness and synthetic smoke path.
+- [x] Follow `SERVER_PRODUCTION_RUNBOOK.md` through Compose preflight, explicit
+  migration, API/worker/web startup and public readiness. On 2026-09-14 the
+  verified account created its first library at revision `ad9a16a`, proving the
+  authenticated CSRF-protected write path.
 - [ ] Install the example systemd timers and prove each oneshot command both
   succeeds normally and produces an observable failed unit.
 - [ ] Create and verify a backup, then restore it into a clean disposable
