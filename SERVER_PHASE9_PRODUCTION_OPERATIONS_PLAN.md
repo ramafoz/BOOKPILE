@@ -130,9 +130,11 @@ memberships and application invariants.
 
 Status: provider-neutral edge limits, aggregate health commands, retention
 maintenance, systemd schedules, privacy-safe email events, dependency update
-automation and the administration boundary are implemented. Host firewall,
-alert delivery, external error reporting and capacity thresholds require the
-chosen staging provider; see `SERVER_OPERATIONS_AND_SECURITY.md`.
+automation and the administration boundary are implemented. The active IONOS
+external IPv4 firewall policy now allows only incoming TCP 22/80/443, and an
+external backup alert reached the operator. Broader operations/outbox alerts,
+external error reporting and capacity thresholds remain open; see
+`SERVER_OPERATIONS_AND_SECURITY.md`.
 
 - Finalize automatic HTTPS, firewall policy, proxy rate limits, body/time
   limits, dependency scanning and security update policy.

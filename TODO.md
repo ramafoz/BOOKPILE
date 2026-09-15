@@ -909,8 +909,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
-    SYSTEM_ADMIN boundary are complete. Close after provider firewall, alert,
-    capacity and external error-reporting acceptance in staging.
+    SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall and an external
+    backup alert passed in staging; close after broader alert, capacity and
+    external error-reporting acceptance.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are

@@ -61,12 +61,18 @@ strict same-origin CSP and browser isolation headers, and bounds upstream dial
 time. A 15-minute response-header allowance remains temporarily necessary for
 synchronous 100 MiB import inspection; background processing could lower it.
 
-At the VPS firewall, allow inbound TCP 22 only from the operator's protected
-network where practical and 80/443 from the internet. Deny 5432, 8100 and all
-Docker internal-network ports. Use key-only SSH, provider MFA, unattended OS
-security updates with controlled reboot notification, and separate staging and
-production hosts/secrets. Exact commands depend on the selected Spanish VPS and
-are a Phase 9F rehearsal item.
+The staging IPv4 address has an active IONOS external firewall policy: only
+incoming TCP 22, 80 and 443 remain allowed after removing unused 8443/8447
+rules on 2026-09-16. Public readiness and a fresh SSH connection passed after
+the change. UFW remains inactive; Docker-published ports can bypass UFW, so do
+not treat it as a substitute for the external policy. No public 5432/8100
+listeners or allow rules were observed. SSH is still allowed from all sources;
+restrict it to the operator's protected network if a stable address and a
+provider-console recovery path are available. Review any separately assigned
+IPv6 address/policy before exposing IPv6. Use key-only SSH, provider MFA,
+unattended OS security updates with controlled reboot notification, and
+separate staging and production hosts/secrets. SSH source restriction remains
+a Phase 9F decision.
 
 Authentication limits are atomic PostgreSQL counters, so API workers share
 them. Stock Caddy has no distributed rate-limit module; do not silently replace

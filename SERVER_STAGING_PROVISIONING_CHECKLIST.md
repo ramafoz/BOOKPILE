@@ -30,8 +30,15 @@ be an additional convenience only.
   their official repositories. On Ubuntu 24.04, run the reviewed
   `server/deploy/provision-ubuntu-host.sh` installer as the trusted administrator
   and reconnect before validating Docker access.
-- [ ] Restrict SSH to the operator network where practical; allow inbound
-  80/443 and deny public 5432/8100.
+- [x] Verify the active IONOS external firewall policy assigned to the staging
+  IPv4 address on 2026-09-16. Incoming rules now permit only TCP 22, 80 and
+  443; default-denied 5432/8100 have no public listener. The unused default
+  TCP 8443/8447 rules were removed, and a fresh SSH connection and public
+  readiness check still passed. UFW is inactive; Docker-published ports must
+  not be assumed to obey UFW rules.
+- [ ] Restrict SSH to the operator network where practical, after confirming
+  a stable source address and a working provider-console recovery path. Review
+  any separately assigned public IPv6 address/policy before exposing IPv6.
 - [ ] Create `/opt/bookpile`, check out the exact approved commit and verify the
   worktree is clean.
 
