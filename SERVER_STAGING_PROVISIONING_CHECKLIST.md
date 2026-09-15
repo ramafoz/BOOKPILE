@@ -70,8 +70,12 @@ be an additional convenience only.
   region and credentials, and set mode `600`.
 - [x] Run `bookpile-private-objects probe` before application startup. It
   returned `{"ready": true, "verified_bytes": 1024}` against Dinahosting.
-- [ ] Run the exact non-empty inventory acceptance from
-  `SERVER_PRIVATE_OBJECT_STORAGE.md` after adding a synthetic private image.
+- [x] Run the exact non-empty inventory acceptance from
+  `SERVER_PRIVATE_OBJECT_STORAGE.md`. On 2026-09-16, the installed
+  `bookpile-private-objects audit` compared PostgreSQL with Dinahosting and
+  returned `exact: true`, `expected_count: 1`, `stored_count: 1`, and empty
+  missing/mismatched/orphaned lists. This used the existing staging object;
+  no new synthetic image was claimed.
 
 ## 4. Immutable backup in a separate EU failure domain
 
