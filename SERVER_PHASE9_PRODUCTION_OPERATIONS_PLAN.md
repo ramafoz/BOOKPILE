@@ -68,8 +68,9 @@ put/stat/read/list/delete, metadata integrity and anonymous-access rejection on
 2026-09-13. One private object also passed the real encrypted backup/restore
 drill. The 2026-09-15 deep staging reconciliation found one expected/stored
 object and zero missing, mismatched or orphaned objects. Dinahosting cannot
-issue a distinct read-only credential for the same bucket; staging documents
-temporary application-key reuse, which must be revisited before production;
+issue a distinct read-only credential for the same bucket. The operator
+accepted write-capable application-key reuse for the initial private beta on
+2026-09-16, with explicit residual risk and reassessment triggers;
 see `SERVER_PRIVATE_OBJECT_STORAGE.md`.
 
 - Add an adapter selected by configuration without changing object keys or API

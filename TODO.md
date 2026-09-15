@@ -892,7 +892,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     migration tooling are implemented. Dinahosting passed an isolated private-
     bucket round trip; the 2026-09-15 deep staging reconciliation found one
     expected/stored object and zero missing, mismatched or orphaned objects.
-    The distinct read-only backup-reader credential remains a production gap.
+    The operator accepted write-capable credential reuse for the initial
+    private beta on 2026-09-16, with the residual risk documented.
   - [x] 9C implementation/local gates: encrypted transactional PostgreSQL
     outbox, leased retrying worker, stale-action cancellation, deterministic
     message IDs and delivery-relative recovery windows. Provider delivery and

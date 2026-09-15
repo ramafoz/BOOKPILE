@@ -42,16 +42,19 @@ be an additional convenience only.
 - [x] Prove the provider signing region (`us-east-1`) and path-style addressing
   against `https://objects.dinaserver.com`; do not infer them from AWS defaults.
 - [x] Dinahosting support confirmed it cannot issue a distinct read-only
-  credential for the same bucket. Staging temporarily reuses the isolated
-  application credential for backup reads; this least-privilege gap must be
-  resolved or explicitly accepted before production.
+  credential for the same bucket. The operator explicitly accepted reuse of
+  the isolated application credential for backup reads for the initial private
+  beta on 2026-09-16; see the residual-risk decision in
+  `SERVER_PRIVATE_OBJECT_STORAGE.md`.
 - [x] Create an isolated application account/credential capped to 1 GB. Its
   effective put/stat/read/list/delete access and metadata preservation passed a
   1,024-byte round trip under the `staging` prefix on 2026-09-13; the probe
   object was deleted. An unauthenticated bucket request returned `403
   AccessDenied`.
-- [ ] Revisit a distinct list/get-only backup-reader credential before production;
-  Dinahosting cannot provide one for the current shared bucket.
+- [x] Decide the backup-reader credential gap for the initial private beta:
+  accept the provider's write-capable credential reuse, without claiming that
+  the backup process has provider-enforced read-only access. Reassess if the
+  provider adds scoped read-only keys or the threat model changes.
 - [x] Copy `server/.env.staging.example` to `.env.staging`, fill the endpoint,
   region and credentials, and set mode `600`.
 - [x] Run `bookpile-private-objects probe` before application startup. It

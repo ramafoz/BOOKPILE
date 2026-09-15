@@ -96,9 +96,30 @@ verified, then skipped. A partial target is never made authoritative merely
 because some copies succeeded. Unexpected target orphans fail final validation
 and are not deleted automatically.
 
+## Dinahosting backup-reader decision (2026-09-16)
+
+Dinahosting cannot issue a second list/get-only credential for the same active
+bucket. For the initial private beta, the operator accepts supplying the
+isolated application credential to the operational backup container for reads.
+The normal backup `create` path reads expected source objects without calling
+source write/delete methods; it stages backup artefacts locally and uploads
+them to the separate Backblaze repository. The PostgreSQL backup role has `SELECT`
+but no application-table `INSERT` or `DELETE`; the backup container is an
+on-demand non-root process with a read-only root filesystem and a separate
+environment file. These barriers limit normal execution and exposure but do
+**not** remove the credential's S3 write/delete capability. A compromised
+backup process or leaked key could still modify the active bucket; rotation
+would also affect the application using that key. Reassess this acceptance if
+Dinahosting adds same-bucket read-only keys, the workload/privilege boundary
+changes, or before expanding beyond the initial private beta. No backup
+credential or secret is recorded here.
+
 ## Current acceptance boundary
 
 The adapter, configuration, compensation contract, corruption tests, dry-run /
-apply migration and inventory reconciliation are implemented. Phase 9B is not
-formally closed until the chosen provider passes an isolated real-bucket round
-trip and the complete development inventory is migrated/reconciled in staging.
+apply migration and inventory reconciliation are implemented. Phase 9B staging
+acceptance is closed: Dinahosting passed the isolated real-bucket round trip,
+and the 2026-09-15 deep inventory matched the one expected/stored private
+object with no missing, mismatched or orphaned objects. A bulk development-
+inventory migration is not required for the empty/new staging account; its
+copy-and-verify tooling and local 869-object rehearsal passed separately.
