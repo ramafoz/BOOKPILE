@@ -36,9 +36,12 @@ be an additional convenience only.
   TCP 8443/8447 rules were removed, and a fresh SSH connection and public
   readiness check still passed. UFW is inactive; Docker-published ports must
   not be assumed to obey UFW rules.
-- [ ] Restrict SSH to the operator network where practical, after confirming
-  a stable source address and a working provider-console recovery path. Review
-  any separately assigned public IPv6 address/policy before exposing IPv6.
+- [x] Accept SSH access from any operator device rather than restrict port 22
+  to one source IP. On 2026-09-16, effective `sshd -T` output showed
+  `pubkeyauthentication yes`, `passwordauthentication no` and
+  `kbdinteractiveauthentication no`; the account/sudo password is not an SSH
+  login method. `ip -6 -brief address show scope global` returned no address.
+  Do not add an `AAAA` record or assign a public IPv6 address for this beta.
 - [ ] Create `/opt/bookpile`, check out the exact approved commit and verify the
   worktree is clean.
 

@@ -66,13 +66,14 @@ incoming TCP 22, 80 and 443 remain allowed after removing unused 8443/8447
 rules on 2026-09-16. Public readiness and a fresh SSH connection passed after
 the change. UFW remains inactive; Docker-published ports can bypass UFW, so do
 not treat it as a substitute for the external policy. No public 5432/8100
-listeners or allow rules were observed. SSH is still allowed from all sources;
-restrict it to the operator's protected network if a stable address and a
-provider-console recovery path are available. Review any separately assigned
-IPv6 address/policy before exposing IPv6. Use key-only SSH, provider MFA,
-unattended OS security updates with controlled reboot notification, and
-separate staging and production hosts/secrets. SSH source restriction remains
-a Phase 9F decision.
+listeners or allow rules were observed. The operator elected to keep TCP 22
+reachable from different devices. Effective `sshd -T` output on 2026-09-16
+showed public-key authentication enabled and both password and keyboard-
+interactive authentication disabled. No global IPv6 address was configured;
+the beta will not use IPv6 or an `AAAA` record. Preserve key-only SSH,
+provider MFA, unattended OS security updates with controlled reboot
+notification, and separate staging and production hosts/secrets. Recheck the
+IPv6 firewall if a public IPv6 address is ever assigned.
 
 Authentication limits are atomic PostgreSQL counters, so API workers share
 them. Stock Caddy has no distributed rate-limit module; do not silently replace
