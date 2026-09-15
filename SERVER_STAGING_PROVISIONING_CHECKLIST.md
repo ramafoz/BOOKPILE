@@ -94,7 +94,9 @@ be an additional convenience only.
 - [ ] Remove the obsolete Mailjet verification and DKIM DNS records after
   recording final DNS evidence; Mailjet is no longer an authorized sender.
 - [x] Select `ramafoz@gmail.com` as the private external operator mailbox.
-  Alert delivery and a controlled failure test are not yet configured.
+  The daily backup check received a success ping after a verified systemd
+  backup on 2026-09-15. A disposable check then sent a controlled failure
+  alert to this mailbox on 2026-09-16; the disposable check was removed.
 - [ ] Exercise password-reset and deletion-recovery messages, including an
   induced temporary SMTP failure and a terminal failure alert.
 
@@ -108,7 +110,8 @@ be an additional convenience only.
   hourly retention-maintenance, 15-minute lightweight-operations and daily
   deep-object-reconciliation systemd timers. Their 2026-09-15 oneshots
   succeeded; checks were `healthy: true` and the deep inventory was one exact
-  object. Exercise observable failure and external alert delivery later.
+  object. The external backup heartbeat and a disposable alert-delivery test
+  passed on 2026-09-15/16. Broader operations failure alerting remains open.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.
