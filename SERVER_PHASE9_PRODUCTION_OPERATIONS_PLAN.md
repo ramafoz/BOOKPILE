@@ -88,8 +88,10 @@ object exactly; interruption leaves the active reference valid.
 Status: encrypted transactional outbox, leased worker, bounded retries,
 delivery-relative recovery windows and local/CI gates complete. Authenticated
 implicit TLS through Dinahosting delivered and completed a real account
-verification on 2026-09-14. Password reset, deletion recovery, induced retry,
-terminal failure and operator alerting remain staging/9E gates; see
+verification on 2026-09-14. A real password-reset email, one-time link and
+new-password sign-in passed on 2026-09-16; the old password was rejected.
+Deletion recovery, induced retry, terminal failure and outbox operator alerting
+remain staging/9E gates; see
 `SERVER_EMAIL_OUTBOX.md`.
 
 - Replace request-blocking SMTP sends with a PostgreSQL outbox and a separate

@@ -97,8 +97,11 @@ be an additional convenience only.
   The daily backup check received a success ping after a verified systemd
   backup on 2026-09-15. A disposable check then sent a controlled failure
   alert to this mailbox on 2026-09-16; the disposable check was removed.
-- [ ] Exercise password-reset and deletion-recovery messages, including an
-  induced temporary SMTP failure and a terminal failure alert.
+- [x] Exercise a real password-reset message and one-time link for the verified
+  staging account on 2026-09-16. The operator confirmed the new password signs
+  in and the old password is rejected; no link, token or password was recorded.
+- [ ] Exercise deletion-recovery messages, an induced temporary SMTP failure
+  with retry, and a terminal outbox failure alert.
 
 ## 6. First deployment and evidence
 
