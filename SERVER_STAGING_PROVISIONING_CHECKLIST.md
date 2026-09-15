@@ -105,8 +105,13 @@ be an additional convenience only.
 - [x] Deliver a real verification message through the durable worker and
   complete the account-verification link. The worker recorded `SENT` on its
   first attempt on 2026-09-14.
-- [ ] Remove the obsolete Mailjet verification and DKIM DNS records after
-  recording final DNS evidence; Mailjet is no longer an authorized sender.
+- [x] Remove the obsolete Mailjet verification and DKIM TXT records from the
+  Dinahosting DNS panel. On 2026-09-16, the operator confirmed the root SPF
+  did not contain `spf.mailjet.com`, removed only `mailjet._0le9e27f` and
+  `mailjet._domainkey`, and reported that public staging readiness still
+  responded. MX, SPF, DMARC and `default._domainkey` were left intact. Public
+  DNS propagation was not independently timed; Mailjet is no longer an
+  authorized sender.
 - [x] Select `ramafoz@gmail.com` as the private external operator mailbox.
   The daily backup check received a success ping after a verified systemd
   backup on 2026-09-15. A disposable check then sent a controlled failure
