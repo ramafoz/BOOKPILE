@@ -41,15 +41,17 @@ be an additional convenience only.
   staging account; disable sharing and anonymous/public access.
 - [x] Prove the provider signing region (`us-east-1`) and path-style addressing
   against `https://objects.dinaserver.com`; do not infer them from AWS defaults.
-- [ ] Confirm whether Dinahosting can issue a distinct read-only credential for
-  the same bucket. Record a provider gap and stop before production acceptance
-  if application-key reuse would otherwise be required.
+- [x] Dinahosting support confirmed it cannot issue a distinct read-only
+  credential for the same bucket. Staging temporarily reuses the isolated
+  application credential for backup reads; this least-privilege gap must be
+  resolved or explicitly accepted before production.
 - [x] Create an isolated application account/credential capped to 1 GB. Its
   effective put/stat/read/list/delete access and metadata preservation passed a
   1,024-byte round trip under the `staging` prefix on 2026-09-13; the probe
   object was deleted. An unauthenticated bucket request returned `403
   AccessDenied`.
-- [ ] Create a distinct backup-reader credential restricted to list/get only.
+- [ ] Revisit a distinct list/get-only backup-reader credential before production;
+  Dinahosting cannot provide one for the current shared bucket.
 - [x] Copy `server/.env.staging.example` to `.env.staging`, fill the endpoint,
   region and credentials, and set mode `600`.
 - [x] Run `bookpile-private-objects probe` before application startup. It
@@ -72,10 +74,11 @@ be an additional convenience only.
   `delete-expired-lock-probe` deleted that exact version and verified it was
   absent. Targeting the version ID prevented a delete marker from producing a
   false pass.
-- [ ] Create a bucket-scoped application key with only the capabilities needed
-  by create/verify/prune/restore.
-- [ ] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
-  `600`, and keep its encryption key in an off-host password manager.
+- [x] Create the `bookpile-staging-backups-2026` private encrypted EU Central
+  bucket with Object Lock and a bucket-scoped `staging/` application key.
+  Exact capability minimization and final lifecycle expiry remain to be checked.
+- [x] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
+  `600`, and keep its encryption secret in an off-host password manager.
 
 ## 5. Transactional email and alerts
 
@@ -101,10 +104,14 @@ be an additional convenience only.
   migration, API/worker/web startup and public readiness. On 2026-09-14 the
   verified account created its first library at revision `ad9a16a`, proving the
   authenticated CSRF-protected write path.
-- [ ] Install the example systemd timers and prove each oneshot command both
-  succeeds normally and produces an observable failed unit.
-- [ ] Create and verify a backup, then restore it into a clean disposable
-  PostgreSQL database and empty disposable bucket.
+- [x] Install and manually prove the backup-daily and backup-freshness systemd
+  timers. On 2026-09-14 their oneshots returned success; backup freshness was
+  `healthy: true`. Exercise observable failure and external alert delivery later.
+- [x] Create and independently verify an encrypted backup with one private
+  object. Backup `276b0264-4aad-43ff-b9fc-591984cbbe77` restored 36 tables
+  and one exact object into a disposable PostgreSQL database and empty local
+  volume on 2026-09-14. The disposable container, volumes and network were
+  removed. A second verified backup ran successfully through systemd.
 - [ ] Record RPO/RTO, CPU, peak memory, free disk, request/import/backup/restore
   durations and every provider gap in the private staging evidence record.
 - [ ] Destroy disposable acceptance resources and rotate any credentials used

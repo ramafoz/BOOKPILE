@@ -899,8 +899,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     authenticated chunk encryption, separate S3 repository, completion marker,
     29-day compliance retention, guarded restore and local 36-table/869-object
     recovery rehearsal are implemented. Backblaze EU passed exact-version
-    COMPLIANCE enforcement and post-expiry deletion. Close after final lifecycle
-    and staging restore acceptance.
+    COMPLIANCE enforcement and post-expiry deletion. On 2026-09-14, staging
+    created/verified a real database-plus-one-object backup, restored 36 tables
+    and that object into disposable targets, and proved the daily systemd job.
+    Close after final lifecycle expiry and remaining provider acceptance.
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
@@ -909,9 +911,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
-    purchased; HTTPS deployment, active S3, transactional verification email
-    and an authenticated library write pass in staging. Scheduled operations,
-    complete provider acceptance and measured recovery remain.
+    purchased; HTTPS deployment, active S3, transactional verification email,
+    authenticated library write, verified off-site backup, disposable restore
+    and backup/freshness timers pass in staging. External alerts, remaining
+    scheduled operations, complete provider acceptance and measured recovery
+    remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -933,7 +937,18 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Add a restricted platform-administration panel for account invitations,
   accounts, abuse/security operations, and service health. Platform operators
   must remain separate from library `OWNER`/`VIEWER` membership and receive no
-  implicit private-library access.
+  implicit private-library access. Design the first friendly frontend panel for
+  the explicitly enrolled operator (planned `ramafoz`), with independent
+  `SYSTEM_ADMIN` authentication, step-up/MFA for destructive actions, immutable
+  audit, aggregate-only monitoring and no host/Docker or private-catalogue
+  browsing authority. Do not infer privilege from a username; the current
+  staging login is `ramafoz_`.
+- [ ] Polish transactional user emails: design a coherent BOOKPILE identity,
+  accessible responsive HTML plus complete plain-text alternatives, safe
+  action-link presentation, expiry/support copy and rendering/delivery tests
+  across verification, reset, invitations and deletion recovery.
+- [ ] Add a distinctive BOOKPILE browser-tab icon (favicon), including SVG and
+  small PNG variants, dark/light appearance and browser-cache verification.
 - [ ] Complete provider-bound production security/operations acceptance:
   firewall and volumetric controls, paging delivery, disk/capacity thresholds
   and external error reporting. Upload validation, shared PostgreSQL rate

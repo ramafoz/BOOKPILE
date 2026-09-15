@@ -65,8 +65,11 @@ The remaining clean-host rehearsal belongs to 9F. It does not block 9B.
 Status: provider-neutral implementation and simulated corruption/migration
 gates complete. A private Dinahosting staging bucket passed authenticated
 put/stat/read/list/delete, metadata integrity and anonymous-access rejection on
-2026-09-13. Exact staging inventory reconciliation and a distinct read-only
-operational credential remain open; see `SERVER_PRIVATE_OBJECT_STORAGE.md`.
+2026-09-13. One private object also passed the real encrypted backup/restore
+drill. Exact staging inventory reconciliation remains open. Dinahosting cannot
+issue a distinct read-only credential for the same bucket; staging documents
+temporary application-key reuse, which must be revisited before production;
+see `SERVER_PRIVATE_OBJECT_STORAGE.md`.
 
 - Add an adapter selected by configuration without changing object keys or API
   URLs.
@@ -103,8 +106,11 @@ the queued email; retries do not create uncontrolled duplicates.
 Status: provider-neutral implementation and a complete local PostgreSQL 17/S3
 recovery rehearsal pass. Backblaze B2 EU Central accepted a versioned
 COMPLIANCE probe, rejected premature deletion and allowed verified deletion of
-that exact version after expiry. Final credentials/lifecycle and the Spanish
-staging disaster drill remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
+that exact version after expiry. On 2026-09-14, the final bucket/key created
+and independently verified a real encrypted database-plus-object backup,
+restored 36 tables and the object into isolated disposable targets, and a
+systemd oneshot created a second verified backup. Final lifecycle expiry,
+alerting and measured RPO/RTO remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.
@@ -143,8 +149,9 @@ manages `bookpile.gal`, active private objects and transactional email;
 `staging.bookpile.gal` runs on the IONOS rehearsal VPS. Provider-specific
 environment templates, purchase safeguards and the remaining evidence sequence
 are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Initial provisioning and the
-first authenticated smoke path have passed; automated operations and measured
-disaster recovery remain open.
+first authenticated smoke path, encrypted off-site backup, isolated restore and
+backup/freshness scheduling have passed. Remaining operations, external
+alerting and measured disaster recovery remain open.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

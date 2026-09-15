@@ -157,5 +157,23 @@ credentials, and securely delete the restore environment file.
 - The disposable restore database, bucket/container and local staging were
   removed after the rehearsal; source data was read-only.
 
-Real-provider Object Lock/lifecycle behaviour and the Spanish staging disaster
-drill remain Phase 9F gates.
+## Spanish staging recovery evidence (2026-09-14)
+
+- Final bucket: `bookpile-staging-backups-2026`, private, encrypted and
+  Object-Locked in EU Central; final 29-day lifecycle expiry is not yet proven.
+- Backup `276b0264-4aad-43ff-b9fc-591984cbbe77` contained a 119,314-byte
+  PostgreSQL custom dump and one private Dinahosting S3 object. Create and an
+  independent `verify` returned `verified: true`; `status` was healthy.
+- An isolated PostgreSQL 17 database and empty local object volume restored
+  36 tables at `0021_email_outbox` and the exact object. The restore verified
+  table counts and object inventory; disposable targets were removed.
+- Systemd created a second verified snapshot
+  `0598e4bc-5433-46f5-95b9-44422e9733ea`; daily and 15-minute freshness
+  timers are enabled. Failure/paging tests remain open.
+- PostgreSQL backup login has `SELECT` but no `INSERT`/`DELETE` on the
+  application table. Dinahosting could not supply a separate read-only key
+  for the same active bucket; staging temporarily reuses its isolated
+  application credential as a documented least-privilege gap.
+
+Final lifecycle expiry, external alerting and measured RPO/RTO remain Phase 9F
+gates; neither the apex domain nor production data has been switched.
