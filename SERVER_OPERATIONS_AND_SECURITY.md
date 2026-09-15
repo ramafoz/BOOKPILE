@@ -27,6 +27,27 @@ Install copies without the `.example` suffix, correct `WorkingDirectory`, run
 chosen paging route. Monitoring evaluates exit status; a verified backup older
 than 25 hours is unhealthy.
 
+### External backup dead-man switch (staging)
+
+The external check `BOOKPILE staging - backup diario` expects the daily
+02:17 UTC backup with one hour of grace and sends email to the independent
+operator mailbox. The Healthchecks ping URL is a bearer secret: keep it only
+in `/etc/bookpile/healthchecks-backup.curl`, root-owned, mode `600`; never put
+it in a unit, command argument, Git, logs or chat. The reproducible templates
+are `server/deploy/healthchecks-backup.curl.example` and
+`server/deploy/systemd/bookpile-backup-healthchecks.conf.example`.
+
+Install the curl config and the latter as a systemd drop-in named
+`/etc/systemd/system/bookpile-backup.service.d/10-healthchecks.conf`, then
+`systemctl daemon-reload` and `systemd-analyze verify bookpile-backup.service`.
+The drop-in sends an empty HTTPS GET only after a successful backup. Its
+`ExecStartPost=-` deliberately ignores a ping/network failure so a verified
+snapshot is not reclassified as failed. A missing ping, failed job, stopped
+timer or lost host causes Healthchecks to alert after grace. Test first with
+the protected curl configuration, then with a real oneshot; prove an external
+email notification using a disposable check or Healthchecks' notification test
+without corrupting a real backup. This is not website-uptime monitoring.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access

@@ -1,0 +1,4 @@
+[Service]
+# A failed ping must not reclassify a successful encrypted backup as failed.
+# Missing success pings still cause an external alert after Healthchecks grace.
+ExecStartPost=-/usr/bin/curl -q --config /etc/bookpile/healthchecks-backup.curl
