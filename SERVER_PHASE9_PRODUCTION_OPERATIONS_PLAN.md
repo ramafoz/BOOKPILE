@@ -66,7 +66,8 @@ Status: provider-neutral implementation and simulated corruption/migration
 gates complete. A private Dinahosting staging bucket passed authenticated
 put/stat/read/list/delete, metadata integrity and anonymous-access rejection on
 2026-09-13. One private object also passed the real encrypted backup/restore
-drill. Exact staging inventory reconciliation remains open. Dinahosting cannot
+drill. The 2026-09-15 deep staging reconciliation found one expected/stored
+object and zero missing, mismatched or orphaned objects. Dinahosting cannot
 issue a distinct read-only credential for the same bucket; staging documents
 temporary application-key reuse, which must be revisited before production;
 see `SERVER_PRIVATE_OBJECT_STORAGE.md`.

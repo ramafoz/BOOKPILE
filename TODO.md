@@ -887,10 +887,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     hosts, secure headers, request IDs, privacy-safe logs, health boundaries,
     pooling, pinned non-root images, private-network Compose/Caddy, CI and the
     rehearsal runbook. The clean staging-host proof remains in 9F.
-  - [ ] 9B private S3-compatible storage: adapter, strict configuration,
+  - [x] 9B private S3-compatible storage: adapter, strict configuration,
     verified/chunked I/O, inventory audit and restartable copy-without-switching
-    migration tooling are implemented. Close after the chosen provider passes
-    an isolated private-bucket round trip and staging reconciliation.
+    migration tooling are implemented. Dinahosting passed an isolated private-
+    bucket round trip; the 2026-09-15 deep staging reconciliation found one
+    expected/stored object and zero missing, mismatched or orphaned objects.
+    The distinct read-only backup-reader credential remains a production gap.
   - [x] 9C implementation/local gates: encrypted transactional PostgreSQL
     outbox, leased retrying worker, stale-action cancellation, deterministic
     message IDs and delivery-relative recovery windows. Provider delivery and
@@ -913,9 +915,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
     purchased; HTTPS deployment, active S3, transactional verification email,
     authenticated library write, verified off-site backup, disposable restore
-    and backup/freshness timers pass in staging. External alerts, remaining
-    scheduled operations, complete provider acceptance and measured recovery
-    remain.
+    and backup/freshness timers pass in staging. Hourly maintenance, 15-minute
+    operations checks, daily deep reconciliation and an external backup alert
+    delivery test also passed. Broader operations/outbox alerting, complete
+    provider acceptance and measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
