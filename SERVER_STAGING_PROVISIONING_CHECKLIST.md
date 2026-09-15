@@ -7,23 +7,26 @@ issues or chat.
 
 ## 1. Purchase and account boundaries
 
-- [ ] Recheck the regular (not promotional) IONOS VPS M+ monthly price, setup
-  fee, minimum term, cancellation process and Spain location before purchase.
+- [x] Confirm the operator-reported regular IONOS VPS charge after promotions:
+  EUR 10.89 per month including VAT, confirmed on 2026-09-16.
+- [ ] Record any setup fee, minimum term, cancellation process and Spain
+  location for the purchased IONOS VPS in the private operator record.
 - [ ] Choose monthly billing for the first rehearsal where offered.
 - [x] Verify MFA is active on the IONOS, Backblaze and Dinahosting operator
   accounts. The operator confirmed all three on 2026-09-16; the original
   activation dates relative to service-credential creation were not checked.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
   record.
-- [x] Calculate the operator-reported current monthly equivalent on
+- [x] Calculate the operator-reported regular monthly equivalent on
   2026-09-16: IONOS VPS EUR 10.89, Dinahosting S3 EUR 1.30,
   domain/WhoIs EUR 39.49 per year (EUR 3.29 per month), mail EUR 30.00
   per year (EUR 2.50 per month), and Backblaze B2 currently EUR 0.
   Subtotal EUR 17.98 per month, EUR 7.02 below the EUR 25 target.
   [Backblaze's first 10 GB account-wide are free](https://www.backblaze.com/cloud-storage/transaction-pricing);
-  this is a current estimate, not a fixed future backup bill. Confirm
-  non-promotional renewal prices, VAT treatment and any usage charges under
-  the separate contract review.
+  The operator confirmed on 2026-09-16 that the quoted provider charges are
+  post-promotion and include VAT; current promotional bills are lower. B2
+  remains usage-based, so this is not a fixed future backup bill. Recheck
+  usage charges as retained data grows.
 
 Recommended initial VPS: 4 vCPU, 4 GB RAM, 120 GB NVMe, current Ubuntu LTS,
 Spanish region. Do not purchase Plesk, antivirus bundles or a provider backup as
