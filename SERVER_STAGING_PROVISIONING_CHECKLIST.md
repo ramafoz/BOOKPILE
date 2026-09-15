@@ -93,8 +93,8 @@ be an additional convenience only.
   first attempt on 2026-09-14.
 - [ ] Remove the obsolete Mailjet verification and DKIM DNS records after
   recording final DNS evidence; Mailjet is no longer an authorized sender.
-- [ ] Select a private operator mailbox for TLS notices, failed systemd units,
-  failed outbox delivery and backup freshness.
+- [x] Select `ramafoz@gmail.com` as the private external operator mailbox.
+  Alert delivery and a controlled failure test are not yet configured.
 - [ ] Exercise password-reset and deletion-recovery messages, including an
   induced temporary SMTP failure and a terminal failure alert.
 
@@ -104,9 +104,14 @@ be an additional convenience only.
   migration, API/worker/web startup and public readiness. On 2026-09-14 the
   verified account created its first library at revision `ad9a16a`, proving the
   authenticated CSRF-protected write path.
-- [x] Install and manually prove the backup-daily and backup-freshness systemd
-  timers. On 2026-09-14 their oneshots returned success; backup freshness was
-  `healthy: true`. Exercise observable failure and external alert delivery later.
+- [x] Install and manually prove the backup-daily, 15-minute backup-freshness,
+  hourly retention-maintenance, 15-minute lightweight-operations and daily
+  deep-object-reconciliation systemd timers. Their 2026-09-15 oneshots
+  succeeded; checks were `healthy: true` and the deep inventory was one exact
+  object. Exercise observable failure and external alert delivery later.
+- [x] Prove unattended daily execution: systemd created and verified backup
+  `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
+  including one private object.
 - [x] Create and independently verify an encrypted backup with one private
   object. Backup `276b0264-4aad-43ff-b9fc-591984cbbe77` restored 36 tables
   and one exact object into a disposable PostgreSQL database and empty local
