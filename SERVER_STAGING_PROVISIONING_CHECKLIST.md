@@ -10,8 +10,9 @@ issues or chat.
 - [ ] Recheck the regular (not promotional) IONOS VPS M+ monthly price, setup
   fee, minimum term, cancellation process and Spain location before purchase.
 - [ ] Choose monthly billing for the first rehearsal where offered.
-- [ ] Enable MFA on IONOS, Backblaze and Dinahosting before
-  creating service credentials.
+- [x] Verify MFA is active on the IONOS, Backblaze and Dinahosting operator
+  accounts. The operator confirmed all three on 2026-09-16; the original
+  activation dates relative to service-credential creation were not checked.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
   record.
 - [ ] Confirm the recurring total remains below the agreed ceiling.
