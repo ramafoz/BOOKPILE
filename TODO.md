@@ -911,8 +911,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
     SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall, external backup
     alert delivery and the 15-minute aggregate operations/outbox heartbeat
-    plus daily deep private-object reconciliation passed in staging; close
-    after capacity and external error-reporting acceptance.
+    plus daily deep private-object reconciliation passed in staging. The
+    15-minute host-capacity thresholds and external heartbeat also passed;
+    close after external application error-reporting acceptance.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
@@ -921,8 +922,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     and backup/freshness timers pass in staging. Hourly maintenance, 15-minute
     operations checks, daily deep reconciliation, external backup alert
     delivery, the operations/outbox heartbeat and daily deep-check heartbeat
-    also passed. Capacity/error alerting, complete provider acceptance and
-    measured recovery remain.
+    also passed. The 15-minute disk, inode, memory and load-capacity check and
+    external heartbeat passed as well. Application error reporting, complete
+    provider acceptance and measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -957,8 +959,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Add a distinctive BOOKPILE browser-tab icon (favicon), including SVG and
   small PNG variants, dark/light appearance and browser-cache verification.
 - [ ] Complete provider-bound production security/operations acceptance:
-  firewall and volumetric controls, paging delivery, disk/capacity thresholds
-  and external error reporting. Upload validation, shared PostgreSQL rate
+  firewall and volumetric controls, paging delivery and external error
+  reporting. Host disk/inode/memory/load thresholds and their external
+  heartbeat are accepted. Upload validation, shared PostgreSQL rate
   limits, stale-bucket pruning, CSP/HSTS, asynchronous email, aggregate
   monitoring and privacy-safe request correlation are implemented. Stock Caddy
   deliberately has no misleading per-process rate limiter.

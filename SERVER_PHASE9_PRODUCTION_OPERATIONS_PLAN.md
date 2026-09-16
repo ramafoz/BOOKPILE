@@ -132,9 +132,10 @@ Status: provider-neutral edge limits, aggregate health commands, retention
 maintenance, systemd schedules, privacy-safe email events, dependency update
 automation and the administration boundary are implemented. The active IONOS
 external IPv4 firewall policy now allows only incoming TCP 22/80/443, and an
-external backup alert reached the operator. Broader operations/outbox alerts,
-external error reporting and capacity thresholds remain open; see
-`SERVER_OPERATIONS_AND_SECURITY.md`.
+external backup alert reached the operator. External heartbeats now cover the
+15-minute aggregate operations/outbox check, daily private-object reconciliation
+and 15-minute host-capacity thresholds. External application error reporting
+remains open; see `SERVER_OPERATIONS_AND_SECURITY.md`.
 
 - Finalize automatic HTTPS, firewall policy, proxy rate limits, body/time
   limits, dependency scanning and security update policy.

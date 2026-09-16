@@ -156,7 +156,10 @@ be an additional convenience only.
   was then configured for 04:05 UTC with 2h15 grace. Its protected HTTP probe,
   systemd validation and real oneshot passed on 2026-09-16; the inventory was
   one expected/stored object with zero missing, mismatched or orphaned objects.
-  Capacity and external error reporting remain open.
+  A fourth external check now receives the host-capacity service heartbeat every
+  15 minutes. Its root-disk, inode, available-memory and 15-minute-load checks,
+  protected HTTP probe, systemd validation, real oneshot and timer activation
+  passed on 2026-09-16. External application error reporting remains open.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.
