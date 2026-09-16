@@ -20,6 +20,10 @@ from .api.routes.profiles import router as profiles_router
 from .services.storage_domain import InsufficientSharedCapacity
 from .api.dependencies import PrivateObjectStorageDependency, SessionDependency
 from .config import get_settings
+from .error_reporting import (
+    capture_unhandled_request_error,
+    initialize_error_reporting,
+)
 
 
 request_logger = logging.getLogger("bookpile.requests")
@@ -28,6 +32,7 @@ error_logger = logging.getLogger("bookpile.errors")
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    initialize_error_reporting(settings)
     app = FastAPI(
         title="BOOKPILE Server",
         version="0.1.0-dev",
@@ -69,6 +74,7 @@ def create_app() -> FastAPI:
         except Exception as exc:
             if not settings.is_hosted:
                 raise
+            capture_unhandled_request_error(exc, request_id, settings)
             error_logger.error(
                 json.dumps(
                     {

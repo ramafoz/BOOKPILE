@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(default=5, ge=1, le=50)
     database_max_overflow: int = Field(default=5, ge=0, le=100)
     database_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
+    error_reporting_dsn: SecretStr | None = None
     session_cookie_name: str = "bookpile_session"
     csrf_cookie_name: str = "bookpile_csrf"
     session_cookie_secure: bool = False
@@ -161,6 +162,12 @@ class Settings(BaseSettings):
                 raise ValueError("Hosted SMTP delivery requires authentication")
             if self.email_delivery_mode != "outbox":
                 raise ValueError("Hosted email delivery requires the durable outbox")
+        if self.error_reporting_dsn:
+            reporting_dsn = urlsplit(
+                self.error_reporting_dsn.get_secret_value()
+            )
+            if reporting_dsn.scheme != "https" or not reporting_dsn.hostname:
+                raise ValueError("The error-reporting DSN must use HTTPS")
         if self.private_object_backend == "s3":
             required = {
                 "HTTPS endpoint": self.private_object_s3_endpoint_url,

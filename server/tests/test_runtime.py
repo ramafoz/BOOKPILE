@@ -9,6 +9,7 @@ from bookpile_server.api.dependencies import get_private_object_storage
 from bookpile_server.config import Settings
 from bookpile_server.database import get_session
 from bookpile_server import main
+from bookpile_server import error_reporting
 
 
 class UnavailableObjects:
@@ -113,6 +114,14 @@ def test_hosted_app_hides_docs_and_adds_transport_security(monkeypatch) -> None:
 def test_hosted_unhandled_error_is_correlatable_without_leaking_message(
     monkeypatch, caplog
 ) -> None:
+    captured = []
+    monkeypatch.setattr(
+        main,
+        "capture_unhandled_request_error",
+        lambda exc, request_id, settings: captured.append(
+            (exc, request_id, settings.deployment_revision)
+        ),
+    )
     monkeypatch.setattr(main, "get_settings", lambda: _hosted_settings())
     app = main.create_app()
 
@@ -134,6 +143,71 @@ def test_hosted_unhandled_error_is_correlatable_without_leaking_message(
     assert response.headers["cache-control"] == "no-store"
     assert "RuntimeError" in caplog.text
     assert "private-value-must-not-appear" not in caplog.text
+    assert len(captured) == 1
+    assert isinstance(captured[0][0], RuntimeError)
+    assert captured[0][1] == response.headers["x-request-id"]
+    assert captured[0][2] == "git-1234567"
+
+
+def test_error_reporting_scrubber_keeps_stack_but_removes_private_context() -> None:
+    event = {
+        "request": {"url": "https://example.test/private?token=secret"},
+        "user": {"email": "reader@example.test"},
+        "breadcrumbs": {"values": [{"message": "private title"}]},
+        "contexts": {"response": {"body": "private body"}},
+        "extra": {"library": "private library"},
+        "message": "private message",
+        "server_name": "private-hostname",
+        "tags": {
+            "bookpile.correlation_id": "request-123",
+            "untrusted": "private tag",
+        },
+        "exception": {
+            "values": [
+                {
+                    "type": "RuntimeError",
+                    "value": "private exception value",
+                    "stacktrace": {
+                        "frames": [{"filename": "bookpile_server/main.py", "lineno": 1}]
+                    },
+                }
+            ]
+        },
+    }
+
+    scrubbed = error_reporting.scrub_error_event(event, {})
+    serialized = json.dumps(scrubbed)
+
+    assert scrubbed["exception"]["values"][0]["type"] == "RuntimeError"
+    assert scrubbed["exception"]["values"][0]["value"] == "[redacted]"
+    assert "stacktrace" in scrubbed["exception"]["values"][0]
+    assert scrubbed["tags"] == {"bookpile.correlation_id": "request-123"}
+    assert scrubbed["transaction"] == "unhandled_request"
+    assert "private" not in serialized
+    assert "secret" not in serialized
+
+
+def test_error_reporting_initialization_disables_automatic_data_collection(
+    monkeypatch,
+) -> None:
+    options = {}
+    monkeypatch.setattr(
+        error_reporting.sentry_sdk,
+        "init",
+        lambda **kwargs: options.update(kwargs),
+    )
+    monkeypatch.setattr(error_reporting.sentry_sdk, "is_initialized", lambda: True)
+    settings = _hosted_settings(
+        error_reporting_dsn="https://public-key@errors.example.test/123"
+    )
+
+    assert error_reporting.initialize_error_reporting(settings)
+    assert options["default_integrations"] is False
+    assert options["auto_enabling_integrations"] is False
+    assert options["traces_sample_rate"] == 0.0
+    assert options["send_default_pii"] is False
+    assert options["include_local_variables"] is False
+    assert options["max_request_body_size"] == "never"
 
 
 @pytest.mark.parametrize("changes", [
@@ -146,6 +220,7 @@ def test_hosted_unhandled_error_is_correlatable_without_leaking_message(
     {"deployment_revision": "development"},
     {"private_object_backend": "filesystem"},
     {"private_object_s3_endpoint_url": "http://objects.example"},
+    {"error_reporting_dsn": "http://errors.example.test/123"},
 ])
 def test_hosted_configuration_rejects_unsafe_values(changes) -> None:
     with pytest.raises(ValueError):

@@ -95,6 +95,40 @@ service's `10-healthchecks.conf` drop-in. Disk includes Docker layers/build
 cache because Docker is stored on the root filesystem. Zero swap is reported
 as evidence but is not itself unhealthy; decide swap separately from alerting.
 
+### External server error reporting
+
+BOOKPILE uses a separate Sentry project in the EU region for unexpected API
+and email-worker exceptions. Configure only
+`BOOKPILE_SERVER_ERROR_REPORTING_DSN`; keep the DSN in the protected runtime
+environment and never commit or paste it into logs or chat. The integration is
+deliberately manual: Sentry's default and auto-enabled integrations, tracing,
+breadcrumbs, request bodies, local variables and default PII collection are
+disabled.
+
+Every event passes through an application-owned final scrubber. It removes the
+request, user, breadcrumbs, contexts, extras, log message, hostname and thread
+fields; replaces exception messages with `[redacted]`; and discards every tag
+except the `bookpile.*` correlation, component and deployment-revision tags.
+The technical exception type and stack frames remain. This prevents library
+names, object keys, email addresses, URLs, queries, cookies, tokens and database
+values from becoming observability data.
+
+After deploying a configured image, send one controlled event without causing
+a public failure:
+
+```sh
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml run --rm --no-deps api \
+  bookpile-error-reporting
+```
+
+The command must return `configured: true`, `sent: true` and an event ID. In
+Sentry, confirm the matching event uses the expected environment/release and
+contains only redacted exception text plus the three allowed BOOKPILE tags.
+Exercise the email notification route from that project as well. Browser-side
+telemetry is intentionally outside this server operations boundary; adding it
+later requires a separate CSP, source-map, consent and privacy review.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access
