@@ -1,0 +1,10 @@
+# Copy to /etc/bookpile/healthchecks-capacity.curl with owner root:root and mode 600.
+# Replace only the URL. Treat the UUID in it as a secret; do not commit the filled file.
+url = "https://hc-ping.com/replace-with-private-ping-uuid"
+proto = "=https"
+connect-timeout = 5
+max-time = 10
+retry = 2
+fail
+silent
+output = "/dev/null"

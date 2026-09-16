@@ -1,0 +1,4 @@
+[Service]
+# Send success only after all host capacity thresholds pass.
+# A failed ping must not reclassify a healthy BOOKPILE check as failed.
+ExecStartPost=-/usr/bin/curl -q --config /etc/bookpile/healthchecks-capacity.curl

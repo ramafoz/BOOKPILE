@@ -76,6 +76,25 @@ two-hour unit timeout as the private inventory grows. Its protected config is
 `10-healthchecks.conf` drop-in. It reports success only after database/outbox/
 deletion checks and the complete private-object count/hash reconciliation pass.
 
+### Host capacity thresholds
+
+Install `server/deploy/check-host-capacity.sh` as
+`/usr/local/sbin/bookpile-host-capacity-check` mode `755`, and install the
+matching service/timer examples without the `.example` suffix. The lightweight
+host check runs at minutes 7, 22, 37 and 52 so it does not overlap the aggregate
+application check. It fails when root-disk or inode use reaches 85%, available
+memory falls below 512 MiB, or 15-minute load exceeds twice the online CPU
+count. Environment overrides exist for every threshold. Output is aggregate
+JSON only; it contains no paths below `/`, process names or user data.
+
+The external `BOOKPILE staging - capacidad del VPS` Healthchecks check uses the
+same `*:7/15` UTC schedule with ten minutes of grace. Keep its bearer URL in
+`/etc/bookpile/healthchecks-capacity.curl`, root-owned and mode `600`, and
+install `bookpile-host-capacity-healthchecks.conf.example` as the capacity
+service's `10-healthchecks.conf` drop-in. Disk includes Docker layers/build
+cache because Docker is stored on the root filesystem. Zero swap is reported
+as evidence but is not itself unhealthy; decide swap separately from alerting.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access
