@@ -103,7 +103,8 @@ and email-worker exceptions. Configure only
 environment and never commit or paste it into logs or chat. The integration is
 deliberately manual: Sentry's default and auto-enabled integrations, tracing,
 breadcrumbs, request bodies, local variables and default PII collection are
-disabled.
+disabled. Source-code context is also disabled so stack frames cannot transmit
+nearby source literals.
 
 Every event passes through an application-owned final scrubber. It removes the
 request, user, breadcrumbs, contexts, extras, log message, hostname and thread

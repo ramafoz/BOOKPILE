@@ -207,6 +207,7 @@ def test_error_reporting_initialization_disables_automatic_data_collection(
     assert options["traces_sample_rate"] == 0.0
     assert options["send_default_pii"] is False
     assert options["include_local_variables"] is False
+    assert options["include_source_context"] is False
     assert options["max_request_body_size"] == "never"
 
 

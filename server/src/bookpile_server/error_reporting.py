@@ -56,6 +56,7 @@ def initialize_error_reporting(settings: Settings) -> bool:
         send_default_pii=False,
         max_breadcrumbs=0,
         include_local_variables=False,
+        include_source_context=False,
         max_request_body_size="never",
         before_send=scrub_error_event,
     )
