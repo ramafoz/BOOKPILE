@@ -909,18 +909,20 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
-    SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall and an external
-    backup alert passed in staging; close after broader alert, capacity and
-    external error-reporting acceptance.
+    SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall, external backup
+    alert delivery and the 15-minute aggregate operations/outbox heartbeat
+    passed in staging; close after deep-check alerting, capacity and external
+    error-reporting acceptance.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
     purchased; HTTPS deployment, active S3, transactional verification email,
     authenticated library write, verified off-site backup, disposable restore
     and backup/freshness timers pass in staging. Hourly maintenance, 15-minute
-    operations checks, daily deep reconciliation and an external backup alert
-    delivery test also passed. Broader operations/outbox alerting, complete
-    provider acceptance and measured recovery remain.
+    operations checks, daily deep reconciliation, external backup alert
+    delivery and the operations/outbox heartbeat also passed. Deep-check and
+    capacity/error alerting, complete provider acceptance and measured recovery
+    remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data

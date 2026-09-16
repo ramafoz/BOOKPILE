@@ -48,6 +48,25 @@ the protected curl configuration, then with a real oneshot; prove an external
 email notification using a disposable check or Healthchecks' notification test
 without corrupting a real backup. This is not website-uptime monitoring.
 
+### External lightweight-operations dead-man switch (staging)
+
+The external check `BOOKPILE staging - operaciones` follows the staging
+`*:0/15` systemd timer in UTC with ten minutes of grace and uses the same
+verified operator-email integration. Keep its distinct bearer URL only in
+`/etc/bookpile/healthchecks-operations.curl`, root-owned and mode `600`.
+Reproducible examples are
+`server/deploy/healthchecks-operations.curl.example` and
+`server/deploy/systemd/bookpile-operations-check-healthchecks.conf.example`.
+Install the latter as
+`/etc/systemd/system/bookpile-operations-check.service.d/10-healthchecks.conf`.
+
+The drop-in sends success only after `bookpile-maintenance check` exits zero.
+An unhealthy database, overdue deletion cleanup, overdue/failed email, stopped
+timer or lost host therefore produces no ping and becomes externally visible
+after the grace period. As with backup monitoring, `ExecStartPost=-` prevents
+a Healthchecks outage from changing BOOKPILE's own check result. Validate every
+manual edit with `systemd-analyze verify` before relying on the monitor.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access

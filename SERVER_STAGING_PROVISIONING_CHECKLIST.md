@@ -148,7 +148,12 @@ be an additional convenience only.
   deep-object-reconciliation systemd timers. Their 2026-09-15 oneshots
   succeeded; checks were `healthy: true` and the deep inventory was one exact
   object. The external backup heartbeat and a disposable alert-delivery test
-  passed on 2026-09-15/16. Broader operations failure alerting remains open.
+  passed on 2026-09-15/16. On 2026-09-16, a separate external 15-minute
+  operations heartbeat was configured with ten minutes of grace. Its protected
+  curl configuration returned HTTP 200, Healthchecks became green, systemd
+  validation passed, and a real healthy oneshot exited zero through the
+  installed success-only drop-in. Daily deep-check alerting, capacity and
+  external error reporting remain open.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.
