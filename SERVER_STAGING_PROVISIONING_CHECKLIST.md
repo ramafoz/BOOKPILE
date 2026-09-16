@@ -159,7 +159,10 @@ be an additional convenience only.
   A fourth external check now receives the host-capacity service heartbeat every
   15 minutes. Its root-disk, inode, available-memory and 15-minute-load checks,
   protected HTTP probe, systemd validation, real oneshot and timer activation
-  passed on 2026-09-16. External application error reporting remains open.
+  passed on 2026-09-16. On 2026-09-17, an EU-hosted Sentry project received a
+  controlled error at revision `bc1ac4b` and delivered the operator email.
+  Inspection confirmed redacted exception text, no source context, no user or
+  request data, and only the approved BOOKPILE correlation tags.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.

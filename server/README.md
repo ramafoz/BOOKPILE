@@ -136,7 +136,7 @@ Phase 9E adds bounded edge behaviour, hourly lifecycle maintenance, aggregate
 light/deep integrity checks, backup-freshness monitoring, privacy-safe failure
 correlation, example systemd schedules and an explicit separation between host
 operators and library membership. Provider firewall, paging, capacity and
-external error-reporting acceptance remain in staging. See
+privacy-scrubbed external error reporting are accepted in staging. See
 `SERVER_OPERATIONS_AND_SECURITY.md`.
 
 ## Development setup

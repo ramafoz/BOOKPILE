@@ -912,8 +912,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall, external backup
     alert delivery and the 15-minute aggregate operations/outbox heartbeat
     plus daily deep private-object reconciliation passed in staging. The
-    15-minute host-capacity thresholds and external heartbeat also passed;
-    close after external application error-reporting acceptance.
+    15-minute host-capacity thresholds and external heartbeat also passed. On
+    2026-09-17, the EU-hosted Sentry error route captured a controlled API
+    probe, delivered its email alert and exposed only redacted stack metadata,
+    revision, component and correlation ID. Phase 9E is accepted.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
@@ -923,8 +925,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     operations checks, daily deep reconciliation, external backup alert
     delivery, the operations/outbox heartbeat and daily deep-check heartbeat
     also passed. The 15-minute disk, inode, memory and load-capacity check and
-    external heartbeat passed as well. Application error reporting, complete
-    provider acceptance and measured recovery remain.
+    external heartbeat passed as well. Privacy-scrubbed server error reporting
+    and its paging route passed on 2026-09-17. Complete provider acceptance and
+    measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -958,10 +961,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   across verification, reset, invitations and deletion recovery.
 - [ ] Add a distinctive BOOKPILE browser-tab icon (favicon), including SVG and
   small PNG variants, dark/light appearance and browser-cache verification.
-- [ ] Complete provider-bound production security/operations acceptance:
-  firewall and volumetric controls, paging delivery and external error
-  reporting. Host disk/inode/memory/load thresholds and their external
-  heartbeat are accepted. Upload validation, shared PostgreSQL rate
+- [x] Complete provider-bound staging security/operations acceptance: the
+  external firewall, paging delivery, privacy-scrubbed Sentry error reporting,
+  host disk/inode/memory/load thresholds and external heartbeats are accepted.
+  Upload validation, shared PostgreSQL rate
   limits, stale-bucket pruning, CSP/HSTS, asynchronous email, aggregate
   monitoring and privacy-safe request correlation are implemented. Stock Caddy
   deliberately has no misleading per-process rate limiter.

@@ -128,14 +128,16 @@ memberships and application invariants.
 
 ### 9E — edge security, observability and scheduled operations
 
-Status: provider-neutral edge limits, aggregate health commands, retention
-maintenance, systemd schedules, privacy-safe email events, dependency update
+Status: complete in staging. Provider-neutral edge limits, aggregate health
+commands, retention maintenance, systemd schedules, privacy-safe email events,
+dependency update
 automation and the administration boundary are implemented. The active IONOS
 external IPv4 firewall policy now allows only incoming TCP 22/80/443, and an
 external backup alert reached the operator. External heartbeats now cover the
 15-minute aggregate operations/outbox check, daily private-object reconciliation
-and 15-minute host-capacity thresholds. External application error reporting
-remains open; see `SERVER_OPERATIONS_AND_SECURITY.md`.
+and 15-minute host-capacity thresholds. An EU-hosted Sentry project captured a
+privacy-scrubbed controlled server exception and delivered the operator alert
+on 2026-09-17; see `SERVER_OPERATIONS_AND_SECURITY.md`.
 
 - Finalize automatic HTTPS, firewall policy, proxy rate limits, body/time
   limits, dependency scanning and security update policy.
@@ -191,10 +193,8 @@ Targets may be tightened after measured staging drills.
 
 ## Decisions deliberately deferred to later slices
 
-- Final VPS, domain, object-storage and email providers.
 - Exact paid/free entitlement model; the current 100 MB entitlement remains a
   configurable application rule.
 - Whether production PostgreSQL later moves to a managed service.
-- Exact monitoring/error-reporting vendor and paging route.
 - Any public catalogue, social graph or support access to private data.
 

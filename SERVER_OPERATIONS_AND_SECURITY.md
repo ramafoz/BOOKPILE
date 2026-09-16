@@ -130,6 +130,11 @@ Exercise the email notification route from that project as well. Browser-side
 telemetry is intentionally outside this server operations boundary; adding it
 later requires a separate CSP, source-map, consent and privacy review.
 
+Staging acceptance passed on 2026-09-17 at revision `bc1ac4b`. The controlled
+probe reached the EU project and the operator mailbox. Inspection showed the
+expected redacted exception, environment/release and three `bookpile.*` tags;
+it contained no source context, user, request, breadcrumb or private data.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access
