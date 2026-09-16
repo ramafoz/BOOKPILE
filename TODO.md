@@ -911,8 +911,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
     SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall, external backup
     alert delivery and the 15-minute aggregate operations/outbox heartbeat
-    passed in staging; close after deep-check alerting, capacity and external
-    error-reporting acceptance.
+    plus daily deep private-object reconciliation passed in staging; close
+    after capacity and external error-reporting acceptance.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
@@ -920,9 +920,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     authenticated library write, verified off-site backup, disposable restore
     and backup/freshness timers pass in staging. Hourly maintenance, 15-minute
     operations checks, daily deep reconciliation, external backup alert
-    delivery and the operations/outbox heartbeat also passed. Deep-check and
-    capacity/error alerting, complete provider acceptance and measured recovery
-    remain.
+    delivery, the operations/outbox heartbeat and daily deep-check heartbeat
+    also passed. Capacity/error alerting, complete provider acceptance and
+    measured recovery remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data

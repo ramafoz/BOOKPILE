@@ -152,8 +152,11 @@ be an additional convenience only.
   operations heartbeat was configured with ten minutes of grace. Its protected
   curl configuration returned HTTP 200, Healthchecks became green, systemd
   validation passed, and a real healthy oneshot exited zero through the
-  installed success-only drop-in. Daily deep-check alerting, capacity and
-  external error reporting remain open.
+  installed success-only drop-in. A separate daily deep-reconciliation check
+  was then configured for 04:05 UTC with 2h15 grace. Its protected HTTP probe,
+  systemd validation and real oneshot passed on 2026-09-16; the inventory was
+  one expected/stored object with zero missing, mismatched or orphaned objects.
+  Capacity and external error reporting remain open.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.

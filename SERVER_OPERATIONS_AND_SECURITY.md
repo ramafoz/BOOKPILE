@@ -67,6 +67,15 @@ after the grace period. As with backup monitoring, `ExecStartPost=-` prevents
 a Healthchecks outage from changing BOOKPILE's own check result. Validate every
 manual edit with `systemd-analyze verify` before relying on the monitor.
 
+The daily deep reconciliation has a separate check named
+`BOOKPILE staging - reconciliación privada diaria`. It follows
+`*-*-* 04:05:00` UTC with two hours and fifteen minutes of grace, allowing the
+two-hour unit timeout as the private inventory grows. Its protected config is
+`/etc/bookpile/healthchecks-deep-check.curl`; install
+`bookpile-deep-check-healthchecks.conf.example` as the service's
+`10-healthchecks.conf` drop-in. It reports success only after database/outbox/
+deletion checks and the complete private-object count/hash reconciliation pass.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access
