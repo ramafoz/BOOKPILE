@@ -643,7 +643,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   dedicated maintenance line.
 - [ ] Resolve the remaining decisions listed in the multi-user implementation
   plan.
-- [ ] Select and contract the Spanish beta infrastructure within the initial
+- [x] Select and contract the Spanish beta infrastructure within the initial
   EUR 25/month target.
 - [x] Complete Server Phase 1 on `feature/server-foundation`:
   - [x] Isolate Server code from Local v1.
@@ -760,7 +760,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     explicit omission of unmapped personal data, preserve Server geometry,
     and never infer membership. Synthetic round-trip, rollback, frontend,
     migration, PostgreSQL and real-export UX acceptance gates pass.
-- [ ] Implement private per-library catalogue, physical hierarchy, visual map,
+- [x] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
   - [x] Physical hierarchy, precise visual-layout validation, responsive map,

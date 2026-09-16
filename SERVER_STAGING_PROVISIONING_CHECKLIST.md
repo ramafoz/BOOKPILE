@@ -12,9 +12,10 @@ issues or chat.
 - [ ] Record any setup fee, minimum term, cancellation process and Spain
   location for the purchased IONOS VPS in the private operator record.
 - [ ] Choose monthly billing for the first rehearsal where offered.
-- [x] Verify MFA is active on the IONOS, Backblaze and Dinahosting operator
-  accounts. The operator confirmed all three on 2026-09-16; the original
-  activation dates relative to service-credential creation were not checked.
+- [x] Verify MFA is active on the IONOS, Backblaze, Dinahosting and Sentry
+  operator accounts. The operator confirmed the first three on 2026-09-16 and
+  Sentry on 2026-09-17; the original activation dates relative to service-
+  credential creation were not checked.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
   record.
 - [x] Calculate the operator-reported regular monthly equivalent on
@@ -25,8 +26,9 @@ issues or chat.
   [Backblaze's first 10 GB account-wide are free](https://www.backblaze.com/cloud-storage/transaction-pricing);
   The operator confirmed on 2026-09-16 that the quoted provider charges are
   post-promotion and include VAT; current promotional bills are lower. B2
-  remains usage-based, so this is not a fixed future backup bill. Recheck
-  usage charges as retained data grows.
+  remains usage-based, so this is not a fixed future backup bill. The Sentry
+  Developer account added on 2026-09-17 is currently free. Recheck both
+  providers' usage charges and plan limits as retained data and telemetry grow.
 
 Recommended initial VPS: 4 vCPU, 4 GB RAM, 120 GB NVMe, current Ubuntu LTS,
 Spanish region. Do not purchase Plesk, antivirus bundles or a provider backup as
@@ -37,7 +39,9 @@ be an additional convenience only.
 
 - [x] Create only an `A` record for `staging.bookpile.gal` pointing to the VPS.
   Add `AAAA` only after IPv6 firewall and reachability are deliberately tested.
-- [ ] Keep `bookpile.gal` unchanged and reserved for the later production gate.
+- [x] Keep `bookpile.gal` unchanged and reserved for the later production gate.
+  The apex and `www` records remained on the existing site while only
+  `staging.bookpile.gal` pointed to the IONOS VPS.
 - [x] Install security updates, key-only SSH, Docker Engine and Compose from
   their official repositories. On Ubuntu 24.04, run the reviewed
   `server/deploy/provision-ubuntu-host.sh` installer as the trusted administrator
@@ -54,8 +58,10 @@ be an additional convenience only.
   `kbdinteractiveauthentication no`; the account/sudo password is not an SSH
   login method. `ip -6 -brief address show scope global` returned no address.
   Do not add an `AAAA` record or assign a public IPv6 address for this beta.
-- [ ] Create `/opt/bookpile`, check out the exact approved commit and verify the
-  worktree is clean.
+- [x] Use `/home/bookpileadmin/b` as the accepted staging checkout instead of
+  migrating the working deployment to `/opt/bookpile`. The worktree was clean
+  before each fast-forward deployment, and all installed systemd units use the
+  accepted absolute working directory.
 
 ## 3. Active private objects in Spain
 
