@@ -137,7 +137,8 @@ external backup alert reached the operator. External heartbeats now cover the
 15-minute aggregate operations/outbox check, daily private-object reconciliation
 and 15-minute host-capacity thresholds. An EU-hosted Sentry project captured a
 privacy-scrubbed controlled server exception and delivered the operator alert
-on 2026-09-17; see `SERVER_OPERATIONS_AND_SECURITY.md`.
+on 2026-09-17. Its external uptime monitor now also exercises public readiness;
+see `SERVER_OPERATIONS_AND_SECURITY.md`.
 
 - Finalize automatic HTTPS, firewall policy, proxy rate limits, body/time
   limits, dependency scanning and security update policy.

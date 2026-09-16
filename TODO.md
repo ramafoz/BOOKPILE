@@ -915,7 +915,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     15-minute host-capacity thresholds and external heartbeat also passed. On
     2026-09-17, the EU-hosted Sentry error route captured a controlled API
     probe, delivered its email alert and exposed only redacted stack metadata,
-    revision, component and correlation ID. Phase 9E is accepted.
+    revision, component and correlation ID. An external Sentry uptime monitor
+    also exercises public readiness. Phase 9E is accepted.
   - [ ] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are

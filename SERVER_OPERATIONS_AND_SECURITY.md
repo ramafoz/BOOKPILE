@@ -135,6 +135,16 @@ probe reached the EU project and the operator mailbox. Inspection showed the
 expected redacted exception, environment/release and three `bookpile.*` tags;
 it contained no source context, user, request, breadcrumb or private data.
 
+### External public availability
+
+The Sentry uptime monitor `BOOKPILE staging - disponibilidad pública` actively
+requests `https://staging.bookpile.gal/health/ready` from outside the VPS. The
+operator confirmed it active on 2026-09-17. A successful response proves the
+public DNS/TLS/Caddy path, API process, PostgreSQL connection and private-object
+store together. Its JSON response contains only aggregate readiness and the
+deployment revision. This complements the server-originated Healthchecks
+dead-man switches, which cannot by themselves prove public reachability.
+
 Operational JSON contains only aggregate counts, UUIDs for queued mail/backups,
 revisions and states. It must not contain usernames, email addresses, object
 keys, library names, request queries, tokens or decrypted payloads. Caddy access

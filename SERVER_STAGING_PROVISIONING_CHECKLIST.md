@@ -168,7 +168,10 @@ be an additional convenience only.
   passed on 2026-09-16. On 2026-09-17, an EU-hosted Sentry project received a
   controlled error at revision `bc1ac4b` and delivered the operator email.
   Inspection confirmed redacted exception text, no source context, no user or
-  request data, and only the approved BOOKPILE correlation tags.
+  request data, and only the approved BOOKPILE correlation tags. The external
+  Sentry uptime monitor for the public `/health/ready` endpoint was activated
+  on 2026-09-17, closing the DNS/TLS/edge/API/dependency reachability gap left
+  by server-originated dead-man switches.
 - [x] Prove unattended daily execution: systemd created and verified backup
   `0ec5ab57-56c0-4887-b375-20f12fe1280c` at 02:17 UTC on 2026-09-15,
   including one private object.
