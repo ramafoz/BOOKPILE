@@ -143,8 +143,17 @@ be an additional convenience only.
 - [x] Exercise real verification, password-reset and deletion-recovery messages
   and their one-time links in a disposable staging account. The complete cycle
   passed on 2026-09-18 without recording any action URL or token.
-- [ ] In an isolated environment, induce a temporary SMTP failure with retry
-  and a terminal outbox failure with an operator alert.
+- [x] In an isolated environment, induce a temporary SMTP failure with retry
+  and a terminal outbox failure with an operator alert. On 2026-09-18, an
+  invalid one-shot SMTP endpoint left the first password-reset message
+  `PENDING` with `DELIVERY_UNAVAILABLE`; the normal worker delivered that same
+  message on attempt two with SMTP `250`. A second message, with a one-shot
+  maximum of one attempt, became `FAILED`. The aggregate operations check
+  reported `email_outbox: attention`, exited one and withheld its heartbeat;
+  Healthchecks sent `DOWN`. After the single test row was deliberately returned
+  to `PENDING`, the normal worker delivered it on attempt two with SMTP `250`
+  and provider queue ID `5269E5445AF7`; the healthy check then produced the
+  external `UP` notification. No recipient, body or action token was recorded.
 - [x] Deploy migration `0022_email_delivery_receipts`, inspect the multipart
   verification/reset/recovery messages in real mailboxes, confirm the RFC
   `Date` removes the provider's `MISSING_DATE` score and retain only the safe
@@ -165,7 +174,14 @@ be an additional convenience only.
 - [x] Follow `SERVER_PRODUCTION_RUNBOOK.md` through Compose preflight, explicit
   migration, API/worker/web startup and public readiness. On 2026-09-14 the
   verified account created its first library at revision `ad9a16a`, proving the
-  authenticated CSRF-protected write path.
+  authenticated CSRF-protected write path. During the 2026-09-18 SMTP fault
+  rehearsal, `docker compose start email-worker` also tried to start a stale
+  one-shot `migrate` container whose old image did not know revision
+  `0022_email_delivery_receipts`. The database was already healthy at 0022;
+  recreating `migrate` with the current image completed idempotently with exit
+  zero. Operational worker restarts must therefore avoid starting dependencies,
+  and deployments must recreate one-shot migration containers with the current
+  immutable image.
 - [x] Install and manually prove the backup-daily, 15-minute backup-freshness,
   hourly retention-maintenance, 15-minute lightweight-operations and daily
   deep-object-reconciliation systemd timers. Their 2026-09-15 oneshots

@@ -69,4 +69,21 @@ Operational alerts must cover a stopped worker, old `PENDING` rows, reclaimed
 leases and any `FAILED` row. Logs and dashboards may use message UUID, purpose,
 state, attempt count, SMTP response code and validated provider queue ID; they
 must never expose recipient, raw SMTP text or decrypted content.
+
+Staging exercised this chain on 2026-09-18. A controlled unavailable endpoint
+scheduled a retry and the normal worker delivered the same message on attempt
+two. A separate one-attempt probe reached `FAILED`; the aggregate operations
+check exited non-zero, withheld its heartbeat and produced a real external
+`DOWN` alert. After scoped operator recovery, SMTP accepted the message on
+attempt two and a successful check produced the external `UP` alert. The test
+recorded no recipient, decrypted payload or action URL.
+
+For an operational restart of an existing worker container, do not use
+`docker compose start email-worker`: Compose may also restart an exited,
+possibly stale one-shot `migrate` dependency. Use `docker start` for that exact
+existing container or `docker compose up -d --no-deps email-worker` after the
+explicit migration step. During deployment, run migration from the new
+immutable API image and recreate rather than restart any old migration
+container.
+
 Do not downgrade migration 0021 while the queue contains rows.

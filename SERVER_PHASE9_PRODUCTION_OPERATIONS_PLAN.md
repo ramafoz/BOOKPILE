@@ -93,8 +93,10 @@ implicit TLS through Dinahosting delivered and completed a real account
 verification on 2026-09-14. A real password-reset email, one-time link and
 new-password sign-in passed on 2026-09-16; the old password was rejected.
 The complete verification, password-reset and deletion-recovery cycle passed
-with real disposable staging accounts on 2026-09-18. The isolated induced
-retry, terminal failure and outbox operator-alert tests remain 9F evidence; see
+with real disposable staging accounts on 2026-09-18. Controlled isolated SMTP
+failure then proved rescheduling and successful second-attempt delivery, a
+terminal `FAILED` row, aggregate operations failure, external `DOWN` paging,
+manual recovery and the external `UP` notification. See
 `SERVER_EMAIL_OUTBOX.md`.
 
 The cross-purpose presentation and delivery-hardening implementation now adds
@@ -173,9 +175,9 @@ manages `bookpile.gal`, active private objects and transactional email;
 environment templates, purchase safeguards and the remaining evidence sequence
 are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Initial provisioning and the
 first authenticated smoke path, encrypted off-site backup, isolated restore and
-backup/freshness scheduling, operations alerting and transactional-provider
-acceptance have passed. The isolated SMTP fault tests and measured disaster
-recovery remain open.
+backup/freshness scheduling, operations alerting, transactional-provider
+acceptance and isolated SMTP fault tests have passed. Measured disaster recovery
+remains open.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

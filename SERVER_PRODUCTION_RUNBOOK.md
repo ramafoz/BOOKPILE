@@ -98,6 +98,14 @@ docker compose --env-file server/.env.production \
   -f server/compose.production.yaml up -d api email-worker web
 ```
 
+Use the newly built or immutable release image for the explicit migration.
+Do not restart a previously exited `migrate` container after retagging a mutable
+image: it may contain an older migration graph. Recreate the one-shot container
+or keep using `run --rm migrate`. When only an existing email worker needs an
+operational restart, use `docker compose up -d --no-deps email-worker` (or
+`docker start` for the exact stopped container) so Compose does not start the
+one-shot migration dependency again.
+
 The API remains unready until PostgreSQL and the configured private-object
 adapter both answer. Caddy waits for API readiness.
 

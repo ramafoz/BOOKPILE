@@ -927,8 +927,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     delivery, the operations/outbox heartbeat and daily deep-check heartbeat
     also passed. The 15-minute disk, inode, memory and load-capacity check and
     external heartbeat passed as well. Privacy-scrubbed server error reporting
-    and its paging route passed on 2026-09-17. Provider acceptance is complete;
-    the measured recovery drill and isolated SMTP fault injection remain.
+    and its paging route passed on 2026-09-17. On 2026-09-18, controlled SMTP
+    failure proved the bounded retry, terminal failure, operations failure,
+    external `DOWN` alert, manual recovery, successful second attempt and
+    external `UP` alert. Provider acceptance is complete; only the measured
+    recovery drill remains.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
