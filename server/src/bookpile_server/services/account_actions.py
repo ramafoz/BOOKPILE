@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from ..config import Settings
 from ..email_delivery import EmailSender, OutgoingEmail
+from ..email_templates import password_reset_email, verification_email
 from ..models import AccountActionToken, User
 from ..repositories.account_actions import AccountActionRepository
 from ..security.identities import IdentityValidationError, normalize_email
@@ -57,15 +58,15 @@ class AccountActionService:
             ip_address=ip_address,
         )
         query = urlencode({"token": raw_token})
+        rendered = verification_email(
+            f"{self._settings.public_base_url.rstrip('/')}/verify-email?{query}"
+        )
         self._email_sender.send(
             OutgoingEmail(
                 recipient=user.email,
-                subject="Verify your BOOKPILE email",
-                text=(
-                    "Verify your BOOKPILE account using this link:\n\n"
-                    f"{self._settings.public_base_url.rstrip('/')}/verify-email?{query}\n\n"
-                    "This link expires in 24 hours."
-                ),
+                subject=rendered.subject,
+                text=rendered.text,
+                html=rendered.html,
                 message_key=f"account-action:{token.id}",
                 purpose="EMAIL_VERIFICATION",
                 account_action_token_id=token.id,
@@ -130,16 +131,15 @@ class AccountActionService:
             ip_address=ip_address,
         )
         query = urlencode({"token": raw_token})
+        rendered = password_reset_email(
+            f"{self._settings.public_base_url.rstrip('/')}/reset-password?{query}"
+        )
         self._email_sender.send(
             OutgoingEmail(
                 recipient=user.email,
-                subject="Reset your BOOKPILE password",
-                text=(
-                    "Reset your BOOKPILE password using this link:\n\n"
-                    f"{self._settings.public_base_url.rstrip('/')}/reset-password?{query}\n\n"
-                    "This link expires in 30 minutes. If you did not request it, "
-                    "you can ignore this email."
-                ),
+                subject=rendered.subject,
+                text=rendered.text,
+                html=rendered.html,
                 message_key=f"account-action:{token.id}",
                 purpose="PASSWORD_RESET",
                 account_action_token_id=token.id,

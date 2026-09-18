@@ -96,6 +96,13 @@ Deletion recovery, induced retry, terminal failure and outbox operator alerting
 remain staging/9E gates; see
 `SERVER_EMAIL_OUTBOX.md`.
 
+The cross-purpose presentation and delivery-hardening implementation now adds
+multipart text/HTML templates without remote tracking, standards-compliant
+automated-message headers and persisted privacy-safe SMTP acceptance receipts.
+Local server acceptance passes; staging must migrate to
+`0022_email_delivery_receipts` and exercise every template before this portion
+of 9F is accepted.
+
 - Replace request-blocking SMTP sends with a PostgreSQL outbox and a separate
   retrying worker.
 - Configure authenticated TLS delivery, deterministic message identity,

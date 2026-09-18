@@ -441,6 +441,11 @@ class EmailOutboxMessage(Base):
             name="ck_email_outbox_state",
         ),
         CheckConstraint("attempt_count >= 0", name="ck_email_outbox_attempts"),
+        CheckConstraint(
+            "smtp_response_code IS NULL OR "
+            "smtp_response_code BETWEEN 200 AND 599",
+            name="ck_email_outbox_smtp_response_code",
+        ),
         Index("ix_email_outbox_delivery", "state", "available_at"),
     )
 
@@ -461,6 +466,8 @@ class EmailOutboxMessage(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error_code: Mapped[str | None] = mapped_column(String(80))
+    smtp_response_code: Mapped[int | None] = mapped_column(Integer)
+    provider_queue_id: Mapped[str | None] = mapped_column(String(64))
     account_action_token_id: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("account_action_tokens.id", ondelete="CASCADE")
     )

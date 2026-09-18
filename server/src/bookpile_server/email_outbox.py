@@ -10,7 +10,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .config import Settings
-from .email_delivery import EmailDeliveryError, EmailSender, OutgoingEmail
+from .email_delivery import (
+    EmailDeliveryError,
+    EmailSender,
+    OutgoingEmail,
+    SmtpDeliveryReceipt,
+)
 from .models import (
     AccountActionToken,
     AccountDeletionTombstone,
@@ -35,18 +40,24 @@ RETRY_DELAYS = (
 outbox_logger = logging.getLogger("bookpile.email_outbox")
 
 
-def log_delivery(event: str, message: EmailOutboxMessage) -> None:
+def log_delivery(
+    event: str,
+    message: EmailOutboxMessage,
+    receipt: SmtpDeliveryReceipt | None = None,
+) -> None:
+    payload = {
+        "event": event,
+        "message_id": str(message.id),
+        "purpose": message.purpose,
+        "attempt": message.attempt_count,
+        "state": message.state,
+    }
+    if receipt is not None:
+        payload["smtp_response_code"] = receipt.response_code
+        if receipt.provider_queue_id:
+            payload["provider_queue_id"] = receipt.provider_queue_id
     outbox_logger.info(
-        json.dumps(
-            {
-                "event": event,
-                "message_id": str(message.id),
-                "purpose": message.purpose,
-                "attempt": message.attempt_count,
-                "state": message.state,
-            },
-            separators=(",", ":"),
-        )
+        json.dumps(payload, separators=(",", ":"))
     )
 
 
@@ -64,6 +75,7 @@ class EmailPayloadCipher:
                 "recipient": email.recipient,
                 "subject": email.subject,
                 "text": email.text,
+                "html": email.html,
                 "message_key": email.message_key,
                 "purpose": email.purpose,
             },
@@ -81,6 +93,7 @@ class EmailPayloadCipher:
             recipient=payload["recipient"],
             subject=payload["subject"],
             text=payload["text"],
+            html=payload.get("html"),
             message_key=payload["message_key"],
             purpose=payload["purpose"],
             account_action_token_id=message.account_action_token_id,
@@ -146,7 +159,7 @@ class EmailOutboxWorker:
                 self._mark_terminal(session, message, moment, "PAYLOAD_DECRYPTION")
                 return True
         try:
-            self._delivery.send(outgoing)
+            receipt = self._delivery.send(outgoing)
         except EmailDeliveryError:
             with self._session_factory() as session:
                 message = session.get(EmailOutboxMessage, message_id)
@@ -165,10 +178,16 @@ class EmailOutboxWorker:
             message.sent_at = moment
             message.lease_until = None
             message.last_error_code = None
+            message.smtp_response_code = (
+                receipt.response_code if receipt is not None else None
+            )
+            message.provider_queue_id = (
+                receipt.provider_queue_id if receipt is not None else None
+            )
             message.updated_at = moment
             self._extend_recovery_window(session, message, moment)
             session.commit()
-            log_delivery("email_sent", message)
+            log_delivery("email_sent", message, receipt)
         return True
 
     def _claim(self, moment: datetime) -> UUID | None:

@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from ..models import AccountDeletionTombstone, LibraryMembership
 from ..config import Settings
 from ..email_delivery import EmailDeliveryError, EmailSender, OutgoingEmail
+from ..email_templates import account_recovery_email
 from ..repositories.account_deletion import AccountDeletionRepository
 from ..security.passwords import verify_password
 
@@ -125,22 +126,17 @@ class AccountDeletionService:
             details={"recover_until": tombstone.recover_until.isoformat()},
         )
         recovery_query = urlencode({"token": raw_recovery_token})
+        rendered = account_recovery_email(
+            f"{self.settings.public_base_url.rstrip('/')}/restore-account?"
+            f"{recovery_query}"
+        )
         try:
             self.email_sender.send(
                 OutgoingEmail(
                     recipient=user.email,
-                    subject="Restore your deleted BOOKPILE account",
-                    text=(
-                        "We are sad to see you go. Your BOOKPILE account is now "
-                        "scheduled for permanent deletion.\n\n"
-                        "If you want your account back, use this secure link during "
-                        "the next 48 hours:\n\n"
-                        f"{self.settings.public_base_url.rstrip('/')}/restore-account?"
-                        f"{recovery_query}\n\n"
-                        "After 48 hours, your account and its remaining personal data "
-                        "will be permanently deleted. This single-use link is the only "
-                        "way to restore the account."
-                    ),
+                    subject=rendered.subject,
+                    text=rendered.text,
+                    html=rendered.html,
                     message_key=f"account-deletion:{tombstone.id}",
                     purpose="ACCOUNT_DELETION_RECOVERY",
                     account_deletion_tombstone_id=tombstone.id,

@@ -142,6 +142,10 @@ be an additional convenience only.
   in and the old password is rejected; no link, token or password was recorded.
 - [ ] Exercise deletion-recovery messages, an induced temporary SMTP failure
   with retry, and a terminal outbox failure alert.
+- [ ] Deploy migration `0022_email_delivery_receipts`, inspect the multipart
+  verification/reset/recovery messages in real mailboxes, confirm the RFC
+  `Date` removes the provider's `MISSING_DATE` score and retain only the safe
+  SMTP response code/provider queue ID as delivery evidence.
 
 ## 6. First deployment and evidence
 

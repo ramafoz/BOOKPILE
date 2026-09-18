@@ -126,7 +126,10 @@ def test_deleted_viewer_is_locked_out_and_can_restore_membership_only_by_email_l
     )
     assert wrong.status_code == 400
     assert len(email_sender.emails) == 1
-    recovery_url = email_sender.emails[0].text.split("\n\n")[2]
+    assert email_sender.emails[0].html is not None
+    recovery_url = next(
+        line for line in email_sender.emails[0].text.splitlines() if "?token=" in line
+    )
     recovery_token = parse_qs(urlparse(recovery_url).query)["token"][0]
     tombstone = session.query(AccountDeletionTombstone).filter_by(user_id=viewer.id).one()
     assert tombstone.recovery_token_hash != recovery_token

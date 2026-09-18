@@ -200,6 +200,20 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "library_storage_allocations",
             "library_deletion_tombstones",
         } <= set(inspect(engine).get_table_names())
+        email_outbox_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("email_outbox_messages")
+        }
+        assert {"smtp_response_code", "provider_queue_id"} <= email_outbox_columns
+        command.downgrade(alembic, "0021_email_outbox")
+        downgraded_email_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("email_outbox_messages")
+        }
+        assert {"smtp_response_code", "provider_queue_id"}.isdisjoint(
+            downgraded_email_columns
+        )
+        command.upgrade(alembic, "head")
         with Session(engine) as session:
             first = session.get(Library, first_library_id)
             second = session.get(Library, second_library_id)

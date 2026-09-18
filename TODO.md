@@ -959,7 +959,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Polish transactional user emails: design a coherent BOOKPILE identity,
   accessible responsive HTML plus complete plain-text alternatives, safe
   action-link presentation, expiry/support copy and rendering/delivery tests
-  across verification, reset, invitations and deletion recovery.
+  across verification, reset, invitations and deletion recovery. The shared
+  privacy-safe multipart design, header hardening and persisted SMTP acceptance
+  receipts are implemented for every currently emitted message; close after
+  migration `0022_email_delivery_receipts` and real-mailbox staging acceptance.
 - [ ] Add a distinctive BOOKPILE browser-tab icon (favicon), including SVG and
   small PNG variants, dark/light appearance and browser-cache verification.
 - [x] Complete provider-bound staging security/operations acceptance: the

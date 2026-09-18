@@ -14,6 +14,23 @@ but not addresses or recovery links. Message IDs are deterministic so a worker
 crash around SMTP acknowledgement is detectable by the provider. Delivery is
 at-least-once: a rare crash after SMTP accepts a message can still duplicate it.
 
+Every account message is generated from the shared BOOKPILE transactional-email
+presentation. It contains equivalent complete plain-text and responsive HTML
+parts, an email-client-safe bookshelf motif built without remote resources,
+visible fallback URLs and no tracking pixels. Verification, password reset and
+account recovery therefore share one accessible visual language while retaining
+purpose-specific subjects, expiry and security guidance. The SMTP envelope adds
+an RFC `Date`, deterministic `Message-ID`, `Auto-Submitted: auto-generated` and
+auto-response suppression headers.
+
+Migration `0022_email_delivery_receipts` stores only the successful SMTP response
+code and a strictly parsed provider queue identifier when the server supplies
+one. Both values are also included in the privacy-safe `email_sent` log. They
+allow provider tracing without decrypting the recipient, body or action URL.
+`SENT` continues to mean that the authenticated SMTP server accepted the
+message; it does not prove inbox placement. Downstream delivery, spam placement
+and bounces remain provider/mailbox evidence.
+
 Retries use bounded exponential delay and leased claims allow another worker to
 recover abandoned work. Revoked/consumed account actions and recovered account
 deletions are cancelled before delivery. Account-action expiry and the 48-hour
@@ -42,5 +59,6 @@ bookpile-email-worker --poll-seconds 2 --processed-delay-seconds 11
 
 Operational alerts must cover a stopped worker, old `PENDING` rows, reclaimed
 leases and any `FAILED` row. Logs and dashboards may use message UUID, purpose,
-state and attempt count; they must never expose recipient or decrypted content.
+state, attempt count, SMTP response code and validated provider queue ID; they
+must never expose recipient, raw SMTP text or decrypted content.
 Do not downgrade migration 0021 while the queue contains rows.

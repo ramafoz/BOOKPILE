@@ -1,3 +1,5 @@
+from email.utils import parsedate_to_datetime
+from hashlib import sha256
 from unittest.mock import MagicMock, patch
 
 from bookpile_server.config import Settings
@@ -15,19 +17,21 @@ def test_smtp_sender_uses_implicit_tls_when_configured() -> None:
     )
     connection = MagicMock()
     smtp = connection.__enter__.return_value
+    smtp.last_data_response = (250, b"2.0.0 Ok: queued as PROVIDER123")
     email = OutgoingEmail(
         recipient="reader@example.com",
-        subject="Verify your BOOKPILE account",
+        subject="BOOKPILE — Verify your email",
         text="Verification message",
+        html="<html><body><p>Verification message</p></body></html>",
         message_key="verification:test",
         purpose="EMAIL_VERIFICATION",
     )
 
     with (
-        patch("bookpile_server.email_delivery.smtplib.SMTP_SSL", return_value=connection) as smtp_ssl,
-        patch("bookpile_server.email_delivery.smtplib.SMTP") as smtp_starttls,
+        patch("bookpile_server.email_delivery.ReceiptSMTPSSL", return_value=connection) as smtp_ssl,
+        patch("bookpile_server.email_delivery.ReceiptSMTP") as smtp_starttls,
     ):
-        SmtpEmailSender(settings).send(email)
+        receipt = SmtpEmailSender(settings).send(email)
 
     smtp_ssl.assert_called_once()
     assert smtp_ssl.call_args.kwargs["host"] == settings.smtp_host
@@ -37,3 +41,16 @@ def test_smtp_sender_uses_implicit_tls_when_configured() -> None:
     smtp.starttls.assert_not_called()
     smtp.login.assert_called_once_with("hello@bookpile.gal", "mailbox-password")
     smtp.send_message.assert_called_once()
+    message = smtp.send_message.call_args.args[0]
+    assert parsedate_to_datetime(message["Date"]).tzinfo is not None
+    assert message["Auto-Submitted"] == "auto-generated"
+    assert message["X-Auto-Response-Suppress"] == "All"
+    assert message["Message-ID"] == (
+        f"<{sha256(email.message_key.encode()).hexdigest()}@bookpile.gal>"
+    )
+    assert message.is_multipart()
+    assert message.get_body(preferencelist=("plain",)).get_content().strip() == email.text
+    assert email.html in message.get_body(preferencelist=("html",)).get_content()
+    assert receipt is not None
+    assert receipt.response_code == 250
+    assert receipt.provider_queue_id == "PROVIDER123"
