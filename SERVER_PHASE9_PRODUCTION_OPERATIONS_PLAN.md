@@ -31,7 +31,8 @@ backups and its measured recovery result is documented.
 Status: implementation and local gates complete. The first IONOS staging-host
 deployment passed explicit migration, HTTPS liveness/readiness and an
 authenticated library write on 2026-09-13/14. Scheduled operations, rollback
-and recovery evidence remain in 9F. Commands are in
+and measured recovery now pass in staging; production separation and final
+evidence consolidation remain in 9F/9G. Commands are in
 `SERVER_PRODUCTION_RUNBOOK.md`.
 
 - Add production startup validation, trusted-host/origin enforcement, secure
@@ -58,7 +59,7 @@ Completed locally:
 - CI gates Local/Server Python, both frontend editions, lint, PostgreSQL
   migrations and both production images.
 
-The remaining clean-host rehearsal belongs to 9F. It does not block 9B.
+The clean-host deployment and isolated recovery rehearsals passed in 9F.
 
 ### 9B — private S3-compatible object storage
 
@@ -122,14 +123,18 @@ the queued email; retries do not create uncontrolled duplicates.
 
 ### 9D — backup, restore and retention automation
 
-Status: provider-neutral implementation and a complete local PostgreSQL 17/S3
-recovery rehearsal pass. Backblaze B2 EU Central accepted a versioned
+Status: provider-neutral implementation and local plus live-provider
+PostgreSQL 17/object recovery rehearsals pass. Backblaze B2 EU Central accepted
+a versioned
 COMPLIANCE probe, rejected premature deletion and allowed verified deletion of
 that exact version after expiry. On 2026-09-14, the final bucket/key created
 and independently verified a real encrypted database-plus-object backup,
 restored 36 tables and the object into isolated disposable targets, and a
-systemd oneshot created a second verified backup. Final lifecycle expiry,
-alerting and measured RPO/RTO remain open; see `SERVER_OPERATIONAL_BACKUP.md`.
+systemd oneshot created a second verified backup. On 2026-09-18, a measured
+loss rehearsal restored 36 tables and 434 exact objects, migrated the recovered
+database, and started a ready isolated API. RPO was 6 h 36 min 22 s and total
+RTO was 35 min 48 s. Final lifecycle-expiry evidence remains open; see
+`SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.
@@ -176,8 +181,12 @@ environment templates, purchase safeguards and the remaining evidence sequence
 are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Initial provisioning and the
 first authenticated smoke path, encrypted off-site backup, isolated restore and
 backup/freshness scheduling, operations alerting, transactional-provider
-acceptance and isolated SMTP fault tests have passed. Measured disaster recovery
-remains open.
+acceptance and isolated SMTP fault tests have passed. The 2026-09-18 measured
+disaster-recovery drill restored 36 tables and 434 objects into empty isolated
+targets, migrated and started the recovered API, and passed readiness in
+35 min 48 s end to end. Disposable resources were removed. Consolidation of
+the remaining private provider/cost evidence is the last checklist item before
+formal 9F closure.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

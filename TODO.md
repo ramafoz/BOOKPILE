@@ -930,8 +930,13 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     and its paging route passed on 2026-09-17. On 2026-09-18, controlled SMTP
     failure proved the bounded retry, terminal failure, operations failure,
     external `DOWN` alert, manual recovery, successful second attempt and
-    external `UP` alert. Provider acceptance is complete; only the measured
-    recovery drill remains.
+    external `UP` alert. On 2026-09-18, the measured recovery drill restored 36
+    tables and 434 exact objects into empty disposable targets, migrated the
+    recovered database, started a ready isolated API and removed every target.
+    RPO was 6 h 36 min 22 s; successful restore time was 5 min 11.48 s and
+    end-to-end RTO including diagnosed rehearsal defects was 35 min 48 s. The
+    technical drill is complete; consolidate the remaining private provider,
+    cost and performance evidence to close 9F formally.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -989,8 +994,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
-  Their active staging providers are accepted; reproducible production
-  separation and the remaining recovery rehearsal are still open.
+  Their active staging providers and measured recovery rehearsal are accepted;
+  reproducible production separation and formal evidence consolidation remain
+  open.
 - [x] Choose and provision the Spanish VPS, active private object storage,
   domain, transactional email and HTTPS staging deployment: IONOS hosts the
   VPS; Dinahosting supplies domain/DNS, active S3 and email; Backblaze B2 EU

@@ -213,10 +213,17 @@ be an additional convenience only.
   and one exact object into a disposable PostgreSQL database and empty local
   volume on 2026-09-14. The disposable container, volumes and network were
   removed. A second verified backup ran successfully through systemd.
-- [ ] Record RPO/RTO, CPU, peak memory, free disk, request/import/backup/restore
-  durations and every provider gap in the private staging evidence record.
-- [ ] Destroy disposable acceptance resources and rotate any credentials used
-  by destructive tests.
+- [ ] Consolidate RPO/RTO, CPU, memory, free disk, request/import/backup/restore
+  durations and every provider gap in the private staging evidence record. The
+  2026-09-18 recovery measurement is now recorded in
+  `SERVER_OPERATIONAL_BACKUP.md`: RPO 6 h 36 min 22 s, successful restore
+  5 min 11.48 s and total RTO 35 min 48 s for 36 tables/434 objects. Four CPUs,
+  disk delta and before/after memory were captured; peak memory was not sampled
+  and must not be inferred from the steady-state measurements.
+- [x] Destroy disposable acceptance resources and rotate any credentials used
+  by destructive tests. The measured drill's API/container, PostgreSQL database
+  and filesystem object volume were removed on 2026-09-18. It created no
+  temporary credential requiring rotation and exposed no existing secret.
 
 Passing this list closes provider gates in 9A-9E and the measured 9F rehearsal.
 It does not switch the apex domain, invite beta users or authorize production.

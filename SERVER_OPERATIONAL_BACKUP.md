@@ -157,7 +157,7 @@ credentials, and securely delete the restore environment file.
 - The disposable restore database, bucket/container and local staging were
   removed after the rehearsal; source data was read-only.
 
-## Spanish staging recovery evidence (2026-09-14)
+## Spanish staging recovery evidence (2026-09-14/18)
 
 - Final bucket: `bookpile-staging-backups-2026`, private, encrypted and
   Object-Locked in EU Central; final 29-day lifecycle expiry is not yet proven.
@@ -174,6 +174,37 @@ credentials, and securely delete the restore environment file.
   application table. Dinahosting could not supply a separate read-only key
   for the same active bucket; staging temporarily reuses its isolated
   application credential as a documented least-privilege gap.
+- On 2026-09-18, backup `623c595c-2aa7-44db-903c-c833c647120b` independently
+  verified its PostgreSQL dump and 434 private objects before a measured
+  total-host-loss rehearsal. At the simulated incident time its age was
+  23,782 seconds (RPO 6 h 36 min 22 s), inside the initial 24-hour target.
+- Empty isolated targets restored 36 tables at `0021_email_outbox` and all 434
+  objects with exact inventory and hashes. The current API image then migrated
+  the restored database to `0022_email_delivery_receipts` in 1.70 seconds. A
+  read-only object audit reported 434 expected/stored objects and zero missing,
+  mismatched or orphaned objects.
+- The successful restore itself took 311.48 seconds (5 min 11.48 s). The
+  recovered API completed startup about eight seconds after it was started and
+  returned readiness with both `database` and `private_objects` ready.
+- End-to-end RTO from the first restore attempt at 21:43:34 UTC to recovered
+  API startup at 22:19:22 UTC was 2,148 seconds (35 min 48 s), including
+  diagnosis and correction of the rehearsal defects below. This is comfortably
+  inside the initial four-hour target.
+- The rehearsal exposed three runbook prerequisites: the restore container
+  needs both the private database network and controlled egress to Backblaze;
+  Backblaze Class B transactions must not be capped during recovery; and a
+  filesystem restore target must be writable by the image UID/GID 10001. The
+  provider transaction limit was removed after pay-as-you-go was confirmed,
+  and the target volume was recreated with owner 10001 and mode 0700.
+- Host disk use increased by approximately 49,799,168 bytes (47.5 MiB) after
+  restore. The host had four CPUs and about 2.73 GB available memory before the
+  run; steady-state available memory changed by only about 6 MB. Peak memory
+  was not captured, so no peak claim is made and a future larger-dataset drill
+  should sample it during execution.
+- The disposable API/container, PostgreSQL database and object volume were
+  removed after validation. The active staging database and private-object
+  store were never restore targets.
 
-Final lifecycle expiry, external alerting and measured RPO/RTO remain Phase 9F
-gates; neither the apex domain nor production data has been switched.
+The measured RPO/RTO and external alerting gates have passed. Final lifecycle
+expiry evidence and consolidation of the private provider/cost record remain;
+neither the apex domain nor production data has been switched.
