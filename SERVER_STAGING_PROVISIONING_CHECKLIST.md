@@ -223,7 +223,9 @@ be an additional convenience only.
 - [x] Destroy disposable acceptance resources and rotate any credentials used
   by destructive tests. The measured drill's API/container, PostgreSQL database
   and filesystem object volume were removed on 2026-09-18. It created no
-  temporary credential requiring rotation and exposed no existing secret.
+  temporary credential requiring rotation and exposed no existing secret. The
+  post-cleanup deep check remained healthy with 434 exact active objects and all
+  failure/overdue counters at zero.
 
 Passing this list closes provider gates in 9A-9E and the measured 9F rehearsal.
 It does not switch the apex domain, invite beta users or authorize production.

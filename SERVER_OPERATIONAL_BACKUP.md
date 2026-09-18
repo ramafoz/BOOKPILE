@@ -203,7 +203,11 @@ credentials, and securely delete the restore environment file.
   should sample it during execution.
 - The disposable API/container, PostgreSQL database and object volume were
   removed after validation. The active staging database and private-object
-  store were never restore targets.
+  store were never restore targets. A final deep check after cleanup returned
+  `healthy: true`: database, deletion cleanup, email outbox and private objects
+  were ready; all overdue/failed counters were zero; and the active inventory
+  still contained 434 expected/stored objects with zero missing, mismatched or
+  orphaned objects.
 
 The measured RPO/RTO and external alerting gates have passed. Final lifecycle
 expiry evidence and consolidation of the private provider/cost record remain;
