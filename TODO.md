@@ -938,7 +938,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Design normalization and display rules for free-text metadata before
     localized labels or translated controlled vocabularies are introduced.
 
-- [ ] Restore compact Server catalogue sorting before production:
+- [x] Restore compact Server catalogue sorting before production:
   - Put a general `Sort` control beside `Search` on the main catalogue page,
     without requiring the user to open `Advanced`.
   - Limit that quick control to `Title`, `Author`, and `Physical location`.
@@ -948,8 +948,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     API/repository, including an explicit rule for books without a physical
     location, and cover Owner/Viewer, pagination and responsive behaviour with
     automated tests.
+  - Accepted in staging on 2026-09-18: the quick control, dynamic search and
+    deterministic ascending/descending physical hierarchy work as intended;
+    unplaced books remain last and alphabetical.
 
-- [ ] Unify and tighten the primary Server workspace presentation before the
+- [x] Unify and tighten the primary Server workspace presentation before the
   private beta:
   - Remove the duplicated outer/inner framed-card treatment from Catalogue,
     Library Map and Statistics. Give all three the same single responsive page
@@ -975,6 +978,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     row into two lines.
   - Add responsive and interaction tests for the shared shell, dynamic search,
     quick filters, narrow summary row and absence of horizontal overflow.
+  - Desktop and mobile staging acceptance completed on 2026-09-18. The final
+    pass moved reading-state badges below mobile cover/title rows and isolated
+    Statistics table scrolling so rows no longer bleed through sticky column
+    headings in Chrome or mobile Safari.
 
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
@@ -1001,8 +1008,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   privacy-safe multipart design, header hardening and persisted SMTP acceptance
   receipts are implemented for every currently emitted message; close after
   migration `0022_email_delivery_receipts` and real-mailbox staging acceptance.
-- [ ] Add a distinctive BOOKPILE browser-tab icon (favicon), including SVG and
-  small PNG variants, dark/light appearance and browser-cache verification.
+- [x] Add a distinctive BOOKPILE browser-tab icon (favicon). The transparent
+  SVG reuses the Server `LibraryBig` geometry, switches between black and white
+  for light/dark browser chrome, remains crisp at small sizes without a PNG
+  fallback, and passed staging browser-cache verification on 2026-09-18.
 - [x] Complete provider-bound staging security/operations acceptance: the
   external firewall, paging delivery, privacy-scrubbed Sentry error reporting,
   host disk/inode/memory/load thresholds and external heartbeats are accepted.
