@@ -730,7 +730,9 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-statistics-book-list { overflow: hidden !important; }
 .server-statistics-book-list h3 { position: relative; z-index: 2; background: #fffdf8; }
 .server-statistics-book-scroll { max-height: 440px; overflow: auto; overscroll-behavior: contain; }
-.server-statistics-book-scroll thead th { position: sticky; z-index: 1; top: 0; background: #fffdf8; box-shadow: 0 1px #e9dfd2; }
+.server-statistics-book-scroll table { border-collapse: separate; border-spacing: 0; }
+.server-statistics-book-scroll thead { isolation: isolate; }
+.server-statistics-book-scroll thead th { position: sticky; z-index: 3; top: 0; background: #fffdf8; background-clip: padding-box; box-shadow: 0 1px #e9dfd2; }
 .server-statistics-book-list tbody tr { height: 43px; }
 .server-statistics-note { margin: 14px 0 0; color: #697973; font-size: 12px; }
 .server-statistics-duration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
