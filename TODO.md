@@ -938,6 +938,17 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Design normalization and display rules for free-text metadata before
     localized labels or translated controlled vocabularies are introduced.
 
+- [ ] Restore compact Server catalogue sorting before production:
+  - Put a general `Sort` control beside `Search` on the main catalogue page,
+    without requiring the user to open `Advanced`.
+  - Limit that quick control to `Title`, `Author`, and `Physical location`.
+  - Keep the complete set of specialist sort fields and related controls in
+    `Advanced`.
+  - Add a library-scoped deterministic physical-location sort to the Server
+    API/repository, including an explicit rule for books without a physical
+    location, and cover Owner/Viewer, pagination and responsive behaviour with
+    automated tests.
+
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
