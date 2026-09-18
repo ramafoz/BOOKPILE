@@ -727,9 +727,10 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-statistics-tables table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .server-statistics-tables th, .server-statistics-tables td { padding: 8px; border-top: 1px solid #e9dfd2; text-align: left; }
 .server-statistics-tables td small { display: block; margin-top: 2px; color: #6b7975; }
-.server-statistics-book-list { max-height: 510px; overflow-y: auto !important; }
-.server-statistics-book-list h3 { position: sticky; z-index: 2; top: -16px; padding: 16px 0 10px; background: #fffdf8; }
-.server-statistics-book-list thead { position: sticky; z-index: 1; top: 41px; background: #fffdf8; }
+.server-statistics-book-list { overflow: hidden !important; }
+.server-statistics-book-list h3 { position: relative; z-index: 2; background: #fffdf8; }
+.server-statistics-book-scroll { max-height: 440px; overflow: auto; overscroll-behavior: contain; }
+.server-statistics-book-scroll thead th { position: sticky; z-index: 1; top: 0; background: #fffdf8; box-shadow: 0 1px #e9dfd2; }
 .server-statistics-book-list tbody tr { height: 43px; }
 .server-statistics-note { margin: 14px 0 0; color: #697973; font-size: 12px; }
 .server-statistics-duration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
@@ -946,14 +947,16 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
   .server-catalogue-search > button { min-width: 0; min-height: 38px; padding: 5px; font-size: 0; }
   .server-catalogue-search > button svg { width: 16px; }
   .server-advanced-search, .server-form-grid, .server-book-metadata, .server-contributor-credits { grid-template-columns: 1fr; }
-  .server-book-list article { grid-template-columns: 60px 30px minmax(0, 1fr); column-gap: 7px; padding-block: 12px; }
-  .server-book-list article > div:nth-of-type(1) { min-width: 0; }
+  .server-book-list article { grid-template-columns: 60px minmax(0, 1fr); column-gap: 7px; padding-block: 12px; }
+  .server-book-list article > .server-reading-status { grid-column: 1; grid-row: 2; width: 58px; min-width: 0; align-self: start; padding-inline: 5px; font-size: 8px; }
+  .server-book-list article > .server-book-cover, .server-book-list article > .server-book-placeholder { grid-column: 1; grid-row: 1; justify-self: center; }
+  .server-book-list article > div:nth-of-type(1) { min-width: 0; grid-column: 2; grid-row: 1; }
   .server-book-list h4 { font-size: 18px; overflow-wrap: anywhere; }
   .server-book-author, .server-book-line, .server-book-location { font-size: 11px; }
-  .server-book-location { grid-column: 3; }
+  .server-book-location { grid-column: 2; grid-row: 2; }
   .server-book-location.unavailable { display: none; }
   .server-book-placeholder { width: 32px; height: 44px; }
-  .server-book-row-actions { grid-column: 3; gap: 2px; }
+  .server-book-row-actions { grid-column: 2; grid-row: 3; gap: 2px; }
   .server-book-row-actions button, .server-book-row-actions .server-icon-link { width: 30px; height: 30px; }
   .server-book-row-actions button svg, .server-book-row-actions .server-icon-link svg { width: 15px; }
   .server-personal-reading-form fieldset > div { grid-template-columns: 1fr; }
