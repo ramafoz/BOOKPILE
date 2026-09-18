@@ -140,19 +140,25 @@ be an additional convenience only.
 - [x] Exercise a real password-reset message and one-time link for the verified
   staging account on 2026-09-16. The operator confirmed the new password signs
   in and the old password is rejected; no link, token or password was recorded.
-- [ ] Exercise deletion-recovery messages, an induced temporary SMTP failure
-  with retry, and a terminal outbox failure alert.
-- [ ] Deploy migration `0022_email_delivery_receipts`, inspect the multipart
+- [x] Exercise real verification, password-reset and deletion-recovery messages
+  and their one-time links in a disposable staging account. The complete cycle
+  passed on 2026-09-18 without recording any action URL or token.
+- [ ] In an isolated environment, induce a temporary SMTP failure with retry
+  and a terminal outbox failure with an operator alert.
+- [x] Deploy migration `0022_email_delivery_receipts`, inspect the multipart
   verification/reset/recovery messages in real mailboxes, confirm the RFC
   `Date` removes the provider's `MISSING_DATE` score and retain only the safe
-  SMTP response code/provider queue ID as delivery evidence. On 2026-09-18,
-  staging reached revision `1fada55`, migration 0022 became head and the first
-  password-reset submission stored SMTP `250` plus Dinahosting queue ID
-  `BFB775445C0C`. The RFC `Date` and multipart body were present, but
-  Dinahosting scored the hidden HTML preheader as `FONT_INVIS_MSGID`, added a
-  `[SPAM]` subject prefix after signing and thereby caused Gmail to report DKIM
-  failure. Acceptance remains open until the no-hidden-content template is
-  deployed and all three message types pass the real-mailbox inspection.
+  SMTP response code/provider queue ID as delivery evidence. Staging reached
+  revision `1fada55`, migration 0022 became head and the no-hidden-content
+  template was subsequently deployed. Dinahosting disabled its outbound
+  antispam filter after confirming that its post-signing `[SPAM]` subject
+  rewrite could invalidate DKIM. The final 2026-09-18 run stored SMTP `250` and
+  provider queue IDs `7B7CE5445AF4`, `623275445AF4` and `BDDAF5445AF4`; all
+  three messages retained their subjects, included RFC `Date`, multipart text
+  and HTML without remote resources, and passed SPF, DKIM and DMARC. Gmail put
+  the authenticated verification message in spam but delivered reset and
+  recovery to the inbox, so receiver-side reputation remains a monitoring item
+  rather than a failed provider gate.
 
 ## 6. First deployment and evidence
 

@@ -927,8 +927,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     delivery, the operations/outbox heartbeat and daily deep-check heartbeat
     also passed. The 15-minute disk, inode, memory and load-capacity check and
     external heartbeat passed as well. Privacy-scrubbed server error reporting
-    and its paging route passed on 2026-09-17. Complete provider acceptance and
-    measured recovery remain.
+    and its paging route passed on 2026-09-17. Provider acceptance is complete;
+    the measured recovery drill and isolated SMTP fault injection remain.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -986,7 +986,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
-  Provider acceptance remains part of the staging gates.
+  Their active staging providers are accepted; reproducible production
+  separation and the remaining recovery rehearsal are still open.
 - [x] Choose and provision the Spanish VPS, active private object storage,
   domain, transactional email and HTTPS staging deployment: IONOS hosts the
   VPS; Dinahosting supplies domain/DNS, active S3 and email; Backblaze B2 EU
@@ -1001,13 +1002,19 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   audit, aggregate-only monitoring and no host/Docker or private-catalogue
   browsing authority. Do not infer privilege from a username; the current
   staging login is `ramafoz_`.
-- [ ] Polish transactional user emails: design a coherent BOOKPILE identity,
+- [x] Polish transactional user emails: design a coherent BOOKPILE identity,
   accessible responsive HTML plus complete plain-text alternatives, safe
   action-link presentation, expiry/support copy and rendering/delivery tests
   across verification, reset, invitations and deletion recovery. The shared
   privacy-safe multipart design, header hardening and persisted SMTP acceptance
-  receipts are implemented for every currently emitted message; close after
-  migration `0022_email_delivery_receipts` and real-mailbox staging acceptance.
+  receipts are implemented for every currently emitted message. Accepted in
+  staging on 2026-09-18 after migration `0022_email_delivery_receipts`: real
+  verification, password-reset and deletion-recovery messages returned SMTP
+  `250`, retained unmodified subjects, contained no remote resources or
+  tracking, and passed SPF, DKIM and DMARC. Dinahosting disabled the outbound
+  antispam filter that had modified signed mail. Gmail placed one authenticated
+  verification message in spam while delivering reset and recovery to the
+  inbox; monitor this receiver-side reputation signal during the private beta.
 - [x] Add a distinctive BOOKPILE browser-tab icon (favicon). The transparent
   SVG reuses the Server `LibraryBig` geometry, switches between black and white
   for light/dark browser chrome, remains crisp at small sizes without a PNG

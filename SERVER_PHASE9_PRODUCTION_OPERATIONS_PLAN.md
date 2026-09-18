@@ -92,16 +92,22 @@ delivery-relative recovery windows and local/CI gates complete. Authenticated
 implicit TLS through Dinahosting delivered and completed a real account
 verification on 2026-09-14. A real password-reset email, one-time link and
 new-password sign-in passed on 2026-09-16; the old password was rejected.
-Deletion recovery, induced retry, terminal failure and outbox operator alerting
-remain staging/9E gates; see
+The complete verification, password-reset and deletion-recovery cycle passed
+with real disposable staging accounts on 2026-09-18. The isolated induced
+retry, terminal failure and outbox operator-alert tests remain 9F evidence; see
 `SERVER_EMAIL_OUTBOX.md`.
 
 The cross-purpose presentation and delivery-hardening implementation now adds
 multipart text/HTML templates without remote tracking, standards-compliant
 automated-message headers and persisted privacy-safe SMTP acceptance receipts.
-Local server acceptance passes; staging must migrate to
-`0022_email_delivery_receipts` and exercise every template before this portion
-of 9F is accepted.
+Local server acceptance passes. Staging migrated to
+`0022_email_delivery_receipts` and exercised every emitted template on
+2026-09-18. Each final message returned SMTP `250`, retained its signed subject,
+contained no remote resources or tracking and passed SPF, DKIM and DMARC.
+Dinahosting disabled the outbound antispam filter whose post-signing subject
+rewrite had invalidated DKIM. One authenticated verification message was placed
+in Gmail spam while reset and recovery reached the inbox; this residual
+receiver-side reputation signal will be monitored during the private beta.
 
 - Replace request-blocking SMTP sends with a PostgreSQL outbox and a separate
   retrying worker.
@@ -167,8 +173,9 @@ manages `bookpile.gal`, active private objects and transactional email;
 environment templates, purchase safeguards and the remaining evidence sequence
 are in `SERVER_STAGING_PROVISIONING_CHECKLIST.md`. Initial provisioning and the
 first authenticated smoke path, encrypted off-site backup, isolated restore and
-backup/freshness scheduling have passed. Remaining operations, external
-alerting and measured disaster recovery remain open.
+backup/freshness scheduling, operations alerting and transactional-provider
+acceptance have passed. The isolated SMTP fault tests and measured disaster
+recovery remain open.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.
