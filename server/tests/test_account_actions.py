@@ -53,7 +53,7 @@ def test_password_reset_is_generic_changes_hash_and_revokes_sessions(
     assert requested.status_code == unknown.status_code == 202
     assert requested.content == unknown.content
     assert len(email_sender.emails) == 1
-    assert email_sender.emails[0].subject == "BOOKPILE — Reset your password"
+    assert email_sender.emails[0].subject == "BOOKPILE: Reset your password"
     assert email_sender.emails[0].html is not None
     raw_token = token_from_email(email_sender.emails[0].text)
 

@@ -23,6 +23,14 @@ purpose-specific subjects, expiry and security guidance. The SMTP envelope adds
 an RFC `Date`, deterministic `Message-ID`, `Auto-Submitted: auto-generated` and
 auto-response suppression headers.
 
+Keep transactional HTML free of hidden preheaders, zero-size text and invisible
+content. During the 2026-09-18 staging acceptance, the hosting provider's
+outbound SpamAssassin assigned `FONT_INVIS_MSGID` to a conventional hidden
+preheader, classified the message as spam and prefixed its subject after DKIM
+signing. That downstream mutation invalidated DKIM at Gmail. Subjects are kept
+ASCII-only as an additional compatibility measure; inbox placement must be
+rechecked after any presentation change.
+
 Migration `0022_email_delivery_receipts` stores only the successful SMTP response
 code and a strictly parsed provider queue identifier when the server supplies
 one. Both values are also included in the privacy-safe `email_sent` log. They

@@ -14,7 +14,6 @@ class RenderedEmail:
 def _render(
     *,
     subject: str,
-    preheader: str,
     eyebrow: str,
     heading: str,
     introduction: str,
@@ -43,7 +42,6 @@ def _render(
     <title>{escape(subject)}</title>
   </head>
   <body style="margin:0;padding:0;background:#f5f0e7;color:#1d2c28;font-family:Arial,Helvetica,sans-serif;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">{escape(preheader)}</div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f0e7;">
       <tr>
         <td align="center" style="padding:32px 16px;">
@@ -94,7 +92,7 @@ def _render(
             </tr>
             <tr>
               <td style="padding:20px 32px;border-top:1px solid #e5dacb;background:#f8f3ea;color:#6f7875;font-size:12px;line-height:1.5;">
-                This automated message contains no tracking pixels or remote images.<br>
+                This automated service message was sent in response to a BOOKPILE account action. It does not load external content.<br>
                 BOOKPILE · Your personal library, securely mapped.
               </td>
             </tr>
@@ -109,8 +107,7 @@ def _render(
 
 def verification_email(action_url: str) -> RenderedEmail:
     return _render(
-        subject="BOOKPILE — Verify your email",
-        preheader="Confirm your email address to activate your BOOKPILE account.",
+        subject="BOOKPILE: Verify your email",
         eyebrow="One last step",
         heading="Verify your email",
         introduction="Confirm that this email address belongs to you to activate your BOOKPILE account.",
@@ -124,8 +121,7 @@ def verification_email(action_url: str) -> RenderedEmail:
 
 def password_reset_email(action_url: str) -> RenderedEmail:
     return _render(
-        subject="BOOKPILE — Reset your password",
-        preheader="Use this secure link to choose a new BOOKPILE password.",
+        subject="BOOKPILE: Reset your password",
         eyebrow="Account security",
         heading="Reset your password",
         introduction="A password reset was requested for your BOOKPILE account.",
@@ -139,8 +135,7 @@ def password_reset_email(action_url: str) -> RenderedEmail:
 
 def account_recovery_email(action_url: str) -> RenderedEmail:
     return _render(
-        subject="BOOKPILE — Recover your account",
-        preheader="Your BOOKPILE account can still be recovered for 48 hours.",
+        subject="BOOKPILE: Recover your account",
         eyebrow="Account recovery",
         heading="Recover your account",
         introduction="Your BOOKPILE account is scheduled for permanent deletion.",

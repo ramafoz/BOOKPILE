@@ -145,7 +145,14 @@ be an additional convenience only.
 - [ ] Deploy migration `0022_email_delivery_receipts`, inspect the multipart
   verification/reset/recovery messages in real mailboxes, confirm the RFC
   `Date` removes the provider's `MISSING_DATE` score and retain only the safe
-  SMTP response code/provider queue ID as delivery evidence.
+  SMTP response code/provider queue ID as delivery evidence. On 2026-09-18,
+  staging reached revision `1fada55`, migration 0022 became head and the first
+  password-reset submission stored SMTP `250` plus Dinahosting queue ID
+  `BFB775445C0C`. The RFC `Date` and multipart body were present, but
+  Dinahosting scored the hidden HTML preheader as `FONT_INVIS_MSGID`, added a
+  `[SPAM]` subject prefix after signing and thereby caused Gmail to report DKIM
+  failure. Acceptance remains open until the no-hidden-content template is
+  deployed and all three message types pass the real-mailbox inspection.
 
 ## 6. First deployment and evidence
 

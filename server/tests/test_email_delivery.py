@@ -20,7 +20,7 @@ def test_smtp_sender_uses_implicit_tls_when_configured() -> None:
     smtp.last_data_response = (250, b"2.0.0 Ok: queued as PROVIDER123")
     email = OutgoingEmail(
         recipient="reader@example.com",
-        subject="BOOKPILE — Verify your email",
+        subject="BOOKPILE: Verify your email",
         text="Verification message",
         html="<html><body><p>Verification message</p></body></html>",
         message_key="verification:test",
