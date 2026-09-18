@@ -638,7 +638,7 @@ export interface CatalogueQuery {
   year_min?: number;
   year_max?: number;
   perspective_user_id?: string;
-  reading_state?: "ANY" | "PENDING" | "READING" | "REREADING" | "READ";
+  reading_state?: "ANY" | "PENDING" | "ACTIVE" | "READING" | "REREADING" | "READ";
   rereading_state?: "ANY" | "YES" | "NO";
   reading_date_field?: "STARTED" | "FINISHED";
   reading_date_from?: string;

@@ -189,7 +189,9 @@ def get_catalogue(
     year_min: int | None = Query(default=None, ge=1000, le=9999),
     year_max: int | None = Query(default=None, ge=1000, le=9999),
     perspective_user_id: UUID | None = Query(default=None),
-    reading_state: Literal["ANY", "PENDING", "READING", "REREADING", "READ"] = "ANY",
+    reading_state: Literal[
+        "ANY", "PENDING", "ACTIVE", "READING", "REREADING", "READ"
+    ] = "ANY",
     rereading_state: Literal["ANY", "YES", "NO"] = "ANY",
     reading_date_field: Literal["STARTED", "FINISHED"] = "FINISHED",
     reading_date_from: date | None = Query(default=None),
@@ -213,6 +215,7 @@ def get_catalogue(
         "loaned_date",
         "expected_return_date",
         "returned_date",
+        "physical",
         "random",
     ] = "title",
     sort_order: Literal["asc", "desc"] = "asc",

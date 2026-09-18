@@ -1,6 +1,8 @@
 import type { CatalogueQuery, LibraryMemberSummary, ReadingPerspective } from "./serverApi";
 
 export type ViewingWorkspace = "CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT";
+export type QuickReadingFilter = "ANY" | "PENDING" | "ACTIVE" | "READ";
+export type QuickCatalogueSort = "title" | "author" | "physical";
 
 const FILTER_KEYS: Array<keyof CatalogueQuery> = [
   "search", "isbn", "language", "original_language", "genre", "publisher",
@@ -48,4 +50,38 @@ export function catalogueTitle(
 
 export function cataloguePrivacyLabel(members: LibraryMemberSummary[]): string {
   return members.length > 1 ? "Shared catalogue" : "Private catalogue";
+}
+
+export function withDynamicSearch(
+  query: CatalogueQuery,
+  search: string,
+): CatalogueQuery {
+  const normalized = search.trim();
+  return {
+    ...query,
+    search: normalized || undefined,
+    offset: 0,
+  };
+}
+
+export function withQuickReadingFilter(
+  query: CatalogueQuery,
+  readingState: QuickReadingFilter,
+): CatalogueQuery {
+  return {
+    ...query,
+    reading_state: readingState,
+    offset: 0,
+  };
+}
+
+export function withQuickCatalogueSort(
+  query: CatalogueQuery,
+  sortBy: QuickCatalogueSort,
+): CatalogueQuery {
+  return {
+    ...query,
+    sort_by: sortBy,
+    offset: 0,
+  };
 }
