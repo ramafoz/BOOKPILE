@@ -949,6 +949,33 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     location, and cover Owner/Viewer, pagination and responsive behaviour with
     automated tests.
 
+- [ ] Unify and tighten the primary Server workspace presentation before the
+  private beta:
+  - Remove the duplicated outer/inner framed-card treatment from Catalogue,
+    Library Map and Statistics. Give all three the same single responsive page
+    shell already used by the personal Account area, without horizontal
+    overflow or content escaping the mobile viewport.
+  - Keep the Catalogue heading composition (`Private catalogue`, `Your books`,
+    the book icon, `New read` and `Add`) but align the icon more deliberately
+    with the heading and keep every header control inside the content width.
+  - Restore the Local-style summary row immediately below the Catalogue
+    heading: `Total books`, `Waiting to be read`, `Currently reading` and
+    `Read`, with the established distinct icons and counts.
+  - Make each summary item a quick catalogue filter. `Total books` clears only
+    the quick reading-state filter; `Waiting to be read` selects `PENDING`;
+    `Currently reading` includes active first readings and re-readings; and
+    `Read` selects completed reading state. Preserve search and other active
+    filters, expose the selected item accessibly and reset pagination.
+  - Make catalogue text search update dynamically after a short debounce and
+    remove the separate `Search` submit button. Place the compact quick `Sort`
+    and `Advanced` controls beside the search field as space permits.
+  - Keep the four summary items on one row on mobile by reducing icon, number,
+    type and gap sizes; show only icon plus number at the narrow breakpoint,
+    with accessible names retaining the hidden labels rather than wrapping the
+    row into two lines.
+  - Add responsive and interaction tests for the shared shell, dynamic search,
+    quick filters, narrow summary row and absence of horizontal overflow.
+
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
