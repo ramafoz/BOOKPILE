@@ -1,4 +1,4 @@
-FROM python:3.13.7-slim-bookworm AS builder
+FROM python:3.14.6-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -7,7 +7,7 @@ COPY server/pyproject.toml ./
 COPY server/src ./src
 RUN python -m pip wheel --wheel-dir /wheels .
 
-FROM python:3.13.7-slim-bookworm AS runtime
+FROM python:3.14.6-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
