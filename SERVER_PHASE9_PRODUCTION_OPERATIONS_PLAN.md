@@ -31,8 +31,8 @@ backups and its measured recovery result is documented.
 Status: implementation and local gates complete. The first IONOS staging-host
 deployment passed explicit migration, HTTPS liveness/readiness and an
 authenticated library write on 2026-09-13/14. Scheduled operations, rollback
-and measured recovery now pass in staging; production separation and final
-evidence consolidation remain in 9F/9G. Commands are in
+and measured recovery now pass in staging; production separation and the final
+9G review remain. Commands are in
 `SERVER_PRODUCTION_RUNBOOK.md`.
 
 - Add production startup validation, trusted-host/origin enforcement, secure
@@ -185,10 +185,11 @@ acceptance and isolated SMTP fault tests have passed. The 2026-09-18 measured
 disaster-recovery drill restored 36 tables and 434 objects into empty isolated
 targets, migrated and started the recovered API, and passed readiness in
 35 min 48 s end to end. Disposable resources were removed. The private
-provider/cost dossier was reviewed on 2026-09-19. Invoices, DPAs, region and
-exit evidence are present; dated subprocessor-list copies, the current
-Dinahosting mail/privacy terms and post-trial Sentry plan confirmation remain
-before formal 9F closure.
+provider/cost dossier was completed and reviewed on 2026-09-19, including
+invoices, DPAs, current subprocessor lists, region evidence, service terms and
+exit procedures. Sentry's official policy confirms its new-account Business
+trial returns to the free Developer plan without billing unless a card and
+subscription are added manually. Phase 9F is accepted.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.

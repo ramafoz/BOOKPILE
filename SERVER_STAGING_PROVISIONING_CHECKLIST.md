@@ -21,17 +21,18 @@ issues or chat.
   operator accounts. The operator confirmed the first three on 2026-09-16 and
   Sentry on 2026-09-17; the original activation dates relative to service-
   credential creation were not checked.
-- [ ] Save each DPA/subprocessor/export link and invoice in the private operator
-  record. The private, Git-ignored dossier was reviewed on 2026-09-19 and now
-  contains invoices, the IONOS/Backblaze/Sentry DPAs, Spain/EU-region evidence,
-  Healthchecks privacy/no-DPA/location evidence and provider exit screenshots.
-  Before closing this item, retain dated copies of the current Backblaze and
-  Sentry subprocessor pages, the IONOS DPA Annex 2 subprocessor list, and the
-  current Dinahosting hosting/email terms and privacy page. Also record that
-  Healthchecks signs no customer DPA and is acceptable only while BOOKPILE
-  sends aggregate heartbeat state without personal data, credentials, URLs or
-  diagnostic payloads. Reconfirm Sentry's settled post-trial plan after the
-  trial ends; no payment method is currently stored.
+- [x] Save each DPA/subprocessor/export link and invoice in the private operator
+  record. The private, Git-ignored dossier was completed and reviewed on
+  2026-09-19. It contains invoices; IONOS, Backblaze and Sentry DPAs; current
+  IONOS, Backblaze and Sentry subprocessor lists; Spain/EU-region evidence;
+  Dinahosting hosting/email terms and privacy policy; Healthchecks
+  privacy/no-DPA/location evidence; and provider exit procedures. Healthchecks
+  signs no customer DPA and remains acceptable only while BOOKPILE sends
+  aggregate heartbeat state without personal data, credentials, URLs or
+  diagnostic payloads. Sentry's official trial policy confirms that a new
+  Business trial returns to the free Developer plan without billing unless the
+  operator manually adds a card and subscribes:
+  <https://sentry.zendesk.com/hc/en-us/articles/24761453250459-Why-am-I-on-a-Business-trial>
 - [x] Calculate the operator-reported regular monthly equivalent on
   2026-09-16: IONOS VPS EUR 10.89, Dinahosting S3 EUR 1.30,
   domain/WhoIs EUR 39.49 per year (EUR 3.29 per month), mail EUR 30.00

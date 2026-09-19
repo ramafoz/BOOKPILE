@@ -917,7 +917,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     probe, delivered its email alert and exposed only redacted stack metadata,
     revision, component and correlation ID. An external Sentry uptime monitor
     also exercises public readiness. Phase 9E is accepted.
-  - [ ] 9F Spanish staging deployment and measured recovery drill. The
+  - [x] 9F Spanish staging deployment and measured recovery drill. The
     individual contracting identity, Spain/EU data boundary and
     `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
     purchased; HTTPS deployment, active S3, transactional verification email,
@@ -935,11 +935,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     recovered database, started a ready isolated API and removed every target.
     RPO was 6 h 36 min 22 s; successful restore time was 5 min 11.48 s and
     end-to-end RTO including diagnosed rehearsal defects was 35 min 48 s. The
-    technical drill is complete. The private provider dossier was reviewed on
-    2026-09-19 and contains the invoices, principal DPAs, region evidence and
-    exit routes. Retain dated Backblaze/Sentry/IONOS subprocessor lists, the
-    current Dinahosting mail/privacy terms and the settled post-trial Sentry
-    plan to close 9F formally.
+    private provider dossier was completed and reviewed on 2026-09-19 with
+    invoices, principal DPAs, dated subprocessor lists, region evidence,
+    service terms and exit routes. Sentry's official trial policy confirms a
+    return to the free Developer plan without billing unless a card and paid
+    subscription are added manually. The technical and administrative gates
+    are complete; Phase 9F is accepted.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data
@@ -997,9 +998,9 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 - [ ] Replace local-only assumptions with production adapters and providers.
   Phase 9A configuration/database/runtime handling and the 9B/9C/9D
   private-object, durable-email and recovery implementations are complete.
-  Their active staging providers and measured recovery rehearsal are accepted;
-  reproducible production separation and formal evidence consolidation remain
-  open.
+  Their active staging providers, measured recovery rehearsal and formal
+  evidence consolidation are accepted; reproducible production separation
+  remains open.
 - [x] Choose and provision the Spanish VPS, active private object storage,
   domain, transactional email and HTTPS staging deployment: IONOS hosts the
   VPS; Dinahosting supplies domain/DNS, active S3 and email; Backblaze B2 EU
