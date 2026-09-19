@@ -9,15 +9,29 @@ issues or chat.
 
 - [x] Confirm the operator-reported regular IONOS VPS charge after promotions:
   EUR 10.89 per month including VAT, confirmed on 2026-09-16.
-- [ ] Record any setup fee, minimum term, cancellation process and Spain
-  location for the purchased IONOS VPS in the private operator record.
-- [ ] Choose monthly billing for the first rehearsal where offered.
+- [x] Record any setup fee, minimum term, cancellation process and Spain
+  location for the purchased IONOS VPS in the private operator record. Reviewed
+  on 2026-09-19: setup fee EUR 0, 12-month minimum term, monthly invoicing,
+  Spanish data centre and the control-panel withdrawal/cancellation route are
+  retained privately.
+- [x] Choose monthly billing for the first rehearsal where offered. IONOS VPS
+  and Dinahosting S3 are invoiced monthly; domain, WHOIS protection and mail
+  use the provider's annual service period.
 - [x] Verify MFA is active on the IONOS, Backblaze, Dinahosting and Sentry
   operator accounts. The operator confirmed the first three on 2026-09-16 and
   Sentry on 2026-09-17; the original activation dates relative to service-
   credential creation were not checked.
 - [ ] Save each DPA/subprocessor/export link and invoice in the private operator
-  record.
+  record. The private, Git-ignored dossier was reviewed on 2026-09-19 and now
+  contains invoices, the IONOS/Backblaze/Sentry DPAs, Spain/EU-region evidence,
+  Healthchecks privacy/no-DPA/location evidence and provider exit screenshots.
+  Before closing this item, retain dated copies of the current Backblaze and
+  Sentry subprocessor pages, the IONOS DPA Annex 2 subprocessor list, and the
+  current Dinahosting hosting/email terms and privacy page. Also record that
+  Healthchecks signs no customer DPA and is acceptable only while BOOKPILE
+  sends aggregate heartbeat state without personal data, credentials, URLs or
+  diagnostic payloads. Reconfirm Sentry's settled post-trial plan after the
+  trial ends; no payment method is currently stored.
 - [x] Calculate the operator-reported regular monthly equivalent on
   2026-09-16: IONOS VPS EUR 10.89, Dinahosting S3 EUR 1.30,
   domain/WhoIs EUR 39.49 per year (EUR 3.29 per month), mail EUR 30.00

@@ -935,8 +935,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     recovered database, started a ready isolated API and removed every target.
     RPO was 6 h 36 min 22 s; successful restore time was 5 min 11.48 s and
     end-to-end RTO including diagnosed rehearsal defects was 35 min 48 s. The
-    technical drill is complete; consolidate the remaining private provider,
-    cost and performance evidence to close 9F formally.
+    technical drill is complete. The private provider dossier was reviewed on
+    2026-09-19 and contains the invoices, principal DPAs, region evidence and
+    exit routes. Retain dated Backblaze/Sentry/IONOS subprocessor lists, the
+    current Dinahosting mail/privacy terms and the settled post-trial Sentry
+    plan to close 9F formally.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
 - [ ] Add a localization framework only after the main interface and data

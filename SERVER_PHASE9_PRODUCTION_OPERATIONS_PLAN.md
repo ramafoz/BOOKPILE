@@ -184,9 +184,11 @@ backup/freshness scheduling, operations alerting, transactional-provider
 acceptance and isolated SMTP fault tests have passed. The 2026-09-18 measured
 disaster-recovery drill restored 36 tables and 434 objects into empty isolated
 targets, migrated and started the recovered API, and passed readiness in
-35 min 48 s end to end. Disposable resources were removed. Consolidation of
-the remaining private provider/cost evidence is the last checklist item before
-formal 9F closure.
+35 min 48 s end to end. Disposable resources were removed. The private
+provider/cost dossier was reviewed on 2026-09-19. Invoices, DPAs, region and
+exit evidence are present; dated subprocessor-list copies, the current
+Dinahosting mail/privacy terms and post-trial Sentry plan confirmation remain
+before formal 9F closure.
 
 - Select providers and domain after comparing full recurring cost, VAT,
   resources, data location, DPA/subprocessors, backup, support, scaling and exit.
