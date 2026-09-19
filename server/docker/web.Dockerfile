@@ -6,7 +6,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build:server
 
-FROM caddy:2.10.2-alpine AS runtime
+FROM caddy:2.11.3-alpine AS runtime
 
 RUN addgroup -S -g 10001 bookpile \
     && adduser -S -D -H -u 10001 -G bookpile bookpile \
