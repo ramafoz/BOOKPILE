@@ -324,8 +324,8 @@ fields.
 - [x] Integrate ISBN lookup and temporary-photo barcode capture into Batch Add
   while preserving its current container, position, direction, and collision
   handling.
-- [ ] Accept and merge Server temporary-photo barcode scanning on real mobile
-  hardware. Implementation is complete on `feature/server-barcode-scanning`:
+- [x] Accept and merge Server temporary-photo barcode scanning on real mobile
+  hardware. It is merged into `main`:
   - [x] Add Owner-only, library-scoped and rate-limited provider lookup with
     exact ISBN catalogue warnings and mocked backend tests.
   - [x] Reuse local ZXing decoding without uploading or storing the photograph.
@@ -643,7 +643,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   dedicated maintenance line.
 - [ ] Resolve the remaining decisions listed in the multi-user implementation
   plan.
-- [ ] Select and contract the Spanish beta infrastructure within the initial
+- [x] Select and contract the Spanish beta infrastructure within the initial
   EUR 25/month target.
 - [x] Complete Server Phase 1 on `feature/server-foundation`:
   - [x] Isolate Server code from Local v1.
@@ -760,7 +760,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     explicit omission of unmapped personal data, preserve Server geometry,
     and never infer membership. Synthetic round-trip, rollback, frontend,
     migration, PostgreSQL and real-export UX acceptance gates pass.
-- [ ] Implement private per-library catalogue, physical hierarchy, visual map,
+- [x] Implement private per-library catalogue, physical hierarchy, visual map,
   backup, restore, and export flows.
   - [x] Shared catalogue and private cover flows.
   - [x] Physical hierarchy, precise visual-layout validation, responsive map,
@@ -881,6 +881,68 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
 
 ### Publishable web/app infrastructure
 
+- [ ] Complete Server Phase 9 according to
+  `SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md`.
+  - [x] 9A implementation/local gates: strict hosted configuration, trusted
+    hosts, secure headers, request IDs, privacy-safe logs, health boundaries,
+    pooling, pinned non-root images, private-network Compose/Caddy, CI and the
+    rehearsal runbook. The clean staging-host proof remains in 9F.
+  - [x] 9B private S3-compatible storage: adapter, strict configuration,
+    verified/chunked I/O, inventory audit and restartable copy-without-switching
+    migration tooling are implemented. Dinahosting passed an isolated private-
+    bucket round trip; the 2026-09-15 deep staging reconciliation found one
+    expected/stored object and zero missing, mismatched or orphaned objects.
+    The operator accepted write-capable credential reuse for the initial
+    private beta on 2026-09-16, with the residual risk documented.
+  - [x] 9C implementation/local gates: encrypted transactional PostgreSQL
+    outbox, leased retrying worker, stale-action cancellation, deterministic
+    message IDs and delivery-relative recovery windows. Provider delivery and
+    worker monitoring are exercised in staging during 9F.
+  - [ ] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
+    authenticated chunk encryption, separate S3 repository, completion marker,
+    29-day compliance retention, guarded restore and local 36-table/869-object
+    recovery rehearsal are implemented. Backblaze EU passed exact-version
+    COMPLIANCE enforcement and post-expiry deletion. On 2026-09-14, staging
+    created/verified a real database-plus-one-object backup, restored 36 tables
+    and that object into disposable targets, and proved the daily systemd job.
+    Close after final lifecycle expiry and remaining provider acceptance.
+  - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
+    retention maintenance, light/deep invariant checks, backup freshness,
+    privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
+    SYSTEM_ADMIN boundary are complete. IONOS IPv4 firewall, external backup
+    alert delivery and the 15-minute aggregate operations/outbox heartbeat
+    plus daily deep private-object reconciliation passed in staging. The
+    15-minute host-capacity thresholds and external heartbeat also passed. On
+    2026-09-17, the EU-hosted Sentry error route captured a controlled API
+    probe, delivered its email alert and exposed only redacted stack metadata,
+    revision, component and correlation ID. An external Sentry uptime monitor
+    also exercises public readiness. Phase 9E is accepted.
+  - [x] 9F Spanish staging deployment and measured recovery drill. The
+    individual contracting identity, Spain/EU data boundary and
+    `staging.bookpile.gal` are fixed. IONOS/Dinahosting/Backblaze resources are
+    purchased; HTTPS deployment, active S3, transactional verification email,
+    authenticated library write, verified off-site backup, disposable restore
+    and backup/freshness timers pass in staging. Hourly maintenance, 15-minute
+    operations checks, daily deep reconciliation, external backup alert
+    delivery, the operations/outbox heartbeat and daily deep-check heartbeat
+    also passed. The 15-minute disk, inode, memory and load-capacity check and
+    external heartbeat passed as well. Privacy-scrubbed server error reporting
+    and its paging route passed on 2026-09-17. On 2026-09-18, controlled SMTP
+    failure proved the bounded retry, terminal failure, operations failure,
+    external `DOWN` alert, manual recovery, successful second attempt and
+    external `UP` alert. On 2026-09-18, the measured recovery drill restored 36
+    tables and 434 exact objects into empty disposable targets, migrated the
+    recovered database, started a ready isolated API and removed every target.
+    RPO was 6 h 36 min 22 s; successful restore time was 5 min 11.48 s and
+    end-to-end RTO including diagnosed rehearsal defects was 35 min 48 s. The
+    private provider dossier was completed and reviewed on 2026-09-19 with
+    invoices, principal DPAs, dated subprocessor lists, region evidence,
+    service terms and exit routes. Sentry's official trial policy confirms a
+    return to the free Developer plan without billing unless a card and paid
+    subscription are added manually. The technical and administrative gates
+    are complete; Phase 9F is accepted.
+  - [ ] 9G production-readiness review and explicit go/no-go.
+
 - [ ] Add a localization framework only after the main interface and data
   model are mature; keep the current interface in English until then.
   - Planned interface languages: Galician, Portuguese, Spanish, Italian,
@@ -888,26 +950,104 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   - Design normalization and display rules for free-text metadata before
     localized labels or translated controlled vocabularies are introduced.
 
-- [ ] Replace local-only assumptions with production configuration for the
-  database, cover storage, API URLs, and secrets.
-- [ ] Choose the Spanish VPS, private object storage, domain, email service,
-  and HTTPS deployment; IONOS/Arsys and Dinahosting are current candidates.
+- [x] Restore compact Server catalogue sorting before production:
+  - Put a general `Sort` control beside `Search` on the main catalogue page,
+    without requiring the user to open `Advanced`.
+  - Limit that quick control to `Title`, `Author`, and `Physical location`.
+  - Keep the complete set of specialist sort fields and related controls in
+    `Advanced`.
+  - Add a library-scoped deterministic physical-location sort to the Server
+    API/repository, including an explicit rule for books without a physical
+    location, and cover Owner/Viewer, pagination and responsive behaviour with
+    automated tests.
+  - Accepted in staging on 2026-09-18: the quick control, dynamic search and
+    deterministic ascending/descending physical hierarchy work as intended;
+    unplaced books remain last and alphabetical.
+
+- [x] Unify and tighten the primary Server workspace presentation before the
+  private beta:
+  - Remove the duplicated outer/inner framed-card treatment from Catalogue,
+    Library Map and Statistics. Give all three the same single responsive page
+    shell already used by the personal Account area, without horizontal
+    overflow or content escaping the mobile viewport.
+  - Keep the Catalogue heading composition (`Private catalogue`, `Your books`,
+    the book icon, `New read` and `Add`) but align the icon more deliberately
+    with the heading and keep every header control inside the content width.
+  - Restore the Local-style summary row immediately below the Catalogue
+    heading: `Total books`, `Waiting to be read`, `Currently reading` and
+    `Read`, with the established distinct icons and counts.
+  - Make each summary item a quick catalogue filter. `Total books` clears only
+    the quick reading-state filter; `Waiting to be read` selects `PENDING`;
+    `Currently reading` includes active first readings and re-readings; and
+    `Read` selects completed reading state. Preserve search and other active
+    filters, expose the selected item accessibly and reset pagination.
+  - Make catalogue text search update dynamically after a short debounce and
+    remove the separate `Search` submit button. Place the compact quick `Sort`
+    and `Advanced` controls beside the search field as space permits.
+  - Keep the four summary items on one row on mobile by reducing icon, number,
+    type and gap sizes; show only icon plus number at the narrow breakpoint,
+    with accessible names retaining the hidden labels rather than wrapping the
+    row into two lines.
+  - Add responsive and interaction tests for the shared shell, dynamic search,
+    quick filters, narrow summary row and absence of horizontal overflow.
+  - Desktop and mobile staging acceptance completed on 2026-09-18. The final
+    pass moved reading-state badges below mobile cover/title rows and isolated
+    Statistics table scrolling so rows no longer bleed through sticky column
+    headings in Chrome or mobile Safari.
+
+- [ ] Replace local-only assumptions with production adapters and providers.
+  Phase 9A configuration/database/runtime handling and the 9B/9C/9D
+  private-object, durable-email and recovery implementations are complete.
+  Their active staging providers, measured recovery rehearsal and formal
+  evidence consolidation are accepted; reproducible production separation
+  remains open.
+- [x] Choose and provision the Spanish VPS, active private object storage,
+  domain, transactional email and HTTPS staging deployment: IONOS hosts the
+  VPS; Dinahosting supplies domain/DNS, active S3 and email; Backblaze B2 EU
+  Central holds immutable encrypted backups.
 - [ ] Add authorization checks to every user-owned backend operation.
 - [ ] Add a restricted platform-administration panel for account invitations,
   accounts, abuse/security operations, and service health. Platform operators
   must remain separate from library `OWNER`/`VIEWER` membership and receive no
-  implicit private-library access.
-- [ ] Complete the production security/operations layer: upload validation,
-  reverse-proxy rate limits, stale rate-bucket pruning, CSP/HSTS, asynchronous
-  email delivery, audit operations, monitoring, and error reporting. Baseline
-  application rate limits and defensive API headers are implemented.
+  implicit private-library access. Design the first friendly frontend panel for
+  the explicitly enrolled operator (planned `ramafoz`), with independent
+  `SYSTEM_ADMIN` authentication, step-up/MFA for destructive actions, immutable
+  audit, aggregate-only monitoring and no host/Docker or private-catalogue
+  browsing authority. Do not infer privilege from a username; the current
+  staging login is `ramafoz_`.
+- [x] Polish transactional user emails: design a coherent BOOKPILE identity,
+  accessible responsive HTML plus complete plain-text alternatives, safe
+  action-link presentation, expiry/support copy and rendering/delivery tests
+  across verification, reset, invitations and deletion recovery. The shared
+  privacy-safe multipart design, header hardening and persisted SMTP acceptance
+  receipts are implemented for every currently emitted message. Accepted in
+  staging on 2026-09-18 after migration `0022_email_delivery_receipts`: real
+  verification, password-reset and deletion-recovery messages returned SMTP
+  `250`, retained unmodified subjects, contained no remote resources or
+  tracking, and passed SPF, DKIM and DMARC. Dinahosting disabled the outbound
+  antispam filter that had modified signed mail. Gmail placed one authenticated
+  verification message in spam while delivering reset and recovery to the
+  inbox; monitor this receiver-side reputation signal during the private beta.
+- [x] Add a distinctive BOOKPILE browser-tab icon (favicon). The transparent
+  SVG reuses the Server `LibraryBig` geometry, switches between black and white
+  for light/dark browser chrome, remains crisp at small sizes without a PNG
+  fallback, and passed staging browser-cache verification on 2026-09-18.
+- [x] Complete provider-bound staging security/operations acceptance: the
+  external firewall, paging delivery, privacy-scrubbed Sentry error reporting,
+  host disk/inode/memory/load thresholds and external heartbeats are accepted.
+  Upload validation, shared PostgreSQL rate
+  limits, stale-bucket pruning, CSP/HSTS, asynchronous email, aggregate
+  monitoring and privacy-safe request correlation are implemented. Stock Caddy
+  deliberately has no misleading per-process rate limiter.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,
   owned-library dependency checks, session revocation, email-only single-use
   48-hour recovery, and final personal-data cleanup. Keep it separate from
   library deletion.
-- [ ] Add automated deployment, migration, test, and rollback procedures.
+- [ ] Complete automated deployment and rollback. CI, explicit migration,
+  reproducible images and a manual rehearsal/rollback runbook exist; registry
+  publication and staging automation follow provider selection.
 - [ ] Test responsive behaviour, accessibility, browser support, and mobile
   installation requirements.
 - [ ] Prepare terms of use, privacy information, and any required consent or

@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -5,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_session
 from ..email_delivery import EmailSender, SmtpEmailSender
+from ..email_outbox import TransactionalOutboxEmailSender
 from ..repositories.account_actions import AccountActionRepository
 from ..repositories.rate_limits import RateLimitRepository
 from ..repositories.books import BookRepository
@@ -32,7 +34,7 @@ from ..services.auth import (
 )
 from ..services.catalogue import CatalogueService
 from ..services.covers import CoverService
-from ..cover_storage import FilesystemCoverStorage
+from ..cover_storage import CoverStorage, FilesystemCoverStorage, S3PrivateObjectStorage
 from ..services.library_access import LibraryAccessService
 from ..services.libraries import LibraryService
 from ..services.loans import LoanService
@@ -47,6 +49,19 @@ from ..services.storage import StorageService
 SessionDependency = Annotated[Session, Depends(get_session)]
 
 
+@lru_cache(maxsize=1)
+def get_private_object_storage() -> CoverStorage:
+    settings = get_settings()
+    if settings.private_object_backend == "s3":
+        return S3PrivateObjectStorage.from_settings(settings)
+    return FilesystemCoverStorage(settings.private_object_root)
+
+
+PrivateObjectStorageDependency = Annotated[
+    CoverStorage, Depends(get_private_object_storage)
+]
+
+
 def get_catalogue_service(session: SessionDependency) -> CatalogueService:
     return CatalogueService(BookRepository(session))
 
@@ -56,12 +71,15 @@ CatalogueServiceDependency = Annotated[
 ]
 
 
-def get_cover_service(session: SessionDependency) -> CoverService:
+def get_cover_service(
+    session: SessionDependency,
+    object_storage: PrivateObjectStorageDependency,
+) -> CoverService:
     settings = get_settings()
     return CoverService(
         CoverRepository(session),
         BookRepository(session),
-        FilesystemCoverStorage(settings.private_object_root),
+        object_storage,
         settings,
     )
 
@@ -114,14 +132,17 @@ def get_loan_service(session: SessionDependency) -> LoanService:
 LoanServiceDependency = Annotated[LoanService, Depends(get_loan_service)]
 
 
-def get_local_import_service(session: SessionDependency) -> LocalImportService:
+def get_local_import_service(
+    session: SessionDependency,
+    object_storage: PrivateObjectStorageDependency,
+) -> LocalImportService:
     settings = get_settings()
     return LocalImportService(
         LocalImportRepository(session),
         settings.import_staging_root,
         ttl_minutes=settings.import_staging_ttl_minutes,
         storage_service=StorageService(StorageRepository(session)),
-        object_storage=FilesystemCoverStorage(settings.private_object_root),
+        object_storage=object_storage,
         settings=settings,
     )
 
@@ -131,11 +152,14 @@ LocalImportServiceDependency = Annotated[
 ]
 
 
-def get_portable_export_service(session: SessionDependency) -> PortableExportService:
+def get_portable_export_service(
+    session: SessionDependency,
+    object_storage: PrivateObjectStorageDependency,
+) -> PortableExportService:
     settings = get_settings()
     return PortableExportService(
         LocalImportRepository(session),
-        FilesystemCoverStorage(settings.private_object_root),
+        object_storage,
         settings.export_staging_root,
     )
 
@@ -152,11 +176,13 @@ def get_profile_service(session: SessionDependency) -> ProfileService:
 ProfileServiceDependency = Annotated[ProfileService, Depends(get_profile_service)]
 
 
-def get_profile_image_service(session: SessionDependency) -> ProfileImageService:
-    settings = get_settings()
+def get_profile_image_service(
+    session: SessionDependency,
+    object_storage: PrivateObjectStorageDependency,
+) -> ProfileImageService:
     return ProfileImageService(
         ProfileRepository(session),
-        FilesystemCoverStorage(settings.private_object_root),
+        object_storage,
     )
 
 
@@ -190,8 +216,11 @@ AccountInvitationServiceDependency = Annotated[
 ]
 
 
-def get_email_sender() -> EmailSender:
-    return SmtpEmailSender(get_settings())
+def get_email_sender(session: SessionDependency) -> EmailSender:
+    settings = get_settings()
+    if settings.email_delivery_mode == "outbox":
+        return TransactionalOutboxEmailSender(session, settings)
+    return SmtpEmailSender(settings)
 
 
 EmailSenderDependency = Annotated[EmailSender, Depends(get_email_sender)]

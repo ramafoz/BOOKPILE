@@ -1,0 +1,10 @@
+[Unit]
+Description=Check BOOKPILE backup freshness every fifteen minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+Unit=bookpile-backup-check.service
+
+[Install]
+WantedBy=timers.target

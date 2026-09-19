@@ -1,0 +1,173 @@
+# BOOKPILE Server production rehearsal runbook
+
+This is the provider-neutral procedure for rehearsals and the future staging
+host. It is **not** permission to publish BOOKPILE yet: real-provider
+acceptance, observability and the Spanish staging recovery drill remain gates.
+
+## Package and boundaries
+
+- `server/docker/api.Dockerfile` builds the API as unprivileged UID/GID 10001.
+- `server/docker/web.Dockerfile` builds the Server SPA and runs Caddy without
+  root privileges.
+- `server/docker/Caddyfile` is the only public entry point: it terminates HTTPS,
+  serves the SPA and proxies API/health traffic over a private network.
+- `server/compose.production.yaml` connects PostgreSQL, one-shot migrations,
+  API, email worker, web and an operations-profile backup job. PostgreSQL and
+  FastAPI publish no host ports.
+- `server/.env.production.example` names production settings but has no usable
+  secrets. The accepted Phase 9F rehearsal instead uses
+  `server/.env.staging.example` and `.env.staging.backup.example`, with isolated
+  cookies, object prefixes and `https://staging.bookpile.gal`.
+
+Application startup never migrates the schema implicitly. The separate
+`migrate` service must succeed before the API starts.
+
+## One-time host preparation
+
+Install Git and a current Docker Engine with its Compose plugin. On the accepted
+Ubuntu 24.04 host, the reviewed idempotent installer adds Docker's official apt
+repository and grants the invoking administrator access to the Docker socket:
+
+```bash
+sudo bash server/deploy/provision-ubuntu-host.sh
+```
+
+Reconnect after it completes so the new group membership takes effect. The
+Docker group is root-equivalent and is limited to the trusted host operator.
+Then check out the exact approved revision and create the private configuration:
+
+```bash
+cp server/.env.production.example server/.env.production
+chmod 600 server/.env.production
+```
+
+Replace every example value. Separately copy `.env.backup.example` to
+`.env.backup`, mode `600`; API services never receive those secrets. Set the deployment revision to the exact commit;
+use the final HTTPS origin and bare allowed hostname; create independent random
+secrets of at least 32 characters; and use one new PostgreSQL password in both
+the Compose variable and encoded database URL. Never reuse development,
+staging or test credentials. Keep API documentation disabled and secure cookies
+enabled. `openssl rand -hex 32` creates URL-safe secrets. The real env file is
+ignored by Git and must also be protected and backed up as a secret.
+
+For Phase 9F use the staging pair instead:
+
+```bash
+cp server/.env.staging.example server/.env.staging
+cp server/.env.staging.backup.example server/.env.staging.backup
+chmod 600 server/.env.staging server/.env.staging.backup
+```
+
+The staging file selects both paths for Compose. In every command below replace
+`server/.env.production` with `server/.env.staging`. Never copy staging secrets
+into the later production files. Follow
+`SERVER_STAGING_PROVISIONING_CHECKLIST.md` before starting the stack.
+
+Before certificate issuance, point DNS at the host and allow inbound TCP 80/443
+only. Never publish 5432 or 8100.
+
+Install and enable the reviewed timers under `server/deploy/systemd` after
+following `SERVER_OPERATIONS_AND_SECURITY.md`. Connect failed units to the
+selected alert route; timers without observed failures are not monitoring.
+
+## Preflight and build
+
+Run from the repository root:
+
+```bash
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml config --quiet
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml build api web
+```
+
+Preflight must fail if a required value is absent. A later pipeline may select
+immutable registry tags through `BOOKPILE_API_IMAGE` and `BOOKPILE_WEB_IMAGE`.
+
+## Backup, migrate and start
+
+For an existing environment, first create and verify the Phase 9D database and
+object backup according to `SERVER_OPERATIONAL_BACKUP.md`.
+
+```bash
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml up -d db
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml run --rm migrate
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml up -d api email-worker web
+```
+
+Use the newly built or immutable release image for the explicit migration.
+Do not restart a previously exited `migrate` container after retagging a mutable
+image: it may contain an older migration graph. Recreate the one-shot container
+or keep using `run --rm migrate`. When only an existing email worker needs an
+operational restart, use `docker compose up -d --no-deps email-worker` (or
+`docker start` for the exact stopped container) so Compose does not start the
+one-shot migration dependency again.
+
+The API remains unready until PostgreSQL and the configured private-object
+adapter both answer. Caddy waits for API readiness.
+
+## Verification
+
+```bash
+curl --fail --silent https://books.example.com/health/live
+curl --fail --silent https://books.example.com/health/ready
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml ps
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml logs --tail=100 api web
+```
+
+Replace the example host. Liveness proves the API process responds; readiness
+also proves database and private-object access. Responses identify the deployed
+revision. Request logs use generated IDs and route templates while omitting
+queries, tokens, IP addresses and library data.
+
+Then perform a staging smoke path: sign in, open a test-owned library, read a
+private cover, make one reversible test write and confirm its audit event. Do
+not use production member data for smoke tests.
+
+On a new invitation-only installation, create the initial single-use account
+invitation from the trusted host. The command prints the raw registration URL
+once; do not put it in logs, issues or chat:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml run --rm --no-deps \
+  api bookpile-account-invitations create
+```
+
+Only a host operator with Docker access can run this bootstrap command. The
+database stores only the token hash, and the resulting account owns no library
+until it creates one through the normal UI.
+
+## Rollback and stop
+
+Application rollback selects the previous approved immutable API/web tags and
+restarts those services. Do not downgrade the database merely to roll back an
+application image. Schema downgrade is a separate decision requiring a verified
+backup and migration-specific data-loss review.
+
+```bash
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml up -d api web
+docker compose --env-file server/.env.production \
+  -f server/compose.production.yaml stop
+```
+
+Never use `down -v`: named volumes contain the database, private objects and TLS
+state. Total-host-loss recovery remains unproven until the Phase 9F off-site
+restore drill.
+
+## Phase 9A local evidence
+
+- Hosted startup rejects unsafe secrets, cookies, origins, documentation,
+  trusted hosts and databases.
+- Health boundaries, defensive headers and redacted logs are tested.
+- 133 Local and 176 Server isolated tests pass.
+- The full migration/concurrency gate passes on disposable PostgreSQL 17.
+- 11 Local and 30 Server frontend tests, lint and both builds pass.
+- Compose and Caddy validate; both pinned images build and declare
+  unprivileged runtime users.

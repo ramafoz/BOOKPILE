@@ -3,6 +3,9 @@ import {
   cataloguePrivacyLabel,
   catalogueTitle,
   hasActiveCatalogueFilters,
+  withDynamicSearch,
+  withQuickCatalogueSort,
+  withQuickReadingFilter,
   workspacePerspectiveLabel,
 } from "./workspacePresentation";
 
@@ -31,5 +34,19 @@ describe("compact Server workspace presentation", () => {
       { user_id: "1", username: "one", role: "OWNER", viewer_scope: null },
       { user_id: "2", username: "two", role: "VIEWER", viewer_scope: "CATALOG_ONLY" },
     ])).toBe("Shared catalogue");
+  });
+
+  it("applies quick catalogue controls without discarding other filters", () => {
+    const filtered = { language: ["Galician"], offset: 50, sort_order: "desc" as const };
+
+    expect(withDynamicSearch(filtered, "  Dune  ")).toEqual({
+      language: ["Galician"], offset: 0, sort_order: "desc", search: "Dune",
+    });
+    expect(withQuickReadingFilter(filtered, "ACTIVE")).toEqual({
+      language: ["Galician"], offset: 0, sort_order: "desc", reading_state: "ACTIVE",
+    });
+    expect(withQuickCatalogueSort(filtered, "physical")).toEqual({
+      language: ["Galician"], offset: 0, sort_order: "desc", sort_by: "physical",
+    });
   });
 });

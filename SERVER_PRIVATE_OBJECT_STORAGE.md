@@ -1,0 +1,125 @@
+# BOOKPILE Server private object storage
+
+## Boundary
+
+BOOKPILE stores cover and profile-image bytes behind one internal interface.
+PostgreSQL remains authoritative for each opaque key, byte count and SHA-256.
+Browsers never receive a bucket key, bucket URL or storage credential: they
+request an authenticated BOOKPILE API route, exactly as with filesystem storage.
+
+Development defaults to `filesystem`. Hosted startup fails unless `s3` is
+selected and a region, private bucket, HTTPS endpoint, access key, secret key
+and safe deployment prefix are all explicit. Connection/read timeouts, retries,
+pool size and addressing style are bounded configuration.
+
+The S3 adapter:
+
+- never supplies a public ACL or produces presigned browser URLs;
+- puts every object below the environment-specific prefix;
+- records a SHA-256 in private object metadata;
+- verifies metadata, size and downloaded bytes after every write;
+- reads remote bodies in bounded chunks and rejects missing/wrong checksums;
+- treats deletion as idempotent;
+- exposes bucket readiness and a fully verified inventory.
+
+## Provider acceptance contract
+
+Do not insert production credentials until a provider has passed all of these:
+
+- contractual data location and processing in Spain or the explicitly approved
+  EU region, with DPA, subprocessors and exit/export terms reviewed;
+- HTTPS endpoint, S3 v4 signatures and the configured addressing style;
+- bucket is private, has no static website, public policy or anonymous access;
+- a dedicated service credential can only list the selected prefix and get,
+  put and delete objects below it; it cannot administer users or other buckets;
+- encryption at rest, versioning/lifecycle behaviour, egress, request pricing,
+  capacity and support are documented;
+- provider-side retention does not violate BOOKPILE account/library deletion
+  windows or the later Phase 9D backup policy.
+
+Use separate bucket/prefix credentials for staging and production. Never test
+production credentials from CI, Local or a developer workstation.
+
+## Audit command
+
+Before a new provider or credential can be accepted, run the isolated probe:
+
+```bash
+bookpile-private-objects probe
+```
+
+It performs one verified random write/read/delete cycle below a temporary probe
+key and confirms cleanup. It does not open PostgreSQL, enumerate library objects
+or print the key/content. Success returns only `ready` and the verified byte
+count. Use a staging-only bucket/prefix for the first provider acceptance.
+
+After application data exists, the installed audit command compares PostgreSQL
+with the selected adapter:
+
+```bash
+bookpile-private-objects audit
+```
+
+Exit 0 means exact. Exit 1 means missing, orphaned or mismatched objects. Output
+contains counts and short hashes of opaque keys, never raw keys, credentials or
+personal data. An anomaly is evidence to investigate; audit never deletes.
+
+## Filesystem-to-S3 migration
+
+Migration is copy-then-verify and is intentionally not an automatic startup
+step. It never deletes the filesystem source and never switches a running API.
+
+1. Stop API writes and take a verified database/filesystem backup.
+2. Configure the future S3 adapter and retain the old filesystem root at
+   `BOOKPILE_SERVER_PRIVATE_OBJECT_ROOT`.
+3. Run the read-only plan:
+
+   ```bash
+   bookpile-private-objects migrate-from-filesystem
+   ```
+
+4. Resolve every missing/mismatched source object before continuing.
+5. Copy and verify:
+
+   ```bash
+   bookpile-private-objects migrate-from-filesystem --apply
+   bookpile-private-objects audit
+   ```
+
+6. Only after an exact audit, start the API with `PRIVATE_OBJECT_BACKEND=s3` and
+   smoke-test authenticated cover/profile reads and a replace/delete cycle.
+7. Retain the protected filesystem copy through the agreed rollback window.
+   Remove it only under the later backup/retention procedure.
+
+The operation is restartable: already matching targets are downloaded and
+verified, then skipped. A partial target is never made authoritative merely
+because some copies succeeded. Unexpected target orphans fail final validation
+and are not deleted automatically.
+
+## Dinahosting backup-reader decision (2026-09-16)
+
+Dinahosting cannot issue a second list/get-only credential for the same active
+bucket. For the initial private beta, the operator accepts supplying the
+isolated application credential to the operational backup container for reads.
+The normal backup `create` path reads expected source objects without calling
+source write/delete methods; it stages backup artefacts locally and uploads
+them to the separate Backblaze repository. The PostgreSQL backup role has `SELECT`
+but no application-table `INSERT` or `DELETE`; the backup container is an
+on-demand non-root process with a read-only root filesystem and a separate
+environment file. These barriers limit normal execution and exposure but do
+**not** remove the credential's S3 write/delete capability. A compromised
+backup process or leaked key could still modify the active bucket; rotation
+would also affect the application using that key. Reassess this acceptance if
+Dinahosting adds same-bucket read-only keys, the workload/privilege boundary
+changes, or before expanding beyond the initial private beta. No backup
+credential or secret is recorded here.
+
+## Current acceptance boundary
+
+The adapter, configuration, compensation contract, corruption tests, dry-run /
+apply migration and inventory reconciliation are implemented. Phase 9B staging
+acceptance is closed: Dinahosting passed the isolated real-bucket round trip,
+and the 2026-09-15 deep inventory matched the one expected/stored private
+object with no missing, mismatched or orphaned objects. A bulk development-
+inventory migration is not required for the empty/new staging account; its
+copy-and-verify tooling and local 869-object rehearsal passed separately.

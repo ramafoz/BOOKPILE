@@ -1,0 +1,12 @@
+[Unit]
+Description=BOOKPILE host capacity check
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bookpile-host-capacity-check
+TimeoutStartSec=1m
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

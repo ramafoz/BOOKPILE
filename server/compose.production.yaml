@@ -1,0 +1,162 @@
+name: bookpile-production
+
+x-api-environment: &api-environment
+  env_file:
+    - ${BOOKPILE_ENV_FILE:-.env.production}
+  environment:
+    BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
+    BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
+
+services:
+  db:
+    image: postgres:17.6-alpine3.22
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bookpile
+      POSTGRES_USER: bookpile
+      POSTGRES_PASSWORD: ${BOOKPILE_POSTGRES_PASSWORD:?Set BOOKPILE_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookpile -d bookpile"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [backend]
+
+  migrate:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - import-staging:/var/lib/bookpile/import-staging
+      - export-staging:/var/lib/bookpile/export-staging
+    networks: [backend]
+    restart: "no"
+
+  api:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; host = os.environ['BOOKPILE_SERVER_ALLOWED_HOSTS'].split(',')[0].strip(); request = urllib.request.Request('http://127.0.0.1:8100/health/ready', headers={'Host': host}); urllib.request.urlopen(request, timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - import-staging:/var/lib/bookpile/import-staging
+      - export-staging:/var/lib/bookpile/export-staging
+    networks: [backend, egress]
+
+  email-worker:
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command:
+      - "bookpile-email-worker"
+      - "--poll-seconds"
+      - "2"
+      - "--processed-delay-seconds"
+      - "${BOOKPILE_EMAIL_WORKER_PROCESSED_DELAY_SECONDS:-0}"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [backend, egress]
+
+  backup:
+    profiles: ["operations"]
+    image: ${BOOKPILE_BACKUP_IMAGE:-bookpile-backup:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/backup.Dockerfile
+    env_file:
+      - ${BOOKPILE_BACKUP_ENV_FILE:-.env.backup}
+    environment:
+      BOOKPILE_SERVER_OPERATIONAL_BACKUP_STAGING_ROOT: /var/lib/bookpile/operational-backups
+    command: ["create"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - operational-backup-staging:/var/lib/bookpile/operational-backups
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, egress]
+    restart: "no"
+
+  maintenance:
+    profiles: ["operations"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    <<: *api-environment
+    command: ["bookpile-maintenance", "run"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - import-staging:/var/lib/bookpile/import-staging
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, egress]
+    restart: "no"
+
+  web:
+    image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/web.Dockerfile
+    restart: unless-stopped
+    read_only: true
+    environment:
+      BOOKPILE_SITE_ADDRESS: ${BOOKPILE_SITE_ADDRESS:?Set BOOKPILE_SITE_ADDRESS}
+      BOOKPILE_TLS_EMAIL: ${BOOKPILE_TLS_EMAIL:?Set BOOKPILE_TLS_EMAIL}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge, backend]
+
+networks:
+  edge:
+  egress:
+  backend:
+    internal: true
+
+volumes:
+  postgres-data:
+  import-staging:
+  export-staging:
+  caddy-data:
+  caddy-config:
+  operational-backup-staging:

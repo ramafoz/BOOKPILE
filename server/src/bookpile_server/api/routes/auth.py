@@ -359,6 +359,7 @@ def login(
     return LoginResponse(
         user_id=result.user_id,
         username=result.username,
+        csrf_cookie_name=get_settings().csrf_cookie_name,
         expires_at=result.expires_at,
         absolute_expires_at=result.absolute_expires_at,
     )
@@ -409,7 +410,11 @@ def logout(
 
 @router.get("/me", response_model=CurrentUserResponse)
 def current_user(context: CurrentAuthDependency) -> CurrentUserResponse:
-    return CurrentUserResponse(user_id=context.user_id, username=context.username)
+    return CurrentUserResponse(
+        user_id=context.user_id,
+        username=context.username,
+        csrf_cookie_name=get_settings().csrf_cookie_name,
+    )
 
 
 @router.post("/session/rotate", response_model=LoginResponse)
@@ -429,6 +434,7 @@ def rotate_session(
     return LoginResponse(
         user_id=result.user_id,
         username=result.username,
+        csrf_cookie_name=get_settings().csrf_cookie_name,
         expires_at=result.expires_at,
         absolute_expires_at=result.absolute_expires_at,
     )

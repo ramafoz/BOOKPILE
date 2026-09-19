@@ -1,16 +1,19 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, and_, delete, exists, func, or_, select
+from sqlalchemy import Select, and_, case, delete, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import (
     Book,
+    Bookcase,
     BookContributor,
+    Container,
     ContributorRole,
     LibraryAuditEvent,
     Loan,
     ReadingSession,
+    Shelf,
 )
 
 
@@ -152,6 +155,8 @@ def catalogue_filters(
         )
         if reading_state == "PENDING":
             filters.extend((~active, ~completed))
+        elif reading_state == "ACTIVE":
+            filters.append(active)
         elif reading_state == "READING":
             filters.extend((active, ~completed))
         elif reading_state == "REREADING":
@@ -246,6 +251,53 @@ def catalogue_query(
             select(Book)
             .where(*catalogue_filters(library_id, **filters))
             .order_by(func.random())
+            .limit(limit)
+            .offset(offset)
+        )
+    if sort_by == "physical":
+        physical_columns = (
+            func.lower(Bookcase.name),
+            Shelf.shelf_number,
+            case((Container.layer == "BACKGROUND", 0), else_=1),
+            case((Container.container_type == "ROW", 0), else_=1),
+            Container.container_number,
+            Book.position,
+        )
+        direction = (
+            [column.desc() for column in physical_columns]
+            if sort_order == "desc"
+            else [column.asc() for column in physical_columns]
+        )
+        return (
+            select(Book)
+            .outerjoin(
+                Container,
+                and_(
+                    Container.library_id == Book.library_id,
+                    Container.id == Book.container_id,
+                ),
+            )
+            .outerjoin(
+                Shelf,
+                and_(
+                    Shelf.library_id == Container.library_id,
+                    Shelf.id == Container.shelf_id,
+                ),
+            )
+            .outerjoin(
+                Bookcase,
+                and_(
+                    Bookcase.library_id == Shelf.library_id,
+                    Bookcase.id == Shelf.bookcase_id,
+                ),
+            )
+            .where(*catalogue_filters(library_id, **filters))
+            .order_by(
+                Book.container_id.is_(None),
+                *direction,
+                func.lower(Book.title).asc(),
+                Book.id,
+            )
             .limit(limit)
             .offset(offset)
         )

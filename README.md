@@ -524,7 +524,7 @@ an explicit omission confirmation. Migration `0020`, automated round-trip and
 real-export UX acceptance gates pass; Phase 8 is complete as documented in
 [SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
-Server barcode capture is implemented pending mobile acceptance. Owners can
+Server barcode capture is implemented, accepted on mobile, and merged. Owners can
 type an ISBN or decode an EAN-13 from a temporary phone photograph while adding
 one book, running Batch Add, or editing an existing record. The photograph is
 decoded locally and discarded; only the ISBN reaches the authenticated,
@@ -533,6 +533,19 @@ and remains editable after explicit transfer. Mobile Add also exposes scan-first
 single and batch shortcuts; batch scanning preserves placement progression but
 clears book and personal-reading data between records. See
 [SCANNING_PLAN.md](SCANNING_PLAN.md).
+
+Server Phase 9A–9E foundations now provide hardened hosted configuration,
+reproducible non-root images, private S3-compatible objects, an encrypted
+transactional email outbox, encrypted off-site disaster recovery, bounded edge
+behaviour, scheduled retention/finalization work, aggregate health checks and
+backup-freshness monitoring. A local PostgreSQL 17/S3 rehearsal restored 36
+tables and 869 private objects exactly. This is not yet permission to publish:
+real-provider acceptance, alert delivery, capacity thresholds, Spanish staging
+deployment and the final go/no-go remain open in
+[SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md](SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
+The agreed Spanish/EU staging topology and guarded provisioning sequence are in
+[SERVER_STAGING_PROVIDER_DECISION.md](SERVER_STAGING_PROVIDER_DECISION.md) and
+[SERVER_STAGING_PROVISIONING_CHECKLIST.md](SERVER_STAGING_PROVISIONING_CHECKLIST.md).
 
 The compact Server workspace increment is complete and accepted on desktop and
 mobile. It provides anchored top-bar menus, accurate private/shared and

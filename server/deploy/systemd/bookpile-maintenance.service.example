@@ -1,0 +1,10 @@
+[Unit]
+Description=BOOKPILE expired-data maintenance
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/bookpile
+ExecStart=/usr/bin/docker compose --env-file server/.env.production -f server/compose.production.yaml --profile operations run --rm maintenance
+TimeoutStartSec=1h

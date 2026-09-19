@@ -1,0 +1,10 @@
+[Unit]
+Description=Run BOOKPILE operational backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:17:00
+Persistent=true
+Unit=bookpile-backup.service
+
+[Install]
+WantedBy=timers.target

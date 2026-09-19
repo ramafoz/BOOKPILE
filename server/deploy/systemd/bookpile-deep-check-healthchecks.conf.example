@@ -1,0 +1,4 @@
+[Service]
+# Send success only after deep private-object reconciliation passes.
+# A failed ping must not reclassify a healthy BOOKPILE check as failed.
+ExecStartPost=-/usr/bin/curl -q --config /etc/bookpile/healthchecks-deep-check.curl

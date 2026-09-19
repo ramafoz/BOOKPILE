@@ -9,11 +9,14 @@ from bookpile_server.config import get_settings
 from bookpile_server.models import (
     AccountStorageEntitlement,
     Book,
+    Bookcase,
     BookContributor,
+    Container,
     ContributorRole,
     Library,
     LibraryAuditEvent,
     LibraryMembership,
+    Shelf,
     User,
     UserSession,
 )
@@ -269,6 +272,96 @@ def test_viewer_reads_complete_catalogue_but_cannot_mutate(
         headers=csrf(),
     ).status_code == 404
     assert session.get(Book, book.id) is not None
+
+
+def test_physical_sort_uses_hierarchy_and_keeps_unplaced_books_last(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "physical_sort_owner")
+    library = create_library_with_members(session, owner)
+    authenticate(client, session, owner)
+    alpha_case = Bookcase(library_id=library.id, name="Alpha room")
+    zulu_case = Bookcase(library_id=library.id, name="Zulu room")
+    session.add_all((alpha_case, zulu_case))
+    session.flush()
+    alpha_shelf = Shelf(
+        library_id=library.id, bookcase_id=alpha_case.id, shelf_number=1
+    )
+    zulu_shelf = Shelf(
+        library_id=library.id, bookcase_id=zulu_case.id, shelf_number=1
+    )
+    session.add_all((alpha_shelf, zulu_shelf))
+    session.flush()
+    alpha_container = Container(
+        library_id=library.id,
+        shelf_id=alpha_shelf.id,
+        container_type="ROW",
+        layer="BACKGROUND",
+        container_number=1,
+    )
+    zulu_container = Container(
+        library_id=library.id,
+        shelf_id=zulu_shelf.id,
+        container_type="ROW",
+        layer="BACKGROUND",
+        container_number=1,
+    )
+    session.add_all((alpha_container, zulu_container))
+    session.flush()
+    session.add_all(
+        (
+            Book(
+                library_id=library.id,
+                title="Alpha room second",
+                author="Author",
+                container_id=alpha_container.id,
+                position=2,
+            ),
+            Book(
+                library_id=library.id,
+                title="Alpha room first",
+                author="Author",
+                container_id=alpha_container.id,
+                position=1,
+            ),
+            Book(
+                library_id=library.id,
+                title="Zulu room first",
+                author="Author",
+                container_id=zulu_container.id,
+                position=1,
+            ),
+            Book(library_id=library.id, title="Zulu unplaced", author="Author"),
+            Book(library_id=library.id, title="Alpha unplaced", author="Author"),
+        )
+    )
+    session.commit()
+
+    ascending = client.get(
+        f"/api/v1/libraries/{library.id}/catalogue",
+        params={"sort_by": "physical", "sort_order": "asc"},
+    )
+    descending = client.get(
+        f"/api/v1/libraries/{library.id}/catalogue",
+        params={"sort_by": "physical", "sort_order": "desc"},
+    )
+
+    assert ascending.status_code == 200, ascending.text
+    assert [book["title"] for book in ascending.json()["books"]] == [
+        "Alpha room first",
+        "Alpha room second",
+        "Zulu room first",
+        "Alpha unplaced",
+        "Zulu unplaced",
+    ]
+    assert descending.status_code == 200, descending.text
+    assert [book["title"] for book in descending.json()["books"]] == [
+        "Zulu room first",
+        "Alpha room second",
+        "Alpha room first",
+        "Alpha unplaced",
+        "Zulu unplaced",
+    ]
 
 
 def test_search_filters_options_and_counts_are_library_scoped(

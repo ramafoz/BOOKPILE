@@ -1,0 +1,11 @@
+[Unit]
+Description=Check BOOKPILE host capacity every fifteen minutes
+
+[Timer]
+OnCalendar=*:7/15
+Persistent=true
+RandomizedDelaySec=30
+Unit=bookpile-host-capacity-check.service
+
+[Install]
+WantedBy=timers.target
