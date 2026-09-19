@@ -20,25 +20,25 @@
     "preview:server": "vite preview --mode edition-server"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.4.1",
-    "@zxing/browser": "^0.1.5",
-    "@zxing/library": "^0.21.3",
-    "lucide-react": "^0.511.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
+    "lucide-react": "^1.46.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tesseract.js": "^7.0.0",
-    "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "typescript": "~7.0.2",
+    "vite": "^8.3.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.25.0",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "eslint": "^9.25.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.19",
-    "globals": "^16.0.0",
-    "typescript-eslint": "^8.30.1",
-    "vitest": "^4.1.11"
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
   }
 }
