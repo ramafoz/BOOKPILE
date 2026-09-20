@@ -24,8 +24,8 @@
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^0.511.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tesseract.js": "^7.0.0",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
