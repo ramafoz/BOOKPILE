@@ -28,6 +28,11 @@ from .services.library_deletion_cleanup import (
 )
 
 
+# Maintenance runs hourly at minute 11. A deletion is operationally overdue only
+# after a complete maintenance interval plus scheduling and execution headroom.
+DELETION_CLEANUP_OVERDUE_GRACE = timedelta(minutes=75)
+
+
 @dataclass(frozen=True)
 class MaintenanceResult:
     finalized_libraries: int = 0
@@ -206,7 +211,8 @@ def collect_operations_status(
             session.scalar(
                 select(func.count()).select_from(AccountDeletionTombstone).where(
                     AccountDeletionTombstone.state == "PENDING",
-                    AccountDeletionTombstone.recover_until <= moment,
+                    AccountDeletionTombstone.recover_until
+                    <= moment - DELETION_CLEANUP_OVERDUE_GRACE,
                 )
             )
             or 0
@@ -215,7 +221,8 @@ def collect_operations_status(
             session.scalar(
                 select(func.count()).select_from(LibraryDeletionTombstone).where(
                     LibraryDeletionTombstone.state == "PENDING",
-                    LibraryDeletionTombstone.recover_until <= moment,
+                    LibraryDeletionTombstone.recover_until
+                    <= moment - DELETION_CLEANUP_OVERDUE_GRACE,
                 )
             )
             or 0

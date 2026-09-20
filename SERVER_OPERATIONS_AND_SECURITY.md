@@ -19,7 +19,7 @@ globally pruned because it belongs to each active library and requires a
 separate product retention decision.
 
 Example systemd units and timers live in `server/deploy/systemd`: backup daily,
-maintenance hourly, lightweight checks every 5 minutes, backup freshness every
+maintenance hourly, lightweight checks every 15 minutes, backup freshness every
 15 minutes and full private-object reconciliation daily.
 
 Install copies without the `.example` suffix, correct `WorkingDirectory`, run
@@ -66,6 +66,10 @@ timer or lost host therefore produces no ping and becomes externally visible
 after the grace period. As with backup monitoring, `ExecStartPost=-` prevents
 a Healthchecks outage from changing BOOKPILE's own check result. Validate every
 manual edit with `systemd-analyze verify` before relying on the monitor.
+Deletion cleanup is considered overdue only 75 minutes after its recovery
+window closes. This gives the hourly maintenance job one complete interval plus
+scheduling headroom; a pending deletion inside that grace period is expected,
+not an operational failure.
 
 The daily deep reconciliation has a separate check named
 `BOOKPILE staging - reconciliación privada diaria`. It follows
