@@ -5,8 +5,10 @@ from sqlalchemy import select
 
 from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.models import (
+    AccountDeletionTombstone,
     EmailOutboxMessage,
     Library,
+    LibraryDeletionTombstone,
     LibraryImportJob,
     RateLimitBucket,
     SecurityEvent,
@@ -61,6 +63,43 @@ def test_deep_status_detects_orphaned_private_object(session, tmp_path) -> None:
     assert status.healthy is False
     assert status.checks["private_objects"] == "attention"
     assert status.counters["private_objects_orphaned"] == 1
+
+
+def test_deletion_status_allows_hourly_cleanup_grace(session, tmp_path) -> None:
+    now = datetime.now(UTC)
+    session.add_all(
+        [
+            AccountDeletionTombstone(
+                user_id=uuid4(),
+                username="recently_expired",
+                email="recently-expired@example.test",
+                membership_snapshot=[],
+                object_manifest=[],
+                created_at=now - timedelta(hours=2),
+                recover_until=now - timedelta(minutes=30),
+            ),
+            LibraryDeletionTombstone(
+                library_id=uuid4(),
+                library_name="Cleanup genuinely overdue",
+                logical_size_bytes=0,
+                membership_snapshot=[],
+                allocation_snapshot=[],
+                object_manifest=[],
+                created_at=now - timedelta(hours=4),
+                recover_until=now - timedelta(hours=2),
+            ),
+        ]
+    )
+    session.commit()
+
+    status = collect_operations_status(
+        session, FilesystemCoverStorage(tmp_path / "objects"), now=now
+    )
+
+    assert status.healthy is False
+    assert status.checks["deletion_cleanup"] == "attention"
+    assert status.counters["account_deletions_overdue"] == 0
+    assert status.counters["library_deletions_overdue"] == 1
 
 
 def test_maintenance_prunes_only_records_beyond_retention(session, tmp_path) -> None:
