@@ -1,8 +1,8 @@
 [Unit]
-Description=Check BOOKPILE operations every five minutes
+Description=Check BOOKPILE operations every fifteen minutes
 
 [Timer]
-OnCalendar=*:0/5
+OnCalendar=*:0/15
 Persistent=true
 Unit=bookpile-operations-check.service
 
