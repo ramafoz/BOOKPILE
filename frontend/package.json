@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.4.1",
-    "@zxing/browser": "^0.1.5",
+    "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.21.3",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
