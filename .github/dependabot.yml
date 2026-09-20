@@ -11,7 +11,7 @@ updates:
         update-types: ["patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: pip
     directory: /server
     schedule:
@@ -23,7 +23,7 @@ updates:
         update-types: ["patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: pip
     directory: /backend
     schedule:
@@ -35,7 +35,7 @@ updates:
         update-types: ["patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -47,7 +47,7 @@ updates:
         update-types: ["patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: docker
     directory: /server/docker
     schedule:
@@ -59,4 +59,4 @@ updates:
         update-types: ["patch"]
     ignore:
       - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
