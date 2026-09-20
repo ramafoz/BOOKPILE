@@ -8,6 +8,10 @@ updates:
     groups:
       frontend-security-and-maintenance:
         patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /server
     schedule:
@@ -16,6 +20,10 @@ updates:
     groups:
       server-security-and-maintenance:
         patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /backend
     schedule:
@@ -24,13 +32,31 @@ updates:
     groups:
       local-security-and-maintenance:
         patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      actions-security-and-maintenance:
+        patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /server/docker
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      docker-security-and-maintenance:
+        patterns: ["*"]
+        update-types: ["patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
