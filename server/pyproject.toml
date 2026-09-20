@@ -8,7 +8,7 @@ version = "0.1.0.dev0"
 description = "Hosted multi-user BOOKPILE server"
 requires-python = ">=3.12"
 dependencies = [
-  "alembic==1.16.5",
+  "alembic==1.20.0",
   "argon2-cffi==25.1.0",
   "boto3==1.43.91",
   "cryptography==50.0.1",
