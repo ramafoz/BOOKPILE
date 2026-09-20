@@ -1,6 +1,6 @@
 fastapi==0.115.12
 httpx==0.28.1
-uvicorn[standard]==0.34.3
+uvicorn[standard]==0.53.0
 Pillow==11.2.1
 pillow-heif==1.4.0
 python-multipart==0.0.32
