@@ -1,4 +1,4 @@
-FROM postgres:17.6-bookworm AS postgres-tools
+FROM postgres:17.10-bookworm AS postgres-tools
 
 FROM python:3.13.7-slim-bookworm AS builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
