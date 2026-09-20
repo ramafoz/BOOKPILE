@@ -22,7 +22,7 @@ dependencies = [
   "python-multipart==0.0.20",
   "sentry-sdk==2.66.1",
   "sqlalchemy==2.0.43",
-  "uvicorn[standard]==0.34.3",
+  "uvicorn[standard]==0.53.0",
 ]
 
 [project.optional-dependencies]
