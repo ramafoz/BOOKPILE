@@ -17,7 +17,7 @@ dependencies = [
   "httpx==0.28.1",
   "psycopg[binary]==3.2.13",
   "pydantic-settings==2.10.1",
-  "pillow==11.3.0",
+  "pillow==12.3.0",
   "pillow-heif==1.1.1",
   "python-multipart==0.0.32",
   "sentry-sdk==2.66.1",
