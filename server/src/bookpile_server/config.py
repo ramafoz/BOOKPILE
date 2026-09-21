@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SERVER_DIRECTORY = Path(__file__).resolve().parents[2]
 DEVELOPMENT_RATE_LIMIT_SECRET = "bookpile-development-rate-limit-secret"
 DEVELOPMENT_OUTBOX_SECRET = "bookpile-development-outbox-encryption-secret"
+DEVELOPMENT_BACKUP_SECRET = "bookpile-development-operational-backup-encryption-secret"
 
 
 class Settings(BaseSettings):
@@ -75,7 +76,7 @@ class Settings(BaseSettings):
     private_object_s3_max_attempts: int = Field(default=3, ge=1, le=10)
     private_object_s3_max_connections: int = Field(default=10, ge=1, le=100)
     operational_backup_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "operational-backups"
-    operational_backup_encryption_secret: SecretStr = SecretStr(DEVELOPMENT_OUTBOX_SECRET)
+    operational_backup_encryption_secret: SecretStr = SecretStr(DEVELOPMENT_BACKUP_SECRET)
     operational_backup_encryption_key_id: str = "development"
     operational_backup_retention_days: int = Field(default=29, ge=1, le=29)
     operational_backup_s3_endpoint_url: str | None = None

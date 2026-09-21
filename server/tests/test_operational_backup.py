@@ -5,12 +5,66 @@ from uuid import uuid4
 
 import pytest
 from botocore.exceptions import ClientError
+from pydantic import SecretStr
 
 from bookpile_server.backup_crypto import BackupIntegrityError, decrypt_file, encrypt_file
 from bookpile_server.backup_repository import S3BackupRepository
+from bookpile_server.cli import operational_backup as backup_cli
+from bookpile_server.config import (
+    DEVELOPMENT_BACKUP_SECRET,
+    DEVELOPMENT_OUTBOX_SECRET,
+    Settings,
+)
 from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.operational_backup import OperationalBackupService, PostgresTools
 from bookpile_server.private_object_operations import ExpectedPrivateObject
+
+
+@pytest.mark.parametrize(
+    "secret",
+    [DEVELOPMENT_BACKUP_SECRET, DEVELOPMENT_OUTBOX_SECRET],
+)
+def test_backup_cli_rejects_public_development_secrets_before_remote_access(
+    monkeypatch, secret: str
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        operational_backup_s3_endpoint_url="https://backup.example.test",
+        operational_backup_s3_region="test-region",
+        operational_backup_s3_bucket="backup-bucket",
+        operational_backup_s3_access_key_id="test-access-key",
+        operational_backup_s3_secret_access_key=SecretStr("test-secret-key"),
+        operational_backup_encryption_secret=SecretStr(secret),
+        operational_backup_encryption_key_id="test-key-2026",
+    )
+    monkeypatch.setattr(backup_cli, "get_settings", lambda: settings)
+
+    def unexpected_remote_access(_settings):
+        raise AssertionError("Backup configuration must fail before accessing S3")
+
+    monkeypatch.setattr(backup_cli.S3BackupRepository, "from_settings", unexpected_remote_access)
+    with pytest.raises(RuntimeError, match="encryption key and explicit key ID"):
+        backup_cli.service_from_settings()
+
+
+def test_backup_cli_rejects_missing_secret_with_custom_key_id(monkeypatch) -> None:
+    settings = Settings(
+        _env_file=None,
+        operational_backup_s3_endpoint_url="https://backup.example.test",
+        operational_backup_s3_region="test-region",
+        operational_backup_s3_bucket="backup-bucket",
+        operational_backup_s3_access_key_id="test-access-key",
+        operational_backup_s3_secret_access_key=SecretStr("test-secret-key"),
+        operational_backup_encryption_key_id="test-key-2026",
+    )
+    monkeypatch.setattr(backup_cli, "get_settings", lambda: settings)
+
+    def unexpected_remote_access(_settings):
+        raise AssertionError("Backup configuration must fail before accessing S3")
+
+    monkeypatch.setattr(backup_cli.S3BackupRepository, "from_settings", unexpected_remote_access)
+    with pytest.raises(RuntimeError, match="encryption key and explicit key ID"):
+        backup_cli.service_from_settings()
 
 
 class MemoryRepository:
