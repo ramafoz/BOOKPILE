@@ -2,6 +2,14 @@
 
 from dataclasses import dataclass
 from html import escape
+from typing import Literal
+
+
+EmailLocale = Literal["en", "gl"]
+
+
+def resolve_email_locale(preferred_locale: str) -> EmailLocale:
+    return "gl" if preferred_locale == "gl" else "en"
 
 
 @dataclass(frozen=True)
@@ -11,8 +19,87 @@ class RenderedEmail:
     html: str
 
 
+@dataclass(frozen=True)
+class EmailCopy:
+    subject: str
+    eyebrow: str
+    heading: str
+    introduction: str
+    action_label: str
+    expiry: str
+    fallback: str
+    closing: str
+
+
+_SHARED_COPY = {
+    "en": {
+        "tagline": "Your personal library, securely mapped.",
+        "footer": "This automated service message was sent in response to a BOOKPILE account action. It does not load external content.",
+        "fallback": "If the button does not work, copy and paste this address into your browser:",
+    },
+    "gl": {
+        "tagline": "A túa biblioteca persoal, situada con seguridade.",
+        "footer": "Esta mensaxe automática enviouse por unha acción na túa conta de BOOKPILE. Non carga contido externo.",
+        "fallback": "Se o botón non funciona, copia e pega este enderezo no navegador:",
+    },
+}
+
+
+_EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
+    "verification": {
+        "en": EmailCopy(
+            "BOOKPILE: Verify your email", "One last step", "Verify your email",
+            "Confirm that this email address belongs to you to activate your BOOKPILE account.",
+            "Verify email", "This single-use link expires 24 hours after the message is delivered.",
+            _SHARED_COPY["en"]["fallback"],
+            "If you did not create a BOOKPILE account, you can safely ignore this message.",
+        ),
+        "gl": EmailCopy(
+            "BOOKPILE: Verifica o teu correo", "Un último paso", "Verifica o teu correo",
+            "Confirma que este enderezo de correo é teu para activar a conta de BOOKPILE.",
+            "Verificar o correo", "Esta ligazón dun só uso caduca 24 horas despois da entrega da mensaxe.",
+            _SHARED_COPY["gl"]["fallback"],
+            "Se non creaches unha conta de BOOKPILE, podes ignorar esta mensaxe.",
+        ),
+    },
+    "password_reset": {
+        "en": EmailCopy(
+            "BOOKPILE: Reset your password", "Account security", "Reset your password",
+            "A password reset was requested for your BOOKPILE account.",
+            "Choose a new password", "This single-use link expires 30 minutes after the message is delivered.",
+            _SHARED_COPY["en"]["fallback"],
+            "If you did not request a password reset, ignore this message. Your password has not changed.",
+        ),
+        "gl": EmailCopy(
+            "BOOKPILE: Restablece o contrasinal", "Seguridade da conta", "Restablece o contrasinal",
+            "Solicitouse restablecer o contrasinal da túa conta de BOOKPILE.",
+            "Escoller outro contrasinal", "Esta ligazón dun só uso caduca 30 minutos despois da entrega da mensaxe.",
+            _SHARED_COPY["gl"]["fallback"],
+            "Se non solicitaches restablecer o contrasinal, ignora esta mensaxe. O teu contrasinal non cambiou.",
+        ),
+    },
+    "account_recovery": {
+        "en": EmailCopy(
+            "BOOKPILE: Recover your account", "Account recovery", "Recover your account",
+            "Your BOOKPILE account is scheduled for permanent deletion.",
+            "Recover account", "This single-use recovery link expires 48 hours after the message is delivered.",
+            _SHARED_COPY["en"]["fallback"],
+            "If you intended to delete the account, no action is required. Its remaining personal data will be removed after the recovery window closes.",
+        ),
+        "gl": EmailCopy(
+            "BOOKPILE: Recupera a túa conta", "Recuperación da conta", "Recupera a túa conta",
+            "A túa conta de BOOKPILE está programada para a eliminación definitiva.",
+            "Recuperar a conta", "Esta ligazón de recuperación dun só uso caduca 48 horas despois da entrega da mensaxe.",
+            _SHARED_COPY["gl"]["fallback"],
+            "Se querías eliminar a conta, non tes que facer nada. Os datos persoais restantes eliminaranse ao rematar o prazo de recuperación.",
+        ),
+    },
+}
+
+
 def _render(
     *,
+    locale: EmailLocale,
     subject: str,
     eyebrow: str,
     heading: str,
@@ -23,6 +110,7 @@ def _render(
     fallback: str,
     closing: str,
 ) -> RenderedEmail:
+    shared = _SHARED_COPY[locale]
     text = (
         f"{heading}\n\n"
         f"{introduction}\n\n"
@@ -30,11 +118,11 @@ def _render(
         f"{expiry}\n\n"
         f"{closing}\n\n"
         "BOOKPILE\n"
-        "Your personal library, securely mapped."
+        f"{shared['tagline']}"
     )
     safe_url = escape(action_url, quote=True)
     html = f"""<!doctype html>
-<html lang="en">
+<html lang="{locale}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -92,8 +180,8 @@ def _render(
             </tr>
             <tr>
               <td style="padding:20px 32px;border-top:1px solid #e5dacb;background:#f8f3ea;color:#6f7875;font-size:12px;line-height:1.5;">
-                This automated service message was sent in response to a BOOKPILE account action. It does not load external content.<br>
-                BOOKPILE · Your personal library, securely mapped.
+                {escape(shared['footer'])}<br>
+                BOOKPILE · {escape(shared['tagline'])}
               </td>
             </tr>
           </table>
@@ -105,43 +193,29 @@ def _render(
     return RenderedEmail(subject=subject, text=text, html=html)
 
 
-def verification_email(action_url: str) -> RenderedEmail:
+def _account_email(kind: str, action_url: str, locale: EmailLocale) -> RenderedEmail:
+    copy = _EMAIL_COPY[kind][locale]
     return _render(
-        subject="BOOKPILE: Verify your email",
-        eyebrow="One last step",
-        heading="Verify your email",
-        introduction="Confirm that this email address belongs to you to activate your BOOKPILE account.",
-        action_label="Verify email",
+        locale=locale,
+        subject=copy.subject,
+        eyebrow=copy.eyebrow,
+        heading=copy.heading,
+        introduction=copy.introduction,
+        action_label=copy.action_label,
         action_url=action_url,
-        expiry="This single-use link expires 24 hours after the message is delivered.",
-        fallback="If the button does not work, copy and paste this address into your browser:",
-        closing="If you did not create a BOOKPILE account, you can safely ignore this message.",
+        expiry=copy.expiry,
+        fallback=copy.fallback,
+        closing=copy.closing,
     )
 
 
-def password_reset_email(action_url: str) -> RenderedEmail:
-    return _render(
-        subject="BOOKPILE: Reset your password",
-        eyebrow="Account security",
-        heading="Reset your password",
-        introduction="A password reset was requested for your BOOKPILE account.",
-        action_label="Choose a new password",
-        action_url=action_url,
-        expiry="This single-use link expires 30 minutes after the message is delivered.",
-        fallback="If the button does not work, copy and paste this address into your browser:",
-        closing="If you did not request a password reset, ignore this message. Your password has not changed.",
-    )
+def verification_email(action_url: str, locale: EmailLocale = "en") -> RenderedEmail:
+    return _account_email("verification", action_url, locale)
 
 
-def account_recovery_email(action_url: str) -> RenderedEmail:
-    return _render(
-        subject="BOOKPILE: Recover your account",
-        eyebrow="Account recovery",
-        heading="Recover your account",
-        introduction="Your BOOKPILE account is scheduled for permanent deletion.",
-        action_label="Recover account",
-        action_url=action_url,
-        expiry="This single-use recovery link expires 48 hours after the message is delivered.",
-        fallback="If the button does not work, copy and paste this address into your browser:",
-        closing="If you intended to delete the account, no action is required. Its remaining personal data will be removed after the recovery window closes.",
-    )
+def password_reset_email(action_url: str, locale: EmailLocale = "en") -> RenderedEmail:
+    return _account_email("password_reset", action_url, locale)
+
+
+def account_recovery_email(action_url: str, locale: EmailLocale = "en") -> RenderedEmail:
+    return _account_email("account_recovery", action_url, locale)

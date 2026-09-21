@@ -146,7 +146,7 @@ def test_registration_atomically_consumes_invitation(
 
 
 def test_registration_stores_locale_and_rejects_unsupported_locale(
-    client, session: Session
+    client, session: Session, email_sender
 ) -> None:
     service = AccountInvitationService(AccountInvitationRepository(session))
     invitation = service.create()
@@ -162,6 +162,8 @@ def test_registration_stores_locale_and_rejects_unsupported_locale(
     assert accepted.status_code == 201
     user = session.scalar(select(User).where(User.username == "new_reader"))
     assert user is not None and user.preferred_locale == "gl"
+    assert email_sender.emails[0].subject == "BOOKPILE: Verifica o teu correo"
+    assert '<html lang="gl">' in email_sender.emails[0].html
 
 
 def test_verification_resend_is_generic_and_revokes_old_token(

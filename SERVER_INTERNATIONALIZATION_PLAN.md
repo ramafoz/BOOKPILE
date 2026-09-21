@@ -57,7 +57,9 @@ coherent full-user journey.
   invitation email, so no email-language selector should pretend otherwise.
 - Account-action emails (verification, password reset, deletion recovery) use
   the recipient account preference captured at queue time, not an inviter's
-  choice. Unknown-account responses remain generic in every language.
+  choice. The existing outbox encrypts the rendered subject, text and HTML, so
+  retries keep the same language even if the preference changes later.
+  Unknown-account responses remain generic in every language.
 
 ## First branch checkpoint
 
@@ -79,4 +81,13 @@ accounts. Registration accepts only `en` or `gl` and saves the sign-up choice;
 login, session rotation and `/auth/me` return it. An authenticated, CSRF-protected
 `PUT /auth/locale` updates it. The frontend API knows this contract, but the
 authenticated language control and preference hydration wait for complete
-workspace translations. No email templates or invitation delivery changed.
+workspace translations. Invitation delivery is not implemented.
+
+## Third branch checkpoint
+
+The three transactional account emails have reviewed English and Galician
+subject, text and HTML copy. They render from the recipient's account locale
+before entering the encrypted outbox; the HTML `lang` attribute follows the
+message. Token lifetimes, URLs, privacy-safe responses and transport are
+unchanged. Invitation emails remain a separate feature with per-invitation
+recipient language selection.
