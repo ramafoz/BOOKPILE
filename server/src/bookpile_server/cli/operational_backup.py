@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..api.dependencies import get_private_object_storage
 from ..backup_repository import S3BackupRepository
-from ..config import get_settings
+from ..config import DEVELOPMENT_BACKUP_SECRET, DEVELOPMENT_OUTBOX_SECRET, get_settings
 from ..cover_storage import FilesystemCoverStorage, S3PrivateObjectStorage
 from ..database import engine
 from ..models import Base
@@ -62,9 +62,13 @@ def service_from_settings():
     if settings.operational_backup_s3_bucket == settings.private_object_s3_bucket:
         raise RuntimeError("Operational backups require a bucket separate from active private objects")
     backup_secret = settings.operational_backup_encryption_secret.get_secret_value()
-    if len(backup_secret) < 32 or (
-        settings.operational_backup_encryption_key_id.strip().lower()
-        in {"", "development", "unknown"}
+    if (
+        backup_secret in {DEVELOPMENT_BACKUP_SECRET, DEVELOPMENT_OUTBOX_SECRET}
+        or len(backup_secret) < 32
+        or (
+            settings.operational_backup_encryption_key_id.strip().lower()
+            in {"", "development", "unknown"}
+        )
     ):
         raise RuntimeError("Operational backup encryption key and explicit key ID are required")
     repository = S3BackupRepository.from_settings(settings)

@@ -60,6 +60,9 @@ is supplied only to the backup container. Use:
   retention (or let provider lifecycle perform deletion);
 - an independent random encryption key of at least 32 characters.
 
+The backup CLI rejects missing, short and built-in development encryption
+secrets before accessing the remote repository, even if a custom key ID is set.
+
 Keep the encryption key and its non-secret key ID in an off-host password
 manager/recovery record. Retain an old key until every snapshot bearing its ID
 has expired. Losing the key makes compliant snapshots intentionally
