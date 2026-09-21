@@ -47,14 +47,17 @@ coherent full-user journey.
   page must save it server-side; that account setting must not be confused with
   a library-wide setting. The API field and protected update endpoint can be
   introduced before the unfinished workspace is exposed in Galician.
-- For every invitation that is actually *sent*, the inviter must choose the
-  recipient language explicitly. Store that choice on the invitation/outbox
-  event so retries use the same language. It may differ from the inviter's
-  account preference and must never change it. The invited person can choose
-  a different interface/account preference during registration or acceptance.
-  This applies to both account and library invitations when email delivery is
-  implemented. Today those flows generate a link/token; they do not send an
-  invitation email, so no email-language selector should pretend otherwise.
+- For both account and library invitations, the inviter chooses the language
+  of a predefined message independently of their own account preference. No
+  automated email is required: show the message with its invitation URL and
+  offer separate actions to copy the whole message or just the URL. The text
+  must distinguish catalogue/map viewing from equal co-Owner authority; it
+  must not imply the recipient already has a BOOKPILE account. Keep the chosen
+  language with the generated invitation presentation, without changing the
+  inviter's preference. A recipient may choose a different language during
+  registration or acceptance. Do not put an invitation token in logs or
+  analytics. Existing flows generate links/tokens only; message composition
+  and its copy controls are the next UI slice.
 - Account-action emails (verification, password reset, deletion recovery) use
   the recipient account preference captured at queue time, not an inviter's
   choice. The existing outbox encrypts the rendered subject, text and HTML, so
@@ -81,7 +84,7 @@ accounts. Registration accepts only `en` or `gl` and saves the sign-up choice;
 login, session rotation and `/auth/me` return it. An authenticated, CSRF-protected
 `PUT /auth/locale` updates it. The frontend API knows this contract, but the
 authenticated language control and preference hydration wait for complete
-workspace translations. Invitation delivery is not implemented.
+workspace translations. Invitation message composition is not implemented.
 
 ## Third branch checkpoint
 
@@ -89,5 +92,5 @@ The three transactional account emails have reviewed English and Galician
 subject, text and HTML copy. They render from the recipient's account locale
 before entering the encrypted outbox; the HTML `lang` attribute follows the
 message. Token lifetimes, URLs, privacy-safe responses and transport are
-unchanged. Invitation emails remain a separate feature with per-invitation
-recipient language selection.
+unchanged. Invitation message composition remains a separate feature with a
+per-invitation language choice; it does not require sending email.
