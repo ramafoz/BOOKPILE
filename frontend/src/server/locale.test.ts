@@ -3,6 +3,7 @@ import {
   availableLocales, english, formatLocalDateTime, formatLocalNumber,
   parseLocale, resolveLocale, translate,
 } from "./locale";
+import { galician } from "./locales/gl";
 
 describe("Server locale foundation", () => {
   it("exposes only reviewed locales", () => {
@@ -23,11 +24,22 @@ describe("Server locale foundation", () => {
   });
 
   it("provides non-empty translations with matching interpolation variables", () => {
+    expect(Object.keys(galician).sort()).toEqual(Object.keys(english).sort());
     for (const key of Object.keys(english) as Array<keyof typeof english>) {
       const source = english[key];
       const translation = translate("gl", key);
       expect(translation.trim(), key).not.toBe("");
       expect(translation.match(/\{\w+\}/g) ?? [], key).toEqual(source.match(/\{\w+\}/g) ?? []);
+    }
+  });
+
+  it("substitutes every declared placeholder in both catalogues", () => {
+    for (const key of Object.keys(english) as Array<keyof typeof english>) {
+      const placeholders = english[key].match(/\{(\w+)\}/g) ?? [];
+      const values = Object.fromEntries(placeholders.map((token) => [token.slice(1, -1), "example"]));
+      for (const locale of availableLocales) {
+        expect(translate(locale, key, values), `${locale}.${key}`).not.toMatch(/\{\w+\}/);
+      }
     }
   });
 

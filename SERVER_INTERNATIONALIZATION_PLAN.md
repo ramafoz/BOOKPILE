@@ -41,4 +41,7 @@ browser-locale detection and persistence, an accessible account-flow selector,
 routes. The signed-in workspace deliberately remains English and reports
 `lang="en"`. Generic localized authentication errors avoid exposing raw API
 details; a later slice should introduce stable, localized error codes and
-review form validation. This checkpoint is not the multilingual beta.
+review form validation. Catalogues now live in one module per language; adding
+another locale requires a complete key set and matching interpolation variables
+before it can appear in the selector. This checkpoint is not the multilingual
+beta.
