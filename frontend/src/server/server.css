@@ -59,6 +59,34 @@ button { cursor: pointer; }
   color: #dfb76f;
 }
 
+.server-locale-choice {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: clamp(20px, 4vw, 50px);
+  color: #f9f2e6;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.server-locale-choice select {
+  min-height: 38px;
+  max-width: 130px;
+  padding: 5px 8px;
+  border: 1px solid #dfb76f;
+  border-radius: 7px;
+  color: #f9f2e6;
+  background: #123c33;
+  font: inherit;
+}
+
+.server-locale-choice select:focus-visible {
+  outline: 2px solid #dfb76f;
+  outline-offset: 3px;
+}
+
 .server-story-copy {
   position: relative;
   z-index: 2;
@@ -871,6 +899,9 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 }
 
 @media (max-width: 480px) {
+  .server-locale-choice { margin-left: 12px; }
+  .server-locale-choice span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .server-locale-choice select { max-width: 96px; }
   .server-isbn-actions, .server-candidate-review > div { grid-template-columns: 1fr; }
   .server-story { min-height: 270px; }
   .server-brand-mark { width: 41px; height: 41px; }

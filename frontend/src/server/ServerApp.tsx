@@ -41,6 +41,9 @@ import {
 } from "./workspacePresentation";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
+import LocaleProvider from "./LocaleProvider";
+import { type LocaleContextValue, useLocale } from "./LocaleContext";
+import { availableLocales, localeNames } from "./locale";
 
 type Route =
   | "login"
@@ -93,21 +96,38 @@ function friendlyError(error: unknown): string {
   return "BOOKPILE could not reach the server. Please try again.";
 }
 
+function authFriendlyError(error: unknown, t: LocaleContextValue["t"]): string {
+  if (error instanceof ServerApiError) {
+    if (error.status === 429) {
+      const minutes = error.retryAfter ? Math.max(1, Math.ceil(error.retryAfter / 60)) : null;
+      return minutes
+        ? t(minutes === 1 ? "tooManyAttemptsMinutesOne" : "tooManyAttemptsMinutesMany", { minutes })
+        : t("tooManyAttempts");
+    }
+    return t(error.status === 401 ? "invalidCredentials" : "actionFailed");
+  }
+  return t("serverUnavailable");
+}
+
 function AuthShell({ children }: { children: ReactNode }) {
+  const { locale, setLocale, t } = useLocale();
   return (
     <main className="server-shell">
-      <section className="server-story" aria-label="BOOKPILE introduction">
+      <section className="server-story" aria-label={t("storyLabel")}>
         <a className="server-brand" href="/login">
           <span className="server-brand-mark"><LibraryBig size={24} /></span>
           <span>BOOKPILE</span>
         </a>
+        <label className="server-locale-choice">
+          <span>{t("languageLabel")}</span>
+          <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)}>
+            {availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}
+          </select>
+        </label>
         <div className="server-story-copy">
-          <p className="server-eyebrow">Your personal library, securely mapped</p>
-          <h1>Every book<br />has its place.</h1>
-          <p>
-            The hosted BOOKPILE is being built as a private, invitation-only
-            service. Your account is the first boundary around your library.
-          </p>
+          <p className="server-eyebrow">{t("storyEyebrow")}</p>
+          <h1>{t("storyTitle")}</h1>
+          <p>{t("storyDescription")}</p>
         </div>
         <div className="server-books" aria-hidden="true">
           <i /><i /><i /><i /><i /><i />
@@ -117,7 +137,7 @@ function AuthShell({ children }: { children: ReactNode }) {
       <section className="server-auth-column">
         {children}
         <p className="server-phase-note">
-          Server preview · Accounts are separate from BOOKPILE Local v1
+          {t("previewNote")}
         </p>
       </section>
     </main>
@@ -185,20 +205,21 @@ function LoginPage({
   navigate: (route: Route) => void;
   onLogin: (user: CurrentUser) => void;
 }) {
+  const { t } = useLocale();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       onLogin(await serverApi.login(identifier, password, rememberMe));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(caught);
     } finally {
       setBusy(false);
     }
@@ -206,13 +227,13 @@ function LoginPage({
 
   return (
     <AuthCard
-      eyebrow="Welcome back"
-      title="Sign in"
-      intro="Enter the private account created from your beta invitation."
+      eyebrow={t("welcomeBack")}
+      title={t("signIn")}
+      intro={t("loginIntro")}
     >
       <form className="server-form" onSubmit={submit}>
         <Field
-          label="Username or email"
+          label={t("usernameOrEmail")}
           icon={<UserRound size={18} />}
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
@@ -220,7 +241,7 @@ function LoginPage({
           autoFocus
         />
         <Field
-          label="Password"
+          label={t("password")}
           icon={<LockKeyhole size={18} />}
           type="password"
           value={password}
@@ -233,15 +254,15 @@ function LoginPage({
             checked={rememberMe}
             onChange={(event) => setRememberMe(event.target.checked)}
           />
-          Keep me signed in on this device
+          {t("keepSignedIn")}
         </label>
-        {error && <Message kind="error">{error}</Message>}
-        <SubmitButton busy={busy}>Sign in <ArrowRight size={18} /></SubmitButton>
+        {error !== null && <Message kind="error">{authFriendlyError(error, t)}</Message>}
+        <SubmitButton busy={busy}>{t("signIn")} <ArrowRight size={18} /></SubmitButton>
       </form>
       <div className="server-card-links">
-        <button type="button" onClick={() => navigate("forgot-password")}>Forgot password?</button>
-        <button type="button" onClick={() => navigate("resend-verification")}>Verify account</button>
-        <button type="button" onClick={() => navigate("register")}>Use an invitation</button>
+        <button type="button" onClick={() => navigate("forgot-password")}>{t("forgotPassword")}</button>
+        <button type="button" onClick={() => navigate("resend-verification")}>{t("verifyAccount")}</button>
+        <button type="button" onClick={() => navigate("register")}>{t("useInvitation")}</button>
       </div>
     </AuthCard>
   );
@@ -252,43 +273,45 @@ function RestoreAccountPage({
 }: {
   navigate: (route: Route) => void;
 }) {
+  const { t } = useLocale();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown | null>(null);
   const [restored, setRestored] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       await serverApi.restoreAccount(token);
       window.history.replaceState({}, "", "/restore-account");
       setRestored(true);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(caught);
     } finally {
       setBusy(false);
     }
   }
 
-  return <AuthCard eyebrow="48-hour recovery" title="Restore account" intro="This one-time link is the only way to restore a deleted account during its 48-hour recovery window.">
+  return <AuthCard eyebrow={t("recoveryWindow")} title={t("restoreAccount")} intro={t("restoreIntro")}>
     {restored ? <>
-      <Message kind="success">Your account and available library memberships were restored.</Message>
-      <button className="server-submit" type="button" onClick={() => navigate("login")}>Continue to sign in <ArrowRight size={18} /></button>
+      <Message kind="success">{t("accountRestored")}</Message>
+      <button className="server-submit" type="button" onClick={() => navigate("login")}>{t("continueToSignIn")} <ArrowRight size={18} /></button>
     </> : token ? <form className="server-form" onSubmit={submit}>
-      <p className="server-help">Confirm restoration, then sign in normally with your existing credentials.</p>
-      {error && <Message kind="error">{error}</Message>}
-      <SubmitButton busy={busy}>Restore account <ArrowRight size={18} /></SubmitButton>
-      <div className="server-card-links single"><button type="button" onClick={() => navigate("login")}>Keep deletion and return</button></div>
+      <p className="server-help">{t("restoreHelp")}</p>
+      {error !== null && <Message kind="error">{authFriendlyError(error, t)}</Message>}
+      <SubmitButton busy={busy}>{t("restoreAccount")} <ArrowRight size={18} /></SubmitButton>
+      <div className="server-card-links single"><button type="button" onClick={() => navigate("login")}>{t("keepDeletion")}</button></div>
     </form> : <>
-      <Message kind="error">This recovery link is incomplete. Use the exact link sent to your registered email address.</Message>
-      <button className="server-submit" type="button" onClick={() => navigate("login")}>Return to sign in</button>
+      <Message kind="error">{t("incompleteRecoveryLink")}</Message>
+      <button className="server-submit" type="button" onClick={() => navigate("login")}>{t("returnToSignIn")}</button>
     </>}
   </AuthCard>;
 }
 
 function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
+  const { t } = useLocale();
   const inviteFromUrl = new URLSearchParams(window.location.search).get("invite") ?? "";
   const [invite, setInvite] = useState(inviteFromUrl);
   const [email, setEmail] = useState("");
@@ -296,13 +319,13 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [complete, setComplete] = useState<string | null>(null);
+  const [error, setError] = useState<unknown | null>(null);
+  const [complete, setComplete] = useState<"registrationEmailSent" | "registrationEmailFailed" | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       const result = await serverApi.register({
         invitation_token: invite.trim(),
@@ -312,11 +335,9 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
         password_confirmation: confirmation,
       });
       window.history.replaceState({}, "", "/register");
-      setComplete(result.verification_email_sent
-        ? "Your account was created. Check your email to verify it before signing in."
-        : "Your account was created, but the verification email could not be sent. Use Verify account to request another link.");
+      setComplete(result.verification_email_sent ? "registrationEmailSent" : "registrationEmailFailed");
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(caught);
     } finally {
       setBusy(false);
     }
@@ -324,30 +345,30 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
 
   return (
     <AuthCard
-      eyebrow="Invitation-only beta"
-      title="Create your account"
-      intro="All fields are required. Use the single-use account invitation issued by a BOOKPILE administrator; a library invitation cannot create an account."
+      eyebrow={t("invitationBeta")}
+      title={t("createAccount")}
+      intro={t("registrationIntro")}
     >
       {complete ? (
         <div className="server-complete">
           <CheckCircle2 size={38} />
-          <p>{complete}</p>
-          <button className="server-submit" type="button" onClick={() => navigate("login")}>Continue to sign in</button>
+          <p>{t(complete)}</p>
+          <button className="server-submit" type="button" onClick={() => navigate("login")}>{t("continueToSignIn")}</button>
         </div>
       ) : (
         <form className="server-form" onSubmit={submit}>
-          <Field label="Account invitation token" icon={<KeyRound size={18} />} value={invite} onChange={(event) => setInvite(event.target.value)} autoComplete="off" />
-          <Field label="Email" icon={<Mail size={18} />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
-          <Field label="Username" icon={<UserRound size={18} />} value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={30} pattern="[A-Za-z0-9_]+" autoComplete="username" />
-          <Field label="Password" icon={<LockKeyhole size={18} />} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
-          <Field label="Confirm password" icon={<LockKeyhole size={18} />} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
-          <p className="server-help">Use 12–128 characters. Spaces and Unicode characters are welcome.</p>
-          {error && <Message kind="error">{error}</Message>}
-          <SubmitButton busy={busy}>Create account <ArrowRight size={18} /></SubmitButton>
+          <Field label={t("invitationToken")} icon={<KeyRound size={18} />} value={invite} onChange={(event) => setInvite(event.target.value)} autoComplete="off" />
+          <Field label={t("email")} icon={<Mail size={18} />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
+          <Field label={t("username")} icon={<UserRound size={18} />} value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} maxLength={30} pattern="[A-Za-z0-9_]+" autoComplete="username" />
+          <Field label={t("password")} icon={<LockKeyhole size={18} />} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
+          <Field label={t("confirmPassword")} icon={<LockKeyhole size={18} />} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
+          <p className="server-help">{t("passwordHelp")}</p>
+          {error !== null && <Message kind="error">{authFriendlyError(error, t)}</Message>}
+          <SubmitButton busy={busy}>{t("createAccount")} <ArrowRight size={18} /></SubmitButton>
         </form>
       )}
       <div className="server-card-links single">
-        <button type="button" onClick={() => navigate("login")}>Back to sign in</button>
+        <button type="button" onClick={() => navigate("login")}>{t("backToSignIn")}</button>
       </div>
     </AuthCard>
   );
@@ -360,22 +381,23 @@ function EmailRequestPage({
   mode: "verification" | "reset";
   navigate: (route: Route) => void;
 }) {
+  const { t } = useLocale();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown | null>(null);
   const [complete, setComplete] = useState(false);
   const verification = mode === "verification";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       if (verification) await serverApi.resendVerification(email);
       else await serverApi.requestPasswordReset(email);
       setComplete(true);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(caught);
     } finally {
       setBusy(false);
     }
@@ -383,25 +405,25 @@ function EmailRequestPage({
 
   return (
     <AuthCard
-      eyebrow={verification ? "Account verification" : "Account recovery"}
-      title={verification ? "Request a new link" : "Reset your password"}
+      eyebrow={t(verification ? "accountVerification" : "accountRecovery")}
+      title={t(verification ? "requestNewLink" : "resetYourPassword")}
       intro={verification
-        ? "We will send a fresh verification link if the account is eligible."
-        : "We will send a password-reset link if the account exists and is active."}
+        ? t("verificationRequestIntro")
+        : t("resetRequestIntro")}
     >
       {complete ? (
         <Message kind="success">
-          If that email belongs to an eligible BOOKPILE account, a message is on its way.
+          {t("genericEmailResponse")}
         </Message>
       ) : (
         <form className="server-form" onSubmit={submit}>
-          <Field label="Email" icon={<Mail size={18} />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
-          {error && <Message kind="error">{error}</Message>}
-          <SubmitButton busy={busy}>Send link <ArrowRight size={18} /></SubmitButton>
+          <Field label={t("email")} icon={<Mail size={18} />} type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" autoFocus />
+          {error !== null && <Message kind="error">{authFriendlyError(error, t)}</Message>}
+          <SubmitButton busy={busy}>{t("sendLink")} <ArrowRight size={18} /></SubmitButton>
         </form>
       )}
       <div className="server-card-links single">
-        <button type="button" onClick={() => navigate("login")}>Back to sign in</button>
+        <button type="button" onClick={() => navigate("login")}>{t("backToSignIn")}</button>
       </div>
     </AuthCard>
   );
@@ -414,29 +436,30 @@ function TokenActionPage({
   mode: "verification" | "reset";
   navigate: (route: Route) => void;
 }) {
+  const { t } = useLocale();
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown | "invalidToken" | null>(null);
   const [complete, setComplete] = useState(false);
   const verification = mode === "verification";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!token) {
-      setError("This link does not contain a valid token.");
+      setError("invalidToken");
       return;
     }
     setBusy(true);
-    setError("");
+    setError(null);
     try {
       if (verification) await serverApi.verifyEmail(token);
       else await serverApi.resetPassword(token, password, confirmation);
       window.history.replaceState({}, "", verification ? "/verify-email" : "/reset-password");
       setComplete(true);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(caught);
     } finally {
       setBusy(false);
     }
@@ -444,32 +467,32 @@ function TokenActionPage({
 
   return (
     <AuthCard
-      eyebrow={verification ? "Confirm your address" : "Choose a new password"}
-      title={verification ? "Verify email" : "Reset password"}
+      eyebrow={t(verification ? "confirmAddress" : "chooseNewPassword")}
+      title={t(verification ? "verifyEmail" : "resetPassword")}
       intro={verification
-        ? "Confirm this one-time link to activate your BOOKPILE account."
-        : "Reset links expire after 30 minutes and can only be used once."}
+        ? t("verifyEmailIntro")
+        : t("resetPasswordIntro")}
     >
       {complete ? (
         <div className="server-complete">
           <CheckCircle2 size={38} />
-          <p>{verification ? "Your email is verified. You can now sign in." : "Your password has been changed and all previous sessions were signed out."}</p>
-          <button className="server-submit" type="button" onClick={() => navigate("login")}>Continue to sign in</button>
+          <p>{t(verification ? "emailVerified" : "passwordChanged")}</p>
+          <button className="server-submit" type="button" onClick={() => navigate("login")}>{t("continueToSignIn")}</button>
         </div>
       ) : (
         <form className="server-form" onSubmit={submit}>
           {!verification && (
             <>
-              <Field label="New password" icon={<LockKeyhole size={18} />} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" autoFocus />
-              <Field label="Confirm new password" icon={<LockKeyhole size={18} />} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
+              <Field label={t("newPassword")} icon={<LockKeyhole size={18} />} type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" autoFocus />
+              <Field label={t("confirmNewPassword")} icon={<LockKeyhole size={18} />} type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" />
             </>
           )}
-          {error && <Message kind="error">{error}</Message>}
-          <SubmitButton busy={busy}>{verification ? "Verify my email" : "Change password"} <ArrowRight size={18} /></SubmitButton>
+          {error !== null && <Message kind="error">{error === "invalidToken" ? t("invalidToken") : authFriendlyError(error, t)}</Message>}
+          <SubmitButton busy={busy}>{t(verification ? "verifyMyEmail" : "changePassword")} <ArrowRight size={18} /></SubmitButton>
         </form>
       )}
       <div className="server-card-links single">
-        <button type="button" onClick={() => navigate("login")}>Back to sign in</button>
+        <button type="button" onClick={() => navigate("login")}>{t("backToSignIn")}</button>
       </div>
     </AuthCard>
   );
@@ -1105,11 +1128,18 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   );
 }
 
-export default function ServerApp() {
+function ServerAppContent() {
+  const { locale, t } = useLocale();
   const [route, setRoute] = useState<Route>(() => routeFromPath(window.location.pathname));
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bootError, setBootError] = useState("");
+  const [bootError, setBootError] = useState<unknown | null>(null);
+
+  useEffect(() => {
+    // The authenticated workspace is still English during this first i18n slice.
+    const showingWorkspace = user && route !== "verify-email" && route !== "reset-password";
+    document.documentElement.lang = showingWorkspace ? "en" : locale;
+  }, [locale, route, user]);
 
   const navigate = useCallback((next: Route) => {
     window.history.pushState({}, "", `/${next}`);
@@ -1128,7 +1158,7 @@ export default function ServerApp() {
       .then((current) => { if (active) setUser(current); })
       .catch((error: unknown) => {
         if (active && (!(error instanceof ServerApiError) || error.status !== 401)) {
-          setBootError(friendlyError(error));
+          setBootError(error);
         }
       })
       .finally(() => { if (active) setLoading(false); });
@@ -1136,10 +1166,10 @@ export default function ServerApp() {
   }, []);
 
   if (loading) {
-    return <div className="server-loading"><LibraryBig size={38} /><LoaderCircle className="server-spinner" size={24} /><span>Opening BOOKPILE…</span></div>;
+    return <div className="server-loading"><LibraryBig size={38} /><LoaderCircle className="server-spinner" size={24} /><span>{t("loading")}</span></div>;
   }
-  if (bootError) {
-    return <div className="server-loading error"><LibraryBig size={38} /><p>{bootError}</p><button type="button" onClick={() => window.location.reload()}>Try again</button></div>;
+  if (bootError !== null) {
+    return <div className="server-loading error"><LibraryBig size={38} /><p>{authFriendlyError(bootError, t)}</p><button type="button" onClick={() => window.location.reload()}>{t("tryAgain")}</button></div>;
   }
   if (user && route !== "verify-email" && route !== "reset-password") {
     return <AccountHome user={user} onSignedOut={() => { setUser(null); navigate("login"); }} />;
@@ -1155,4 +1185,8 @@ export default function ServerApp() {
   else page = <LoginPage navigate={navigate} onLogin={setUser} />;
 
   return <AuthShell>{page}</AuthShell>;
+}
+
+export default function ServerApp() {
+  return <LocaleProvider><ServerAppContent /></LocaleProvider>;
 }
