@@ -795,6 +795,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     user_id: UUID
     username: str
+    preferred_locale: str
     csrf_cookie_name: str
     expires_at: datetime
     absolute_expires_at: datetime
@@ -803,7 +804,16 @@ class LoginResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     user_id: UUID
     username: str
+    preferred_locale: str
     csrf_cookie_name: str
+
+
+class PreferredLocaleWrite(BaseModel):
+    preferred_locale: Literal["en", "gl"]
+
+
+class PreferredLocaleResponse(BaseModel):
+    preferred_locale: Literal["en", "gl"]
 
 
 class RegisterAccountRequest(BaseModel):
@@ -812,6 +822,7 @@ class RegisterAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=30)
     password: str = Field(min_length=1, max_length=128)
     password_confirmation: str = Field(min_length=1, max_length=128)
+    preferred_locale: Literal["en", "gl"] = "en"
 
 
 class RegisterAccountResponse(BaseModel):

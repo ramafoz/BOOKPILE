@@ -160,6 +160,7 @@ class AccountInvitationService:
         password: str,
         password_confirmation: str,
         ip_address: str | None,
+        preferred_locale: str = "en",
     ) -> RegisteredAccount:
         if password != password_confirmation:
             raise RegistrationValidationError("Passwords do not match.")
@@ -187,6 +188,7 @@ class AccountInvitationService:
             email=normalized_email,
             username=normalized_username,
             password_hash=password_hash,
+            preferred_locale=preferred_locale,
             state="pending_verification",
         )
         self._repository.add_user(user)

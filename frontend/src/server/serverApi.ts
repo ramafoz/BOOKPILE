@@ -1,8 +1,11 @@
+import type { AppLocale } from "./locale";
+
 const API_URL = import.meta.env.VITE_SERVER_API_URL ?? "/api/v1";
 
 export interface CurrentUser {
   user_id: string;
   username: string;
+  preferred_locale: AppLocale;
   csrf_cookie_name: string;
 }
 
@@ -728,6 +731,11 @@ async function request<T>(
 
 export const serverApi = {
   me: () => request<CurrentUser>("/auth/me").then(rememberCsrfCookieName),
+  updatePreferredLocale: (preferredLocale: AppLocale) => request<{ preferred_locale: AppLocale }>(
+    "/auth/locale",
+    { method: "PUT", body: JSON.stringify({ preferred_locale: preferredLocale }) },
+    true,
+  ),
   login: (identifier: string, password: string, rememberMe: boolean) =>
     request<LoginResult>("/auth/login", {
       method: "POST",
@@ -790,6 +798,7 @@ export const serverApi = {
     username: string;
     password: string;
     password_confirmation: string;
+    preferred_locale: AppLocale;
   }) => request<RegistrationResult>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),

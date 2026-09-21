@@ -92,6 +92,7 @@ def test_registration_atomically_consumes_invitation(
     user = session.scalar(select(User).where(User.username == "new_reader"))
     assert user is not None
     assert user.email == "new.reader@example.com"
+    assert user.preferred_locale == "en"
     assert verify_password(user.password_hash, "a valid registration password 🔐")
     invitation = session.get(AccountInvitation, invitation_result.invitation_id)
     assert invitation is not None
@@ -142,6 +143,25 @@ def test_registration_atomically_consumes_invitation(
         },
     )
     assert login.status_code == 200
+
+
+def test_registration_stores_locale_and_rejects_unsupported_locale(
+    client, session: Session
+) -> None:
+    service = AccountInvitationService(AccountInvitationRepository(session))
+    invitation = service.create()
+    invalid = client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(invitation.raw_token, preferred_locale="es"),
+    )
+    assert invalid.status_code == 422
+    accepted = client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(invitation.raw_token, preferred_locale="gl"),
+    )
+    assert accepted.status_code == 201
+    user = session.scalar(select(User).where(User.username == "new_reader"))
+    assert user is not None and user.preferred_locale == "gl"
 
 
 def test_verification_resend_is_generic_and_revokes_old_token(

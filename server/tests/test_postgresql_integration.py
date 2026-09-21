@@ -205,7 +205,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             for column in inspect(engine).get_columns("email_outbox_messages")
         }
         assert {"smtp_response_code", "provider_queue_id"} <= email_outbox_columns
+        user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+        assert "preferred_locale" in user_columns
         command.downgrade(alembic, "0021_email_outbox")
+        downgraded_user_columns = {
+            column["name"] for column in inspect(engine).get_columns("users")
+        }
+        assert "preferred_locale" not in downgraded_user_columns
         downgraded_email_columns = {
             column["name"]
             for column in inspect(engine).get_columns("email_outbox_messages")

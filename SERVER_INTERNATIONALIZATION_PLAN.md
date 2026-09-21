@@ -33,6 +33,32 @@ Do not expose a locale in the selector until its current route is covered. A
 feature branch may contain a partial migration; staging promotion waits for a
 coherent full-user journey.
 
+## Language choices and precedence
+
+- The public home page must offer a visible language selector. The pre-sign-in
+  Server home/account shell already has one for English and Galician; extend
+  the same choice to the eventual production landing page. Before sign-in,
+  prefer an explicit browser-stored choice, then a supported browser language,
+  then English. Do not infer language from a book's metadata or IP address.
+- Each account has its own preferred locale. Registration records the language
+  chosen on the sign-up page; existing accounts migrate to English. Once the
+  authenticated workspace is translated, sign-in and `/auth/me` should apply
+  the account preference across devices. Changing it in the personal account
+  page must save it server-side; that account setting must not be confused with
+  a library-wide setting. The API field and protected update endpoint can be
+  introduced before the unfinished workspace is exposed in Galician.
+- For every invitation that is actually *sent*, the inviter must choose the
+  recipient language explicitly. Store that choice on the invitation/outbox
+  event so retries use the same language. It may differ from the inviter's
+  account preference and must never change it. The invited person can choose
+  a different interface/account preference during registration or acceptance.
+  This applies to both account and library invitations when email delivery is
+  implemented. Today those flows generate a link/token; they do not send an
+  invitation email, so no email-language selector should pretend otherwise.
+- Account-action emails (verification, password reset, deletion recovery) use
+  the recipient account preference captured at queue time, not an inviter's
+  choice. Unknown-account responses remain generic in every language.
+
 ## First branch checkpoint
 
 `feature/server-i18n-foundation` adds typed English/Galician catalogues,
@@ -45,3 +71,12 @@ review form validation. Catalogues now live in one module per language; adding
 another locale requires a complete key set and matching interpolation variables
 before it can appear in the selector. This checkpoint is not the multilingual
 beta.
+
+## Second branch checkpoint
+
+Migration `0023_account_locale` adds a non-null English default for existing
+accounts. Registration accepts only `en` or `gl` and saves the sign-up choice;
+login, session rotation and `/auth/me` return it. An authenticated, CSRF-protected
+`PUT /auth/locale` updates it. The frontend API knows this contract, but the
+authenticated language control and preference hydration wait for complete
+workspace translations. No email templates or invitation delivery changed.

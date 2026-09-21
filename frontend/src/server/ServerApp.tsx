@@ -311,7 +311,7 @@ function RestoreAccountPage({
 }
 
 function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const inviteFromUrl = new URLSearchParams(window.location.search).get("invite") ?? "";
   const [invite, setInvite] = useState(inviteFromUrl);
   const [email, setEmail] = useState("");
@@ -333,6 +333,7 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
         username,
         password,
         password_confirmation: confirmation,
+        preferred_locale: locale,
       });
       window.history.replaceState({}, "", "/register");
       setComplete(result.verification_email_sent ? "registrationEmailSent" : "registrationEmailFailed");
