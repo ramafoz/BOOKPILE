@@ -1,9 +1,15 @@
 # BOOKPILE Server internationalization
 
-The private beta targets English (`en`), Galician (`gl`), Portuguese (`pt`),
-Spanish (`es`), Italian (`it`), Catalan (`ca`), Basque (`eu`), French (`fr`), and
-Simplified Chinese (`zh-Hans`). Language of the interface is independent of a
-book's bibliographic language. English is the source catalogue and fallback.
+The private-beta launch targets English (`en`), Galician (`gl`), Spanish (`es`),
+Basque (`eu`), Catalan/Valencian (`ca`), Aranese Occitan (`oc-ES`), Portuguese
+(`pt`), Italian (`it`), French (`fr`), and Simplified Chinese (`zh-Hans`). The
+selector presents Catalan and Valencian together as `Català / Valencià`; BOOKPILE
+maintains one reviewed catalogue for them. German, Japanese, Dutch, Greek,
+Arabic and Korean are post-launch candidates and must not appear as selectable
+languages until their routes are complete. Arabic additionally requires a full
+right-to-left layout and interaction audit. Language of the interface is
+independent of a book's bibliographic language. English is the source catalogue
+and fallback.
 
 ## Delivery slices
 
@@ -23,7 +29,7 @@ book's bibliographic language. English is the source catalogue and fallback.
 - [ ] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining seven locales in reviewed batches; verify plural rules,
+- [ ] Add the remaining eight launch locales in reviewed batches; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
