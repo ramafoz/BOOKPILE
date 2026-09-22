@@ -36,15 +36,13 @@ import ServerLibraryMap from "./ServerLibraryMap";
 import StatisticsWorkspace from "./StatisticsWorkspace";
 import AccountWorkspace from "./AccountWorkspace";
 import ProfileDialog from "./ProfileDialog";
-import {
-  workspacePerspectiveLabel,
-} from "./workspacePresentation";
 import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
 import LocaleProvider from "./LocaleProvider";
 import { type LocaleContextValue, useLocale } from "./LocaleContext";
 import { availableLocales, localeNames } from "./locale";
 import { libraryInvitationMessage } from "./invitationCopy";
+import { authenticatedCopy } from "./authenticatedCopy";
 
 type Route =
   | "login"
@@ -528,6 +526,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
   const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT" | "ACCOUNT">("CATALOGUE");
+  const workspaceLocale = workspace === "ACCOUNT" ? locale : "en";
+  const copy = authenticatedCopy(workspaceLocale);
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
@@ -563,6 +563,22 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const hasBlockingServerConflict = importJob?.warnings.some(
     (warning) => ["INCOMPATIBLE_MAP_COORDINATES", "FURNITURE_NAME_CONFLICT"].includes(warning.code),
   ) ?? false;
+
+  useEffect(() => {
+    document.documentElement.lang = workspaceLocale;
+  }, [workspaceLocale]);
+
+  function localizedWorkspaceLabel() {
+    const view = workspace === "MAP"
+      ? copy("libraryMap")
+      : workspace === "STATISTICS"
+        ? copy("statistics")
+        : copy("catalogue");
+    const perspective = perspectives.find((item) => item.selected) ?? perspectives[0];
+    return !perspective || perspective.user_id === user.user_id
+      ? `${view} — ${workspaceLocale === "gl" ? "eu" : "self"}`
+      : `${view} — ${perspective.username}`;
+  }
 
   function toggleControlsPanel(panel: NonNullable<typeof controlsPanel>, button: HTMLButtonElement) {
     if (controlsPanel === panel) {
@@ -970,15 +986,15 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <span className="server-brand-mark"><LibraryBig size={24} /></span>
           <span>BOOKPILE</span>
         </a>
-        <nav className="server-compact-navigation" aria-label="BOOKPILE workspace controls">
+        <nav className="server-compact-navigation" aria-label={copy("navControls")}>
           <button type="button" className={controlsPanel === "LIBRARIES" ? "active" : ""} onClick={(event) => toggleControlsPanel("LIBRARIES", event.currentTarget)}>
-            <LibraryBig size={17} /><span><b>{selected?.name ?? "Choose library"}</b>{selected && <small>{selected.role === "OWNER" ? "Owner" : "Viewer"}</small>}</span><ChevronDown size={15} />
+            <LibraryBig size={17} /><span><b>{selected?.name ?? copy("chooseLibrary")}</b>{selected && <small>{selected.role === "OWNER" ? copy("owner") : copy("viewer")}</small>}</span><ChevronDown size={15} />
           </button>
           {selected && <button type="button" className={controlsPanel === "VIEW" ? "active" : ""} onClick={(event) => { if (workspace === "ACCOUNT") setWorkspace("CATALOGUE"); toggleControlsPanel("VIEW", event.currentTarget); }}>
             {workspace === "ACCOUNT" ? <UserRound size={17} /> : workspace === "MAP" ? <Map size={17} /> : workspace === "STATISTICS" ? <BarChart3 size={17} /> : workspace === "LAYOUT" ? <Layers3 size={17} /> : <BookOpen size={17} />}
-            <span><b>{workspace === "ACCOUNT" ? "My profile" : workspace === "LAYOUT" ? "Customize layout" : workspacePerspectiveLabel(workspace, user.user_id, perspectives)}</b><small>{workspace === "ACCOUNT" ? "Private account" : selected.can_view_map ? "Catalogue and map" : "Catalogue only"}</small></span><ChevronDown size={15} />
+            <span><b>{workspace === "ACCOUNT" ? copy("myProfile") : workspace === "LAYOUT" ? copy("customizeLayout") : localizedWorkspaceLabel()}</b><small>{workspace === "ACCOUNT" ? copy("privateAccount") : selected.can_view_map ? copy("catalogueAndMap") : copy("catalogueOnly")}</small></span><ChevronDown size={15} />
           </button>}
-          <button type="button" className={`server-compact-identity ${workspace === "ACCOUNT" ? "active" : ""}`} title="Open your private profile and account" onClick={() => { setWorkspace("ACCOUNT"); setControlsPanel(null); }}><ShieldCheck size={18} /><span><b>{user.username}</b><small>Protected session</small></span></button>
+          <button type="button" className={`server-compact-identity ${workspace === "ACCOUNT" ? "active" : ""}`} title={copy("openPrivateProfile")} onClick={() => { setWorkspace("ACCOUNT"); setControlsPanel(null); }}><ShieldCheck size={18} /><span><b>{user.username}</b><small>{copy("protectedSession")}</small></span></button>
         </nav>
       </header>
       <section className="server-library-dashboard">
@@ -987,23 +1003,23 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
 
         <div className="server-dashboard-grid">
           <aside className={`server-library-sidebar ${controlsPanel === "LIBRARIES" ? "open" : ""}`} style={anchoredPanelStyle(360, "left")}>
-            <header><h2>Your libraries</h2><button type="button" onClick={() => setControlsPanel(null)} aria-label="Close libraries panel">×</button></header>
+            <header><h2>{copy("yourLibraries")}</h2><button type="button" onClick={() => setControlsPanel(null)} aria-label={copy("closeLibraries")}>×</button></header>
             <div className="server-library-list">
               {libraries.map((library) => (
                 <button className={library.library_id === selectedId ? "active" : ""} type="button" key={library.library_id} onClick={() => { setSelectedId(library.library_id); setWorkspace("CATALOGUE"); setControlsPanel(null); }}>
-                  <LibraryBig size={18} /><span><b>{library.name}</b><small>{library.role === "OWNER" ? "Owner" : library.viewer_scope === "CATALOG_AND_MAP" ? "Viewer · catalogue + map" : "Viewer · catalogue"}</small></span>
+                  <LibraryBig size={18} /><span><b>{library.name}</b><small>{library.role === "OWNER" ? copy("owner") : library.viewer_scope === "CATALOG_AND_MAP" ? copy("viewerCatalogueMap") : copy("viewerCatalogue")}</small></span>
                 </button>
               ))}
-              {!libraries.length && <p>No libraries yet. Create your first one below.</p>}
+              {!libraries.length && <p>{copy("noLibraries")}</p>}
             </div>
-            {selected?.role === "OWNER" && <button className="server-library-settings-link" type="button" onClick={(event) => { setWorkspace("CATALOGUE"); setSettingsSection("ROOT"); toggleControlsPanel("LIBRARY_SETTINGS", event.currentTarget); }}><Layers3 size={17} /><span><b>Library settings</b><small>Members, physical structure and deletion</small></span></button>}
+            {selected?.role === "OWNER" && <button className="server-library-settings-link" type="button" onClick={(event) => { setWorkspace("CATALOGUE"); setSettingsSection("ROOT"); toggleControlsPanel("LIBRARY_SETTINGS", event.currentTarget); }}><Layers3 size={17} /><span><b>{copy("librarySettings")}</b><small>{copy("librarySettingsHelp")}</small></span></button>}
             <form className="server-compact-form" onSubmit={createLibrary}>
-              <label>New library name<input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} maxLength={160} required /></label>
-              <button type="submit" disabled={dataBusy}><Plus size={17} /> Create library</button>
+              <label>{copy("newLibraryName")}<input value={libraryName} onChange={(event) => setLibraryName(event.target.value)} maxLength={160} required /></label>
+              <button type="submit" disabled={dataBusy}><Plus size={17} /> {copy("createLibrary")}</button>
             </form>
             <form className="server-compact-form" onSubmit={acceptInvitation}>
-              <label>Library invitation link or token<input value={invitationToken} onChange={(event) => setInvitationToken(event.target.value)} minLength={32} required /></label>
-              <button type="submit" disabled={dataBusy}><Users size={17} /> Join library</button>
+              <label>{copy("libraryInvitation")}<input value={invitationToken} onChange={(event) => setInvitationToken(event.target.value)} minLength={32} required /></label>
+              <button type="submit" disabled={dataBusy}><Users size={17} /> {copy("joinLibrary")}</button>
             </form>
           </aside>
 
@@ -1017,18 +1033,18 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   ? <PhysicalLibraryWorkspace key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} />
                   : <CatalogueWorkspace key={`${selected.library_id}-${libraryRevision}`} library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} onOpenProfile={setProfileUserId} onSetUpMap={() => setWorkspace("LAYOUT")} />}
               <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "VIEW" ? "open" : ""}`} style={anchoredPanelStyle(560, "right")}>
-                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label="Close view and perspective panel">×</button>
-                <h3>View and reading perspective</h3>
-                <nav className="server-view-choices" aria-label="Library view">
-                  <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => { setWorkspace("CATALOGUE"); setControlsPanel(null); }}><BookOpen size={17} /> Catalogue</button>
-                  {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => { setWorkspace("MAP"); setControlsPanel(null); }}><Map size={17} /> Library Map</button>}
-                  <button type="button" className={workspace === "STATISTICS" ? "active" : ""} onClick={() => { setWorkspace("STATISTICS"); setControlsPanel(null); }}><BarChart3 size={17} /> Statistics</button>
+                <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label={copy("closeViewPanel")}>×</button>
+                <h3>{copy("viewPerspective")}</h3>
+                <nav className="server-view-choices" aria-label={copy("libraryView")}>
+                  <button type="button" className={workspace === "CATALOGUE" ? "active" : ""} onClick={() => { setWorkspace("CATALOGUE"); setControlsPanel(null); }}><BookOpen size={17} /> {copy("catalogue")}</button>
+                  {selected.can_view_map && <button type="button" className={workspace === "MAP" ? "active" : ""} onClick={() => { setWorkspace("MAP"); setControlsPanel(null); }}><Map size={17} /> {copy("libraryMap")}</button>}
+                  <button type="button" className={workspace === "STATISTICS" ? "active" : ""} onClick={() => { setWorkspace("STATISTICS"); setControlsPanel(null); }}><BarChart3 size={17} /> {copy("statistics")}</button>
                 </nav>
-                <p>Choose whose personal reading data is represented. Other members' perspectives are read-only.</p>
+                <p>{copy("perspectiveHelp")}</p>
                 <select value={perspectives.find((item) => item.selected)?.user_id ?? ""} onChange={(event) => void selectPerspective(event.target.value)} disabled={dataBusy}>
-                  {perspectives.map((item) => <option key={item.user_id} value={item.user_id}>{item.username}{item.writable ? " · your editable perspective" : " · read only"}</option>)}
+                  {perspectives.map((item) => <option key={item.user_id} value={item.user_id}>{item.username} · {item.writable ? copy("editablePerspective") : copy("readOnly")}</option>)}
                 </select>
-                <div className="server-perspective-profiles"><small>Member profiles</small>{perspectives.map((item) => <button key={item.user_id} type="button" onClick={() => setProfileUserId(item.user_id)}>@{item.username}</button>)}</div>
+                <div className="server-perspective-profiles"><small>{copy("memberProfiles")}</small>{perspectives.map((item) => <button key={item.user_id} type="button" onClick={() => setProfileUserId(item.user_id)}>@{item.username}</button>)}</div>
               </section>
 
               <div className={`server-members-control-stack ${controlsPanel === "LIBRARY_SETTINGS" ? "open" : ""}`}>
@@ -1150,9 +1166,8 @@ function ServerAppContent() {
   const [bootError, setBootError] = useState<unknown | null>(null);
 
   useEffect(() => {
-    // The authenticated workspace is still English during this first i18n slice.
     const showingWorkspace = user && route !== "verify-email" && route !== "reset-password";
-    document.documentElement.lang = showingWorkspace ? "en" : locale;
+    if (!showingWorkspace) document.documentElement.lang = locale;
   }, [locale, route, user]);
 
   const navigate = useCallback((next: Route) => {

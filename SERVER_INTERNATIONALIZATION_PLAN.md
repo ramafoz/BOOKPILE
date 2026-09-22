@@ -63,7 +63,7 @@ coherent full-user journey.
   inviter's preference. A recipient may choose a different language during
   registration or acceptance. Do not put an invitation token in logs or
   analytics. Existing flows generate links/tokens only; message composition
-  and its copy controls are the next UI slice.
+  and its copy controls are implemented for English and Galician.
 - Account-action emails (verification, password reset, deletion recovery) use
   the recipient account preference captured at queue time, not an inviter's
   choice. The existing outbox encrypts the rendered subject, text and HTML, so
@@ -119,3 +119,17 @@ pre-sign-in choice after logout. The personal account page can update the
 preference through the protected API and explains that invitation language is
 independent. The authenticated workspace deliberately continues to declare
 English until all of its sections have complete Galician catalogues.
+
+## Sixth branch checkpoint
+
+The authenticated navigation and the complete personal-account workspace now
+have a separate, statically checked English/Galician catalogue. Profile and
+privacy controls, storage and account metadata, language settings, earned beta
+invitations, deleted-library recovery, password/session actions and account
+deletion all follow the account preference. Dates in this workspace use the
+locale-aware formatter, and visible and assistive labels change together.
+
+To avoid a misleading half-translated product, this slice is route-gated. The
+account workspace and its surrounding navigation declare and display the saved
+locale; returning to catalogue, map, statistics or layout returns the shell and
+document language to English until that workspace receives complete coverage.
