@@ -58,6 +58,23 @@ describe("configured CSRF cookie", () => {
     }), { status: 200 }));
     await serverApi.me();
   });
+
+  it("protects and serializes account locale changes", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=locale-token" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ preferred_locale: "gl" }), { status: 200 }),
+    );
+
+    await expect(serverApi.updatePreferredLocale("gl")).resolves.toEqual({
+      preferred_locale: "gl",
+    });
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/auth/locale");
+    expect(options?.method).toBe("PUT");
+    expect(new Headers(options?.headers).get("X-CSRF-Token")).toBe("locale-token");
+    expect(JSON.parse(String(options?.body))).toEqual({ preferred_locale: "gl" });
+  });
 });
 
 describe("Server catalogue requests", () => {

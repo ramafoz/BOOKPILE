@@ -13,17 +13,17 @@ and fallback.
 
 ## Delivery slices
 
-- [ ] Establish typed message catalogues, locale resolution, browser preference,
+- [x] Establish typed message catalogues, locale resolution, browser preference,
   document language and regional formatting. Make only complete locales
   selectable; do not present untranslated pages as translated.
-- [ ] Translate the entire unauthenticated account journey: invitation signup,
+- [x] Translate the entire unauthenticated account journey: invitation signup,
   verification, sign-in, reset and deletion recovery. Preserve generic responses
   that avoid account enumeration. Localize safe API error codes, never raw server
   exception text.
 - [ ] Translate the authenticated shell, account and library controls, catalogue,
   map, statistics, readings, loans, imports/exports, dialogs and notices. Audit
   screen-reader labels, empty states and mobile widths for longer strings.
-- [ ] Persist the account preference server-side for cross-device use. Before
+- [x] Persist the account preference server-side for cross-device use. Before
   sign-in, use a best-effort browser preference; define precedence and a
   privacy-safe API migration. Browser storage must not contain tokens.
 - [ ] Localize every transactional email in text and HTML, using the account
@@ -110,3 +110,12 @@ catalogue-and-map access and equal co-Owner authority. The generated role,
 scope and library name are snapshotted with the displayed link so later form
 changes cannot misdescribe an existing token; changing the message language
 does not alter either user's account preference.
+
+## Fifth branch checkpoint
+
+Successful login and `/auth/me` now hydrate the browser locale from the account
+preference, which therefore follows the user across devices and remains the
+pre-sign-in choice after logout. The personal account page can update the
+preference through the protected API and explains that invitation language is
+independent. The authenticated workspace deliberately continues to declare
+English until all of its sections have complete Galician catalogues.

@@ -76,7 +76,7 @@ export default function AccountWorkspace({
   onLibrariesChanged: (preferredId?: string) => Promise<void>;
   onAccountDeleted: () => void;
 }) {
-  const { locale } = useLocale();
+  const { locale, setLocale } = useLocale();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [account, setAccount] = useState<PrivateAccount | null>(null);
   const [storage, setStorage] = useState<StorageOverview | null>(null);
@@ -128,6 +128,23 @@ export default function AccountWorkspace({
       setEarnedInvitationExpiry(invitation.expires_at);
       setBetaInvitations(await serverApi.betaInvitationStatus());
       setNotice("Your account invitation is ready. It is shown only in this session.");
+    } catch (caught) {
+      setError(message(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeAccountLocale(nextLocale: typeof locale) {
+    if (nextLocale === locale) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const updated = await serverApi.updatePreferredLocale(nextLocale);
+      setLocale(updated.preferred_locale);
+      setInvitationLocale(updated.preferred_locale);
+      setNotice("Your language preference was saved for this account.");
     } catch (caught) {
       setError(message(caught));
     } finally {
@@ -683,6 +700,11 @@ export default function AccountWorkspace({
             <b>{new Date(account.created_at).toLocaleDateString()}</b>
           </span>
         </div>
+      </section>
+      <section className="server-profile-card server-language-card">
+        <h3>Language</h3>
+        <p>Your account preference follows you across devices and is used for account messages. Invitation messages can use a different language.</p>
+        <label className="server-invitation-language">BOOKPILE language<select value={locale} disabled={busy} onChange={(event) => void changeAccountLocale(event.target.value as typeof locale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
       </section>
       {betaInvitations && (
         <section className="server-profile-card server-beta-invitation-card">

@@ -1143,7 +1143,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
 }
 
 function ServerAppContent() {
-  const { locale, t } = useLocale();
+  const { locale, setLocale, t } = useLocale();
   const [route, setRoute] = useState<Route>(() => routeFromPath(window.location.pathname));
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1160,6 +1160,11 @@ function ServerAppContent() {
     setRoute(next);
   }, []);
 
+  const acceptAuthenticatedUser = useCallback((current: CurrentUser) => {
+    setUser(current);
+    setLocale(current.preferred_locale);
+  }, [setLocale]);
+
   useEffect(() => {
     const pop = () => setRoute(routeFromPath(window.location.pathname));
     window.addEventListener("popstate", pop);
@@ -1169,7 +1174,7 @@ function ServerAppContent() {
   useEffect(() => {
     let active = true;
     void serverApi.me()
-      .then((current) => { if (active) setUser(current); })
+      .then((current) => { if (active) acceptAuthenticatedUser(current); })
       .catch((error: unknown) => {
         if (active && (!(error instanceof ServerApiError) || error.status !== 401)) {
           setBootError(error);
@@ -1177,7 +1182,7 @@ function ServerAppContent() {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [acceptAuthenticatedUser]);
 
   if (loading) {
     return <div className="server-loading"><LibraryBig size={38} /><LoaderCircle className="server-spinner" size={24} /><span>{t("loading")}</span></div>;
@@ -1196,7 +1201,7 @@ function ServerAppContent() {
   else if (route === "forgot-password") page = <EmailRequestPage mode="reset" navigate={navigate} />;
   else if (route === "reset-password") page = <TokenActionPage mode="reset" navigate={navigate} />;
   else if (route === "restore-account") page = <RestoreAccountPage navigate={navigate} />;
-  else page = <LoginPage navigate={navigate} onLogin={setUser} />;
+  else page = <LoginPage navigate={navigate} onLogin={acceptAuthenticatedUser} />;
 
   return <AuthShell>{page}</AuthShell>;
 }
