@@ -94,3 +94,13 @@ before entering the encrypted outbox; the HTML `lang` attribute follows the
 message. Token lifetimes, URLs, privacy-safe responses and transport are
 unchanged. Invitation message composition remains a separate feature with a
 per-invitation language choice; it does not require sending email.
+
+## Fourth branch checkpoint
+
+Account and library invitations now compose reviewed English or Galician copy
+without sending email. The inviter can copy the complete message or only its
+single-use URL. Library copy truthfully distinguishes catalogue-only access,
+catalogue-and-map access and equal co-Owner authority. The generated role,
+scope and library name are snapshotted with the displayed link so later form
+changes cannot misdescribe an existing token; changing the message language
+does not alter either user's account preference.

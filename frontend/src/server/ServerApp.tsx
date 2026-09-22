@@ -44,6 +44,7 @@ import { useTimedNotices } from "./timedNotices";
 import LocaleProvider from "./LocaleProvider";
 import { type LocaleContextValue, useLocale } from "./LocaleContext";
 import { availableLocales, localeNames } from "./locale";
+import { libraryInvitationMessage } from "./invitationCopy";
 
 type Route =
   | "login"
@@ -500,6 +501,7 @@ function TokenActionPage({
 }
 
 function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: () => void }) {
+  const { locale } = useLocale();
   const [, setBusy] = useState<"logout" | "all" | null>(null);
   const [error, setError] = useState("");
   const { notices, pushNotice, dismissNotice } = useTimedNotices();
@@ -514,9 +516,14 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   );
   const [inviteRole, setInviteRole] = useState<"OWNER" | "VIEWER">("VIEWER");
   const [inviteScope, setInviteScope] = useState<"CATALOG_ONLY" | "CATALOG_AND_MAP">("CATALOG_ONLY");
+  const [invitationLocale, setInvitationLocale] = useState(locale);
   const [ownerWarning, setOwnerWarning] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState("");
-  const [generatedToken, setGeneratedToken] = useState("");
+  const [generatedInvitation, setGeneratedInvitation] = useState<{
+    link: string;
+    libraryName: string;
+    role: "OWNER" | "VIEWER";
+    scope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
+  } | null>(null);
   const [dataBusy, setDataBusy] = useState(false);
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
@@ -621,6 +628,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   }, [selected]);
 
   useEffect(() => {
+    setGeneratedInvitation(null);
     setImportFile(null);
     setImportJob(null);
     setImportMemberMapping({});
@@ -721,8 +729,12 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       );
       const url = new URL("/login", window.location.origin);
       url.searchParams.set("library-invite", result.invitation_token);
-      setGeneratedLink(url.toString());
-      setGeneratedToken(result.invitation_token);
+      setGeneratedInvitation({
+        link: url.toString(),
+        libraryName: selected.name,
+        role: inviteRole,
+        scope: inviteRole === "VIEWER" ? inviteScope : null,
+      });
       pushNotice("The single-use library invitation is ready. It expires in seven days.");
     } catch (caught) {
       setError(friendlyError(caught));
@@ -1040,12 +1052,13 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   <form className="server-invite-form" onSubmit={createInvitation}>
                     <label>Role<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value as "OWNER" | "VIEWER"); setOwnerWarning(false); }}><option value="VIEWER">Viewer</option><option value="OWNER">Equal co-Owner</option></select></label>
                     {inviteRole === "VIEWER" && <label>Access<select value={inviteScope} onChange={(event) => setInviteScope(event.target.value as typeof inviteScope)}><option value="CATALOG_ONLY">Catalogue only</option><option value="CATALOG_AND_MAP">Catalogue and map</option></select></label>}
+                    <label>Invitation language<select value={invitationLocale} onChange={(event) => setInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
                     {inviteRole === "OWNER" && <label className="server-check"><input type="checkbox" checked={ownerWarning} onChange={(event) => setOwnerWarning(event.target.checked)} /> I understand this person receives equal authority and may remove me.</label>}
                     <button type="submit" disabled={dataBusy}>Generate invitation</button>
                   </form>
-                  {generatedLink && <div className="server-generated-invitation">
-                    <label>Library invitation link<span><input readOnly value={generatedLink} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedLink, "Library invitation link")}>Copy link</button></span></label>
-                    <label>Library token only<span><input readOnly value={generatedToken} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copyInvitation(generatedToken, "Library invitation token")}>Copy token</button></span></label>
+                  {generatedInvitation && <div className="server-generated-invitation">
+                    <label>Invitation message<textarea readOnly value={libraryInvitationMessage(invitationLocale, generatedInvitation.link, generatedInvitation.libraryName, generatedInvitation.role, generatedInvitation.scope)} onFocus={(event) => event.currentTarget.select()} /></label>
+                    <div className="server-invitation-copy-actions"><button type="button" onClick={() => void copyInvitation(libraryInvitationMessage(invitationLocale, generatedInvitation.link, generatedInvitation.libraryName, generatedInvitation.role, generatedInvitation.scope), "Library invitation message")}>Copy message</button><button type="button" onClick={() => void copyInvitation(generatedInvitation.link, "Library invitation link")}>Copy link only</button></div>
                   </div>}
                 </section>
                 </>}

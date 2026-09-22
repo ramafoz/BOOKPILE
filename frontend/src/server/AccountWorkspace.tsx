@@ -20,6 +20,9 @@ import {
   ServerApiError,
   serverApi,
 } from "./serverApi";
+import { useLocale } from "./LocaleContext";
+import { availableLocales, localeNames } from "./locale";
+import { accountInvitationMessage } from "./invitationCopy";
 
 const FIELDS = [
   ["display_name", "Name"],
@@ -73,6 +76,7 @@ export default function AccountWorkspace({
   onLibrariesChanged: (preferredId?: string) => Promise<void>;
   onAccountDeleted: () => void;
 }) {
+  const { locale } = useLocale();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [account, setAccount] = useState<PrivateAccount | null>(null);
   const [storage, setStorage] = useState<StorageOverview | null>(null);
@@ -80,6 +84,7 @@ export default function AccountWorkspace({
   const [betaInvitations, setBetaInvitations] = useState<BetaInvitationStatus | null>(null);
   const [earnedInvitationLink, setEarnedInvitationLink] = useState("");
   const [earnedInvitationExpiry, setEarnedInvitationExpiry] = useState("");
+  const [invitationLocale, setInvitationLocale] = useState(locale);
   const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -130,10 +135,10 @@ export default function AccountWorkspace({
     }
   }
 
-  async function copyBetaInvitation() {
+  async function copyBetaInvitation(value: string, label: string) {
     try {
-      await navigator.clipboard.writeText(earnedInvitationLink);
-      setNotice("Account invitation link copied.");
+      await navigator.clipboard.writeText(value);
+      setNotice(`${label} copied.`);
     } catch {
       setError("BOOKPILE could not access the clipboard. Select and copy the visible link manually.");
     }
@@ -688,8 +693,13 @@ export default function AccountWorkspace({
           </div>
           <small>{betaInvitations.active_day_count} of {betaInvitations.days_required} active days toward your next invitation</small>
           <div className="server-beta-invitation-summary"><span><b>{betaInvitations.available_credits}</b> ready to create</span><span><b>{betaInvitations.open_invitations}</b> created and still usable</span></div>
+          <label className="server-invitation-language">Invitation language<select value={invitationLocale} onChange={(event) => setInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
           {betaInvitations.available_credits > 0 && <button className="server-primary-action" type="button" disabled={busy} onClick={() => void createBetaInvitation()}><KeyRound size={16} /> Create account invitation</button>}
-          {earnedInvitationLink && <div className="server-earned-invitation"><label>Account invitation link<input readOnly value={earnedInvitationLink} onFocus={(event) => event.currentTarget.select()} /></label><button type="button" onClick={() => void copyBetaInvitation()}>Copy link</button><small>Expires {new Date(earnedInvitationExpiry).toLocaleString()}. For security, copy it now; BOOKPILE stores only its hash.</small></div>}
+          {earnedInvitationLink && <div className="server-earned-invitation">
+            <label>Invitation message<textarea readOnly value={accountInvitationMessage(invitationLocale, earnedInvitationLink)} onFocus={(event) => event.currentTarget.select()} /></label>
+            <div className="server-invitation-copy-actions"><button type="button" onClick={() => void copyBetaInvitation(accountInvitationMessage(invitationLocale, earnedInvitationLink), "Invitation message")}>Copy message</button><button type="button" onClick={() => void copyBetaInvitation(earnedInvitationLink, "Invitation link")}>Copy link only</button></div>
+            <small>Expires {new Date(earnedInvitationExpiry).toLocaleString()}. For security, copy it now; BOOKPILE stores only its hash.</small>
+          </div>}
         </section>
       )}
       {recoverable.length > 0 && (
