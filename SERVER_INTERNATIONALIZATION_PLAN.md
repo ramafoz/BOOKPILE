@@ -177,3 +177,12 @@ The catalogue route can now apply the account locale end to end, including its
 navigation, profile dialogs and settings overlays. Entering Map, Statistics or
 physical Layout deliberately returns the workspace and document language to
 English until each of those large visual routes has matching Galician coverage.
+
+## Tenth branch checkpoint
+
+The Statistics route now applies the account locale throughout its reading and
+loan dashboards: filters, duration summaries, rate cards, tables, empty states,
+notes and generic failures all have statically checked English/Galician copy.
+Bibliographic filter values and member names remain user data. Catalogue,
+Account and Statistics can therefore expose Galician; Map and physical Layout
+remain explicitly English pending their geometry and interaction audit.

@@ -539,7 +539,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
   const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT" | "ACCOUNT">("CATALOGUE");
-  const workspaceLocale = workspace === "ACCOUNT" || workspace === "CATALOGUE" ? locale : "en";
+  const workspaceLocale = workspace === "ACCOUNT" || workspace === "CATALOGUE" || workspace === "STATISTICS" ? locale : "en";
   const copy = authenticatedCopy(workspaceLocale);
   const adminCopy = libraryAdminCopy(workspaceLocale);
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
@@ -1042,7 +1042,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
               {workspace === "MAP" && selected.can_view_map
                 ? <ServerLibraryMap key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
-                  ? <StatisticsWorkspace libraryId={selected.library_id} perspective={(perspectives.find((item) => item.selected) ?? perspectives[0])!} />
+                  ? <StatisticsWorkspace libraryId={selected.library_id} perspective={(perspectives.find((item) => item.selected) ?? perspectives[0])!} locale={workspaceLocale} />
                 : workspace === "LAYOUT" && selected.role === "OWNER"
                   ? <PhysicalLibraryWorkspace key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} />
                   : <CatalogueWorkspace key={`${selected.library_id}-${libraryRevision}`} library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} locale={workspaceLocale} onOpenProfile={setProfileUserId} onSetUpMap={() => setWorkspace("LAYOUT")} />}
