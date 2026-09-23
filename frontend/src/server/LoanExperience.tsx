@@ -1,21 +1,24 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarClock, Handshake, RotateCcw, Trash2, X } from "lucide-react";
 import { serverApi, type BookLoans, type LoanRecord, type LoanWrite, type ServerBookSummary } from "./serverApi";
+import type { AppLocale } from "./locale";
+import { loanCopy, type LoanCopy } from "./loanCopy";
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Loan data could not be loaded.";
+function errorMessage(error: unknown, copy: LoanCopy) {
+  return error instanceof Error ? error.message : copy("loadFailed");
 }
 
-function dateLabel(value: string | null) {
-  return value || "Unknown";
+function dateLabel(value: string | null, copy: LoanCopy) {
+  return value || copy("unknown");
 }
 
-export function LoanSummary({ loans }: { loans: BookLoans | null }) {
+export function LoanSummary({ loans, locale }: { loans: BookLoans | null; locale: AppLocale }) {
+  const copy = useMemo(() => loanCopy(locale), [locale]);
   if (!loans?.loans.length) return null;
   const active = loans.loans.find((item) => item.state === "ACTIVE");
-  return <section className="server-loan-summary"><h3>Loan history</h3>
-    {active && <p className={active.overdue ? "overdue" : ""}><Handshake size={16} /><b>{active.loaned_to ? `On loan to ${active.loaned_to}` : "On loan"}</b>{active.loaned_date && ` since ${active.loaned_date}`}{active.expected_return_date && ` · expected ${active.expected_return_date}`}{active.overdue && " · overdue"}</p>}
-    <ul>{loans.loans.filter((item) => item.state === "RETURNED").map((item) => <li key={item.id}>Loaned {dateLabel(item.loaned_date)} · returned {dateLabel(item.returned_date)}{item.loaned_to ? ` · ${item.loaned_to}` : ""}</li>)}</ul>
+  return <section className="server-loan-summary"><h3>{copy("loanHistory")}</h3>
+    {active && <p className={active.overdue ? "overdue" : ""}><Handshake size={16} /><b>{active.loaned_to ? copy("onLoanTo", { borrower: active.loaned_to }) : copy("onLoan")}</b>{active.loaned_date && ` ${copy("since", { date: active.loaned_date })}`}{active.expected_return_date && ` · ${copy("expected", { date: active.expected_return_date })}`}{active.overdue && ` · ${copy("overdue")}`}</p>}
+    <ul>{loans.loans.filter((item) => item.state === "RETURNED").map((item) => <li key={item.id}>{copy("returnedRecord", { loaned: dateLabel(item.loaned_date, copy), returned: dateLabel(item.returned_date, copy) })}{item.loaned_to ? ` · ${item.loaned_to}` : ""}</li>)}</ul>
   </section>;
 }
 
@@ -23,12 +26,14 @@ const EMPTY: LoanWrite & { returned_date: string | null } = {
   loaned_to: "", notes: null, loaned_date: null, expected_return_date: null, returned_date: null,
 };
 
-export default function LoanManager({ libraryId, book, onClose, onChanged }: {
+export default function LoanManager({ libraryId, book, locale, onClose, onChanged }: {
   libraryId: string;
   book: ServerBookSummary;
+  locale: AppLocale;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const copy = loanCopy(locale);
   const [data, setData] = useState<BookLoans | null>(null);
   const [activeDraft, setActiveDraft] = useState(EMPTY);
   const [historyDraft, setHistoryDraft] = useState(EMPTY);
@@ -37,12 +42,12 @@ export default function LoanManager({ libraryId, book, onClose, onChanged }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = useCallback(async () => setData(await serverApi.bookLoans(libraryId, book.id)), [book.id, libraryId]);
-  useEffect(() => { void load().catch((caught) => setError(errorMessage(caught))); }, [load]);
+  useEffect(() => { void load().catch((caught) => setError(errorMessage(caught, copy))); }, [load, copy]);
   const active = data?.loans.find((item) => item.state === "ACTIVE");
   async function run(action: () => Promise<unknown>) {
     setBusy(true); setError("");
     try { await action(); await load(); await onChanged(); }
-    catch (caught) { setError(errorMessage(caught)); }
+    catch (caught) { setError(errorMessage(caught, copy)); }
     finally { setBusy(false); }
   }
   async function saveActive(event: FormEvent) {
@@ -72,20 +77,20 @@ export default function LoanManager({ libraryId, book, onClose, onChanged }: {
   }
   function fields(value: typeof EMPTY, update: (next: typeof EMPTY) => void) {
     return <div className="server-form-grid">
-      <label>Loaned to *<input required maxLength={300} value={value.loaned_to} onChange={(e) => update({ ...value, loaned_to: e.target.value })} /></label>
-      <label>Loan date <small>optional / unknown</small><input type="date" value={value.loaned_date ?? ""} onChange={(e) => update({ ...value, loaned_date: e.target.value || null })} /></label>
-      <label>Expected return <small>optional</small><input type="date" value={value.expected_return_date ?? ""} onChange={(e) => update({ ...value, expected_return_date: e.target.value || null })} /></label>
-      <label className="wide">Private Owner notes<textarea rows={2} maxLength={4000} value={value.notes ?? ""} onChange={(e) => update({ ...value, notes: e.target.value || null })} /></label>
+      <label>{copy("loanedTo")}<input required maxLength={300} value={value.loaned_to} onChange={(e) => update({ ...value, loaned_to: e.target.value })} /></label>
+      <label>{copy("loanDate")} <small>{copy("optionalUnknown")}</small><input type="date" value={value.loaned_date ?? ""} onChange={(e) => update({ ...value, loaned_date: e.target.value || null })} /></label>
+      <label>{copy("expectedReturn")} <small>{copy("optional")}</small><input type="date" value={value.expected_return_date ?? ""} onChange={(e) => update({ ...value, expected_return_date: e.target.value || null })} /></label>
+      <label className="wide">{copy("privateNotes")}<textarea rows={2} maxLength={4000} value={value.notes ?? ""} onChange={(e) => update({ ...value, notes: e.target.value || null })} /></label>
     </div>;
   }
   return <div className="server-modal-backdrop"><section className="server-catalogue-dialog server-loan-manager" role="dialog" aria-modal="true">
-    <button className="server-dialog-close" onClick={onClose} aria-label="Close"><X /></button>
-    <p className="server-card-eyebrow">Shared physical custody</p><h2>Loans</h2><p><b>{book.title}</b> — {book.display_author}</p>
+    <button className="server-dialog-close" onClick={onClose} aria-label={copy("close")}><X /></button>
+    <p className="server-card-eyebrow">{copy("sharedCustody")}</p><h2>{copy("loans")}</h2><p><b>{book.title}</b> — {book.display_author}</p>
     {error && <div className="server-message error">{error}</div>}
-    {active ? <fieldset><legend>Current loan</legend><LoanSummary loans={data} /><div className="server-form-grid"><label>Returned date <small>leave blank if unknown</small><input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} /></label></div><div className="server-form-actions"><button disabled={busy} onClick={() => { if (window.confirm("Cancel this loan without retaining it in history?")) void run(() => serverApi.cancelLoan(libraryId, book.id)); }}><Trash2 size={15} /> Cancel loan</button><button className="confirm" disabled={busy} onClick={() => void run(() => serverApi.returnLoan(libraryId, book.id, returnDate || null))}><RotateCcw size={15} /> Return book</button></div></fieldset>
-      : <form onSubmit={saveActive}><fieldset><legend>Loan this book</legend>{fields(activeDraft, setActiveDraft)}<div className="server-form-actions"><button className="confirm" disabled={busy}><Handshake size={15} /> Start loan</button></div></fieldset></form>}
-    <form onSubmit={saveHistory}><fieldset><legend>{editingId ? "Correct historical loan" : "Add historical loan"}</legend>{fields(historyDraft, setHistoryDraft)}<label>Returned date <small>optional / unknown</small><input type="date" value={historyDraft.returned_date ?? ""} onChange={(e) => setHistoryDraft({ ...historyDraft, returned_date: e.target.value || null })} /></label><div className="server-form-actions">{editingId && <button type="button" onClick={() => { setEditingId(null); setHistoryDraft(EMPTY); }}>Cancel edit</button>}<button className="confirm" disabled={busy}><CalendarClock size={15} /> {editingId ? "Save correction" : "Add history"}</button></div></fieldset></form>
-    {!!data?.loans.filter((item) => item.state === "RETURNED").length && <fieldset><legend>Returned loans</legend><div className="server-loan-history">{data.loans.filter((item) => item.state === "RETURNED").map((item) => <article key={item.id}><span><b>{item.loaned_to}</b><small>{dateLabel(item.loaned_date)} → {dateLabel(item.returned_date)}</small></span><button type="button" onClick={() => edit(item)}>Edit</button><button type="button" aria-label="Delete historical loan" onClick={() => { if (window.confirm("Permanently delete this historical loan?")) void run(() => serverApi.deleteHistoricalLoan(libraryId, book.id, item.id)); }}><Trash2 size={15} /></button></article>)}</div></fieldset>}
-    <div className="server-dialog-actions"><button onClick={onClose}>Close</button></div>
+    {active ? <fieldset><legend>{copy("currentLoan")}</legend><LoanSummary loans={data} locale={locale} /><div className="server-form-grid"><label>{copy("returnedDate")} <small>{copy("leaveBlankUnknown")}</small><input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} /></label></div><div className="server-form-actions"><button disabled={busy} onClick={() => { if (window.confirm(copy("cancelLoanConfirm"))) void run(() => serverApi.cancelLoan(libraryId, book.id)); }}><Trash2 size={15} /> {copy("cancelLoan")}</button><button className="confirm" disabled={busy} onClick={() => void run(() => serverApi.returnLoan(libraryId, book.id, returnDate || null))}><RotateCcw size={15} /> {copy("returnBook")}</button></div></fieldset>
+      : <form onSubmit={saveActive}><fieldset><legend>{copy("loanThisBook")}</legend>{fields(activeDraft, setActiveDraft)}<div className="server-form-actions"><button className="confirm" disabled={busy}><Handshake size={15} /> {copy("startLoan")}</button></div></fieldset></form>}
+    <form onSubmit={saveHistory}><fieldset><legend>{editingId ? copy("correctHistorical") : copy("addHistorical")}</legend>{fields(historyDraft, setHistoryDraft)}<label>{copy("returnedDate")} <small>{copy("optionalUnknown")}</small><input type="date" value={historyDraft.returned_date ?? ""} onChange={(e) => setHistoryDraft({ ...historyDraft, returned_date: e.target.value || null })} /></label><div className="server-form-actions">{editingId && <button type="button" onClick={() => { setEditingId(null); setHistoryDraft(EMPTY); }}>{copy("cancelEdit")}</button>}<button className="confirm" disabled={busy}><CalendarClock size={15} /> {editingId ? copy("saveCorrection") : copy("addHistory")}</button></div></fieldset></form>
+    {!!data?.loans.filter((item) => item.state === "RETURNED").length && <fieldset><legend>{copy("returnedLoans")}</legend><div className="server-loan-history">{data.loans.filter((item) => item.state === "RETURNED").map((item) => <article key={item.id}><span><b>{item.loaned_to}</b><small>{dateLabel(item.loaned_date, copy)} → {dateLabel(item.returned_date, copy)}</small></span><button type="button" onClick={() => edit(item)}>{copy("edit")}</button><button type="button" aria-label={copy("deleteHistorical")} onClick={() => { if (window.confirm(copy("deleteHistoricalConfirm"))) void run(() => serverApi.deleteHistoricalLoan(libraryId, book.id, item.id)); }}><Trash2 size={15} /></button></article>)}</div></fieldset>}
+    <div className="server-dialog-actions"><button onClick={onClose}>{copy("close")}</button></div>
   </section></div>;
 }

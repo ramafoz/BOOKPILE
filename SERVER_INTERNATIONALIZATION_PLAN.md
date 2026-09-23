@@ -146,3 +146,20 @@ Galician remains intentionally gated off for the catalogue route because the
 book details/editor and the reading and loan dialogs it opens are the next
 dependent slice. The route must stay consistently English until those dialogs,
 their validation/errors and their assistive labels have matching coverage.
+
+## Eighth branch checkpoint
+
+The catalogue's complete book workflow now follows an explicit locale. Book
+details, metadata and enum labels, ISBN lookup and candidate review, cover and
+contributor editing, edition and classification fields, copy and physical
+location controls, save/delete progress and notices, reading status and
+history, Goodreads links, and current and historical loans have statically
+checked English/Galician copy. Dates use the selected locale. Translated option
+labels retain stable API values, so localization cannot alter persisted enum
+data. Bibliographic metadata and user-authored values remain untouched.
+
+The catalogue route remains gated to English for one more dependent slice:
+profile dialogs and library administration can be opened from its shared
+shell. Those controls, including members, invitations, import/export and
+library settings, must gain equivalent coverage before the catalogue can
+truthfully switch the document and interface language to Galician.
