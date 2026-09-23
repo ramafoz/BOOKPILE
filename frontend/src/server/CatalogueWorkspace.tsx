@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -49,8 +49,6 @@ import {
 } from "./serverApi";
 import { decodeIsbnBarcodePhoto } from "../barcode";
 import {
-  cataloguePrivacyLabel,
-  catalogueTitle,
   hasActiveCatalogueFilters,
   type QuickCatalogueSort,
   type QuickReadingFilter,
@@ -68,6 +66,8 @@ import {
   ReadingSummary,
 } from "./ReadingExperience";
 import LoanManager, { LoanSummary } from "./LoanExperience";
+import type { AppLocale } from "./locale";
+import { catalogueCopy, type CatalogueCopy } from "./catalogueCopy";
 
 
 const PAGE_SIZE = 25;
@@ -106,12 +106,12 @@ const EMPTY_OPTIONS: CatalogueMetadataOptions = {
   series_names: [], contributor_roles: [],
 };
 
-function message(error: unknown): string {
+function message(error: unknown, fallback = catalogueCopy("en")("serverUnavailable")): string {
   return error instanceof ServerApiError
     ? error.message
     : error instanceof Error
       ? error.message
-      : "BOOKPILE could not reach the server. Please try again.";
+      : fallback;
 }
 function numberValue(value: string): number | null {
   return value === "" ? null : Number(value);
@@ -148,37 +148,38 @@ function writeFromBook(book: ServerBook): ServerBookWrite {
   };
 }
 
-function MultiSelect({ label, values, selected, onChange }: {
+function MultiSelect({ label, values, selected, onChange, formatValue = (value) => value.replaceAll("_", " ") }: {
   label: string;
   values: string[];
   selected: string[];
   onChange: (values: string[]) => void;
+  formatValue?: (value: string) => string;
 }) {
   return <label>{label}<select multiple value={selected} onChange={(event) => onChange(
     Array.from(event.currentTarget.selectedOptions, (option) => option.value),
-  )}>{values.map((value) => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>;
+  )}>{values.map((value) => <option key={value} value={value}>{formatValue(value)}</option>)}</select></label>;
 }
 
-function CoverImage({ libraryId, book }: { libraryId: string; book: ServerBookSummary }) {
+function CoverImage({ libraryId, book, copy = catalogueCopy("en") }: { libraryId: string; book: ServerBookSummary; copy?: CatalogueCopy }) {
   return book.cover
-    ? <img className="server-book-cover" src={serverApi.coverUrl(libraryId, book.id, book.cover.updated_at)} alt={`Cover of ${book.title}`} />
+    ? <img className="server-book-cover" src={serverApi.coverUrl(libraryId, book.id, book.cover.updated_at)} alt={copy("coverOf", { title: book.title })} />
     : <span className="server-book-placeholder"><BookOpen size={20} /></span>;
 }
 
-function physicalLocations(data: PhysicalLibrary | null) {
+function physicalLocations(data: PhysicalLibrary | null, copy = catalogueCopy("en")) {
   return data?.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => ({
     bookcase,
     shelf,
     container,
-    label: `${bookcase.name} · Shelf ${shelf.shelf_number} · ${container.layer === "BACKGROUND" ? "Background" : "Foreground"} ${container.container_type === "ROW" ? "Row" : "Pile"} ${container.container_number}`,
+    label: `${bookcase.name} · ${copy("shelf")} ${shelf.shelf_number} · ${container.layer === "BACKGROUND" ? copy("background") : copy("foreground")} ${container.container_type === "ROW" ? copy("row") : copy("pile")} ${container.container_number}`,
   })))) ?? [];
 }
 
-function locationLabel(data: PhysicalLibrary | null, bookId: string): string | null {
+function locationLabel(data: PhysicalLibrary | null, bookId: string, copy = catalogueCopy("en")): string | null {
   const book = data?.books.find((item) => item.id === bookId);
   if (!book?.container_id || !book.position) return null;
-  const location = physicalLocations(data).find(({ container }) => container.id === book.container_id);
-  return location ? `${location.label} · Position ${book.position}` : null;
+  const location = physicalLocations(data, copy).find(({ container }) => container.id === book.container_id);
+  return location ? `${location.label} · ${copy("position")} ${book.position}` : null;
 }
 
 export function BookDetails({ libraryId, book, location, reading, perspectiveName, reviews, loans, onClose, onEdit }: {
@@ -513,14 +514,27 @@ function BookEditor({ libraryId, initial, initialCover, roles, options, physical
   </section></div>;
 }
 
-export default function CatalogueWorkspace({ library, memberSummary, signedInUserId, perspectives, onOpenProfile, onSetUpMap }: {
+export default function CatalogueWorkspace({ library, memberSummary, signedInUserId, perspectives, locale, onOpenProfile, onSetUpMap }: {
   library: LibrarySummary;
   memberSummary: LibraryMemberSummary[];
   signedInUserId: string;
   perspectives: ReadingPerspective[];
+  locale: AppLocale;
   onOpenProfile: (userId: string) => void;
   onSetUpMap: () => void;
 }) {
+  const copy = useMemo(() => catalogueCopy(locale), [locale]);
+  const enumLabels: Record<string, string> = {
+    UNKNOWN: copy("unknown"), ORIGINAL: copy("original"), TRANSLATED: copy("translated"),
+    FICTION: copy("fiction"), NON_FICTION: copy("nonFiction"),
+    HARDCOVER: copy("hardcover"), PAPERBACK: copy("paperback"), FLEXIBOUND: copy("flexibound"),
+    SPIRAL: copy("spiral"), STAPLED: copy("stapled"), OTHER: copy("other"),
+    CONVENTIONAL_BOOK: copy("conventionalBook"), COMIC_GRAPHIC_NOVEL: copy("comicGraphicNovel"),
+    ATLAS: copy("atlas"), REFERENCE: copy("reference"),
+    ART_PHOTOGRAPHY_ILLUSTRATED: copy("artPhotographyIllustrated"),
+    MAGAZINE_PERIODICAL: copy("magazinePeriodical"),
+  };
+  const enumLabel = (value: string) => enumLabels[value] ?? value.replaceAll("_", " ");
   const [books, setBooks] = useState<ServerBookSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState<CatalogueQuery>({ limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" });
@@ -591,9 +605,9 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
       setBooks(page.books); setTotal(page.total); setLoanOverview(loans);
       await loadPersonalRows(page.books, sequence);
     }
-    catch (caught) { if (sequence === loadSequence.current) setError(message(caught)); }
+    catch (caught) { if (sequence === loadSequence.current) setError(message(caught, copy("serverUnavailable"))); }
     finally { if (sequence === loadSequence.current) setBusy(false); }
-  }, [library.library_id, loadPersonalRows, perspectiveUserId]);
+  }, [copy, library.library_id, loadPersonalRows, perspectiveUserId]);
 
   useEffect(() => { queryRef.current = query; }, [query]);
 
@@ -602,10 +616,10 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     queryRef.current = initial;
     setQuery(initial); setDraftQuery(initial); setDetails(null); setEditing(null); setReadingAction(null); setReadingManager(null); setLoanManager(null);
     void load(initial);
-    if (library.can_view_map) void serverApi.physicalLibrary(library.library_id).then(setPhysical).catch((caught) => setError(message(caught)));
+    if (library.can_view_map) void serverApi.physicalLibrary(library.library_id).then(setPhysical).catch((caught) => setError(message(caught, copy("serverUnavailable"))));
     else setPhysical(null);
-    void serverApi.catalogueOptions(library.library_id).then(setOptions).catch((caught) => setError(message(caught)));
-  }, [library.library_id, library.can_view_map, load]);
+    void serverApi.catalogueOptions(library.library_id).then(setOptions).catch((caught) => setError(message(caught, copy("serverUnavailable"))));
+  }, [library.library_id, library.can_view_map, load, copy]);
 
   useEffect(() => {
     const value = draftQuery.search ?? "";
@@ -623,7 +637,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
     if (options.contributor_roles.length) return options;
     const loaded = await serverApi.catalogueOptions(library.library_id);
     if (!loaded.contributor_roles.length) {
-      throw new Error("Contributor roles are unavailable. Please reload and try again.");
+      throw new Error(copy("contributorRolesUnavailable"));
     }
     setOptions(loaded);
     return loaded;
@@ -684,7 +698,7 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
         limit: 1,
         offset: 0,
       });
-      if (!page.books.length) throw new Error("No available pending books match the current catalogue filters.");
+      if (!page.books.length) throw new Error(copy("noSuggestedBooks"));
       setSuggestion(page.books[0]);
       setAddMenu(false);
     } catch (caught) { setError(message(caught)); }
@@ -782,36 +796,40 @@ export default function CatalogueWorkspace({ library, memberSummary, signedInUse
   const catalogueTotal = readingOverview
     ? readingOverview.pending + readingOverview.reading + readingOverview.rereading + readingOverview.read
     : total;
+  const cataloguePrivacy = memberSummary.length > 1 ? copy("sharedCatalogue") : copy("privateCatalogue");
+  const catalogueHeading = !selectedPerspective || selectedPerspective.user_id === signedInUserId
+    ? copy("yourBooks")
+    : copy("usersBooks", { username: selectedPerspective.username });
   return <section className="server-catalogue-workspace">
-    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacyLabel(memberSummary)}</p>{memberSummary.length > 1 && <details><summary>{memberSummary.length} members</summary><span>{memberSummary.map((member) => <span key={member.user_id}><button className="server-username-link" type="button" onClick={() => onOpenProfile(member.user_id)}>@{member.username}</button><small>{member.role === "OWNER" ? "Owner" : "Viewer"}</small></span>)}</span></details>}</span><h3>{catalogueTitle(signedInUserId, perspectives)}</h3><small>{total} {total === 1 ? "book" : "books"}{filtered ? " match" : ""}</small></span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> New read</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> Add <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> Add single book</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> Batch add</button><button className="server-mobile-add" type="button" onClick={() => void add(false, true)}><ScanBarcode size={16} /> Scan single barcode</button><button className="server-mobile-add" type="button" onClick={() => void add(true, true)}><Camera size={16} /> Batch scan</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">Reading suggestion</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> Another</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>Start reading</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label="Close suggestion"><X size={15} /></button></div>}</div>}</header>
+    <header><div className="server-catalogue-identity"><span className="server-catalogue-icon"><BookOpen size={25} /></span><span><span className="server-catalogue-sharing"><p className="server-card-eyebrow">{cataloguePrivacy}</p>{memberSummary.length > 1 && <details><summary>{copy("memberCount", { count: memberSummary.length })}</summary><span>{memberSummary.map((member) => <span key={member.user_id}><button className="server-username-link" type="button" onClick={() => onOpenProfile(member.user_id)}>@{member.username}</button><small>{member.role === "OWNER" ? copy("owner") : copy("viewer")}</small></span>)}</span></details>}</span><h3>{catalogueHeading}</h3><small>{total} {total === 1 ? copy("book") : copy("books")}{filtered ? ` ${copy("match")}` : ""}</small></span></div>{library.role === "OWNER" && <div className="server-catalogue-actions">{readingOverview?.writable && <button className="server-secondary-action" type="button" onClick={() => void suggestNewRead()}><Sparkles size={17} /> {copy("newRead")}</button>}<button className="server-primary-action" type="button" onClick={() => setAddMenu(!addMenu)}><Plus size={17} /> {copy("add")} <ChevronDown size={15} /></button>{addMenu && <div className="server-add-menu"><button type="button" onClick={() => void add(false)}><BookOpen size={16} /> {copy("addSingleBook")}</button><button type="button" onClick={() => void add(true)}><Layers3 size={16} /> {copy("batchAdd")}</button><button className="server-mobile-add" type="button" onClick={() => void add(false, true)}><ScanBarcode size={16} /> {copy("scanSingleBarcode")}</button><button className="server-mobile-add" type="button" onClick={() => void add(true, true)}><Camera size={16} /> {copy("batchScan")}</button></div>}{suggestion && <div className="server-reading-suggestion"><p className="server-card-eyebrow">{copy("readingSuggestion")}</p><b>{suggestion.title}</b><span>{suggestion.display_author}</span><div><button type="button" onClick={() => void suggestNewRead()}><RefreshCw size={15} /> {copy("another")}</button><button type="button" className="confirm" onClick={() => { const chosen = suggestion; setSuggestion(null); void openReadingAction(chosen); }}>{copy("startReading")}</button></div><button className="close" type="button" onClick={() => setSuggestion(null)} aria-label={copy("closeSuggestion")}><X size={15} /></button></div>}</div>}</header>
     {error && <div className="server-message error">{error}</div>}<TimedNoticeStack notices={notices} onDismiss={dismissNotice} />
-    {readingOverview && <div className="server-catalogue-summary" aria-label="Catalogue reading summary">
-      <button className="total" type="button" aria-pressed={readingState === "ANY"} onClick={() => applyQuickReadingFilter("ANY")}><span><LibraryBig /></span><strong>{catalogueTotal}</strong><small>Total books</small></button>
-      <button className="pending" type="button" aria-pressed={readingState === "PENDING"} onClick={() => applyQuickReadingFilter("PENDING")}><span><BookOpen /></span><strong>{readingOverview.pending}</strong><small>Waiting to be read</small></button>
-      <button className="reading" type="button" aria-pressed={["ACTIVE", "READING", "REREADING"].includes(readingState)} onClick={() => applyQuickReadingFilter("ACTIVE")}><span><BookOpen /></span><strong>{readingOverview.active_display}</strong><small>Currently reading</small></button>
-      <button className="read" type="button" aria-pressed={readingState === "READ"} onClick={() => applyQuickReadingFilter("READ")}><span><Check /></span><strong>{readingOverview.read}</strong><small>Read</small></button>
+    {readingOverview && <div className="server-catalogue-summary" aria-label={copy("readingSummary")}>
+      <button className="total" type="button" aria-pressed={readingState === "ANY"} onClick={() => applyQuickReadingFilter("ANY")}><span><LibraryBig /></span><strong>{catalogueTotal}</strong><small>{copy("totalBooks")}</small></button>
+      <button className="pending" type="button" aria-pressed={readingState === "PENDING"} onClick={() => applyQuickReadingFilter("PENDING")}><span><BookOpen /></span><strong>{readingOverview.pending}</strong><small>{copy("waitingToRead")}</small></button>
+      <button className="reading" type="button" aria-pressed={["ACTIVE", "READING", "REREADING"].includes(readingState)} onClick={() => applyQuickReadingFilter("ACTIVE")}><span><BookOpen /></span><strong>{readingOverview.active_display}</strong><small>{copy("currentlyReading")}</small></button>
+      <button className="read" type="button" aria-pressed={readingState === "READ"} onClick={() => applyQuickReadingFilter("READ")}><span><Check /></span><strong>{readingOverview.read}</strong><small>{copy("read")}</small></button>
     </div>}
-    <div className="server-catalogue-search" role="search"><label className="server-catalogue-search-field"><Search size={18} /><input value={draftQuery.search ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, search: e.target.value })} placeholder="Search title, author, contributor or series" aria-label="Search catalogue" /></label><label className="server-catalogue-quick-sort"><span>Sort</span><select value={quickSort} onChange={(event) => applyQuickSort(event.target.value as QuickCatalogueSort)} aria-label="Sort catalogue"><option value="" disabled>Advanced sort</option><option value="title">Title</option><option value="author">Author</option><option value="physical">Physical location</option></select></label><button type="button" className={advanced ? "active" : ""} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={17} /> Advanced</button></div>
+    <div className="server-catalogue-search" role="search"><label className="server-catalogue-search-field"><Search size={18} /><input value={draftQuery.search ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, search: e.target.value })} placeholder={copy("searchPlaceholder")} aria-label={copy("searchCatalogue")} /></label><label className="server-catalogue-quick-sort"><span>{copy("sort")}</span><select value={quickSort} onChange={(event) => applyQuickSort(event.target.value as QuickCatalogueSort)} aria-label={copy("sortCatalogue")}><option value="" disabled>{copy("advancedSort")}</option><option value="title">{copy("title")}</option><option value="author">{copy("author")}</option><option value="physical">{copy("physicalLocation")}</option></select></label><button type="button" className={advanced ? "active" : ""} onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={17} /> {copy("advanced")}</button></div>
     {advanced && <form className="server-advanced-search" onSubmit={apply}>
       <label>ISBN<input value={draftQuery.isbn ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, isbn: e.target.value })} /></label>
-      <MultiSelect label="Languages" values={options.languages} selected={draftQuery.language ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, language: value })} /><MultiSelect label="Original languages" values={options.original_languages} selected={draftQuery.original_language ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, original_language: value })} /><MultiSelect label="Genres" values={options.genres} selected={draftQuery.genre ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, genre: value })} /><MultiSelect label="Publishers" values={options.publishers} selected={draftQuery.publisher ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, publisher: value })} /><MultiSelect label="Series" values={options.series_names} selected={draftQuery.series_name ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, series_name: value })} />
-      <MultiSelect label="Translation" values={["UNKNOWN", "ORIGINAL", "TRANSLATED"]} selected={draftQuery.translation_status ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, translation_status: value })} /><MultiSelect label="Category" values={["FICTION", "NON_FICTION"]} selected={draftQuery.fiction_category ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, fiction_category: value })} /><MultiSelect label="Binding" values={["HARDCOVER", "PAPERBACK", "FLEXIBOUND", "SPIRAL", "STAPLED", "OTHER"]} selected={draftQuery.binding ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, binding: value })} /><MultiSelect label="Publication type" values={["CONVENTIONAL_BOOK", "COMIC_GRAPHIC_NOVEL", "ATLAS", "REFERENCE", "ART_PHOTOGRAPHY_ILLUSTRATED", "MAGAZINE_PERIODICAL", "OTHER"]} selected={draftQuery.publication_type ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, publication_type: value })} />
-      <label>Series membership<select value={draftQuery.series_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, series_state: e.target.value as CatalogueQuery["series_state"] })}><option value="ANY">Any</option><option value="YES">In a series</option><option value="NO">Not in a series</option></select></label><label>Authors<select value={draftQuery.author_structure ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, author_structure: e.target.value as CatalogueQuery["author_structure"] })}><option value="ANY">Any</option><option value="SINGLE">Single author</option><option value="MULTIPLE">Multiple authors</option></select></label>
-      <label>Minimum pages<input type="number" min="1" value={draftQuery.page_min ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, page_min: numberValue(e.target.value) ?? undefined })} /></label><label>Maximum pages<input type="number" min="1" value={draftQuery.page_max ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, page_max: numberValue(e.target.value) ?? undefined })} /></label>
-      <label>Year field<select value={draftQuery.year_field ?? "current_ed_year"} onChange={(e) => setDraftQuery({ ...draftQuery, year_field: e.target.value as CatalogueQuery["year_field"] })}><option value="current_ed_year">Current edition</option><option value="original_publication_year">Original publication</option></select></label><label>Minimum year<input type="number" min="1000" max="9999" value={draftQuery.year_min ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, year_min: numberValue(e.target.value) ?? undefined })} /></label><label>Maximum year<input type="number" min="1000" max="9999" value={draftQuery.year_max ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, year_max: numberValue(e.target.value) ?? undefined })} /></label>
-      <label>Personal reading state<select value={draftQuery.reading_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, reading_state: e.target.value as CatalogueQuery["reading_state"] })}><option value="ANY">Any</option><option value="PENDING">Pending</option><option value="ACTIVE">Currently reading — any active reading</option><option value="READING">Reading — first time</option><option value="REREADING">Re-reading now</option><option value="READ">Read — not active</option></select></label>
-      <label>Rereading history<select value={draftQuery.rereading_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, rereading_state: e.target.value as CatalogueQuery["rereading_state"] })}><option value="ANY">Any</option><option value="YES">Has been reread</option><option value="NO">Has not been reread</option></select></label>
-      <label>Reading date<select value={draftQuery.reading_date_field ?? "FINISHED"} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_field: e.target.value as CatalogueQuery["reading_date_field"] })}><option value="STARTED">Reading started</option><option value="FINISHED">Finished reading</option></select></label>
-      <label>Reading date from<input type="date" value={draftQuery.reading_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_from: e.target.value || undefined })} /></label><label>Reading date to<input type="date" value={draftQuery.reading_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_to: e.target.value || undefined })} /></label>
-      <label>Loan history<select value={draftQuery.loan_scope ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_scope: e.target.value as CatalogueQuery["loan_scope"] })}><option value="ANY">Any</option><option value="ACTIVE">Currently on loan</option><option value="OVERDUE">Overdue</option><option value="EVER">Ever loaned</option><option value="NEVER">Never loaned</option></select></label>
-      {library.role === "OWNER" && <label>Borrower contains<input maxLength={300} value={draftQuery.loaned_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loaned_to: e.target.value || undefined })} /></label>}
-      <label>Loan date<select value={draftQuery.loan_date_field ?? "LOANED"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_field: e.target.value as CatalogueQuery["loan_date_field"] })}><option value="LOANED">Loaned</option><option value="EXPECTED">Expected return</option><option value="RETURNED">Returned</option></select></label>
-      <label>Loan date from<input type="date" value={draftQuery.loan_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_from: e.target.value || undefined })} /></label><label>Loan date to<input type="date" value={draftQuery.loan_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_to: e.target.value || undefined })} /></label>
-      <label>Sort by<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", "Title"], ["author", "Author"], ["physical", "Physical location"], ["created_at", "Date added"], ["updated_at", "Last updated"], ["page_count", "Pages"], ["publisher", "Publisher"], ["current_ed_year", "Edition year"], ["original_publication_year", "Original year"], ["acquisition_date", "Acquisition date"], ["loaned_date", "Loaned date"], ["expected_return_date", "Expected return"], ["returned_date", "Returned date"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Direction<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
-      <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; queryRef.current = clear; setDraftQuery(clear); setQuery(clear); void load(clear); }}>Clear</button><button className="confirm" type="submit">Apply filters</button></div>
+      <MultiSelect label={copy("languages")} values={options.languages} selected={draftQuery.language ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, language: value })} /><MultiSelect label={copy("originalLanguages")} values={options.original_languages} selected={draftQuery.original_language ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, original_language: value })} /><MultiSelect label={copy("genres")} values={options.genres} selected={draftQuery.genre ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, genre: value })} /><MultiSelect label={copy("publishers")} values={options.publishers} selected={draftQuery.publisher ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, publisher: value })} /><MultiSelect label={copy("series")} values={options.series_names} selected={draftQuery.series_name ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, series_name: value })} />
+      <MultiSelect label={copy("translation")} values={["UNKNOWN", "ORIGINAL", "TRANSLATED"]} selected={draftQuery.translation_status ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, translation_status: value })} formatValue={enumLabel} /><MultiSelect label={copy("category")} values={["FICTION", "NON_FICTION"]} selected={draftQuery.fiction_category ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, fiction_category: value })} formatValue={enumLabel} /><MultiSelect label={copy("binding")} values={["HARDCOVER", "PAPERBACK", "FLEXIBOUND", "SPIRAL", "STAPLED", "OTHER"]} selected={draftQuery.binding ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, binding: value })} formatValue={enumLabel} /><MultiSelect label={copy("publicationType")} values={["CONVENTIONAL_BOOK", "COMIC_GRAPHIC_NOVEL", "ATLAS", "REFERENCE", "ART_PHOTOGRAPHY_ILLUSTRATED", "MAGAZINE_PERIODICAL", "OTHER"]} selected={draftQuery.publication_type ?? []} onChange={(value) => setDraftQuery({ ...draftQuery, publication_type: value })} formatValue={enumLabel} />
+      <label>{copy("seriesMembership")}<select value={draftQuery.series_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, series_state: e.target.value as CatalogueQuery["series_state"] })}><option value="ANY">{copy("any")}</option><option value="YES">{copy("inSeries")}</option><option value="NO">{copy("notInSeries")}</option></select></label><label>{copy("authors")}<select value={draftQuery.author_structure ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, author_structure: e.target.value as CatalogueQuery["author_structure"] })}><option value="ANY">{copy("any")}</option><option value="SINGLE">{copy("singleAuthor")}</option><option value="MULTIPLE">{copy("multipleAuthors")}</option></select></label>
+      <label>{copy("minimumPages")}<input type="number" min="1" value={draftQuery.page_min ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, page_min: numberValue(e.target.value) ?? undefined })} /></label><label>{copy("maximumPages")}<input type="number" min="1" value={draftQuery.page_max ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, page_max: numberValue(e.target.value) ?? undefined })} /></label>
+      <label>{copy("yearField")}<select value={draftQuery.year_field ?? "current_ed_year"} onChange={(e) => setDraftQuery({ ...draftQuery, year_field: e.target.value as CatalogueQuery["year_field"] })}><option value="current_ed_year">{copy("currentEdition")}</option><option value="original_publication_year">{copy("originalPublication")}</option></select></label><label>{copy("minimumYear")}<input type="number" min="1000" max="9999" value={draftQuery.year_min ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, year_min: numberValue(e.target.value) ?? undefined })} /></label><label>{copy("maximumYear")}<input type="number" min="1000" max="9999" value={draftQuery.year_max ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, year_max: numberValue(e.target.value) ?? undefined })} /></label>
+      <label>{copy("personalReadingState")}<select value={draftQuery.reading_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, reading_state: e.target.value as CatalogueQuery["reading_state"] })}><option value="ANY">{copy("any")}</option><option value="PENDING">{copy("pending")}</option><option value="ACTIVE">{copy("activeReading")}</option><option value="READING">{copy("firstReading")}</option><option value="REREADING">{copy("rereadingNow")}</option><option value="READ">{copy("readInactive")}</option></select></label>
+      <label>{copy("rereadingHistory")}<select value={draftQuery.rereading_state ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, rereading_state: e.target.value as CatalogueQuery["rereading_state"] })}><option value="ANY">{copy("any")}</option><option value="YES">{copy("hasBeenReread")}</option><option value="NO">{copy("hasNotBeenReread")}</option></select></label>
+      <label>{copy("readingDate")}<select value={draftQuery.reading_date_field ?? "FINISHED"} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_field: e.target.value as CatalogueQuery["reading_date_field"] })}><option value="STARTED">{copy("readingStarted")}</option><option value="FINISHED">{copy("finishedReading")}</option></select></label>
+      <label>{copy("readingDateFrom")}<input type="date" value={draftQuery.reading_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_from: e.target.value || undefined })} /></label><label>{copy("readingDateTo")}<input type="date" value={draftQuery.reading_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, reading_date_to: e.target.value || undefined })} /></label>
+      <label>{copy("loanHistory")}<select value={draftQuery.loan_scope ?? "ANY"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_scope: e.target.value as CatalogueQuery["loan_scope"] })}><option value="ANY">{copy("any")}</option><option value="ACTIVE">{copy("currentlyOnLoan")}</option><option value="OVERDUE">{copy("overdue")}</option><option value="EVER">{copy("everLoaned")}</option><option value="NEVER">{copy("neverLoaned")}</option></select></label>
+      {library.role === "OWNER" && <label>{copy("borrowerContains")}<input maxLength={300} value={draftQuery.loaned_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loaned_to: e.target.value || undefined })} /></label>}
+      <label>{copy("loanDate")}<select value={draftQuery.loan_date_field ?? "LOANED"} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_field: e.target.value as CatalogueQuery["loan_date_field"] })}><option value="LOANED">{copy("loaned")}</option><option value="EXPECTED">{copy("expectedReturn")}</option><option value="RETURNED">{copy("returned")}</option></select></label>
+      <label>{copy("loanDateFrom")}<input type="date" value={draftQuery.loan_date_from ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_from: e.target.value || undefined })} /></label><label>{copy("loanDateTo")}<input type="date" value={draftQuery.loan_date_to ?? ""} onChange={(e) => setDraftQuery({ ...draftQuery, loan_date_to: e.target.value || undefined })} /></label>
+      <label>{copy("sortBy")}<select value={draftQuery.sort_by ?? "title"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_by: e.target.value })}>{[["title", copy("title")], ["author", copy("author")], ["physical", copy("physicalLocation")], ["created_at", copy("dateAdded")], ["updated_at", copy("lastUpdated")], ["page_count", copy("pages")], ["publisher", copy("publisher")], ["current_ed_year", copy("editionYear")], ["original_publication_year", copy("originalYear")], ["acquisition_date", copy("acquisitionDate")], ["loaned_date", copy("loanedDate")], ["expected_return_date", copy("expectedReturn")], ["returned_date", copy("returned")]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>{copy("direction")}<select value={draftQuery.sort_order ?? "asc"} onChange={(e) => setDraftQuery({ ...draftQuery, sort_order: e.target.value as "asc" | "desc" })}><option value="asc">{copy("ascending")}</option><option value="desc">{copy("descending")}</option></select></label>
+      <div className="server-advanced-actions"><button type="button" onClick={() => { const clear = { limit: PAGE_SIZE, offset: 0, sort_by: "title", sort_order: "asc" as const }; queryRef.current = clear; setDraftQuery(clear); setQuery(clear); void load(clear); }}>{copy("clear")}</button><button className="confirm" type="submit">{copy("applyFilters")}</button></div>
     </form>}
-    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id); const reading = readings[book.id]; const activeLoan = activeLoans[book.id]; const custody = activeLoan ? `${activeLoan.loaned_to ? `On loan to ${activeLoan.loaned_to}` : "On loan"}${location ? ` · returns to ${location}` : ""}` : reading?.active_reader_present ? `Being read${location ? ` · returns to ${location}` : ""}` : (location ?? "No physical location"); const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? `${book.page_count} pages` : null].filter(Boolean).join(" · ") || "No optional metadata recorded"}</small></div>{library.can_view_map ? <div className={`server-book-location ${activeLoan ? activeLoan.overdue ? "on-loan overdue" : "on-loan" : reading?.active_reader_present ? "being-read" : ""}`}><MapPin size={16} /><span>{custody}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title="Complete information"><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={`${selectedPerspective?.username ?? "Owner"}'s Goodreads review`}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title="My reading"><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => setLoanManager(book)} title={activeLoan ? "Manage or return loan" : "Loan this book"}><Handshake size={17} /></button><button type="button" onClick={() => void edit(book.id)} title="Edit book and physical location"><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title="Delete"><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && (!filtered && total === 0 && library.role === "OWNER" ? <div className="server-empty-catalogue server-map-onboarding"><span><Layers3 size={34} /></span><p className="server-card-eyebrow">A place for every book</p><h4>Build your physical library</h4><p>BOOKPILE's map connects every catalogue record to its real place. It is optional, but spending a few minutes defining your furniture, shelves and containers now will make adding and finding books much easier.</p><button type="button" onClick={onSetUpMap}><Layers3 size={17} /> Set up the Library Map</button><small>You can also skip this and add books directly whenever you prefer.</small></div> : <div className="server-empty-catalogue"><BookOpen size={38} /><h4>No books match</h4><p>{filtered ? "Try another page or filter." : "This library has no catalogue records yet."}</p></div>)}</div>
-    {total > PAGE_SIZE && <nav className="server-pagination" aria-label="Catalogue pages"><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> Previous</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>Next <ChevronRight size={17} /></button></nav>}
+    <div className={`server-book-list ${busy ? "loading" : ""}`}>{books.map((book) => { const location = locationLabel(physical, book.id, copy); const reading = readings[book.id]; const activeLoan = activeLoans[book.id]; const returnLocation = location ? ` · ${copy("returnsTo", { location })}` : ""; const custody = activeLoan ? `${activeLoan.loaned_to ? copy("onLoanTo", { borrower: activeLoan.loaned_to }) : copy("onLoan")}${returnLocation}` : reading?.active_reader_present ? `${copy("beingRead")}${returnLocation}` : (location ?? copy("noPhysicalLocation")); const perspectiveReview = bookReviews[book.id]?.find((review) => review.user_id === perspectiveUserId); return <article key={book.id}><ReadingStatusBadge reading={reading} onClick={() => void openReadingAction(book)} /><CoverImage libraryId={library.library_id} book={book} copy={copy} /><div><h4>{book.title}</h4><p>{book.display_author}</p><small>{[book.publisher, book.current_ed_year, book.language, book.page_count ? copy("pageCount", { count: book.page_count }) : null].filter(Boolean).join(" · ") || copy("noOptionalMetadata")}</small></div>{library.can_view_map ? <div className={`server-book-location ${activeLoan ? activeLoan.overdue ? "on-loan overdue" : "on-loan" : reading?.active_reader_present ? "being-read" : ""}`}><MapPin size={16} /><span>{custody}</span></div> : <div className="server-book-location unavailable" aria-hidden="true" />}<div className="server-book-row-actions"><button type="button" onClick={() => void openDetails(book.id)} title={copy("completeInformation")}><Eye size={17} /></button>{perspectiveReview && <a className="server-icon-link" href={perspectiveReview.url} target="_blank" rel="noreferrer" title={copy("goodreadsReview", { username: selectedPerspective?.username ?? copy("owner") })}><ExternalLink size={17} /></a>}{reading?.writable && <button type="button" onClick={() => setReadingManager(book)} title={copy("myReading")}><BookMarked size={17} /></button>}{library.role === "OWNER" && <><button type="button" onClick={() => setLoanManager(book)} title={activeLoan ? copy("manageLoan") : copy("loanBook")}><Handshake size={17} /></button><button type="button" onClick={() => void edit(book.id)} title={copy("editBookLocation")}><Pencil size={17} /></button><button type="button" onClick={() => void remove(book)} title={copy("delete")}><Trash2 size={17} /></button></>}</div></article>; })}{!busy && !books.length && (!filtered && total === 0 && library.role === "OWNER" ? <div className="server-empty-catalogue server-map-onboarding"><span><Layers3 size={34} /></span><p className="server-card-eyebrow">{copy("everyBookPlace")}</p><h4>{copy("buildPhysicalLibrary")}</h4><p>{copy("mapOnboarding")}</p><button type="button" onClick={onSetUpMap}><Layers3 size={17} /> {copy("setUpMap")}</button><small>{copy("skipMap")}</small></div> : <div className="server-empty-catalogue"><BookOpen size={38} /><h4>{copy("noBooksMatch")}</h4><p>{filtered ? copy("tryAnotherFilter") : copy("noCatalogueRecords")}</p></div>)}</div>
+    {total > PAGE_SIZE && <nav className="server-pagination" aria-label={copy("cataloguePages")}><button disabled={(query.offset ?? 0) === 0} onClick={() => page(Math.max(0, (query.offset ?? 0) - PAGE_SIZE))}><ChevronLeft size={17} /> {copy("previous")}</button><span>{Math.floor((query.offset ?? 0) / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span><button disabled={(query.offset ?? 0) + PAGE_SIZE >= total} onClick={() => page((query.offset ?? 0) + PAGE_SIZE)}>{copy("next")} <ChevronRight size={17} /></button></nav>}
     {details && <BookDetails libraryId={library.library_id} book={details} location={locationLabel(physical, details.id)} reading={detailsReading} perspectiveName={selectedPerspective?.username} reviews={detailsReviews} loans={detailsLoans} onClose={() => setDetails(null)} onEdit={library.role === "OWNER" ? () => void edit(details.id) : null} />}{editing && <BookEditor key={editorSequence} libraryId={library.library_id} initial={editing.book} initialCover={editing.cover} roles={options.contributor_roles} options={options} physical={physical} bookId={editing.id} initialPlacement={batchMode ? batchPlacement : null} batchMode={batchMode} scanFlow={scanFlow} batchAddedCount={batchAddedCount} onOpenExisting={(bookId) => { setEditing(null); setBatchMode(false); setScanFlow(false); void openDetails(bookId); }} onClose={() => { setEditing(null); setBatchMode(false); setScanFlow(false); setBatchPlacement(null); setBatchAddedCount(0); }} onSave={save} />}
     {readingAction && <ReadingActionDialog libraryId={library.library_id} book={readingAction.book} reading={readingAction.reading} onClose={() => setReadingAction(null)} onChanged={refreshPersonalData} />}
     {readingManager && <ReadingManager libraryId={library.library_id} book={readingManager} onClose={() => setReadingManager(null)} onChanged={refreshPersonalData} />}

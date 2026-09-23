@@ -133,3 +133,16 @@ To avoid a misleading half-translated product, this slice is route-gated. The
 account workspace and its surrounding navigation declare and display the saved
 locale; returning to catalogue, map, statistics or layout returns the shell and
 document language to English until that workspace receives complete coverage.
+
+## Seventh branch checkpoint
+
+The catalogue browsing surface now has a statically checked English/Galician
+catalogue: identity and sharing summary, reading counters, dynamic search,
+quick and advanced sorting, all advanced filters and enum labels, book rows,
+physical-custody descriptions, accessible action labels, onboarding and empty
+states, and pagination. User-authored bibliographic values remain unchanged.
+
+Galician remains intentionally gated off for the catalogue route because the
+book details/editor and the reading and loan dialogs it opens are the next
+dependent slice. The route must stay consistently English until those dialogs,
+their validation/errors and their assistive labels have matching coverage.
