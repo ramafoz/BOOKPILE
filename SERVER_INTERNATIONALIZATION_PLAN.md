@@ -163,3 +163,17 @@ profile dialogs and library administration can be opened from its shared
 shell. Those controls, including members, invitations, import/export and
 library settings, must gain equivalent coverage before the catalogue can
 truthfully switch the document and interface language to Galician.
+
+## Ninth branch checkpoint
+
+Public member profiles and the catalogue's shared library-administration
+surface now have English/Galician coverage. This includes membership roles and
+permission changes, invitation composition controls, destructive confirmation
+copy, portable export, isolated ZIP inspection/import, import counts and stable
+warning-code presentation. Server-provided warning prose is no longer rendered
+directly, and profile dates follow the selected locale.
+
+The catalogue route can now apply the account locale end to end, including its
+navigation, profile dialogs and settings overlays. Entering Map, Statistics or
+physical Layout deliberately returns the workspace and document language to
+English until each of those large visual routes has matching Galician coverage.
