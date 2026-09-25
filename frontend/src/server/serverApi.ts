@@ -588,9 +588,17 @@ export interface RearrangementResult {
   gaps: Array<{ container_id: string; positions: number[] }>;
   movement_log: string[];
   movement_groups: string[][];
+  movement_message_groups: RearrangementMessage[][];
   warnings: string[];
+  warning_messages: RearrangementMessage[];
   geometry_errors: string[];
+  geometry_error_messages: RearrangementMessage[];
   container_layouts: VisualContainerLayout[];
+}
+
+export interface RearrangementMessage {
+  code: string;
+  values: Record<string, string | number>;
 }
 
 export interface BookcaseWrite {

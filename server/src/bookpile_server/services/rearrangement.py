@@ -11,6 +11,8 @@ from uuid import UUID
 
 from ..schemas import RearrangementOperationWrite, RearrangementRequest
 
+Message = dict[str, object]
+
 
 class RearrangementPlanError(Exception):
     pass
@@ -145,11 +147,32 @@ def _shifted(count: int, reason: str) -> str:
     return f"{count} {'book' if count == 1 else 'books'} shifted {reason}."
 
 
+def _message(code: str, **values: object) -> Message:
+    return {"code": code, "values": values}
+
+
+def _move_message(
+    title: str, source: tuple[UUID, int], destination: tuple[UUID, int],
+) -> Message:
+    return _message(
+        "BOOK_MOVED", title=title,
+        source_container_id=str(source[0]), source_position=source[1],
+        destination_container_id=str(destination[0]), destination_position=destination[1],
+    )
+
+
+def _shifted_message(count: int, reason: str) -> Message:
+    return _message("BOOKS_SHIFTED", count=count, reason=reason)
+
+
 def _plan_operation(
     original: Mapping[UUID, PlannedBook],
     containers: Mapping[UUID, PlannedContainer],
     operation: RearrangementOperationWrite,
-) -> tuple[dict[UUID, PlannedBook], list[str], list[str], str, UUID | None, bool, set[UUID]]:
+) -> tuple[
+    dict[UUID, PlannedBook], list[str], list[Message], list[str], list[Message],
+    str, UUID | None, bool, set[UUID],
+]:
     if operation.book_id not in original:
         raise RearrangementPlanError("Book not found.")
     books = dict(original)
@@ -157,12 +180,14 @@ def _plan_operation(
     if initial.container_id is None or initial.position is None:
         raise RearrangementPlanError("The selected book has no physical position.")
     if not operation.steps:
-        return books, [], [], operation.old_position_mode, initial.id, False, set()
+        return books, [], [], [], [], operation.old_position_mode, initial.id, False, set()
 
     occupancy = _occupancy(books)
     affected: set[UUID] = set()
     log: list[str] = []
+    log_messages: list[Message] = []
     warnings: list[str] = []
+    warning_messages: list[Message] = []
     source = (initial.container_id, initial.position)
     first = operation.steps[0]
     target = occupancy.get(first.container_id, {}).get(first.position)
@@ -172,6 +197,7 @@ def _plan_operation(
     collapsed = _remove_active(books, occupancy, initial.id, effective_old, affected)
     active_id: UUID | None = initial.id
     active_source_label = _label(containers, *source)
+    active_source = source
     origin_gap_available = effective_old == "LEAVE_GAP"
 
     for index, step in enumerate(operation.steps):
@@ -191,8 +217,10 @@ def _plan_operation(
             _place(books, occupancy, active_id, step.container_id, step.position)
             affected.add(step.container_id)
             log.append(f'“{active.title}”: {active_source_label} → {destination}')
+            log_messages.append(_move_message(active.title, active_source, (step.container_id, step.position)))
             if index == 0 and collapsed:
                 log.append(_shifted(collapsed, "to occupy the gap"))
+                log_messages.append(_shifted_message(collapsed, "OCCUPY_GAP"))
             active_id = None
             continue
         if step.new_position_mode == "SQUEEZE":
@@ -200,6 +228,7 @@ def _plan_operation(
             _place(books, occupancy, active_id, step.container_id, step.position)
             affected.add(step.container_id)
             log.append(f'“{active.title}”: {active_source_label} → {destination}')
+            log_messages.append(_move_message(active.title, active_source, (step.container_id, step.position)))
             if len(operation.steps) == 1 and source[0] == step.container_id:
                 changed = sum(
                     1 for book_id, book in books.items() if book_id != initial.id
@@ -208,11 +237,14 @@ def _plan_operation(
                 )
                 if changed:
                     log.append(_shifted(changed, "to fill the gap and make new room"))
+                    log_messages.append(_shifted_message(changed, "FILL_GAP_AND_MAKE_ROOM"))
             else:
                 if index == 0 and collapsed:
                     log.append(_shifted(collapsed, "to occupy the gap"))
+                    log_messages.append(_shifted_message(collapsed, "OCCUPY_GAP"))
                 if squeezed:
                     log.append(_shifted(squeezed, "to make room"))
+                    log_messages.append(_shifted_message(squeezed, "MAKE_ROOM"))
             active_id = None
             continue
         if step.new_position_mode == "SWAP":
@@ -228,6 +260,10 @@ def _plan_operation(
                 f'“{active.title}”: {active_source_label} → {destination}',
                 f'“{books[target_id].title}”: {destination} → {_label(containers, *source)}',
             ))
+            log_messages.extend((
+                _move_message(active.title, active_source, (step.container_id, step.position)),
+                _move_message(books[target_id].title, (step.container_id, step.position), source),
+            ))
             active_id = None
             origin_gap_available = False
             continue
@@ -235,12 +271,18 @@ def _plan_operation(
         _place(books, occupancy, active_id, step.container_id, step.position)
         affected.add(step.container_id)
         log.append(f'“{active.title}”: {active_source_label} → {destination}')
+        log_messages.append(_move_message(active.title, active_source, (step.container_id, step.position)))
         active_id = target_id
         active_source_label = destination
+        active_source = (step.container_id, step.position)
         books[target_id] = replace(books[target_id], container_id=None, position=None)
         warnings.append(f'Continue with “{books[target_id].title}”.')
+        warning_messages.append(_message("CONTINUE_WITH_BOOK", title=books[target_id].title))
 
-    return books, log, warnings, effective_old, active_id, active_id is None, affected
+    return (
+        books, log, log_messages, warnings, warning_messages, effective_old,
+        active_id, active_id is None, affected,
+    )
 
 
 def _effective_pages(book: PlannedBook, mean: float) -> float:
@@ -280,7 +322,9 @@ def _resize(item: PlannedContainer, span: float) -> PlannedContainer:
 def _project_geometry(
     containers: Mapping[UUID, PlannedContainer], original: Mapping[UUID, PlannedBook],
     planned: Mapping[UUID, PlannedBook], release: set[UUID],
-) -> tuple[dict[UUID, PlannedContainer], list[str], list[str]]:
+) -> tuple[
+    dict[UUID, PlannedContainer], list[str], list[str], list[Message], list[Message],
+]:
     projected = dict(containers)
     known = [book.page_count for book in original.values() if book.page_count and book.page_count > 0]
     mean = fmean(known) if known else 200.0
@@ -291,6 +335,8 @@ def _project_geometry(
     }
     warnings: list[str] = []
     errors: list[str] = []
+    warning_messages: list[Message] = []
+    error_messages: list[Message] = []
     for container_id in sorted(affected, key=str):
         item = projected[container_id]
         before = _container_pages(original, container_id, mean)
@@ -301,6 +347,7 @@ def _project_geometry(
         capacity = _capacity(item, projected)
         if capacity <= 0.1:
             errors.append(f"{item.label} has no free stacking-axis capacity.")
+            error_messages.append(_message("NO_STACKING_CAPACITY", container_id=str(item.id)))
             continue
         if after == 0:
             target = capacity
@@ -312,9 +359,15 @@ def _project_geometry(
                 target = natural
             elif natural <= capacity * 1.05:
                 target = capacity
-                warnings.append(f"{item.label} will compress its books by {(1 - capacity / natural) * 100:.1f}%.")
+                compression = round((1 - capacity / natural) * 100, 1)
+                warnings.append(f"{item.label} will compress its books by {compression:.1f}%.")
+                warning_messages.append(_message("BOOKS_COMPRESSED", container_id=str(item.id), percent=compression))
             else:
                 errors.append(f"{item.label} needs {natural:.2f}% but only {capacity:.2f}% is available.")
+                error_messages.append(_message(
+                    "INSUFFICIENT_CAPACITY", container_id=str(item.id),
+                    needed=round(natural, 2), available=round(capacity, 2),
+                ))
                 continue
         else:
             scales = []
@@ -325,8 +378,12 @@ def _project_geometry(
             target = min(capacity, after * fmean(scales)) if scales else min(capacity, capacity * 0.1)
             if not scales:
                 warnings.append(f"{item.label} had no known scale; its first book uses 10% of available space.")
+                warning_messages.append(_message("UNKNOWN_SCALE", container_id=str(item.id)))
         projected[container_id] = _resize(item, max(0.1, target))
-    return projected, list(dict.fromkeys(warnings)), list(dict.fromkeys(errors))
+    return (
+        projected, list(dict.fromkeys(warnings)), list(dict.fromkeys(errors)),
+        warning_messages, error_messages,
+    )
 
 
 def _gaps(books: Mapping[UUID, PlannedBook], containers: set[UUID]) -> list[dict[str, object]]:
@@ -352,7 +409,9 @@ def plan(
     )]
     books = original
     groups: list[list[str]] = []
+    message_groups: list[list[Message]] = []
     warnings: list[str] = []
+    warning_messages: list[Message] = []
     affected: set[UUID] = set()
     release: set[UUID] = set()
     effective_old = request.old_position_mode
@@ -360,17 +419,26 @@ def plan(
     complete = False
     for index, operation in enumerate(operations):
         source = books.get(operation.book_id)
-        books, log, operation_warnings, effective_old, next_active, complete, operation_affected = _plan_operation(books, containers, operation)
+        (
+            books, log, log_messages, operation_warnings, operation_warning_messages,
+            effective_old, next_active, complete, operation_affected,
+        ) = _plan_operation(books, containers, operation)
         if index < len(operations) - 1 and not complete:
             raise RearrangementPlanError("Every earlier movement chain must be complete.")
         if log:
             groups.append(log)
+            message_groups.append(log_messages)
         warnings.extend(operation_warnings)
+        warning_messages.extend(operation_warning_messages)
         affected.update(operation_affected)
         if operation.release_shelf_space and source and source.container_id:
             release.add(source.container_id)
-    projected, geometry_warnings, geometry_errors = _project_geometry(containers, original, books, release)
+    (
+        projected, geometry_warnings, geometry_errors,
+        geometry_warning_messages, geometry_error_messages,
+    ) = _project_geometry(containers, original, books, release)
     warnings.extend(geometry_warnings)
+    warning_messages.extend(geometry_warning_messages)
     placements = [
         {"book_id": book.id, "container_id": book.container_id, "position": book.position}
         for book in books.values()
@@ -398,8 +466,11 @@ def plan(
         "gaps": gaps,
         "movement_log": [line for group in groups for line in group],
         "movement_groups": groups,
+        "movement_message_groups": message_groups,
         "warnings": list(dict.fromkeys(warnings + geometry_errors)),
+        "warning_messages": warning_messages + geometry_error_messages,
         "geometry_errors": geometry_errors,
+        "geometry_error_messages": geometry_error_messages,
         "container_layouts": changed_layouts,
     }
     return PlannedDraft(books=books, containers=projected, payload=payload)

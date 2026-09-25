@@ -20,13 +20,13 @@ and fallback.
   verification, sign-in, reset and deletion recovery. Preserve generic responses
   that avoid account enumeration. Localize safe API error codes, never raw server
   exception text.
-- [ ] Translate the authenticated shell, account and library controls, catalogue,
+- [x] Translate the authenticated shell, account and library controls, catalogue,
   map, statistics, readings, loans, imports/exports, dialogs and notices. Audit
   screen-reader labels, empty states and mobile widths for longer strings.
 - [x] Persist the account preference server-side for cross-device use. Before
   sign-in, use a best-effort browser preference; define precedence and a
   privacy-safe API migration. Browser storage must not contain tokens.
-- [ ] Localize every transactional email in text and HTML, using the account
+- [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
 - [ ] Add the remaining eight launch locales in reviewed batches; verify plural rules,
@@ -186,3 +186,21 @@ notes and generic failures all have statically checked English/Galician copy.
 Bibliographic filter values and member names remain user data. Catalogue,
 Account and Statistics can therefore expose Galician; Map and physical Layout
 remain explicitly English pending their geometry and interaction audit.
+
+## Eleventh branch checkpoint
+
+The Library Map and physical Layout routes now have statically checked
+English/Galician catalogues. Map navigation, colour scales, camera and
+inspection controls, book rearrangement, geometry editing, physical hierarchy
+maintenance, confirmations, notices, accessible labels and empty states follow
+the account locale. User-authored furniture names and bibliographic metadata
+remain unchanged.
+
+Rearrangement previews now expose stable structured messages alongside the
+legacy English audit prose. The Server UI renders message codes and values in
+the selected locale, including fully localized physical locations, without
+parsing English sentences. Legacy fields remain in the API for compatibility
+and audit continuity. All current authenticated workspaces can therefore apply
+the saved English or Galician account preference end to end; adding the next
+launch language is now primarily catalogue translation plus locale-specific
+formatting and review rather than route architecture.

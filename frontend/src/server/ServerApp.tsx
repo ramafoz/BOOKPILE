@@ -539,7 +539,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
   const [workspace, setWorkspace] = useState<"CATALOGUE" | "MAP" | "STATISTICS" | "LAYOUT" | "ACCOUNT">("CATALOGUE");
-  const workspaceLocale = workspace === "ACCOUNT" || workspace === "CATALOGUE" || workspace === "STATISTICS" ? locale : "en";
+  const workspaceLocale = locale;
   const copy = authenticatedCopy(workspaceLocale);
   const adminCopy = libraryAdminCopy(workspaceLocale);
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
@@ -1040,11 +1040,11 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
           <div className="server-library-main">
             {workspace === "ACCOUNT" ? <AccountWorkspace onSignOut={signOut} onLibrariesChanged={reloadLibraries} onAccountDeleted={onSignedOut} /> : selected ? <>
               {workspace === "MAP" && selected.can_view_map
-                ? <ServerLibraryMap key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} onBack={() => setWorkspace("CATALOGUE")} />
+                ? <ServerLibraryMap key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} perspective={perspectives.find((item) => item.selected) ?? perspectives[0] ?? null} locale={workspaceLocale} onBack={() => setWorkspace("CATALOGUE")} />
                 : workspace === "STATISTICS" && (perspectives.find((item) => item.selected) ?? perspectives[0])
                   ? <StatisticsWorkspace libraryId={selected.library_id} perspective={(perspectives.find((item) => item.selected) ?? perspectives[0])!} locale={workspaceLocale} />
                 : workspace === "LAYOUT" && selected.role === "OWNER"
-                  ? <PhysicalLibraryWorkspace key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} />
+                  ? <PhysicalLibraryWorkspace key={`${selected.library_id}-${libraryRevision}`} libraryId={selected.library_id} locale={workspaceLocale} />
                   : <CatalogueWorkspace key={`${selected.library_id}-${libraryRevision}`} library={selected} memberSummary={memberSummary} signedInUserId={user.user_id} perspectives={perspectives} locale={workspaceLocale} onOpenProfile={setProfileUserId} onSetUpMap={() => setWorkspace("LAYOUT")} />}
               <section className={`server-dashboard-panel server-floating-control-panel ${controlsPanel === "VIEW" ? "open" : ""}`} style={anchoredPanelStyle(560, "right")}>
                 <button className="server-floating-panel-close" type="button" onClick={() => setControlsPanel(null)} aria-label={copy("closeViewPanel")}>×</button>

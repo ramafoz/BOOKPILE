@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { ArrowLeft, BookOpen, Boxes, Check, ChevronDown, ChevronUp, Eye, Focus, Minus, Move, Plus, RotateCcw, Settings2, Undo2, X } from "lucide-react";
 import { BookDetails } from "./CatalogueWorkspace";
 import { GeometryDialog, type GeometrySelection } from "./PhysicalLibraryWorkspace";
-import { serverApi, type BookLoans, type BookReading, type GoodreadsReview, type LoanOverview, type PhysicalBook, type PhysicalLibrary, type ReadingCatalogueOverview, type ReadingPerspective, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
+import { serverApi, type BookLoans, type BookReading, type GoodreadsReview, type LoanOverview, type PhysicalBook, type PhysicalLibrary, type ReadingCatalogueOverview, type ReadingPerspective, type RearrangementMessage, type RearrangementOperation, type RearrangementRequest, type RearrangementResult, type ServerBook, type VisualLayout } from "./serverApi";
 import {
   boundsForRects,
   cataloguePageMean,
@@ -13,7 +13,9 @@ import {
   proportionalRearrangementSlots,
   type WorldRect,
 } from "./serverMapGeometry";
-import { buildMapColourScale, MAP_COLOUR_OPTIONS, type MapColourMode } from "./serverMapColour";
+import { buildMapColourScale, MAP_COLOUR_OPTIONS, mapColourOptionLabel, type MapColourMode } from "./serverMapColour";
+import type { AppLocale } from "./locale";
+import { mapCopy, type MapCopy } from "./mapCopy";
 
 interface Camera {
   x: number;
@@ -62,22 +64,54 @@ function zoomCamera(camera: Camera, factor: number, anchorX?: number, anchorY?: 
   };
 }
 
-function retainedLocationLabel(data: PhysicalLibrary, bookId: string): string | null {
-  const book = data.books.find((item) => item.id === bookId);
-  if (!book?.container_id || !book.position) return null;
+function containerLocationLabel(data: PhysicalLibrary, containerId: string, position: number | null, copy: MapCopy): string | null {
   for (const bookcase of data.bookcases) {
     for (const shelf of bookcase.shelves) {
-      const container = shelf.containers.find((item) => item.id === book.container_id);
+      const container = shelf.containers.find((item) => item.id === containerId);
       if (!container) continue;
-      const layer = container.layer === "BACKGROUND" ? "Background" : "Foreground";
-      const type = container.container_type === "ROW" ? "Row" : "Pile";
-      return `${bookcase.name} · Shelf ${shelf.shelf_number} · ${layer} ${type} ${container.container_number} · Position ${book.position}`;
+      const layer = copy(container.layer === "BACKGROUND" ? "background" : "foreground");
+      const type = copy(container.container_type === "ROW" ? "row" : "pile");
+      const base = `${bookcase.name} · ${copy("shelf")} ${shelf.shelf_number} · ${layer} ${type} ${container.container_number}`;
+      return position === null ? base : `${base} · ${copy("position")} ${position}`;
     }
   }
   return null;
 }
 
-export default function ServerLibraryMap({ libraryId, perspective, onBack }: { libraryId: string; perspective: ReadingPerspective | null; onBack: () => void }) {
+function retainedLocationLabel(data: PhysicalLibrary, bookId: string, copy: MapCopy): string | null {
+  const book = data.books.find((item) => item.id === bookId);
+  return book?.container_id && book.position
+    ? containerLocationLabel(data, book.container_id, book.position, copy)
+    : null;
+}
+
+function rearrangementMessageLabel(message: RearrangementMessage, data: PhysicalLibrary, copy: MapCopy): string {
+  const values = message.values;
+  const container = (key = "container_id") => containerLocationLabel(data, String(values[key] ?? ""), null, copy) ?? copy("destinationContainer");
+  switch (message.code) {
+    case "BOOK_MOVED":
+      return copy("bookMoved", {
+        title: String(values.title ?? ""),
+        source: containerLocationLabel(data, String(values.source_container_id ?? ""), Number(values.source_position), copy) ?? copy("oldPosition"),
+        destination: containerLocationLabel(data, String(values.destination_container_id ?? ""), Number(values.destination_position), copy) ?? copy("newPosition"),
+      });
+    case "BOOKS_SHIFTED": {
+      const count = Number(values.count);
+      const reason = values.reason === "OCCUPY_GAP" ? copy("occupyGap") : values.reason === "FILL_GAP_AND_MAKE_ROOM" ? copy("fillGapAndMakeRoom") : copy("makeRoom");
+      return copy(count === 1 ? "bookShifted" : "booksShifted", { count, reason });
+    }
+    case "CONTINUE_WITH_BOOK": return copy("continueWithBook", { title: String(values.title ?? "") });
+    case "NO_STACKING_CAPACITY": return copy("noStackingCapacity", { container: container() });
+    case "BOOKS_COMPRESSED": return copy("booksCompressed", { container: container(), percent: Number(values.percent) });
+    case "INSUFFICIENT_CAPACITY": return copy("insufficientCapacity", { container: container(), needed: Number(values.needed), available: Number(values.available) });
+    case "UNKNOWN_SCALE": return copy("unknownScale", { container: container() });
+    case "LAYOUT_CONFLICT": return copy("layoutConflict");
+    default: return copy("rearrangementWarning");
+  }
+}
+
+export default function ServerLibraryMap({ libraryId, perspective, locale, onBack }: { libraryId: string; perspective: ReadingPerspective | null; locale: AppLocale; onBack: () => void }) {
+  const copy = useMemo(() => mapCopy(locale), [locale]);
   const perspectiveUserId = perspective?.user_id ?? null;
   const [data, setData] = useState<PhysicalLibrary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,8 +174,8 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       serverApi.loanOverview(libraryId),
     ])
       .then(([physical, overview, loans]) => { setData(physical); setReadingOverview(overview); setLoanOverview(loans); })
-      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : "Library Map unavailable."));
-  }, [libraryId, perspectiveUserId]);
+      .catch(() => setError(copy("unavailable")));
+  }, [copy, libraryId, perspectiveUserId]);
 
   useEffect(() => {
     const element = svgRef.current;
@@ -405,7 +439,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       ]);
       setDetails(record); setDetailsReading(reading); setDetailsReviews(reviews); setDetailsLoans(loans);
     }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Book information unavailable."); }
+    catch { setError(copy("bookUnavailable")); }
     finally { setDetailsBusy(false); }
   }
 
@@ -440,8 +474,8 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
     try {
       const result = await serverApi.previewRearrangement(libraryId, rearrangementRequest(steps));
       setMoveSteps(steps); setRearrangement(result); setDestinationContainer(""); setDestinationPosition("");
-    } catch (caught) {
-      setRearrangementError(caught instanceof Error ? caught.message : "The destination could not be previewed.");
+    } catch {
+      setRearrangementError(copy("previewFailed"));
     } finally { setRearrangementBusy(false); }
   }
 
@@ -470,7 +504,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       setMoveSteps(steps); setRearrangementError("");
       if (!steps.length && !completedMoves.length) { setRearrangement(null); return; }
       try { setRearrangement(await serverApi.previewRearrangement(libraryId, rearrangementRequest(steps))); }
-      catch (caught) { setRearrangementError(caught instanceof Error ? caught.message : "Undo failed."); }
+      catch { setRearrangementError(copy("undoFailed")); }
       return;
     }
     if (!completedMoves.length) return;
@@ -479,7 +513,7 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
     setCompletedMoves(remaining); setMoveBookId(restored.book_id); setOldPositionMode(restored.old_position_mode);
     setReleaseShelfSpace(restored.release_shelf_space); setMoveSteps(restored.steps);
     try { setRearrangement(await serverApi.previewRearrangement(libraryId, { ...restored, completed_operations: remaining })); }
-    catch (caught) { setRearrangementError(caught instanceof Error ? caught.message : "Undo failed."); }
+    catch { setRearrangementError(copy("undoFailed")); }
   }
 
   async function applyRearrangement() {
@@ -490,19 +524,19 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       await serverApi.applyRearrangement(libraryId, request, rearrangement.revision);
       setData(await serverApi.physicalLibrary(libraryId));
       cancelRearrangement();
-    } catch (caught) {
-      setRearrangementError(caught instanceof Error ? caught.message : "The rearrangement could not be applied.");
+    } catch {
+      setRearrangementError(copy("applyFailed"));
     } finally { setRearrangementBusy(false); }
   }
 
-  if (!data || !geometry) return <section className="server-map-loading"><p>{error ?? "Loading Library Map…"}</p></section>;
+  if (!data || !geometry) return <section className="server-map-loading"><p>{error ?? copy("loading")}</p></section>;
   const mapData = mapPresentationData ?? data;
 
   const readingByBook = new Map((readingOverview?.items ?? []).map((item) => [item.book_id, item]));
   const activeBookIds = new Set((readingOverview?.items ?? []).filter((item) => item.active_reader_present).map((item) => item.book_id));
   const loanedBookIds = new Set((loanOverview?.loans ?? []).filter((item) => item.state === "ACTIVE").map((item) => item.book_id));
   const moveActiveCopiesOutside = !rearranging && !layoutEditing;
-  const colourScale = buildMapColourScale(colourMode, mapData.books, readingByBook, colourFocus);
+  const colourScale = buildMapColourScale(colourMode, mapData.books, readingByBook, colourFocus, locale);
   const focusOptions = colourMode === "genre"
     ? [...new Set(mapData.books.flatMap((book) => (book.genre_text ?? "").split(",").map((value) => value.trim()).filter(Boolean)))].sort()
     : colourMode === "publisher"
@@ -547,16 +581,16 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
         : false;
 
   return <section className="server-library-map">
-    <header><div><p className="server-card-eyebrow">Visual library index</p><h3>Library Map</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title="Back to catalogue" aria-label="Back to catalogue"><ArrowLeft size={16} /> <span>Catalogue</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} disabled={layoutEditing} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> Reorganize books</button>}{data.can_edit && <button type="button" className={layoutEditing ? "active" : ""} disabled={rearranging} onClick={() => layoutEditing ? cancelLayoutEditing() : enterLayoutEditing()}><Settings2 size={16} /> Edit layout</button>}<span>Choose inspection mode</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> Books</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> Containers</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={`Inspection mode: ${inspectionMode === "BOOK" ? "books" : "containers"}. Tap to switch.`}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {inspectionMode === "BOOK" ? "Books" : "Containers"}</button></div></header>
+    <header><div><p className="server-card-eyebrow">{copy("visualIndex")}</p><h3>{copy("libraryMap")}</h3></div><div className="server-map-mode"><button className="server-map-back" type="button" onClick={onBack} title={copy("backCatalogue")} aria-label={copy("backCatalogue")}><ArrowLeft size={16} /> <span>{copy("catalogue")}</span></button>{data.can_edit && <button type="button" className={rearranging ? "active" : ""} disabled={layoutEditing} onClick={() => rearranging ? cancelRearrangement() : setRearranging(true)}><Move size={16} /> {copy("reorganize")}</button>}{data.can_edit && <button type="button" className={layoutEditing ? "active" : ""} disabled={rearranging} onClick={() => layoutEditing ? cancelLayoutEditing() : enterLayoutEditing()}><Settings2 size={16} /> {copy("editLayout")}</button>}<span>{copy("chooseInspection")}</span><button className={`server-map-inspection-option ${inspectionMode === "BOOK" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("BOOK"); setSelection(null); }}><BookOpen size={16} /> {copy("books")}</button><button className={`server-map-inspection-option ${inspectionMode === "CONTAINER" ? "active" : ""}`} type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode("CONTAINER"); setSelection(null); }}><Boxes size={16} /> {copy("containers")}</button><button className="server-map-inspection-toggle active" type="button" disabled={rearranging || layoutEditing} onClick={() => { setInspectionMode(inspectionMode === "BOOK" ? "CONTAINER" : "BOOK"); setSelection(null); }} aria-label={copy("inspectionMode", { mode: copy(inspectionMode === "BOOK" ? "books" : "containers").toLocaleLowerCase(locale === "gl" ? "gl-ES" : "en-GB") })}>{inspectionMode === "BOOK" ? <BookOpen size={16} /> : <Boxes size={16} />} {copy(inspectionMode === "BOOK" ? "books" : "containers")}</button></div></header>
     {error && <div className="server-map-error">{error}</div>}
     <div className="server-map-stage">
       {perspective && <div className={`server-map-colour-legend ${colourLegendExpanded ? "expanded" : "collapsed"}`}>
         <button type="button" className="server-map-colour-summary" onClick={() => setColourLegendExpanded((value) => !value)}><b>{colourFocus && ["genre", "publisher", "author"].includes(colourMode) ? colourFocus : colourScale.label}</b>{colourLegendExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>
-        {colourLegendExpanded && <div className="server-map-colour-body"><label>Colour by<select value={colourMode} onChange={(event) => { setColourMode(event.target.value as MapColourMode); setColourFocus(""); }}>{MAP_COLOUR_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          {focusOptions.length > 0 && <label>{colourMode === "genre" ? "Genre" : colourMode === "publisher" ? "Publisher" : "Author"}<select value={colourFocus} onChange={(event) => setColourFocus(event.target.value)}><option value="">Choose…</option>{focusOptions.map((value) => <option key={value}>{value}</option>)}</select></label>}
+        {colourLegendExpanded && <div className="server-map-colour-body"><label>{copy("colourBy")}<select value={colourMode} onChange={(event) => { setColourMode(event.target.value as MapColourMode); setColourFocus(""); }}>{MAP_COLOUR_OPTIONS.map((option) => <option key={option.value} value={option.value}>{mapColourOptionLabel(option.value, locale)}</option>)}</select></label>
+          {focusOptions.length > 0 && <label>{copy(colourMode === "genre" ? "genre" : colourMode === "publisher" ? "publisher" : "author")}<select value={colourFocus} onChange={(event) => setColourFocus(event.target.value)}><option value="">{copy("choose")}</option>{focusOptions.map((value) => <option key={value}>{value}</option>)}</select></label>}
           {colourScale.continuous && <div className="server-map-gradient-legend"><span>{colourScale.lowLabel}</span><i /><span>{colourScale.highLabel}</span></div>}
           <div className="server-map-legend-items">{colourScale.legendItems.map((item) => <span key={item.label}><i style={{ background: item.colour }} />{item.label}</span>)}</div>
-          <small>Colours show {perspective.username}'s perspective. Physical custody is shared.</small>
+          <small>{copy("perspectiveColours", { username: perspective.username })}</small>
         </div>}
       </div>}
       <svg
@@ -686,20 +720,21 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
         </g>)}
         {layoutEditing && layoutSelectionRect && <g className="server-layout-selection">
           <rect className="server-layout-selection-outline" x={layoutSelectionRect.x} y={layoutSelectionRect.y} width={layoutSelectionRect.width} height={layoutSelectionRect.height} />
-          {layoutMoveAllowed && <circle className="server-layout-handle move" cx={layoutSelectionRect.x + layoutSelectionRect.width / 2} cy={layoutSelectionRect.y + layoutSelectionRect.height / 2} r={handleSize * .55} onPointerDown={(event) => beginLayoutDrag(event, "MOVE")}><title>Drag selected object</title></circle>}
-          {layoutResizeAllowed && <rect className="server-layout-handle resize" x={layoutSelectionRect.x + layoutSelectionRect.width - handleSize / 2} y={layoutSelectionRect.y - handleSize / 2} width={handleSize} height={handleSize} rx={handleSize * .18} onPointerDown={(event) => beginLayoutDrag(event, "RESIZE")}><title>Resize selected object</title></rect>}
+          {layoutMoveAllowed && <circle className="server-layout-handle move" cx={layoutSelectionRect.x + layoutSelectionRect.width / 2} cy={layoutSelectionRect.y + layoutSelectionRect.height / 2} r={handleSize * .55} onPointerDown={(event) => beginLayoutDrag(event, "MOVE")}><title>{copy("dragObject")}</title></circle>}
+          {layoutResizeAllowed && <rect className="server-layout-handle resize" x={layoutSelectionRect.x + layoutSelectionRect.width - handleSize / 2} y={layoutSelectionRect.y - handleSize / 2} width={handleSize} height={handleSize} rx={handleSize * .18} onPointerDown={(event) => beginLayoutDrag(event, "RESIZE")}><title>{copy("resizeObject")}</title></rect>}
         </g>}
       </svg>
-      <div className="server-map-controls" aria-label="Map camera controls">
-        <button type="button" title="Reset view" onClick={reset}><RotateCcw size={17} /></button>
-        <button type="button" title="Zoom in" onClick={() => setCamera((value) => zoomCamera(value, .8))}><Plus size={17} /></button>
-        <button type="button" title="Zoom out" onClick={() => setCamera((value) => zoomCamera(value, 1.25))}><Minus size={17} /></button>
+      <div className="server-map-controls" aria-label={copy("cameraControls")}>
+        <button type="button" title={copy("resetView")} onClick={reset}><RotateCcw size={17} /></button>
+        <button type="button" title={copy("zoomIn")} onClick={() => setCamera((value) => zoomCamera(value, .8))}><Plus size={17} /></button>
+        <button type="button" title={copy("zoomOut")} onClick={() => setCamera((value) => zoomCamera(value, 1.25))}><Minus size={17} /></button>
       </div>
     </div>
     {layoutEditing && layoutDraft && <GeometryDialog
       key={layoutEditorEpoch}
       libraryId={libraryId}
       data={{ ...data, layout: layoutDraft }}
+      locale={locale}
       baselineLayout={data.layout}
       presentation="PANEL"
       collapsed={layoutPanelCollapsed}
@@ -717,21 +752,21 @@ export default function ServerLibraryMap({ libraryId, perspective, onBack }: { l
       onError={(value) => setError(value)}
     />}
     {rearranging && <aside className={`server-rearrangement-panel ${rearrangementPanelCollapsed ? "collapsed" : ""}`}>
-      <header><div><p className="server-card-eyebrow">Draft movement</p><h4>{moveBookId ? (mapData.books.find((book) => book.id === (rearrangement?.next_active_book_id ?? moveBookId))?.title ?? "Choose a book") : "Choose a book on the map"}</h4></div><span><button type="button" onClick={() => setRearrangementPanelCollapsed((value) => !value)} title={rearrangementPanelCollapsed ? "Expand draft" : "Collapse draft"}>{rearrangementPanelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />} {rearrangementPanelCollapsed ? "Expand" : "Collapse"}</button><button type="button" onClick={cancelRearrangement}><X size={17} /> Cancel draft</button></span></header>
+      <header><div><p className="server-card-eyebrow">{copy("draftMovement")}</p><h4>{moveBookId ? (mapData.books.find((book) => book.id === (rearrangement?.next_active_book_id ?? moveBookId))?.title ?? copy("chooseBook")) : copy("chooseBookMap")}</h4></div><span><button type="button" onClick={() => setRearrangementPanelCollapsed((value) => !value)} title={copy(rearrangementPanelCollapsed ? "expandDraft" : "collapseDraft")}>{rearrangementPanelCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />} {copy(rearrangementPanelCollapsed ? "expand" : "collapse")}</button><button type="button" onClick={cancelRearrangement}><X size={17} /> {copy("cancelDraft")}</button></span></header>
       {!rearrangementPanelCollapsed && <>
-      <div className="server-rearrangement-modes"><label>Old position<select disabled={moveSteps.length > 0 || newPositionMode === "SWAP"} value={newPositionMode === "SWAP" ? "LEAVE_GAP" : oldPositionMode} onChange={(event) => setOldPositionMode(event.target.value as "COLLAPSE" | "LEAVE_GAP")}><option value="COLLAPSE">Collapse</option><option value="LEAVE_GAP">Leave gap</option></select></label><label>New position<select disabled={moveSteps.length > 0} value={newPositionMode} onChange={(event) => { const value = event.target.value as "SQUEEZE" | "SWAP" | "CONTINUE"; setNewPositionMode(value); if (value === "SWAP") setOldPositionMode("LEAVE_GAP"); }}><option value="SQUEEZE">Squeeze</option><option value="SWAP">Swap</option><option value="CONTINUE">Continue</option></select></label></div>
-      <label className="server-rearrangement-release"><input type="checkbox" disabled={moveSteps.length > 0} checked={releaseShelfSpace} onChange={(event) => setReleaseShelfSpace(event.target.checked)} /> Release shelf space if this move removes pages from its source container</label>
-      <div className="server-rearrangement-destination"><label>Book<select disabled={moveSteps.length > 0} value={moveBookId} onChange={(event) => selectMoveBook(event.target.value)}><option value="">Choose on map or here</option>{mapData.books.filter((book) => book.container_id && book.position).map((book) => <option key={book.id} value={book.id}>{book.title} — {book.author}</option>)}</select></label><label>Destination container<select value={destinationContainer} onChange={(event) => setDestinationContainer(event.target.value)}><option value="">Choose on map or here</option>{data.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => <option key={container.id} value={container.id}>{bookcase.name} · Shelf {shelf.shelf_number} · {container.layer === "BACKGROUND" ? "Background" : "Foreground"} {container.container_type === "ROW" ? "Row" : "Pile"} {container.container_number}</option>)))}</select></label><label>Position<input type="number" min="1" value={destinationPosition} onChange={(event) => setDestinationPosition(event.target.value)} /></label><button type="button" disabled={rearrangementBusy || !moveBookId || !destinationContainer || !destinationPosition || Boolean(rearrangement?.complete)} onClick={() => void previewDestination()}><Move size={16} /> Preview destination</button></div>
+      <div className="server-rearrangement-modes"><label>{copy("oldPosition")}<select disabled={moveSteps.length > 0 || newPositionMode === "SWAP"} value={newPositionMode === "SWAP" ? "LEAVE_GAP" : oldPositionMode} onChange={(event) => setOldPositionMode(event.target.value as "COLLAPSE" | "LEAVE_GAP")}><option value="COLLAPSE">{copy("collapsePosition")}</option><option value="LEAVE_GAP">{copy("leaveGap")}</option></select></label><label>{copy("newPosition")}<select disabled={moveSteps.length > 0} value={newPositionMode} onChange={(event) => { const value = event.target.value as "SQUEEZE" | "SWAP" | "CONTINUE"; setNewPositionMode(value); if (value === "SWAP") setOldPositionMode("LEAVE_GAP"); }}><option value="SQUEEZE">{copy("squeeze")}</option><option value="SWAP">{copy("swap")}</option><option value="CONTINUE">{copy("continue")}</option></select></label></div>
+      <label className="server-rearrangement-release"><input type="checkbox" disabled={moveSteps.length > 0} checked={releaseShelfSpace} onChange={(event) => setReleaseShelfSpace(event.target.checked)} /> {copy("releaseSpace")}</label>
+      <div className="server-rearrangement-destination"><label>{copy("book")}<select disabled={moveSteps.length > 0} value={moveBookId} onChange={(event) => selectMoveBook(event.target.value)}><option value="">{copy("chooseMapHere")}</option>{mapData.books.filter((book) => book.container_id && book.position).map((book) => <option key={book.id} value={book.id}>{book.title} — {book.author}</option>)}</select></label><label>{copy("destinationContainer")}<select value={destinationContainer} onChange={(event) => setDestinationContainer(event.target.value)}><option value="">{copy("chooseMapHere")}</option>{data.bookcases.flatMap((bookcase) => bookcase.shelves.flatMap((shelf) => shelf.containers.map((container) => <option key={container.id} value={container.id}>{bookcase.name} · {copy("shelf")} {shelf.shelf_number} · {copy(container.layer === "BACKGROUND" ? "background" : "foreground")} {copy(container.container_type === "ROW" ? "row" : "pile")} {container.container_number}</option>)))}</select></label><label>{copy("position")}<input type="number" min="1" value={destinationPosition} onChange={(event) => setDestinationPosition(event.target.value)} /></label><button type="button" disabled={rearrangementBusy || !moveBookId || !destinationContainer || !destinationPosition || Boolean(rearrangement?.complete)} onClick={() => void previewDestination()}><Move size={16} /> {copy("previewDestination")}</button></div>
       {rearrangementError && <div className="server-message error">{rearrangementError}</div>}
-      {rearrangement && <div className="server-rearrangement-summary">{rearrangement.movement_groups.map((group, index) => <section key={index}><b>Move {index + 1}</b><ul>{group.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}</ul></section>)}{rearrangement.warnings.map((warning) => <p key={warning}>{warning}</p>)}{!rearrangement.valid_to_apply && rearrangement.complete && !rearrangement.gaps.length && !rearrangement.geometry_errors.length && <p>This draft adds up to an unchanged arrangement. Add another move or cancel it.</p>}</div>}
-      <footer><button type="button" disabled={rearrangementBusy || (!moveSteps.length && !completedMoves.length)} onClick={() => void undoLast()}><Undo2 size={16} /> Undo last step</button><button type="button" disabled={rearrangementBusy || !rearrangement?.complete || !moveBookId} onClick={addAnotherMove}><Plus size={16} /> Add another move</button><button className="confirm" type="button" disabled={rearrangementBusy || !rearrangement?.valid_to_apply || (!moveBookId && !completedMoves.length)} onClick={() => void applyRearrangement()}><Check size={16} /> Apply</button></footer>
+      {rearrangement && <div className="server-rearrangement-summary">{(rearrangement.movement_message_groups?.length ? rearrangement.movement_message_groups : rearrangement.movement_groups).map((group, index) => <section key={index}><b>{copy("moveNumber", { number: index + 1 })}</b><ul>{group.map((line, lineIndex) => <li key={lineIndex}>{typeof line === "string" ? line : rearrangementMessageLabel(line, data, copy)}</li>)}</ul></section>)}{(rearrangement.warning_messages?.length ? rearrangement.warning_messages.map((message) => rearrangementMessageLabel(message, data, copy)) : rearrangement.warnings).map((warning, index) => <p key={`${index}-${warning}`}>{warning}</p>)}{!rearrangement.valid_to_apply && rearrangement.complete && !rearrangement.gaps.length && !rearrangement.geometry_errors.length && <p>{copy("unchangedDraft")}</p>}</div>}
+      <footer><button type="button" disabled={rearrangementBusy || (!moveSteps.length && !completedMoves.length)} onClick={() => void undoLast()}><Undo2 size={16} /> {copy("undo")}</button><button type="button" disabled={rearrangementBusy || !rearrangement?.complete || !moveBookId} onClick={addAnotherMove}><Plus size={16} /> {copy("addMove")}</button><button className="confirm" type="button" disabled={rearrangementBusy || !rearrangement?.valid_to_apply || (!moveBookId && !completedMoves.length)} onClick={() => void applyRearrangement()}><Check size={16} /> {copy("apply")}</button></footer>
       </>}
     </aside>}
     {selection && <aside className="server-map-inspector">
-      <button type="button" className="server-map-inspector-close" onClick={() => setSelection(null)} title="Clear selection"><X size={17} /></button>
-      {selection.kind === "BOOK" ? <><p className="server-card-eyebrow">Selected book</p><h4>{selection.book.title}</h4><p>{selection.book.author}</p><small>{selection.book.page_count ? `${selection.book.page_count} pages` : `Page count unknown · visual fallback ${Math.round(meanPages)} pages`}</small></> : <><p className="server-card-eyebrow">Selected container</p><h4>{selectedBooks.length} {selectedBooks.length === 1 ? "book" : "books"}</h4><ol>{selectedBooks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((book) => <li key={book.id}><button type="button" onClick={() => { setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>{book.title}<small>{book.author}</small></button></li>)}</ol></>}
-      <div><span className="server-map-inspector-actions">{selectedContainer && <button type="button" onClick={() => focus(selectedContainer)}><Focus size={16} /> Focus container</button>}{selection.kind === "BOOK" && <button type="button" onClick={() => void showDetails(selection.book)} disabled={detailsBusy}><Eye size={16} /> {detailsBusy ? "Loading…" : "Complete information"}</button>}</span><span><Move size={15} /> Read-only inspection</span></div>
+      <button type="button" className="server-map-inspector-close" onClick={() => setSelection(null)} title={copy("clearSelection")}><X size={17} /></button>
+      {selection.kind === "BOOK" ? <><p className="server-card-eyebrow">{copy("selectedBook")}</p><h4>{selection.book.title}</h4><p>{selection.book.author}</p><small>{selection.book.page_count ? copy("pages", { count: selection.book.page_count }) : copy("unknownPages", { count: Math.round(meanPages) })}</small></> : <><p className="server-card-eyebrow">{copy("selectedContainer")}</p><h4>{copy(selectedBooks.length === 1 ? "bookCount" : "booksCount", { count: selectedBooks.length })}</h4><ol>{selectedBooks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0)).map((book) => <li key={book.id}><button type="button" onClick={() => { setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>{book.title}<small>{book.author}</small></button></li>)}</ol></>}
+      <div><span className="server-map-inspector-actions">{selectedContainer && <button type="button" onClick={() => focus(selectedContainer)}><Focus size={16} /> {copy("focusContainer")}</button>}{selection.kind === "BOOK" && <button type="button" onClick={() => void showDetails(selection.book)} disabled={detailsBusy}><Eye size={16} /> {copy(detailsBusy ? "loadingDetails" : "completeInformation")}</button>}</span><span><Move size={15} /> {copy("readOnlyInspection")}</span></div>
     </aside>}
-    {details && <BookDetails libraryId={libraryId} book={details} location={retainedLocationLabel(data, details.id)} reading={detailsReading} perspectiveName={perspective?.username} reviews={detailsReviews} loans={detailsLoans} locale="en" onClose={() => setDetails(null)} onEdit={null} />}
+    {details && <BookDetails libraryId={libraryId} book={details} location={retainedLocationLabel(data, details.id, copy)} reading={detailsReading} perspectiveName={perspective?.username} reviews={detailsReviews} loans={detailsLoans} locale={locale} onClose={() => setDetails(null)} onEdit={null} />}
   </section>;
 }

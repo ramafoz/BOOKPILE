@@ -449,6 +449,12 @@ class VisualContainerLayoutWrite(BaseModel):
     support_container_id: UUID | None = None
     pile_alignment: Literal["LEFT", "CENTER", "RIGHT"] = "RIGHT"
 
+
+class RearrangementMessageResponse(BaseModel):
+    code: str
+    values: dict[str, str | int | float] = Field(default_factory=dict)
+
+
 class RearrangementResultResponse(BaseModel):
     revision: str
     valid_to_apply: bool
@@ -459,8 +465,11 @@ class RearrangementResultResponse(BaseModel):
     gaps: list[RearrangementGapResponse]
     movement_log: list[str]
     movement_groups: list[list[str]]
+    movement_message_groups: list[list[RearrangementMessageResponse]] = Field(default_factory=list)
     warnings: list[str]
+    warning_messages: list[RearrangementMessageResponse] = Field(default_factory=list)
     geometry_errors: list[str]
+    geometry_error_messages: list[RearrangementMessageResponse] = Field(default_factory=list)
     container_layouts: list[VisualContainerLayoutWrite]
 
 
