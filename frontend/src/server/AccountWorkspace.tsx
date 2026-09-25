@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useState } from "react";
 import {
   Camera,
   KeyRound,
@@ -20,18 +20,10 @@ import {
   ServerApiError,
   serverApi,
 } from "./serverApi";
-
-const FIELDS = [
-  ["display_name", "Name"],
-  ["timezone", "Timezone"],
-  ["personal_data", "Personal data"],
-] as const;
-
-const VISIBILITY: Array<[ProfileVisibility, string]> = [
-  ["PRIVATE", "Only me"],
-  ["SHARED_LIBRARY_MEMBERS", "People sharing a library"],
-  ["AUTHENTICATED", "All BOOKPILE users"],
-];
+import { useLocale } from "./LocaleContext";
+import { availableLocales, formatLocalDateTime, localeNames } from "./locale";
+import { accountInvitationMessage } from "./invitationCopy";
+import { authenticatedCopy } from "./authenticatedCopy";
 const COLOURS = [
   "#2f7667",
   "#a95d36",
@@ -58,10 +50,10 @@ const TIMEZONES = (() => {
       ];
 })();
 
-function message(error: unknown) {
+function message(error: unknown, fallback: string) {
   return error instanceof ServerApiError
     ? error.message
-    : "BOOKPILE could not complete that request.";
+    : fallback;
 }
 
 export default function AccountWorkspace({
@@ -73,6 +65,23 @@ export default function AccountWorkspace({
   onLibrariesChanged: (preferredId?: string) => Promise<void>;
   onAccountDeleted: () => void;
 }) {
+  const { locale, setLocale } = useLocale();
+  const copy = authenticatedCopy(locale);
+  const fields = [
+    ["display_name", copy("fieldName")],
+    ["timezone", copy("fieldTimezone")],
+    ["personal_data", copy("fieldPersonalData")],
+  ] as const;
+  const visibilityOptions: Array<[ProfileVisibility, string]> = [
+    ["PRIVATE", copy("visibilityPrivate")],
+    ["SHARED_LIBRARY_MEMBERS", copy("visibilityLibrary")],
+    ["AUTHENTICATED", copy("visibilityAuthenticated")],
+  ];
+  const requestFailedMessage = copy("requestFailed");
+  const errorMessage = useCallback(
+    (caught: unknown) => message(caught, requestFailedMessage),
+    [requestFailedMessage],
+  );
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [account, setAccount] = useState<PrivateAccount | null>(null);
   const [storage, setStorage] = useState<StorageOverview | null>(null);
@@ -80,6 +89,7 @@ export default function AccountWorkspace({
   const [betaInvitations, setBetaInvitations] = useState<BetaInvitationStatus | null>(null);
   const [earnedInvitationLink, setEarnedInvitationLink] = useState("");
   const [earnedInvitationExpiry, setEarnedInvitationExpiry] = useState("");
+  const [invitationLocale, setInvitationLocale] = useState(locale);
   const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -122,20 +132,37 @@ export default function AccountWorkspace({
       setEarnedInvitationLink(url.toString());
       setEarnedInvitationExpiry(invitation.expires_at);
       setBetaInvitations(await serverApi.betaInvitationStatus());
-      setNotice("Your account invitation is ready. It is shown only in this session.");
+      setNotice(copy("invitationReady"));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
   }
 
-  async function copyBetaInvitation() {
+  async function changeAccountLocale(nextLocale: typeof locale) {
+    if (nextLocale === locale) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
     try {
-      await navigator.clipboard.writeText(earnedInvitationLink);
-      setNotice("Account invitation link copied.");
+      const updated = await serverApi.updatePreferredLocale(nextLocale);
+      setLocale(updated.preferred_locale);
+      setInvitationLocale(updated.preferred_locale);
+      setNotice(copy("languageSaved"));
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyBetaInvitation(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice(copy("copied", { label }));
     } catch {
-      setError("BOOKPILE could not access the clipboard. Select and copy the visible link manually.");
+      setError(copy("clipboardFailed"));
     }
   }
 
@@ -152,17 +179,17 @@ export default function AccountWorkspace({
       setRestoreTarget(null);
       setRestorePassword("");
       await Promise.all([load(), onLibrariesChanged(restored.library_id)]);
-      setNotice(`“${restored.name}” and all its memberships were restored.`);
+      setNotice(copy("libraryRestored", { name: restored.name }));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    void load().catch((caught) => setError(message(caught)));
-  }, []);
+    void load().catch((caught) => setError(errorMessage(caught)));
+  }, [errorMessage]);
 
   function update<K extends keyof AccountProfile>(
     field: K,
@@ -204,9 +231,9 @@ export default function AccountWorkspace({
       };
       setProfile(await serverApi.updateAccountProfile(payload));
       setStorage(await serverApi.accountStorage());
-      setNotice("Your profile and privacy choices were saved.");
+      setNotice(copy("profileSaved"));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -223,9 +250,9 @@ export default function AccountWorkspace({
       );
       setStorage(await serverApi.accountStorage());
       setImageRevision(String(Date.now()));
-      setNotice("Your private profile image was updated.");
+      setNotice(copy("imageUpdated"));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -240,9 +267,9 @@ export default function AccountWorkspace({
         current ? { ...current, profile_image_visible: false } : current,
       );
       setStorage(await serverApi.accountStorage());
-      setNotice("Your profile image was removed.");
+      setNotice(copy("imageRemoved"));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -260,11 +287,9 @@ export default function AccountWorkspace({
         new_password: "",
         confirmation: "",
       });
-      setNotice(
-        "Your password was changed. Other signed-in devices were disconnected.",
-      );
+      setNotice(copy("passwordChanged"));
     } catch (caught) {
-      setError(message(caught));
+      setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -284,7 +309,7 @@ export default function AccountWorkspace({
       });
       onAccountDeleted();
     } catch (caught) {
-      setDeleteAccountError(message(caught));
+      setDeleteAccountError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -293,7 +318,7 @@ export default function AccountWorkspace({
   if (!profile || !storage || !account)
     return (
       <section className="server-account-workspace loading">
-        <LoaderCircle className="server-spinner" /> Opening your account…
+        <LoaderCircle className="server-spinner" /> {copy("openingAccount")}
       </section>
     );
   const gender = profile.gender ?? "UNSPECIFIED";
@@ -302,12 +327,9 @@ export default function AccountWorkspace({
     <section className="server-account-workspace">
       <header>
         <div>
-          <p className="server-card-eyebrow">Private account</p>
-          <h2>Your profile</h2>
-          <p>
-            Choose what other signed-in BOOKPILE users can see. Email, security
-            and storage details always remain private.
-          </p>
+          <p className="server-card-eyebrow">{copy("privateAccount")}</p>
+          <h2>{copy("yourProfile")}</h2>
+          <p>{copy("profileIntro")}</p>
         </div>
         <ShieldCheck size={42} />
       </header>
@@ -323,12 +345,12 @@ export default function AccountWorkspace({
       )}
       <form onSubmit={save} className="server-profile-layout">
         <section className="server-profile-card">
-          <h3>Profile image</h3>
+          <h3>{copy("profileImage")}</h3>
           <div className="server-profile-photo">
             {profile.profile_image_visible ? (
               <img
                 src={serverApi.profileImageUrl(profile.user_id, imageRevision)}
-                alt="Your profile"
+                alt={copy("yourProfileImage")}
               />
             ) : (
               <UserRound size={44} />
@@ -336,7 +358,7 @@ export default function AccountWorkspace({
           </div>
           <div className="server-profile-photo-actions">
             <label>
-              <Camera size={16} /> Choose image
+              <Camera size={16} /> {copy("chooseImage")}
               <input
                 type="file"
                 accept="image/*,.heic,.heif"
@@ -353,12 +375,12 @@ export default function AccountWorkspace({
                 onClick={() => void removeImage()}
                 disabled={busy}
               >
-                <Trash2 size={16} /> Remove
+                <Trash2 size={16} /> {copy("remove")}
               </button>
             )}
           </div>
           <label>
-            Who can see it?
+            {copy("whoCanSeeIt")}
             <select
               value={visibility("profile_image")}
               onChange={(event) =>
@@ -368,7 +390,7 @@ export default function AccountWorkspace({
                 )
               }
             >
-              {VISIBILITY.map(([value, label]) => (
+              {visibilityOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -377,13 +399,12 @@ export default function AccountWorkspace({
           </label>
         </section>
         <section className="server-profile-card server-profile-fields">
-          <h3>About you</h3>
+          <h3>{copy("aboutYou")}</h3>
           <div className="server-profile-field-grid">
             <label>
-              Name{" "}
+              {copy("name")}{" "}
               <small>
-                Shown only on your profile; BOOKPILE uses @{profile.username}{" "}
-                elsewhere.
+                {copy("nameHelp", { username: profile.username })}
               </small>
               <input
                 value={profile.display_name ?? ""}
@@ -394,14 +415,14 @@ export default function AccountWorkspace({
               />
             </label>
             <label>
-              Timezone
+              {copy("timezone")}
               <select
                 value={profile.timezone ?? ""}
                 onChange={(event) =>
                   update("timezone", event.target.value || null)
                 }
               >
-                <option value="">Not specified</option>
+                <option value="">{copy("notSpecified")}</option>
                 {profile.timezone && !TIMEZONES.includes(profile.timezone) && (
                   <option value={profile.timezone}>{profile.timezone}</option>
                 )}
@@ -413,7 +434,7 @@ export default function AccountWorkspace({
               </select>
             </label>
             <label>
-              City
+              {copy("city")}
               <input
                 value={profile.city ?? ""}
                 maxLength={120}
@@ -421,7 +442,7 @@ export default function AccountWorkspace({
               />
             </label>
             <label>
-              State / region
+              {copy("stateRegion")}
               <input
                 value={profile.state ?? ""}
                 maxLength={120}
@@ -431,7 +452,7 @@ export default function AccountWorkspace({
               />
             </label>
             <label>
-              Country
+              {copy("country")}
               <input
                 value={profile.country ?? ""}
                 maxLength={120}
@@ -441,7 +462,7 @@ export default function AccountWorkspace({
               />
             </label>
             <label>
-              Date of birth
+              {copy("dateOfBirth")}
               <input
                 type="date"
                 value={profile.date_of_birth ?? ""}
@@ -451,7 +472,7 @@ export default function AccountWorkspace({
               />
             </label>
             <label>
-              Gender
+              {copy("gender")}
               <select
                 value={gender}
                 onChange={(event) => {
@@ -470,16 +491,16 @@ export default function AccountWorkspace({
                   });
                 }}
               >
-                <option value="UNSPECIFIED">Leave blank</option>
-                <option value="MALE">Male</option>
-                <option value="FEMALE">Female</option>
-                <option value="CUSTOM">Custom</option>
+                <option value="UNSPECIFIED">{copy("leaveBlank")}</option>
+                <option value="MALE">{copy("male")}</option>
+                <option value="FEMALE">{copy("female")}</option>
+                <option value="CUSTOM">{copy("custom")}</option>
               </select>
             </label>
             {gender === "CUSTOM" && (
               <>
                 <label>
-                  Custom gender
+                  {copy("customGender")}
                   <input
                     required
                     value={profile.custom_gender ?? ""}
@@ -490,7 +511,7 @@ export default function AccountWorkspace({
                   />
                 </label>
                 <label>
-                  Preferred pronoun
+                  {copy("preferredPronoun")}
                   <select
                     value={profile.preferred_pronoun ?? "NEUTRAL"}
                     onChange={(event) => {
@@ -503,18 +524,18 @@ export default function AccountWorkspace({
                       });
                     }}
                   >
-                    <option value="NEUTRAL">Neutral</option>
-                    <option value="MALE">Male</option>
-                    <option value="FEMALE">Female</option>
+                    <option value="NEUTRAL">{copy("neutral")}</option>
+                    <option value="MALE">{copy("male")}</option>
+                    <option value="FEMALE">{copy("female")}</option>
                   </select>
                 </label>
                 {profile.preferred_pronoun === "NEUTRAL" && (
                   <label>
-                    Neutral pronoun text
+                    {copy("neutralPronounText")}
                     <input
                       value={profile.neutral_pronoun ?? ""}
                       maxLength={80}
-                      placeholder="they"
+                      placeholder={copy("neutralPronounPlaceholder")}
                       onChange={(event) =>
                         update("neutral_pronoun", event.target.value || null)
                       }
@@ -522,20 +543,16 @@ export default function AccountWorkspace({
                   </label>
                 )}
                 <p className="server-profile-pronoun-note">
-                  Pronouns are visible to signed-in users even when Gender is
-                  private.
+                  {copy("pronounVisibility")}
                 </p>
               </>
             )}
           </div>
         </section>
         <section className="server-profile-card server-privacy-card">
-          <h3>Privacy</h3>
-          <p>
-            Personal data groups gender, location and date of birth. Pronouns
-            remain visible to signed-in users.
-          </p>
-          {FIELDS.map(([field, label]) => (
+          <h3>{copy("privacy")}</h3>
+          <p>{copy("privacyHelp")}</p>
+          {fields.map(([field, label]) => (
             <label key={field}>
               <span>{label}</span>
               <select
@@ -544,7 +561,7 @@ export default function AccountWorkspace({
                   setVisibility(field, event.target.value as ProfileVisibility)
                 }
               >
-                {VISIBILITY.map(([value, option]) => (
+                {visibilityOptions.map(([value, option]) => (
                   <option key={value} value={value}>
                     {option}
                   </option>
@@ -557,16 +574,13 @@ export default function AccountWorkspace({
             type="submit"
             disabled={busy}
           >
-            {busy ? "Saving…" : "Save profile"}
+            {busy ? copy("saving") : copy("saveProfile")}
           </button>
         </section>
       </form>
       <section className="server-profile-card server-storage-card">
-        <h3>Storage</h3>
-        <p>
-          Each colour shows how your used space is distributed. Shared-library
-          storage is allocated across its Owners.
-        </p>
+        <h3>{copy("storage")}</h3>
+        <p>{copy("storageHelp")}</p>
         {storage.libraries.length +
           (storage.account_data_share_of_used > 0 ? 1 : 0) >
           1 && (
@@ -587,7 +601,7 @@ export default function AccountWorkspace({
                 <div
                   className="server-storage-track"
                   role="progressbar"
-                  aria-label={`${library.name}, contribution to used account storage`}
+                  aria-label={copy("libraryStorageLabel", { library: library.name })}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(library.share_of_used * 100)}
@@ -605,12 +619,12 @@ export default function AccountWorkspace({
               <div>
                 <span>
                   <i className="neutral" />
-                  Account data
+                  {copy("accountData")}
                 </span>
                 <div
                   className="server-storage-track"
                   role="progressbar"
-                  aria-label="Account data contribution to used storage"
+                  aria-label={copy("accountDataStorageLabel")}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(
@@ -629,11 +643,11 @@ export default function AccountWorkspace({
           </div>
         )}
         <div className="server-storage-total">
-          <b>Total account storage</b>
+          <b>{copy("totalAccountStorage")}</b>
           <div
             className="server-storage-track stacked"
             role="progressbar"
-            aria-label="Total account storage used"
+            aria-label={copy("totalStorageLabel")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(storage.used_share_of_entitlement * 100)}
@@ -659,48 +673,58 @@ export default function AccountWorkspace({
         </div>
       </section>
       <section className="server-profile-card server-account-data-card">
-        <h3>Account</h3>
+        <h3>{copy("account")}</h3>
         <div className="server-account-data-grid">
           <span>
-            <small>Username</small>
+            <small>{copy("username")}</small>
             <b>@{account.username}</b>
           </span>
           <span>
-            <small>Registration email</small>
+            <small>{copy("registrationEmail")}</small>
             <b>{account.email}</b>
           </span>
           <span>
-            <small>Password</small>
-            <b>{account.password_protected ? "••••••••••••" : "Not set"}</b>
+            <small>{copy("password")}</small>
+            <b>{account.password_protected ? "••••••••••••" : copy("notSet")}</b>
           </span>
           <span>
-            <small>Member since</small>
-            <b>{new Date(account.created_at).toLocaleDateString()}</b>
+            <small>{copy("memberSince")}</small>
+            <b>{formatLocalDateTime(account.created_at, locale)}</b>
           </span>
         </div>
       </section>
+      <section className="server-profile-card server-language-card">
+        <h3>{copy("language")}</h3>
+        <p>{copy("languageHelp")}</p>
+        <label className="server-invitation-language">{copy("bookpileLanguage")}<select value={locale} disabled={busy} onChange={(event) => void changeAccountLocale(event.target.value as typeof locale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
+      </section>
       {betaInvitations && (
         <section className="server-profile-card server-beta-invitation-card">
-          <h3>Invite someone to BOOKPILE</h3>
-          <p>Every three different days you use BOOKPILE earns one beta account invitation. Each day counts once, and your progress restarts after the third active day. Created invitations expire after seven days.</p>
-          <div className="server-beta-day-progress" role="progressbar" aria-label={`${betaInvitations.active_day_count} of ${betaInvitations.days_required} active days toward the next invitation`} aria-valuemin={0} aria-valuemax={betaInvitations.days_required} aria-valuenow={betaInvitations.active_day_count}>
+          <h3>{copy("inviteSomeone")}</h3>
+          <p>{copy("betaInvitationHelp")}</p>
+          <div className="server-beta-day-progress" role="progressbar" aria-label={copy("invitationProgressLabel", { active: betaInvitations.active_day_count, required: betaInvitations.days_required })} aria-valuemin={0} aria-valuemax={betaInvitations.days_required} aria-valuenow={betaInvitations.active_day_count}>
             {Array.from({ length: betaInvitations.days_required }, (_, index) => <i key={index} className={index < betaInvitations.active_day_count ? "complete" : ""} />)}
           </div>
-          <small>{betaInvitations.active_day_count} of {betaInvitations.days_required} active days toward your next invitation</small>
-          <div className="server-beta-invitation-summary"><span><b>{betaInvitations.available_credits}</b> ready to create</span><span><b>{betaInvitations.open_invitations}</b> created and still usable</span></div>
-          {betaInvitations.available_credits > 0 && <button className="server-primary-action" type="button" disabled={busy} onClick={() => void createBetaInvitation()}><KeyRound size={16} /> Create account invitation</button>}
-          {earnedInvitationLink && <div className="server-earned-invitation"><label>Account invitation link<input readOnly value={earnedInvitationLink} onFocus={(event) => event.currentTarget.select()} /></label><button type="button" onClick={() => void copyBetaInvitation()}>Copy link</button><small>Expires {new Date(earnedInvitationExpiry).toLocaleString()}. For security, copy it now; BOOKPILE stores only its hash.</small></div>}
+          <small>{copy("invitationProgress", { active: betaInvitations.active_day_count, required: betaInvitations.days_required })}</small>
+          <div className="server-beta-invitation-summary"><span><b>{betaInvitations.available_credits}</b> {copy("invitationsReady")}</span><span><b>{betaInvitations.open_invitations}</b> {copy("invitationsOpen")}</span></div>
+          <label className="server-invitation-language">{copy("invitationLanguage")}<select value={invitationLocale} onChange={(event) => setInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
+          {betaInvitations.available_credits > 0 && <button className="server-primary-action" type="button" disabled={busy} onClick={() => void createBetaInvitation()}><KeyRound size={16} /> {copy("createAccountInvitation")}</button>}
+          {earnedInvitationLink && <div className="server-earned-invitation">
+            <label>{copy("invitationMessage")}<textarea readOnly value={accountInvitationMessage(invitationLocale, earnedInvitationLink)} onFocus={(event) => event.currentTarget.select()} /></label>
+            <div className="server-invitation-copy-actions"><button type="button" onClick={() => void copyBetaInvitation(accountInvitationMessage(invitationLocale, earnedInvitationLink), copy("invitationMessage"))}>{copy("copyMessage")}</button><button type="button" onClick={() => void copyBetaInvitation(earnedInvitationLink, copy("invitationLink"))}>{copy("copyLinkOnly")}</button></div>
+            <small>{copy("invitationExpires", { date: formatLocalDateTime(earnedInvitationExpiry, locale) })}</small>
+          </div>}
         </section>
       )}
       {recoverable.length > 0 && (
         <section className="server-profile-card server-recovery-card">
-          <h3>Recently deleted libraries</h3>
-          <p>Every former Owner may restore the complete library for 48 hours. Recovery is all-or-nothing and requires available shared storage.</p>
+          <h3>{copy("recentlyDeletedLibraries")}</h3>
+          <p>{copy("recoveryHelp")}</p>
           <div className="server-recovery-list">
             {recoverable.map((item) => (
               <div key={item.deletion_id}>
-                <span><b>{item.name}</b><small>Recoverable until {new Date(item.recover_until).toLocaleString()}</small></span>
-                <button type="button" onClick={() => { setRestoreTarget(item); setRestorePassword(""); }}>Restore</button>
+                <span><b>{item.name}</b><small>{copy("recoverableUntil", { date: formatLocalDateTime(item.recover_until, locale) })}</small></span>
+                <button type="button" onClick={() => { setRestoreTarget(item); setRestorePassword(""); }}>{copy("restore")}</button>
               </div>
             ))}
           </div>
@@ -710,13 +734,13 @@ export default function AccountWorkspace({
         <div>
           <KeyRound size={24} />
           <span>
-            <h3>Security</h3>
-            <p>Change your password or end signed-in sessions.</p>
+            <h3>{copy("security")}</h3>
+            <p>{copy("securityHelp")}</p>
           </span>
         </div>
         <form className="server-password-form" onSubmit={changePassword}>
           <label>
-            Current password
+            {copy("currentPassword")}
             <input
               type="password"
               autoComplete="current-password"
@@ -731,7 +755,7 @@ export default function AccountWorkspace({
             />
           </label>
           <label>
-            New password
+            {copy("newPassword")}
             <input
               type="password"
               autoComplete="new-password"
@@ -744,7 +768,7 @@ export default function AccountWorkspace({
             />
           </label>
           <label>
-            Confirm new password
+            {copy("confirmNewPassword")}
             <input
               type="password"
               autoComplete="new-password"
@@ -757,30 +781,30 @@ export default function AccountWorkspace({
             />
           </label>
           <button type="submit" disabled={busy}>
-            Change password
+            {copy("changePassword")}
           </button>
         </form>
         <div className="server-session-actions">
           <button type="button" onClick={() => void onSignOut(false)}>
-            <LogOut size={16} /> Sign out
+            <LogOut size={16} /> {copy("signOut")}
           </button>
           <button type="button" onClick={() => void onSignOut(true)}>
-            <LogOut size={16} /> Sign out everywhere
+            <LogOut size={16} /> {copy("signOutEverywhere")}
           </button>
           <button className="danger" type="button" onClick={() => { setDeleteAccountError(""); setDeleteAccountOpen(true); }}>
-            <Trash2 size={16} /> Delete account
+            <Trash2 size={16} /> {copy("deleteAccount")}
           </button>
         </div>
       </section>
       {restoreTarget && (
         <div className="server-modal-backdrop" role="presentation">
           <section className="server-permission-dialog" role="dialog" aria-modal="true">
-            <p className="server-card-eyebrow">Complete recovery</p>
-            <h2>Restore “{restoreTarget.name}”?</h2>
-            <p>Books, covers, layout, readings, loans and every previous membership will return together.</p>
+            <p className="server-card-eyebrow">{copy("completeRecovery")}</p>
+            <h2>{copy("restoreLibraryTitle", { name: restoreTarget.name })}</h2>
+            <p>{copy("restoreLibraryHelp")}</p>
             <form onSubmit={restoreLibrary}>
-              <label>Your current password<input type="password" autoComplete="current-password" autoFocus required value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} /></label>
-              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setRestoreTarget(null)}>Cancel</button><button className="confirm" type="submit" disabled={busy || !restorePassword}>{busy ? "Restoring…" : "Restore library"}</button></div>
+              <label>{copy("yourCurrentPassword")}<input type="password" autoComplete="current-password" autoFocus required value={restorePassword} onChange={(event) => setRestorePassword(event.target.value)} /></label>
+              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setRestoreTarget(null)}>{copy("cancel")}</button><button className="confirm" type="submit" disabled={busy || !restorePassword}>{busy ? copy("restoring") : copy("restoreLibrary")}</button></div>
             </form>
           </section>
         </div>
@@ -788,15 +812,15 @@ export default function AccountWorkspace({
       {deleteAccountOpen && (
         <div className="server-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setDeleteAccountOpen(false); }}>
           <section className="server-permission-dialog server-delete-library-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
-            <p className="server-card-eyebrow">Danger zone</p>
-            <h2 id="delete-account-title">Delete your account?</h2>
-            <p>Your profile becomes invisible, every session is closed and your Viewer memberships are removed immediately. You must transfer or delete every library you own first. You may recover the complete account for 48 hours; after that your profile, personal readings and personal data are permanently erased.</p>
+            <p className="server-card-eyebrow">{copy("dangerZone")}</p>
+            <h2 id="delete-account-title">{copy("deleteAccountTitle")}</h2>
+            <p>{copy("deleteAccountHelp")}</p>
             <form onSubmit={deleteAccount}>
-              <label>Type <b>{account.username}</b> exactly<input required autoFocus value={deleteAccountName} onChange={(event) => setDeleteAccountName(event.target.value)} /></label>
-              <label>Your current password<input required type="password" autoComplete="current-password" value={deleteAccountPassword} onChange={(event) => setDeleteAccountPassword(event.target.value)} /></label>
-              <label className="server-check"><input type="checkbox" checked={deleteAccountAcknowledged} onChange={(event) => setDeleteAccountAcknowledged(event.target.checked)} /> I understand that account recovery expires after 48 hours.</label>
+              <label>{copy("typeUsername", { username: account.username })}<input required autoFocus value={deleteAccountName} onChange={(event) => setDeleteAccountName(event.target.value)} /></label>
+              <label>{copy("yourCurrentPassword")}<input required type="password" autoComplete="current-password" value={deleteAccountPassword} onChange={(event) => setDeleteAccountPassword(event.target.value)} /></label>
+              <label className="server-check"><input type="checkbox" checked={deleteAccountAcknowledged} onChange={(event) => setDeleteAccountAcknowledged(event.target.checked)} /> {copy("deletionAcknowledgement")}</label>
               {deleteAccountError && <div className="server-message error" role="alert">{deleteAccountError}</div>}
-              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setDeleteAccountOpen(false)}>Cancel</button><button className="danger" type="submit" disabled={busy || deleteAccountName !== account.username || !deleteAccountPassword || !deleteAccountAcknowledged}>{busy ? "Deleting…" : "Delete account"}</button></div>
+              <div className="server-dialog-actions"><button type="button" disabled={busy} onClick={() => setDeleteAccountOpen(false)}>{copy("cancel")}</button><button className="danger" type="submit" disabled={busy || deleteAccountName !== account.username || !deleteAccountPassword || !deleteAccountAcknowledged}>{busy ? copy("deleting") : copy("deleteAccount")}</button></div>
             </form>
           </section>
         </div>

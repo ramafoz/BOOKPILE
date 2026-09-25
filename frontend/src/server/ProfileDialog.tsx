@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle, UserRound, X } from "lucide-react";
 import { type AccountProfile, ServerApiError, serverApi } from "./serverApi";
+import type { AppLocale } from "./locale";
+import { profileCopy } from "./profileCopy";
 
 function value(value: string | null | undefined) {
   return value || null;
@@ -8,11 +10,14 @@ function value(value: string | null | undefined) {
 
 export default function ProfileDialog({
   userId,
+  locale,
   onClose,
 }: {
   userId: string;
+  locale: AppLocale;
   onClose: () => void;
 }) {
+  const copy = useMemo(() => profileCopy(locale), [locale]);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -23,10 +28,10 @@ export default function ProfileDialog({
         setError(
           caught instanceof ServerApiError
             ? caught.message
-            : "This profile could not be opened.",
+            : copy("openFailed"),
         ),
       );
-  }, [userId]);
+  }, [copy, userId]);
   return (
     <div
       className="server-modal-backdrop"
@@ -45,13 +50,13 @@ export default function ProfileDialog({
           className="server-dialog-close"
           type="button"
           onClick={onClose}
-          aria-label="Close profile"
+          aria-label={copy("closeProfile")}
         >
           <X />
         </button>
         {!profile && !error && (
           <p className="server-profile-loading">
-            <LoaderCircle className="server-spinner" /> Opening profile…
+            <LoaderCircle className="server-spinner" /> {copy("openingProfile")}
           </p>
         )}
         {error && <div className="server-message error">{error}</div>}
@@ -69,7 +74,7 @@ export default function ProfileDialog({
                 )}
               </div>
               <div>
-                <p className="server-card-eyebrow">BOOKPILE member</p>
+                <p className="server-card-eyebrow">{copy("member")}</p>
                 <h2 id="public-profile-title">@{profile.username}</h2>
                 {profile.display_name && <p>{profile.display_name}</p>}
               </div>
@@ -77,55 +82,55 @@ export default function ProfileDialog({
             <dl className="server-public-profile-data">
               {value(profile.timezone) && (
                 <>
-                  <dt>Timezone</dt>
+                  <dt>{copy("timezone")}</dt>
                   <dd>{profile.timezone}</dd>
                 </>
               )}
               {profile.gender && profile.gender !== "UNSPECIFIED" && (
                 <>
-                  <dt>Gender</dt>
+                  <dt>{copy("gender")}</dt>
                   <dd>
                     {profile.gender === "CUSTOM"
                       ? profile.custom_gender
-                      : profile.gender.toLowerCase()}
+                      : copy(profile.gender === "FEMALE" ? "female" : profile.gender === "MALE" ? "male" : profile.gender === "NON_BINARY" ? "nonBinary" : "other")}
                   </dd>
                 </>
               )}
               {profile.gender === "CUSTOM" && profile.preferred_pronoun && (
                 <>
-                  <dt>Pronouns</dt>
+                  <dt>{copy("pronouns")}</dt>
                   <dd>
                     {profile.preferred_pronoun === "NEUTRAL"
-                      ? profile.neutral_pronoun || "they"
+                      ? profile.neutral_pronoun || copy("they")
                       : profile.preferred_pronoun.toLowerCase()}
                   </dd>
                 </>
               )}
               {value(profile.city) && (
                 <>
-                  <dt>City</dt>
+                  <dt>{copy("city")}</dt>
                   <dd>{profile.city}</dd>
                 </>
               )}
               {value(profile.state) && (
                 <>
-                  <dt>State / region</dt>
+                  <dt>{copy("state")}</dt>
                   <dd>{profile.state}</dd>
                 </>
               )}
               {value(profile.country) && (
                 <>
-                  <dt>Country</dt>
+                  <dt>{copy("country")}</dt>
                   <dd>{profile.country}</dd>
                 </>
               )}
               {value(profile.date_of_birth) && (
                 <>
-                  <dt>Date of birth</dt>
+                  <dt>{copy("dateOfBirth")}</dt>
                   <dd>
                     {new Date(
                       `${profile.date_of_birth}T00:00:00`,
-                    ).toLocaleDateString()}
+                    ).toLocaleDateString(locale === "gl" ? "gl-ES" : "en-GB")}
                   </dd>
                 </>
               )}
@@ -138,7 +143,7 @@ export default function ProfileDialog({
               !profile.country &&
               !profile.date_of_birth && (
                 <p className="server-profile-empty">
-                  This member has not shared any profile details with you.
+                  {copy("empty")}
                 </p>
               )}
           </>

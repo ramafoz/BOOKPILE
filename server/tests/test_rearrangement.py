@@ -66,6 +66,45 @@ def test_same_container_collapse_and_squeeze_keeps_a_continuous_sequence():
     assert result.payload["valid_to_apply"] is True
     assert positions(result, row.id) == {"Second": 1, "Third": 2, "First": 3}
     assert result.payload["gaps"] == []
+    messages = result.payload["movement_message_groups"][0]
+    assert messages[0] == {
+        "code": "BOOK_MOVED",
+        "values": {
+            "title": "First",
+            "source_container_id": str(row.id),
+            "source_position": 1,
+            "destination_container_id": str(row.id),
+            "destination_position": 3,
+        },
+    }
+    assert any(message["code"] == "BOOKS_SHIFTED" for message in messages)
+
+
+def test_continue_preview_exposes_a_structured_next_book_warning():
+    source = container(x=0, width=40, label="Shelf 1 · Row 1")
+    destination = container(x=50, width=40, label="Shelf 1 · Row 2")
+    moving = book(source.id, 1, "Moving")
+    displaced = book(destination.id, 1, "Displaced")
+
+    result = plan(
+        {item.id: item for item in (moving, displaced)},
+        {source.id: source, destination.id: destination},
+        RearrangementRequest(
+            book_id=moving.id,
+            old_position_mode="LEAVE_GAP",
+            steps=[{
+                "container_id": destination.id,
+                "position": 1,
+                "new_position_mode": "CONTINUE",
+            }],
+        ),
+    )
+
+    assert result.payload["complete"] is False
+    assert result.payload["warning_messages"] == [{
+        "code": "CONTINUE_WITH_BOOK",
+        "values": {"title": "Displaced"},
+    }]
 
 
 def test_continue_chain_fills_the_original_gap():
