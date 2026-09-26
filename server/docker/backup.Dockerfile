@@ -1,13 +1,13 @@
 FROM postgres:17.6-bookworm AS postgres-tools
 
-FROM python:3.13.14-slim-bookworm AS builder
+FROM python:3.13.15-slim-bookworm AS builder
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY server/pyproject.toml ./
 COPY server/src ./src
 RUN python -m pip wheel --wheel-dir /wheels .
 
-FROM python:3.13.14-slim-bookworm AS runtime
+FROM python:3.13.15-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/bookpile/bin:$PATH
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends libpq5 libzstd1 liblz4-1 \
