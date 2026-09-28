@@ -33,7 +33,7 @@ export default function LoanManager({ libraryId, book, locale, onClose, onChange
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const copy = loanCopy(locale);
+  const copy = useMemo(() => loanCopy(locale), [locale]);
   const [data, setData] = useState<BookLoans | null>(null);
   const [activeDraft, setActiveDraft] = useState(EMPTY);
   const [historyDraft, setHistoryDraft] = useState(EMPTY);
