@@ -27,6 +27,7 @@ def hash_session_secret(secret: str) -> str:
 class LoginResult:
     user_id: UUID
     username: str
+    preferred_locale: str
     raw_session_token: str
     raw_csrf_token: str
     expires_at: datetime
@@ -118,6 +119,7 @@ class AuthService:
         return LoginResult(
             user_id=user.id,
             username=user.username,
+            preferred_locale=user.preferred_locale,
             raw_session_token=raw_session_token,
             raw_csrf_token=raw_csrf_token,
             expires_at=expires_at,
@@ -203,6 +205,7 @@ class AuthService:
         return LoginResult(
             user_id=context.user_id,
             username=context.username,
+            preferred_locale=context.user_session.user.preferred_locale,
             raw_session_token=raw_session_token,
             raw_csrf_token=raw_csrf_token,
             expires_at=min(now + INACTIVITY_LIFETIME, absolute_expires_at),
@@ -219,6 +222,13 @@ class AuthService:
 
     def private_account(self, context: AuthContext):
         return context.user_session.user
+
+    def set_preferred_locale(self, context: AuthContext, locale: str) -> str:
+        user = context.user_session.user
+        user.preferred_locale = locale
+        user.updated_at = datetime.now(UTC)
+        self._repository.commit()
+        return user.preferred_locale
 
     def change_password(
         self,

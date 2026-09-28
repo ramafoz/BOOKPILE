@@ -12,6 +12,8 @@ from ...schemas import (
     LoginRequest,
     LoginResponse,
     PasswordResetConfirmRequest,
+    PreferredLocaleResponse,
+    PreferredLocaleWrite,
     RegisterAccountRequest,
     RegisterAccountResponse,
 )
@@ -156,6 +158,7 @@ def register_account(
             username=payload.username,
             password=payload.password,
             password_confirmation=payload.password_confirmation,
+            preferred_locale=payload.preferred_locale,
             ip_address=request_ip(request),
         )
     except RegistrationValidationError as exc:
@@ -359,6 +362,7 @@ def login(
     return LoginResponse(
         user_id=result.user_id,
         username=result.username,
+        preferred_locale=result.preferred_locale,
         csrf_cookie_name=get_settings().csrf_cookie_name,
         expires_at=result.expires_at,
         absolute_expires_at=result.absolute_expires_at,
@@ -413,7 +417,20 @@ def current_user(context: CurrentAuthDependency) -> CurrentUserResponse:
     return CurrentUserResponse(
         user_id=context.user_id,
         username=context.username,
+        preferred_locale=context.user_session.user.preferred_locale,
         csrf_cookie_name=get_settings().csrf_cookie_name,
+    )
+
+
+@router.put("/locale", response_model=PreferredLocaleResponse)
+def update_preferred_locale(
+    payload: PreferredLocaleWrite,
+    service: AuthServiceDependency,
+    context: CurrentAuthDependency,
+    _csrf: CsrfDependency,
+) -> PreferredLocaleResponse:
+    return PreferredLocaleResponse(
+        preferred_locale=service.set_preferred_locale(context, payload.preferred_locale)
     )
 
 
@@ -434,6 +451,7 @@ def rotate_session(
     return LoginResponse(
         user_id=result.user_id,
         username=result.username,
+        preferred_locale=result.preferred_locale,
         csrf_cookie_name=get_settings().csrf_cookie_name,
         expires_at=result.expires_at,
         absolute_expires_at=result.absolute_expires_at,

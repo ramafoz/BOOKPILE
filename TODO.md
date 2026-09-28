@@ -943,12 +943,14 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     are complete; Phase 9F is accepted.
   - [ ] 9G production-readiness review and explicit go/no-go.
 
-- [ ] Add a localization framework only after the main interface and data
-  model are mature; keep the current interface in English until then.
-  - Planned interface languages: Galician, Portuguese, Spanish, Italian,
-    Catalan, Basque, French, and Chinese, in addition to English.
-  - Design normalization and display rules for free-text metadata before
-    localized labels or translated controlled vocabularies are introduced.
+- [ ] Complete Server internationalization for the invitation-only beta.
+  The delivery slices and acceptance checks are in
+  `SERVER_INTERNATIONALIZATION_PLAN.md`. English remains the source language;
+  the first feature branch establishes typed English/Galician account-flow
+  catalogues without claiming that the authenticated workspace or email is
+  translated. Portuguese, Spanish, Italian, Catalan, Basque, French and
+  Simplified Chinese follow in reviewed batches. Free-text bibliographic
+  metadata must never be silently machine-translated.
 
 - [x] Restore compact Server catalogue sorting before production:
   - Put a general `Sort` control beside `Search` on the main catalogue page,

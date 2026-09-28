@@ -59,6 +59,34 @@ button { cursor: pointer; }
   color: #dfb76f;
 }
 
+.server-locale-choice {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: clamp(20px, 4vw, 50px);
+  color: #f9f2e6;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.server-locale-choice select {
+  min-height: 38px;
+  max-width: 130px;
+  padding: 5px 8px;
+  border: 1px solid #dfb76f;
+  border-radius: 7px;
+  color: #f9f2e6;
+  background: #123c33;
+  font: inherit;
+}
+
+.server-locale-choice select:focus-visible {
+  outline: 2px solid #dfb76f;
+  outline-offset: 3px;
+}
+
 .server-story-copy {
   position: relative;
   z-index: 2;
@@ -248,7 +276,7 @@ button { cursor: pointer; }
 .server-library-list > p { color: #71807b; font-size: 13px; line-height: 1.5; }
 .server-compact-form { display: grid; gap: 9px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #e4dacd; }
 .server-compact-form label, .server-invite-form label { display: grid; gap: 6px; color: #3d554f; font-size: 12px; font-weight: 700; }
-.server-compact-form input, .server-invite-form select, .server-dashboard-panel > select, .server-generated-invitation input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
+.server-compact-form input, .server-invite-form select, .server-dashboard-panel > select, .server-generated-invitation input, .server-generated-invitation textarea { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
 .server-compact-form button, .server-invite-form button, .server-generated-invitation button, .server-member-actions button { border: 1px solid #9db6ab; border-radius: 7px; display: inline-flex; justify-content: center; align-items: center; gap: 7px; padding: 9px 11px; color: #24574b; background: #f5faf7; font-weight: 700; }
 .server-compact-form button:disabled, .server-invite-form button:disabled { opacity: .55; }
 .server-library-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 15px; }
@@ -280,6 +308,10 @@ button { cursor: pointer; }
 .server-generated-invitation { display: grid; gap: 10px; margin-top: 15px; }
 .server-generated-invitation label { display: grid; gap: 5px; color: #536760; font-size: 12px; font-weight: 700; }
 .server-generated-invitation label > span { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.server-generated-invitation textarea, .server-earned-invitation textarea { min-height: 112px; resize: vertical; font: inherit; line-height: 1.45; }
+.server-invitation-language { display: grid; gap: 6px; max-width: 260px; margin: 14px 0; color: #3d554f; font-size: 12px; font-weight: 700; }
+.server-invitation-language select { min-height: 42px; padding: 9px 11px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
+.server-invitation-copy-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .server-portability-panel { display: grid !important; gap: 13px; }
 .server-portability-panel > h3 { margin-bottom: 0; }
 .server-portability-block { display: grid; gap: 10px; padding: 15px; border: 1px solid #ddd0bf; border-radius: 9px; background: #fffdf9; }
@@ -794,7 +826,9 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 .server-beta-invitation-summary { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 17px 0; color: #49655d; }
 .server-beta-invitation-summary span { display: inline-flex; align-items: baseline; gap: 6px; }
 .server-beta-invitation-summary b { color: #173d34; font-size: 20px; }
-.server-earned-invitation { margin-top: 16px; padding: 14px; border: 1px solid #d9c18d; border-radius: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; background: #fff8e8; }
+.server-earned-invitation { margin-top: 16px; padding: 14px; border: 1px solid #d9c18d; border-radius: 8px; display: grid; gap: 9px; background: #fff8e8; }
+.server-earned-invitation label { display: grid; gap: 6px; color: #536760; font-size: 12px; font-weight: 700; }
+.server-earned-invitation textarea { width: 100%; padding: 10px 11px; border: 1px solid #cfc1ae; border-radius: 7px; color: #203d35; background: #fffdf9; }
 .server-earned-invitation button { min-height: 42px; padding: 8px 13px; border: 1px solid #467064; border-radius: 7px; color: #214d42; background: #f5faf7; font-weight: 750; }
 .server-earned-invitation small { grid-column: 1 / -1; color: #6b746f; }
 .server-storage-library-list { display: grid; gap: 14px; }
@@ -871,6 +905,9 @@ button.server-reading-status:hover, button.server-reading-status:focus-visible {
 }
 
 @media (max-width: 480px) {
+  .server-locale-choice { margin-left: 12px; }
+  .server-locale-choice span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .server-locale-choice select { max-width: 96px; }
   .server-isbn-actions, .server-candidate-review > div { grid-template-columns: 1fr; }
   .server-story { min-height: 270px; }
   .server-brand-mark { width: 41px; height: 41px; }

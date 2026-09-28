@@ -205,7 +205,13 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             for column in inspect(engine).get_columns("email_outbox_messages")
         }
         assert {"smtp_response_code", "provider_queue_id"} <= email_outbox_columns
+        user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+        assert "preferred_locale" in user_columns
         command.downgrade(alembic, "0021_email_outbox")
+        downgraded_user_columns = {
+            column["name"] for column in inspect(engine).get_columns("users")
+        }
+        assert "preferred_locale" not in downgraded_user_columns
         downgraded_email_columns = {
             column["name"]
             for column in inspect(engine).get_columns("email_outbox_messages")
@@ -901,12 +907,12 @@ def test_postgresql_migration_and_tenant_scope() -> None:
         phase_two_tables = set(inspect(engine).get_table_names())
         assert "account_invitations" not in phase_two_tables
         assert {"users", "user_sessions", "security_events"} <= phase_two_tables
-        with Session(engine) as session:
-            assert session.query(User).count() == 2
-            assert sorted(user.state for user in session.query(User)) == [
-                "active",
-                "invited",
-            ]
+        # Current ORM models include columns added after 0002; inspect the
+        # historical schema with SQL rather than mapping the modern User.
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM users")) == 2
+            states = connection.execute(text("SELECT state FROM users")).scalars()
+            assert sorted(states) == ["active", "invited"]
 
         # Then prove 0002 can be removed without removing Phase 1 catalogue.
         command.downgrade(alembic, "0001_server_foundation")

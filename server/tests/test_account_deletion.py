@@ -97,6 +97,8 @@ def test_deleted_viewer_is_locked_out_and_can_restore_membership_only_by_email_l
 ) -> None:
     owner = add_user(session, "remaining_owner")
     viewer = add_user(session, "recovering_viewer")
+    viewer.preferred_locale = "gl"
+    session.commit()
     library = Library(name="Shared Account Test", slug="shared-account-test", created_by_user_id=owner.id)
     session.add(library)
     session.flush()
@@ -126,6 +128,8 @@ def test_deleted_viewer_is_locked_out_and_can_restore_membership_only_by_email_l
     )
     assert wrong.status_code == 400
     assert len(email_sender.emails) == 1
+    assert email_sender.emails[0].subject == "BOOKPILE: Recupera a túa conta"
+    assert '<html lang="gl">' in email_sender.emails[0].html
     assert email_sender.emails[0].html is not None
     recovery_url = next(
         line for line in email_sender.emails[0].text.splitlines() if "?token=" in line

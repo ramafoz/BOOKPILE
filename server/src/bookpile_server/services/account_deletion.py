@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from ..models import AccountDeletionTombstone, LibraryMembership
 from ..config import Settings
 from ..email_delivery import EmailDeliveryError, EmailSender, OutgoingEmail
-from ..email_templates import account_recovery_email
+from ..email_templates import account_recovery_email, resolve_email_locale
 from ..repositories.account_deletion import AccountDeletionRepository
 from ..security.passwords import verify_password
 
@@ -128,7 +128,8 @@ class AccountDeletionService:
         recovery_query = urlencode({"token": raw_recovery_token})
         rendered = account_recovery_email(
             f"{self.settings.public_base_url.rstrip('/')}/restore-account?"
-            f"{recovery_query}"
+            f"{recovery_query}",
+            locale=resolve_email_locale(user.preferred_locale),
         )
         try:
             self.email_sender.send(

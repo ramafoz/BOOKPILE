@@ -846,6 +846,13 @@ class PhysicalLibraryService:
             draft.payload["warnings"] = list(dict.fromkeys([
                 *draft.payload["warnings"], str(exc)
             ]))
+            conflict_message = {"code": "LAYOUT_CONFLICT", "values": {}}
+            draft.payload["geometry_error_messages"] = [
+                *draft.payload["geometry_error_messages"], conflict_message,
+            ]
+            draft.payload["warning_messages"] = [
+                *draft.payload["warning_messages"], conflict_message,
+            ]
             draft.payload["valid_to_apply"] = False
         return hierarchy, draft
 

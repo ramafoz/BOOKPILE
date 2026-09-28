@@ -58,6 +58,7 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
 
     assert response.status_code == 200
     assert response.json()["username"] == "reader_one"
+    assert response.json()["preferred_locale"] == "en"
     assert response.json()["csrf_cookie_name"] == "bookpile_csrf"
     cookie = response.cookies.get("bookpile_session")
     csrf_token = response.cookies.get("bookpile_csrf")
@@ -87,6 +88,7 @@ def test_login_creates_hashed_opaque_session_and_logout_revokes(
     assert client.get("/api/v1/auth/me").json() == {
         "user_id": str(user.id),
         "username": "reader_one",
+        "preferred_locale": "en",
         "csrf_cookie_name": "bookpile_csrf",
     }
 
@@ -127,6 +129,34 @@ def test_login_failures_are_generic(client, session: Session) -> None:
     assert wrong_password.json() == unknown_user.json() == {
         "detail": "Invalid credentials"
     }
+
+
+def test_preferred_locale_requires_session_and_csrf_and_persists(
+    client, session: Session
+) -> None:
+    user = add_active_user(session)
+    endpoint = "/api/v1/auth/locale"
+    assert client.put(endpoint, json={"preferred_locale": "gl"}).status_code == 401
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"identifier": user.username, "password": "a valid password 🔐"},
+    )
+    csrf = login.cookies.get("bookpile_csrf")
+    assert login.status_code == 200 and csrf
+    assert client.put(endpoint, json={"preferred_locale": "gl"}).status_code == 403
+    headers = {"X-CSRF-Token": csrf}
+    assert client.put(
+        endpoint, json={"preferred_locale": "es"}, headers=headers
+    ).status_code == 422
+    assert client.put(
+        endpoint, json={"preferred_locale": "gl"}, headers=headers
+    ).json() == {"preferred_locale": "gl"}
+    session.expire_all()
+    assert session.get(User, user.id).preferred_locale == "gl"
+    assert client.get("/api/v1/auth/me").json()["preferred_locale"] == "gl"
+    rotated = client.post("/api/v1/auth/session/rotate", headers=headers)
+    assert rotated.status_code == 200
+    assert rotated.json()["preferred_locale"] == "gl"
 
 
 def test_unverified_user_cannot_login(client, session: Session) -> None:

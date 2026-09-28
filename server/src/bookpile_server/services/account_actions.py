@@ -6,7 +6,11 @@ from uuid import UUID, uuid4
 
 from ..config import Settings
 from ..email_delivery import EmailSender, OutgoingEmail
-from ..email_templates import password_reset_email, verification_email
+from ..email_templates import (
+    password_reset_email,
+    resolve_email_locale,
+    verification_email,
+)
 from ..models import AccountActionToken, User
 from ..repositories.account_actions import AccountActionRepository
 from ..security.identities import IdentityValidationError, normalize_email
@@ -59,7 +63,8 @@ class AccountActionService:
         )
         query = urlencode({"token": raw_token})
         rendered = verification_email(
-            f"{self._settings.public_base_url.rstrip('/')}/verify-email?{query}"
+            f"{self._settings.public_base_url.rstrip('/')}/verify-email?{query}",
+            locale=resolve_email_locale(user.preferred_locale),
         )
         self._email_sender.send(
             OutgoingEmail(
@@ -132,7 +137,8 @@ class AccountActionService:
         )
         query = urlencode({"token": raw_token})
         rendered = password_reset_email(
-            f"{self._settings.public_base_url.rstrip('/')}/reset-password?{query}"
+            f"{self._settings.public_base_url.rstrip('/')}/reset-password?{query}",
+            locale=resolve_email_locale(user.preferred_locale),
         )
         self._email_sender.send(
             OutgoingEmail(

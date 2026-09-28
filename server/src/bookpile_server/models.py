@@ -46,6 +46,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
     username: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    preferred_locale: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="en", server_default="en"
+    )
     state: Mapped[str] = mapped_column(
         String(32),
         nullable=False,

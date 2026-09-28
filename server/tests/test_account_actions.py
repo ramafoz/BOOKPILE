@@ -99,6 +99,30 @@ def test_password_reset_is_generic_changes_hash_and_revokes_sessions(
     assert reused.status_code == 400
 
 
+def test_password_reset_uses_account_locale_at_send_time(
+    client, session: Session, email_sender
+) -> None:
+    user = add_active_user(session)
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"identifier": user.username, "password": OLD_PASSWORD},
+    )
+    csrf = login.cookies.get("bookpile_csrf")
+    assert login.status_code == 200 and csrf
+    changed = client.put(
+        "/api/v1/auth/locale",
+        json={"preferred_locale": "gl"},
+        headers={"X-CSRF-Token": csrf},
+    )
+    assert changed.status_code == 200
+    response = client.post(
+        "/api/v1/auth/password-reset/request", json={"email": user.email}
+    )
+    assert response.status_code == 202
+    assert email_sender.emails[0].subject == "BOOKPILE: Restablece o contrasinal"
+    assert '<html lang="gl">' in email_sender.emails[0].html
+
+
 def test_invalid_password_reset_does_not_consume_token(
     client, session: Session, email_sender
 ) -> None:
