@@ -695,7 +695,7 @@ export default function ServerLibraryMap({ libraryId, perspective, locale, onBac
         })}
         {data.layout.outside_areas.map((area) => <g key={area.area_kind} className={`server-map-outside ${area.area_kind.toLowerCase()}`}>
           <rect x={area.x_mm} y={-area.y_mm - area.height_mm} width={area.width_mm} height={area.height_mm} rx="2" />
-          <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{area.area_kind === "READING" ? "Reading" : "On loan"}</text>
+          <text x={area.x_mm + area.width_mm / 2} y={-area.y_mm - area.height_mm / 2}>{copy(area.area_kind === "READING" ? "reading" : "onLoan")}</text>
           {moveActiveCopiesOutside && (() => {
             const activeBooks = mapData.books.filter((book) => area.area_kind === "LOANED"
               ? loanedBookIds.has(book.id)
@@ -713,7 +713,7 @@ export default function ServerLibraryMap({ libraryId, perspective, locale, onBac
               return <g key={book.id} className={`server-map-reading-book physically-active ${area.area_kind === "LOANED" ? "on-loan" : ""} ${selection?.kind === "BOOK" && selection.book.id === book.id ? "selected" : ""}`} onClick={(event) => { event.stopPropagation(); setInspectionMode("BOOK"); setSelection({ kind: "BOOK", book }); }}>
                 <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .27} ${y} ${x} ${y + height * .12} L ${x} ${y + height} Q ${x + width * .27} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
                 <path style={{ "--map-book-colour": colour } as CSSProperties} d={`M ${x + width / 2} ${y + height * .18} Q ${x + width * .73} ${y} ${x + width} ${y + height * .12} L ${x + width} ${y + height} Q ${x + width * .73} ${y + height * .82} ${x + width / 2} ${y + height} Z`} />
-                <title>{book.title} — {book.author} · {colourScale.detail(book)} · {area.area_kind === "LOANED" ? "This physical copy is on loan" : "This physical copy is being read"}</title>
+                <title>{book.title} — {book.author} · {colourScale.detail(book)} · {copy(area.area_kind === "LOANED" ? "physicalCopyOnLoan" : "physicalCopyReading")}</title>
               </g>;
             });
           })()}

@@ -149,7 +149,7 @@ export default function AccountWorkspace({
       const updated = await serverApi.updatePreferredLocale(nextLocale);
       setLocale(updated.preferred_locale);
       setInvitationLocale(updated.preferred_locale);
-      setNotice(copy("languageSaved"));
+      setNotice(authenticatedCopy(updated.preferred_locale)("languageSaved"));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
