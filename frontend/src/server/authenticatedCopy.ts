@@ -136,6 +136,7 @@ export const en = {
   editablePerspective: "your editable perspective",
   readOnly: "read only",
   memberProfiles: "Member profiles",
+  self: "self",
 } as const;
 
 export type AuthenticatedCopyKey = keyof typeof en;
@@ -276,6 +277,7 @@ const gl = {
   editablePerspective: "a túa perspectiva editable",
   readOnly: "só lectura",
   memberProfiles: "Perfís dos membros",
+  self: "eu",
 } satisfies Record<AuthenticatedCopyKey, string>;
 
 export const es = {
@@ -414,6 +416,7 @@ export const es = {
   editablePerspective: "tu perspectiva editable",
   readOnly: "solo lectura",
   memberProfiles: "Perfiles de los miembros",
+  self: "yo",
 } satisfies Record<AuthenticatedCopyKey, string>;
 
 const catalogues: Record<AppLocale, Record<AuthenticatedCopyKey, string>> = { en, gl, es };

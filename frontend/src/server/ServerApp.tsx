@@ -41,10 +41,11 @@ import TimedNoticeStack from "./TimedNoticeStack";
 import { useTimedNotices } from "./timedNotices";
 import LocaleProvider from "./LocaleProvider";
 import { type LocaleContextValue, useLocale } from "./LocaleContext";
-import { availableLocales, localeNames } from "./locale";
+import { availableLocales, intlLocale, localeNames } from "./locale";
 import { libraryInvitationMessage } from "./invitationCopy";
 import { authenticatedCopy } from "./authenticatedCopy";
 import { type LibraryAdminCopy, libraryAdminCopy } from "./libraryAdminCopy";
+import { friendlyError } from "./friendlyError";
 
 type Route =
   | "login"
@@ -80,21 +81,6 @@ function routeFromPath(pathname: string): Route {
     || route === "restore-account"
   ) return route;
   return "login";
-}
-
-function friendlyError(error: unknown): string {
-  if (error instanceof ServerApiError) {
-    if (error.status === 429) {
-      const minutes = error.retryAfter
-        ? Math.max(1, Math.ceil(error.retryAfter / 60))
-        : null;
-      return minutes
-        ? `Too many attempts. Please try again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`
-        : "Too many attempts. Please wait before trying again.";
-    }
-    return error.message;
-  }
-  return "BOOKPILE could not reach the server. Please try again.";
 }
 
 function localizedImportWarning(warning: LocalImportWarning, copy: LibraryAdminCopy): string {
@@ -512,7 +498,7 @@ function TokenActionPage({
 }
 
 function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: () => void }) {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const [, setBusy] = useState<"logout" | "all" | null>(null);
   const [error, setError] = useState("");
   const { notices, pushNotice, dismissNotice } = useTimedNotices();
@@ -590,7 +576,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
         : copy("catalogue");
     const perspective = perspectives.find((item) => item.selected) ?? perspectives[0];
     return !perspective || perspective.user_id === user.user_id
-      ? `${view} — ${workspaceLocale === "gl" ? "eu" : "self"}`
+      ? `${view} — ${copy("self")}`
       : `${view} — ${perspective.username}`;
   }
 
@@ -628,8 +614,8 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   }, []);
 
   useEffect(() => {
-    void reloadLibraries().catch((caught) => setError(friendlyError(caught)));
-  }, [reloadLibraries]);
+    void reloadLibraries().catch((caught) => setError(friendlyError(caught, t)));
+  }, [reloadLibraries, t]);
 
   useEffect(() => {
     if (!selected) {
@@ -652,10 +638,10 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
         setMembers(nextMembers);
       }
     }).catch((caught) => {
-      if (active) setError(friendlyError(caught));
+      if (active) setError(friendlyError(caught, t));
     });
     return () => { active = false; };
-  }, [selected]);
+  }, [selected, t]);
 
   useEffect(() => {
     setGeneratedInvitation(null);
@@ -706,7 +692,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       else await serverApi.logout();
       onSignedOut();
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setBusy(null);
     }
@@ -722,7 +708,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await reloadLibraries(created.library_id);
       pushNotice(adminCopy("libraryCreated", { name: created.name }));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -739,7 +725,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await reloadLibraries(accepted.library_id);
       pushNotice(adminCopy(accepted.role === "OWNER" ? "joinedOwner" : "joinedViewer", { name: accepted.name }));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -767,7 +753,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       });
       pushNotice(adminCopy("invitationReadyNotice"));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -790,7 +776,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setPerspectives(await serverApi.selectReadingPerspective(selected.library_id, userId));
       await reloadLibraries(selected.library_id);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -847,7 +833,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setPendingMemberChange(null);
       setMemberChangePassword("");
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -873,7 +859,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await reloadLibraries();
       pushNotice(adminCopy("libraryDeleted", { name: deleted.name }));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
     }
@@ -896,7 +882,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setAllowUnmappedPersonalData(false);
       setAllowRepeatedImport(false);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
       setImportOperation("");
@@ -915,7 +901,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       setNewImportSourceMember("");
       setAllowUnmappedPersonalData(false);
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
       setImportOperation("");
@@ -949,7 +935,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await reloadLibraries(completed.library_id);
       pushNotice(adminCopy("newLibraryImported", { name: createdName, source: adminCopy(importJob.source_kind === "SERVER" ? "sourceServer" : "sourceLocal") }));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
       setImportOperation("");
@@ -975,7 +961,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
       await reloadLibraries(selected.library_id);
       pushNotice(adminCopy("existingLibraryImported", { name: selected.name, source: adminCopy(importJob.source_kind === "SERVER" ? "sourceServer" : "sourceLocal") }));
     } catch (caught) {
-      setError(friendlyError(caught));
+      setError(friendlyError(caught, t));
     } finally {
       setDataBusy(false);
       setImportOperation("");
@@ -1112,7 +1098,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                     {importOperation === "INSPECTING" && <div className="server-import-progress" role="status" aria-live="polite"><b>{adminCopy("uploading")}</b><span aria-hidden="true"><i /></span><small>{adminCopy("uploadingHelp")}</small></div>}
                     {importJob?.state === "READY" && <div className="server-import-report" role="status">
                       <h4>{adminCopy("readyReview")}</h4>
-                      <p>{importJob.source_kind === "SERVER" ? adminCopy("exportDescription", { name: importJob.source_library_name ?? "" }) : adminCopy("localDescription")} · format {importJob.backup_format_version}, schema {importJob.local_schema_version} · {adminCopy("created")} {new Date(importJob.source_created_at).toLocaleString(workspaceLocale === "gl" ? "gl-ES" : "en-GB")}</p>
+                      <p>{importJob.source_kind === "SERVER" ? adminCopy("exportDescription", { name: importJob.source_library_name ?? "" }) : adminCopy("localDescription")} · {adminCopy("format")} {importJob.backup_format_version}, {adminCopy("schema")} {importJob.local_schema_version} · {adminCopy("created")} {new Date(importJob.source_created_at).toLocaleString(intlLocale(workspaceLocale))}</p>
                       <dl>{[
                         ["books", "countBooks"], ["bookcases", "countBookcases"], ["shelves", "countShelves"], ["containers", "countContainers"],
                         [importJob.source_kind === "SERVER" ? "contributors" : "book_authors", importJob.source_kind === "SERVER" ? "countContributors" : "countAuthors"],
