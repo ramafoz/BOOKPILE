@@ -4,10 +4,21 @@ import {
   parseLocale, resolveLocale, translate,
 } from "./locale";
 import { galician } from "./locales/gl";
+import { spanish } from "./locales/es";
 
 describe("Server locale foundation", () => {
   it("exposes only reviewed locales", () => {
-    expect(availableLocales).toEqual(["en", "gl"]);
+    expect(availableLocales).toEqual(["en", "gl", "es"]);
+    expect(parseLocale("es-ES")).toBe("es");
+  });
+
+  it("keeps Spanish entry copy complete", () => {
+    expect(Object.keys(spanish).sort()).toEqual(Object.keys(english).sort());
+    for (const key of Object.keys(english) as Array<keyof typeof english>) {
+      expect(spanish[key].trim(), key).not.toBe("");
+      expect(spanish[key].match(/\{\w+\}/g) ?? [], key)
+        .toEqual(english[key].match(/\{\w+\}/g) ?? []);
+    }
   });
 
   it("prefers a valid saved choice, then the first supported browser language", () => {
@@ -21,6 +32,7 @@ describe("Server locale foundation", () => {
     expect(translate("gl", "signIn")).toBe("Iniciar sesión");
     expect(translate("gl", "tooManyAttemptsMinutesMany", { minutes: 3 })).toContain("3 minutos");
     expect(translate("en", "welcomeBack")).toBe("Welcome back");
+    expect(translate("es", "welcomeBack")).toBe("Te damos la bienvenida");
   });
 
   it("provides non-empty translations with matching interpolation variables", () => {
@@ -33,7 +45,7 @@ describe("Server locale foundation", () => {
     }
   });
 
-  it("substitutes every declared placeholder in both catalogues", () => {
+  it("substitutes every declared placeholder in all catalogues", () => {
     for (const key of Object.keys(english) as Array<keyof typeof english>) {
       const placeholders = english[key].match(/\{(\w+)\}/g) ?? [];
       const values = Object.fromEntries(placeholders.map((token) => [token.slice(1, -1), "example"]));
@@ -49,5 +61,6 @@ describe("Server locale foundation", () => {
       dateStyle: "medium", timeStyle: "short",
     }).format(new Date(date)));
     expect(formatLocalNumber(1234.5, "gl")).toBe(new Intl.NumberFormat("gl-ES").format(1234.5));
+    expect(formatLocalNumber(1234.5, "es")).toBe(new Intl.NumberFormat("es-ES").format(1234.5));
   });
 });

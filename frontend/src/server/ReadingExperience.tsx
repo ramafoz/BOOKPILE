@@ -9,7 +9,7 @@ import {
   ServerApiError,
   serverApi,
 } from "./serverApi";
-import type { AppLocale } from "./locale";
+import { intlLocale, type AppLocale } from "./locale";
 import { readingCopy, type ReadingCopy } from "./readingCopy";
 
 function readingLabels(copy: ReadingCopy): Record<PersonalReadingState, string> {
@@ -30,7 +30,7 @@ function today(): string {
 
 function readableDate(value: string | null, locale: AppLocale, copy: ReadingCopy): string {
   if (!value) return copy("unknown");
-  return new Intl.DateTimeFormat(locale === "gl" ? "gl-ES" : "en-GB", {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00Z`));
 }
