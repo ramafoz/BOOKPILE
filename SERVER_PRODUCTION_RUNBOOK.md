@@ -119,9 +119,10 @@ bash server/deploy/deploy-staging.sh --check
 bash server/deploy/deploy-staging.sh
 ```
 
-The first command performs a non-deploying preflight. The second fetches and
-fast-forwards a clean local `main`, displays the current and target revisions,
-and requires the operator to type `DEPLOY`. It then:
+The first command performs a non-deploying preflight. The second requires a
+local `main` with no tracked or untracked files, fetches and fast-forwards it,
+displays the current and target revisions, and requires the operator to type
+`DEPLOY`. It then:
 
 1. creates a verified off-site database-and-object backup;
 2. builds API, web and backup images tagged with the exact Git commit;

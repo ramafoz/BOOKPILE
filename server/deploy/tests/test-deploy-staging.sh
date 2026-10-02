@@ -30,7 +30,7 @@ EOF
 #!/usr/bin/env bash
 case "\$1" in
   branch) printf '%s\\n' main ;;
-  status) ;;
+  status) printf '%s' "\${FAKE_GIT_STATUS:-}" ;;
   fetch) ;;
   rev-list) printf '%s\\n' '0 0' ;;
   rev-parse)
@@ -92,6 +92,21 @@ grep -qx "BOOKPILE_BACKUP_IMAGE=bookpile-backup:git-${short_revision}" \
 grep -q "backup create" "${successful_log}"
 grep -q "run --rm migrate" "${successful_log}"
 grep -q "bookpile-maintenance check --deep" "${successful_log}"
+
+dirty_fixture="$(make_fixture dirty)"
+dirty_log="${dirty_fixture}/docker.log"
+if PATH="${dirty_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${dirty_log}" \
+  FAKE_GIT_STATUS='?? server/migrations/untracked_revision.py' \
+  BOOKPILE_DEPLOY_LOCK_FILE="${dirty_fixture}/deploy.lock" \
+    bash "${dirty_fixture}/server/deploy/deploy-staging.sh" --check >/dev/null 2>&1; then
+  echo "Expected an untracked source file to fail the deployment preflight." >&2
+  exit 1
+fi
+if [[ -e "${dirty_log}" ]]; then
+  echo "Dirty-worktree preflight reached Docker unexpectedly." >&2
+  exit 1
+fi
 
 failure_fixture="$(make_fixture failure)"
 failure_log="${failure_fixture}/docker.log"
