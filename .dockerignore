@@ -15,5 +15,6 @@ backend/backups
 server/backups
 server/.env
 server/.env.production
+server/.env.*
 *.tsbuildinfo
 

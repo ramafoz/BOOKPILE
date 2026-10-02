@@ -146,6 +146,11 @@ from arbitrary branches, accept a non-fast-forward history or deploy directly
 from GitHub. Production remains a separate future workflow with independent
 configuration, credentials, approval and monitoring.
 
+The clean-worktree check explicitly enables recursive untracked-file reporting,
+so host-level Git configuration cannot hide additions from the commit-addressed
+build. Private `server/.env.*` files are also excluded from the Docker build
+context; Compose reads them from the host only at configuration/runtime.
+
 ## Verification
 
 ```bash

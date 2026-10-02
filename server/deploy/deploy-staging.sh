@@ -79,10 +79,10 @@ if [[ "${current_branch}" != "main" ]]; then
   echo "Refusing to deploy branch '${current_branch}'. Switch to main first." >&2
   exit 1
 fi
-working_tree_status="$(git status --porcelain)"
+working_tree_status="$(git status --porcelain=v1 --untracked-files=all)"
 if [[ -n "${working_tree_status}" ]]; then
   echo "Refusing to deploy a repository with tracked or untracked changes." >&2
-  git status --short >&2
+  git status --short --untracked-files=all >&2
   exit 1
 fi
 
