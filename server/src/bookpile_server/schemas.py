@@ -818,11 +818,11 @@ class CurrentUserResponse(BaseModel):
 
 
 class PreferredLocaleWrite(BaseModel):
-    preferred_locale: Literal["en", "gl"]
+    preferred_locale: Literal["en", "gl", "es"]
 
 
 class PreferredLocaleResponse(BaseModel):
-    preferred_locale: Literal["en", "gl"]
+    preferred_locale: Literal["en", "gl", "es"]
 
 
 class RegisterAccountRequest(BaseModel):
@@ -831,7 +831,7 @@ class RegisterAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=30)
     password: str = Field(min_length=1, max_length=128)
     password_confirmation: str = Field(min_length=1, max_length=128)
-    preferred_locale: Literal["en", "gl"] = "en"
+    preferred_locale: Literal["en", "gl", "es"] = "en"
 
 
 class RegisterAccountResponse(BaseModel):

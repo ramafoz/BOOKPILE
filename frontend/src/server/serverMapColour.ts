@@ -1,5 +1,5 @@
 import type { PersonalReadingState, PhysicalBook, ReadingCatalogueOverview } from "./serverApi";
-import type { AppLocale } from "./locale";
+import { intlLocale, type AppLocale } from "./locale";
 import { mapCopy, type MapCopyKey } from "./mapCopy";
 import { catalogueCopy } from "./catalogueCopy";
 
@@ -70,7 +70,7 @@ export function buildMapColourScale(mode: MapColourMode, books: PhysicalBook[], 
   ], continuous: false };
   if (["genre", "publisher", "author"].includes(mode)) {
     const matches = (book: PhysicalBook) => mode === "genre" ? genres(book).includes(focus) : mode === "publisher" ? book.publisher === focus : book.author === focus;
-    const modeLabel = t(mode === "genre" ? "genre" : mode === "publisher" ? "publisher" : "author").toLocaleLowerCase(locale === "gl" ? "gl-ES" : "en-GB");
+    const modeLabel = t(mode === "genre" ? "genre" : mode === "publisher" ? "publisher" : "author").toLocaleLowerCase(intlLocale(locale));
     return { label, colour: (book) => focus && matches(book) ? FOCUS : MISSING, detail: (book) => focus && matches(book) ? focus : t("notSelected"), legendItems: focus ? [{ label: focus, colour: FOCUS }, { label: t("otherBooks"), colour: MISSING }] : [{ label: t("chooseFocus", { mode: modeLabel }), colour: MISSING }], continuous: false };
   }
   const category = (book: PhysicalBook) => mode === "language" ? book.language : mode === "original_language" ? book.original_language : mode === "translation_status" ? book.translation_status : mode === "fiction_category" ? book.fiction_category : mode === "binding" ? book.binding : mode === "publication_type" ? book.publication_type : null;
@@ -102,7 +102,7 @@ export function buildMapColourScale(mode: MapColourMode, books: PhysicalBook[], 
   };
   const scored = books.map((book) => ({ book, value: metric(book) })).filter((item): item is { book: PhysicalBook; value: number } => !special(item.book) && item.value !== null);
   const values = scored.map((item) => item.value).sort((a, b) => a - b), minimum = percentile(values, values.length >= 3 ? .01 : 0), maximum = percentile(values, values.length >= 3 ? .99 : 1);
-  const describe = (value: number) => mode.includes("duration") ? t("days", { count: Math.round(value) }) : mode === "reading_rate" ? t("pagesPerDay", { count: value.toFixed(1) }) : mode.includes("year") ? String(value) : new Date(value * 86_400_000).toLocaleDateString(locale === "gl" ? "gl-ES" : "en-GB");
+  const describe = (value: number) => mode.includes("duration") ? t("days", { count: Math.round(value) }) : mode === "reading_rate" ? t("pagesPerDay", { count: value.toFixed(1) }) : mode.includes("year") ? String(value) : new Date(value * 86_400_000).toLocaleDateString(intlLocale(locale));
   const endpoint = (low: boolean) => { if (!scored.length) return t("noRecordedData"); const value = low ? values[0] : values.at(-1)!; const winners = scored.filter((item) => item.value === value); const adjective = t(mode.includes("duration") ? (low ? "shortest" : "longest") : mode === "reading_rate" ? (low ? "slowest" : "fastest") : (low ? "oldest" : "newest")); return winners.length === 1 ? t("endpointOne", { adjective, title: winners[0].book.title, value: describe(value) }) : t("endpointTie", { adjective, count: winners.length, value: describe(value) }); };
   const legendItems = [...new Map(books.map(special).filter((item): item is { label: string; colour: string } => Boolean(item)).map((item) => [item.label, item])).values()];
   return { label, colour: (book) => { const item = special(book); if (item) return item.colour; const value = metric(book); if (value === null) return MISSING; const amount = maximum === minimum ? .65 : Math.max(0, Math.min(1, (value - minimum) / (maximum - minimum))); return interpolate(LIGHT, DARK, amount); }, detail: (book) => special(book)?.label ?? (metric(book) === null ? t("noData") : describe(metric(book)!)), lowLabel: endpoint(true), highLabel: endpoint(false), legendItems, continuous: true };

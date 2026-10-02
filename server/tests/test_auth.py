@@ -146,17 +146,17 @@ def test_preferred_locale_requires_session_and_csrf_and_persists(
     assert client.put(endpoint, json={"preferred_locale": "gl"}).status_code == 403
     headers = {"X-CSRF-Token": csrf}
     assert client.put(
-        endpoint, json={"preferred_locale": "es"}, headers=headers
+        endpoint, json={"preferred_locale": "pt"}, headers=headers
     ).status_code == 422
     assert client.put(
-        endpoint, json={"preferred_locale": "gl"}, headers=headers
-    ).json() == {"preferred_locale": "gl"}
+        endpoint, json={"preferred_locale": "es"}, headers=headers
+    ).json() == {"preferred_locale": "es"}
     session.expire_all()
-    assert session.get(User, user.id).preferred_locale == "gl"
-    assert client.get("/api/v1/auth/me").json()["preferred_locale"] == "gl"
+    assert session.get(User, user.id).preferred_locale == "es"
+    assert client.get("/api/v1/auth/me").json()["preferred_locale"] == "es"
     rotated = client.post("/api/v1/auth/session/rotate", headers=headers)
     assert rotated.status_code == 200
-    assert rotated.json()["preferred_locale"] == "gl"
+    assert rotated.json()["preferred_locale"] == "es"
 
 
 def test_unverified_user_cannot_login(client, session: Session) -> None:

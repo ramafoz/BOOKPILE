@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle, UserRound, X } from "lucide-react";
 import { type AccountProfile, ServerApiError, serverApi } from "./serverApi";
-import type { AppLocale } from "./locale";
+import { intlLocale, type AppLocale } from "./locale";
 import { profileCopy } from "./profileCopy";
 
 function value(value: string | null | undefined) {
@@ -130,7 +130,7 @@ export default function ProfileDialog({
                   <dd>
                     {new Date(
                       `${profile.date_of_birth}T00:00:00`,
-                    ).toLocaleDateString(locale === "gl" ? "gl-ES" : "en-GB")}
+                    ).toLocaleDateString(intlLocale(locale))}
                   </dd>
                 </>
               )}

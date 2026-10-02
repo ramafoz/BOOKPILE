@@ -1,6 +1,6 @@
 import type { AppLocale } from "./locale";
 
-const en = {
+export const en = {
   openFailed: "This profile could not be opened.", closeProfile: "Close profile", openingProfile: "Opening profile…",
   member: "BOOKPILE member", timezone: "Timezone", gender: "Gender", pronouns: "Pronouns", city: "City", state: "State / region", country: "Country", dateOfBirth: "Date of birth",
   female: "female", male: "male", nonBinary: "non-binary", other: "other", they: "they",
@@ -13,8 +13,14 @@ const gl = {
   female: "muller", male: "home", nonBinary: "non binario", other: "outro", they: "elu",
   empty: "Este membro non compartiu contigo ningún dato do seu perfil.",
 } satisfies Record<ProfileCopyKey, string>;
+export const es = {
+  openFailed: "No se ha podido abrir este perfil.", closeProfile: "Cerrar perfil", openingProfile: "Abriendo el perfil…",
+  member: "Miembro de BOOKPILE", timezone: "Zona horaria", gender: "Género", pronouns: "Pronombres", city: "Ciudad", state: "Provincia / región", country: "País", dateOfBirth: "Fecha de nacimiento",
+  female: "mujer", male: "hombre", nonBinary: "no binario", other: "otro", they: "elle",
+  empty: "Este miembro no ha compartido contigo ningún dato de su perfil.",
+} satisfies Record<ProfileCopyKey, string>;
 
-const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl };
+const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es };
 export function profileCopy(locale: AppLocale) {
   return (key: ProfileCopyKey) => catalogues[locale][key];
 }
