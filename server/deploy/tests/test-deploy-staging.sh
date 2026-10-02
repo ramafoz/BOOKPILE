@@ -30,7 +30,11 @@ EOF
 #!/usr/bin/env bash
 case "\$1" in
   branch) printf '%s\\n' main ;;
-  status) printf '%s' "\${FAKE_GIT_STATUS:-}" ;;
+  status)
+    if [[ " \$* " == *" --untracked-files=all "* ]]; then
+      printf '%s' "\${FAKE_GIT_STATUS:-}"
+    fi
+    ;;
   fetch) ;;
   rev-list) printf '%s\\n' '0 0' ;;
   rev-parse)
