@@ -18,7 +18,7 @@ dependencies = [
   "psycopg[binary]==3.2.13",
   "pydantic-settings==2.10.1",
   "pillow==12.3.0",
-  "pillow-heif==1.1.1",
+  "pillow-heif==1.4.0",
   "python-multipart==0.0.32",
   "sentry-sdk==2.66.1",
   "sqlalchemy==2.0.54",
@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest==8.4.2",
+  "pytest==9.0.3",
 ]
 
 [project.scripts]
