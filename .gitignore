@@ -18,5 +18,6 @@ server/.env.production
 server/.env.backup
 server/.env.staging
 server/.env.staging.backup
+server/.env.*.deploy-*
 .DS_Store
 ._CONTRACTUAL DOCS/

@@ -109,6 +109,42 @@ one-shot migration dependency again.
 The API remains unready until PostgreSQL and the configured private-object
 adapter both answer. Caddy waits for API readiness.
 
+### Guarded staging deployment
+
+After the automation has itself reached `main` on the staging host, subsequent
+fast-forward deployments can use the reviewed wrapper from the repository root:
+
+```bash
+bash server/deploy/deploy-staging.sh --check
+bash server/deploy/deploy-staging.sh
+```
+
+The first command performs a non-deploying preflight. The second fetches and
+fast-forwards a clean local `main`, displays the current and target revisions,
+and requires the operator to type `DEPLOY`. It then:
+
+1. creates a verified off-site database-and-object backup;
+2. builds API, web and backup images tagged with the exact Git commit;
+3. records those immutable image names and the revision in the private staging
+   environment files;
+4. runs the one-shot migration explicitly;
+5. recreates API, email worker and web without touching PostgreSQL volumes;
+6. verifies the public revision through liveness and readiness; and
+7. requires the deep operational check to report healthy.
+
+Only a trusted interactive host operator should use `--yes`; it suppresses the
+confirmation but none of the safety gates. The script uses `flock` to reject
+concurrent deployments. If a failure happens after the private environment is
+changed, it restores the previous image configuration and recreates the prior
+application services. It deliberately never downgrades the database. A failed
+migration or an application/schema incompatibility therefore still requires
+operator review of the logs and the migration-specific recovery procedure.
+
+The script does not receive secrets as arguments, emit environment files, run
+from arbitrary branches, accept a non-fast-forward history or deploy directly
+from GitHub. Production remains a separate future workflow with independent
+configuration, credentials, approval and monitoring.
+
 ## Verification
 
 ```bash

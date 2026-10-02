@@ -8,6 +8,16 @@ permissions:
   contents: read
 
 jobs:
+  deployment-script:
+    name: Staging deployment script
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check shell syntax
+        run: bash -n server/deploy/deploy-staging.sh server/deploy/tests/test-deploy-staging.sh
+      - name: Exercise success and rollback paths
+        run: bash server/deploy/tests/test-deploy-staging.sh
+
   python-tests:
     name: Python tests (Local and Server)
     runs-on: ubuntu-24.04
