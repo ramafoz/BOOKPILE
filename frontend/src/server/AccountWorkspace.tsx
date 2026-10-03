@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
   KeyRound,
@@ -21,6 +21,7 @@ import {
   serverApi,
 } from "./serverApi";
 import { useLocale } from "./LocaleContext";
+import { loadLocaleCatalogues } from "./localeCatalogues";
 import { availableLocales, formatLocalDateTime, localeNames } from "./locale";
 import { accountInvitationMessage } from "./invitationCopy";
 import { authenticatedCopy } from "./authenticatedCopy";
@@ -90,6 +91,7 @@ export default function AccountWorkspace({
   const [earnedInvitationLink, setEarnedInvitationLink] = useState("");
   const [earnedInvitationExpiry, setEarnedInvitationExpiry] = useState("");
   const [invitationLocale, setInvitationLocale] = useState(locale);
+  const invitationLocaleRequest = useRef(0);
   const [restoreTarget, setRestoreTarget] = useState<RecoverableLibrary | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
@@ -147,13 +149,24 @@ export default function AccountWorkspace({
     setNotice("");
     try {
       const updated = await serverApi.updatePreferredLocale(nextLocale);
-      setLocale(updated.preferred_locale);
+      await setLocale(updated.preferred_locale);
       setInvitationLocale(updated.preferred_locale);
       setNotice(authenticatedCopy(updated.preferred_locale)("languageSaved"));
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function changeInvitationLocale(nextLocale: typeof locale) {
+    const request = invitationLocaleRequest.current + 1;
+    invitationLocaleRequest.current = request;
+    try {
+      await loadLocaleCatalogues(nextLocale);
+      if (invitationLocaleRequest.current === request) setInvitationLocale(nextLocale);
+    } catch {
+      if (invitationLocaleRequest.current === request) setError(requestFailedMessage);
     }
   }
 
@@ -707,7 +720,7 @@ export default function AccountWorkspace({
           </div>
           <small>{copy("invitationProgress", { active: betaInvitations.active_day_count, required: betaInvitations.days_required })}</small>
           <div className="server-beta-invitation-summary"><span><b>{betaInvitations.available_credits}</b> {copy("invitationsReady")}</span><span><b>{betaInvitations.open_invitations}</b> {copy("invitationsOpen")}</span></div>
-          <label className="server-invitation-language">{copy("invitationLanguage")}<select value={invitationLocale} onChange={(event) => setInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
+          <label className="server-invitation-language">{copy("invitationLanguage")}<select value={invitationLocale} onChange={(event) => void changeInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
           {betaInvitations.available_credits > 0 && <button className="server-primary-action" type="button" disabled={busy} onClick={() => void createBetaInvitation()}><KeyRound size={16} /> {copy("createAccountInvitation")}</button>}
           {earnedInvitationLink && <div className="server-earned-invitation">
             <label>{copy("invitationMessage")}<textarea readOnly value={accountInvitationMessage(invitationLocale, earnedInvitationLink)} onFocus={(event) => event.currentTarget.select()} /></label>

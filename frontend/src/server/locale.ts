@@ -1,9 +1,4 @@
 import { english, type MessageKey } from "./locales/en";
-import { galician } from "./locales/gl";
-import { spanish } from "./locales/es";
-import { portuguese } from "./locales/pt";
-import { catalan } from "./locales/ca";
-import { italian } from "./locales/it";
 
 export { english } from "./locales/en";
 export type { MessageKey } from "./locales/en";
@@ -29,14 +24,14 @@ const intlLocales: Record<AppLocale, string> = {
   // does not restrict language matching to Portugal.
   en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT", ca: "ca-ES", it: "it-IT",
 };
-const catalogues: Record<AppLocale, Record<MessageKey, string>> = {
-  en: english,
-  gl: galician,
-  es: spanish,
-  pt: portuguese,
-  ca: catalan,
-  it: italian,
-};
+const catalogues: Partial<Record<AppLocale, Record<MessageKey, string>>> = { en: english };
+
+export function registerMessageCatalogue(
+  locale: AppLocale,
+  catalogue: Record<MessageKey, string>,
+): void {
+  catalogues[locale] = catalogue;
+}
 
 export function intlLocale(locale: AppLocale): string {
   return intlLocales[locale];
@@ -75,7 +70,9 @@ export function translate(
   key: MessageKey,
   values: Record<string, string | number> = {},
 ): string {
-  return catalogues[locale][key].replace(/\{(\w+)\}/g, (token, name: string) =>
+  const catalogue = catalogues[locale];
+  if (!catalogue) throw new Error(`Locale catalogue not loaded: ${locale}`);
+  return catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) =>
     Object.hasOwn(values, name) ? String(values[name]) : token,
   );
 }

@@ -3,7 +3,7 @@ import type { AppLocale, MessageKey } from "./locale";
 
 export interface LocaleContextValue {
   locale: AppLocale;
-  setLocale: (locale: AppLocale) => void;
+  setLocale: (locale: AppLocale) => Promise<void>;
   t: (key: MessageKey, values?: Record<string, string | number>) => string;
 }
 

@@ -29,7 +29,7 @@ and fallback.
 - [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining six launch locales in reviewed batches; verify plural rules,
+- [ ] Add the remaining four launch locales in reviewed batches; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
@@ -246,3 +246,20 @@ the protected account preference endpoint accept and persist `it`; Italian
 browser variants such as `it-IT` and `it-CH` resolve to the shared `Italiano`
 catalogue. Promotion copy explicitly warns that an equal co-Owner can remove
 the current Owner's membership.
+
+## Deferred catalogue loading
+
+The Server frontend keeps only the English fallback in its initial JavaScript.
+Every other completed locale is a separate, statically typed bundle containing
+public, authenticated, catalogue, administration, invitation, loan, map,
+physical-layout, profile, reading and statistics copy. A locale is installed
+as one coherent unit before it becomes active, so a slow or failed download
+cannot expose a partially translated interface. Concurrent requests for the
+same locale share one download.
+
+The saved pre-sign-in preference and the authenticated account preference both
+wait for their bundle before rendering that locale. Invitation-language
+selectors also load their independently chosen bundle without changing the
+inviter's interface preference. English remains available as the safe initial
+fallback. Future launch languages must add one bundle entry and are therefore
+excluded from the initial payload by default.
