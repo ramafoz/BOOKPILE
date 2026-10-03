@@ -148,6 +148,7 @@ export default function AccountWorkspace({
     setError("");
     setNotice("");
     try {
+      await loadLocaleCatalogues(nextLocale);
       const updated = await serverApi.updatePreferredLocale(nextLocale);
       await setLocale(updated.preferred_locale);
       setInvitationLocale(updated.preferred_locale);
