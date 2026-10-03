@@ -230,9 +230,10 @@ Chinese.
 
 Catalan (`ca`) is being prepared as the single BOOKPILE catalogue for Catalan
 and Valencian users. Its complete public account catalogue, all three
-transactional email templates and the loan, public-profile, reading and
-statistics workspaces are translated and structurally tested. Catalan is
+transactional email templates, account and library invitation messages, and
+the loan, public-profile, reading and statistics workspaces are translated and
+structurally tested. Catalan is
 intentionally absent from `availableLocales`, is not yet accepted as an account
 preference and cannot be selected in invitations: the remaining authenticated
-workspaces and invitation copy must be completed and reviewed first. Until then,
+workspaces must be completed and reviewed first. Until then,
 no user can encounter a partially translated Catalan interface.

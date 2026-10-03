@@ -9,6 +9,7 @@ import { loanCa } from "./locales/ca/loan";
 import { profileCa } from "./locales/ca/profile";
 import { readingCa } from "./locales/ca/reading";
 import { statisticsCa } from "./locales/ca/statistics";
+import { accountInvitationMessage, libraryInvitationMessage } from "./invitationCopy";
 
 function expectEquivalent(
   source: Record<string, string>,
@@ -32,5 +33,18 @@ describe("Catalan public copy", () => {
     expectEquivalent(profileEn, profileCa);
     expectEquivalent(readingEn, readingCa);
     expectEquivalent(statisticsEn, statisticsCa);
+  });
+
+  it("distinguishes every prepared invitation permission", () => {
+    const url = "https://bookpile.gal/login?library-invite=private-token";
+    expect(accountInvitationMessage("ca", url)).toContain("crear un compte");
+    expect(accountInvitationMessage("ca", url)).toContain(url);
+    expect(libraryInvitationMessage("ca", url, "Casa", "VIEWER", "CATALOG_ONLY"))
+      .toContain("veure el catàleg de");
+    expect(libraryInvitationMessage("ca", url, "Casa", "VIEWER", "CATALOG_AND_MAP"))
+      .toContain("catàleg i el mapa físic");
+    const owner = libraryInvitationMessage("ca", url, "Casa", "OWNER", null);
+    expect(owner).toContain("copropietari/ària");
+    expect(owner).toContain("mateixa autoritat administrativa");
   });
 });
