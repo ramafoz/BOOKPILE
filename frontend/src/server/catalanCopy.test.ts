@@ -9,6 +9,8 @@ import { loanCa } from "./locales/ca/loan";
 import { profileCa } from "./locales/ca/profile";
 import { readingCa } from "./locales/ca/reading";
 import { statisticsCa } from "./locales/ca/statistics";
+import { en as catalogueEn } from "./catalogueCopy";
+import { catalogueCa } from "./locales/ca/catalogue";
 import { accountInvitationMessage, libraryInvitationMessage } from "./invitationCopy";
 
 function expectEquivalent(
@@ -33,6 +35,7 @@ describe("Catalan public copy", () => {
     expectEquivalent(profileEn, profileCa);
     expectEquivalent(readingEn, readingCa);
     expectEquivalent(statisticsEn, statisticsCa);
+    expectEquivalent(catalogueEn, catalogueCa);
   });
 
   it("distinguishes every prepared invitation permission", () => {
