@@ -152,18 +152,18 @@ def test_registration_stores_locale_and_rejects_unsupported_locale(
     invitation = service.create()
     invalid = client.post(
         "/api/v1/auth/register",
-        json=registration_payload(invitation.raw_token, preferred_locale="pt"),
+        json=registration_payload(invitation.raw_token, preferred_locale="ca"),
     )
     assert invalid.status_code == 422
     accepted = client.post(
         "/api/v1/auth/register",
-        json=registration_payload(invitation.raw_token, preferred_locale="es"),
+        json=registration_payload(invitation.raw_token, preferred_locale="pt"),
     )
     assert accepted.status_code == 201
     user = session.scalar(select(User).where(User.username == "new_reader"))
-    assert user is not None and user.preferred_locale == "es"
-    assert email_sender.emails[0].subject == "BOOKPILE: Verifica tu correo"
-    assert '<html lang="es">' in email_sender.emails[0].html
+    assert user is not None and user.preferred_locale == "pt"
+    assert email_sender.emails[0].subject == "BOOKPILE: Verifique o seu correio eletrónico"
+    assert '<html lang="pt">' in email_sender.emails[0].html
 
 
 def test_verification_resend_is_generic_and_revokes_old_token(

@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { mapPt } from "./locales/pt/map";
 
 export const en = {
   unavailable: "Library Map unavailable.", bookUnavailable: "Book information unavailable.", previewFailed: "The destination could not be previewed.", undoFailed: "Undo failed.", applyFailed: "The rearrangement could not be applied.", loading: "Loading Library Map…",
@@ -40,9 +41,10 @@ export const es = {
   readingStatus: "Estado de lectura", acquisitionRecency: "Antigüedad de adquisición", readingRecency: "Antigüedad de lectura", pendingDuration: "Tiempo pendiente", readingDuration: "Duración de la lectura", readingRate: "Ritmo de lectura (páginas/día)", language: "Idioma", originalLanguage: "Idioma original", translationStatus: "Estado de traducción", editionYear: "Año de la edición actual", originalYear: "Año de publicación original", genreFocus: "Género destacado", publisherFocus: "Editorial destacada", authorFocus: "Autoría destacada", fictionCategory: "Ficción / no ficción", binding: "Encuadernación", publicationType: "Tipo de publicación",
   pending: "Pendiente", reading: "En lectura", onLoan: "Prestado", physicalCopyReading: "Este ejemplar físico está en lectura", physicalCopyOnLoan: "Este ejemplar físico está prestado", rereading: "En relectura", read: "Leído", notSelected: "No seleccionado", otherBooks: "Otros libros", chooseFocus: "Elegir {mode}", notRecorded: "Sin registrar", originalCollection: "Colección original", noAcquisitionDate: "Sin fecha de adquisición", stillReading: "Todavía en lectura", stillRereading: "Todavía en relectura", readNoData: "Leído · sin datos", noData: "Sin datos", days: "{count} días", pagesPerDay: "{count} páginas/día", noRecordedData: "No hay datos registrados", shortest: "Más breve", longest: "Más largo", slowest: "Más lento", fastest: "Más rápido", oldest: "Más antiguo", newest: "Más reciente", endpointOne: "{adjective}: «{title}» · {value}", endpointTie: "{adjective}: empate ({count}) · {value}",
 } satisfies Record<MapCopyKey, string>;
+export const pt = mapPt;
 
 export type MapCopy = (key: MapCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es, pt };
 export function mapCopy(locale: AppLocale): MapCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

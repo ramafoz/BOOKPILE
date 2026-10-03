@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { cataloguePt } from "./locales/pt/catalogue";
 
 export const en = {
   serverUnavailable: "BOOKPILE could not reach the server. Please try again.",
@@ -503,7 +504,9 @@ export const es = {
   partialSave: "Se han guardado el libro compartido y su ubicación, pero han fallado algunos datos de portada privada o lectura personal. {error} Corrígelo y vuelve a intentarlo: BOOKPILE actualizará este libro en vez de crear un duplicado.", savedNext: "«{title}» guardado. Todo listo para el siguiente libro.", bookSaved: "Libro y portada privada guardados.", bookUpdated: "Libro actualizado.", deleteBookConfirm: "¿Eliminar definitivamente «{title}»? Esta acción no se puede deshacer.", bookDeleted: "Libro eliminado definitivamente.", personalDataUpdated: "Datos personales de lectura actualizados.", loanDataUpdated: "Datos compartidos del préstamo actualizados.",
 } satisfies Record<CatalogueCopyKey, string>;
 
-const catalogues: Record<AppLocale, Record<CatalogueCopyKey, string>> = { en, gl, es };
+export const pt = cataloguePt;
+
+const catalogues: Record<AppLocale, Record<CatalogueCopyKey, string>> = { en, gl, es, pt };
 
 export function catalogueCopy(locale: AppLocale): CatalogueCopy {
   const catalogue = catalogues[locale];

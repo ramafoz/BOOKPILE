@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { libraryAdminPt } from "./locales/pt/libraryAdmin";
 
 export const en = {
   requestFailed: "BOOKPILE could not complete that request.", libraryCreated: "“{name}” was created. You are its first Owner.", joinedOwner: "You joined “{name}” as an Owner.", joinedViewer: "You joined “{name}” as a Viewer.",
@@ -71,9 +72,10 @@ export const es = {
   permissionChange: "Cambio de permisos", viewerAccess: "Acceso de visitante", currentPassword: "Tu contraseña actual", cancel: "Cancelar", applying: "Aplicando…", confirmChange: "Confirmar cambio", dangerZone: "Zona de peligro", deleteTitle: "¿Eliminar «{name}»?", deleteHelp: "Esto retira inmediatamente el acceso a todos los miembros y pone en cuarentena los libros, portadas, disposición física, lecturas y préstamos. Cualquier persona que fuese propietaria en el momento de la eliminación puede restaurarlo todo durante 48 horas. Después, la eliminación es definitiva.", typeExactly: "Escribe {name} exactamente", deletionAcknowledgement: "Entiendo que la recuperación caduca a las 48 horas y que después se eliminan definitivamente todos los datos de la biblioteca.", deleting: "Eliminando…",
   emptyTitle: "Crear o unirse a una biblioteca", emptyHelp: "Las cuentas y las bibliotecas son independientes: una cuenta puede poseer o ver varias bibliotecas.",
 } satisfies Record<LibraryAdminCopyKey, string>;
+export const pt = libraryAdminPt;
 
 export type LibraryAdminCopy = (key: LibraryAdminCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<LibraryAdminCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<LibraryAdminCopyKey, string>> = { en, gl, es, pt };
 export function libraryAdminCopy(locale: AppLocale): LibraryAdminCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

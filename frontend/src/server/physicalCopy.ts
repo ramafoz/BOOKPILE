@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { physicalPt } from "./locales/pt/physical";
 
 export const en = {
   requestFailed: "BOOKPILE could not complete that request.", maintenance: "Physical library maintenance", editTarget: "Edit {target}", bookcase: "bookcase", shelf: "shelf", container: "container", nameRequired: "Name *", description: "Description", numberRequired: "{target} number *", optionalDimensions: "Optional physical dimensions", height: "Height", width: "Width", depth: "Depth", usableHeight: "Usable height", usableWidth: "Usable width", usableDepth: "Usable depth", cancel: "Cancel", saveChanges: "Save changes", dimensionsMissing: "Dimensions not recorded",
@@ -40,9 +41,10 @@ export const es = {
   addBookcase: "Añadir mueble", initialStructure: "Estructura y dimensiones iniciales", numberingDirection: "Dirección de numeración de los estantes", homogeneousShelf: "Estructura homogénea de los estantes", exteriorDepth: "Profundidad exterior", directionHelp: "La dirección queda fijada al añadir el primer estante. Las dimensiones vacías usan estimaciones independientes en el mapa y no se registran como medidas físicas.", addShelf: "Añadir estante", chooseBookcase: "Elegir mueble", number: "Número", addContainer: "Añadir contenedor", type: "Tipo", layer: "Capa",
   addedBookcase: "Se ha añadido el mueble.", addedShelf: "Se ha añadido el estante.", addedContainer: "Se ha añadido el contenedor.", updated: "Se ha actualizado la biblioteca física.", layoutSaved: "Se ha guardado la disposición visual.", deleteConfirm: "¿Eliminar {label}? BOOKPILE rechazará la operación si todavía contiene otros registros de la biblioteca física.", deleted: "Se ha eliminado {label}.", bookCount: "{count} libro", booksCount: "{count} libros", shelfCount: "{count} estante", shelvesCount: "{count} estantes", editBookcase: "Editar mueble", deleteBookcase: "Eliminar mueble", editShelf: "Editar estante", deleteShelf: "Eliminar estante", editContainer: "Editar contenedor", deleteContainer: "Eliminar contenedor", noStructure: "Todavía no hay estructura física", addFirst: "Añade arriba el primer mueble.", ownersNotConfigured: "Las personas propietarias todavía no han configurado el mapa de la biblioteca.",
 } satisfies Record<PhysicalCopyKey, string>;
+export const pt = physicalPt;
 
 export type PhysicalCopy = (key: PhysicalCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<PhysicalCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<PhysicalCopyKey, string>> = { en, gl, es, pt };
 export function physicalCopy(locale: AppLocale): PhysicalCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

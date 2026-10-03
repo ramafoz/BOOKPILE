@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { profilePt } from "./locales/pt/profile";
 
 export const en = {
   openFailed: "This profile could not be opened.", closeProfile: "Close profile", openingProfile: "Opening profile…",
@@ -19,8 +20,9 @@ export const es = {
   female: "mujer", male: "hombre", nonBinary: "no binario", other: "otro", they: "elle",
   empty: "Este miembro no ha compartido contigo ningún dato de su perfil.",
 } satisfies Record<ProfileCopyKey, string>;
+export const pt = profilePt;
 
-const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es, pt };
 export function profileCopy(locale: AppLocale) {
   return (key: ProfileCopyKey) => catalogues[locale][key];
 }

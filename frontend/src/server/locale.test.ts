@@ -5,11 +5,14 @@ import {
 } from "./locale";
 import { galician } from "./locales/gl";
 import { spanish } from "./locales/es";
+import { portuguese } from "./locales/pt";
 
 describe("Server locale foundation", () => {
   it("exposes only reviewed locales", () => {
-    expect(availableLocales).toEqual(["en", "gl", "es"]);
+    expect(availableLocales).toEqual(["en", "gl", "es", "pt"]);
     expect(parseLocale("es-ES")).toBe("es");
+    expect(parseLocale("pt-PT")).toBe("pt");
+    expect(parseLocale("pt-BR")).toBe("pt");
   });
 
   it("keeps Spanish entry copy complete", () => {
@@ -24,8 +27,10 @@ describe("Server locale foundation", () => {
   it("prefers a valid saved choice, then the first supported browser language", () => {
     expect(resolveLocale("gl-ES", ["en-US"])).toBe("gl");
     expect(resolveLocale("unsupported", ["zh-CN", "gl-ES", "en-GB"])).toBe("gl");
+    expect(resolveLocale(null, ["pt-PT", "en-GB"])).toBe("pt");
+    expect(resolveLocale(null, ["pt-BR", "en-GB"])).toBe("pt");
     expect(resolveLocale(null, ["zh-CN"])).toBe("en");
-    expect(parseLocale("pt-BR")).toBeNull();
+    expect(parseLocale("ca-ES")).toBeNull();
   });
 
   it("translates fixed and parameterized copy", () => {
@@ -33,6 +38,16 @@ describe("Server locale foundation", () => {
     expect(translate("gl", "tooManyAttemptsMinutesMany", { minutes: 3 })).toContain("3 minutos");
     expect(translate("en", "welcomeBack")).toBe("Welcome back");
     expect(translate("es", "welcomeBack")).toBe("Te damos la bienvenida");
+    expect(translate("pt", "welcomeBack")).toBe("Boas-vindas de volta");
+  });
+
+  it("keeps Portuguese entry copy complete", () => {
+    expect(Object.keys(portuguese).sort()).toEqual(Object.keys(english).sort());
+    for (const key of Object.keys(english) as Array<keyof typeof english>) {
+      expect(portuguese[key].trim(), key).not.toBe("");
+      expect(portuguese[key].match(/\{\w+\}/g) ?? [], key)
+        .toEqual(english[key].match(/\{\w+\}/g) ?? []);
+    }
   });
 
   it("provides non-empty translations with matching interpolation variables", () => {
@@ -62,5 +77,6 @@ describe("Server locale foundation", () => {
     }).format(new Date(date)));
     expect(formatLocalNumber(1234.5, "gl")).toBe(new Intl.NumberFormat("gl-ES").format(1234.5));
     expect(formatLocalNumber(1234.5, "es")).toBe(new Intl.NumberFormat("es-ES").format(1234.5));
+    expect(formatLocalNumber(1234.5, "pt")).toBe(new Intl.NumberFormat("pt-PT").format(1234.5));
   });
 });
