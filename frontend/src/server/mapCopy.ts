@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { mapPt } from "./locales/pt/map";
 import { mapCa } from "./locales/ca/map";
+import { mapIt } from "./locales/it/map";
 
 export const en = {
   unavailable: "Library Map unavailable.", bookUnavailable: "Book information unavailable.", previewFailed: "The destination could not be previewed.", undoFailed: "Undo failed.", applyFailed: "The rearrangement could not be applied.", loading: "Loading Library Map…",
@@ -44,9 +45,10 @@ export const es = {
 } satisfies Record<MapCopyKey, string>;
 export const pt = mapPt;
 export const ca = mapCa;
+export const it = mapIt;
 
 export type MapCopy = (key: MapCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es, pt, ca, it };
 export function mapCopy(locale: AppLocale): MapCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

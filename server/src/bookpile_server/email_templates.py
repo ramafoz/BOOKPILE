@@ -5,11 +5,11 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es", "pt", "ca"]
+EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it"} else "en"
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,11 @@ _SHARED_COPY = {
         "footer": "Aquest missatge automàtic s'ha enviat com a resposta a una acció al teu compte de BOOKPILE. No carrega contingut extern.",
         "fallback": "Si el botó no funciona, copia i enganxa aquesta adreça al navegador:",
     },
+    "it": {
+        "tagline": "La tua biblioteca personale, organizzata in sicurezza.",
+        "footer": "Questo messaggio automatico di servizio è stato inviato in risposta a un'azione sul tuo account BOOKPILE. Non carica contenuti esterni.",
+        "fallback": "Se il pulsante non funziona, copia e incolla questo indirizzo nel browser:",
+    },
 }
 
 
@@ -97,6 +102,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["ca"]["fallback"],
             "Si no has creat cap compte de BOOKPILE, pots ignorar aquest missatge.",
         ),
+        "it": EmailCopy(
+            "BOOKPILE: Verifica il tuo indirizzo email", "Un ultimo passaggio", "Verifica il tuo indirizzo email",
+            "Conferma che questo indirizzo email ti appartiene per attivare il tuo account BOOKPILE.",
+            "Verifica l'indirizzo email", "Questo link monouso scade 24 ore dopo la consegna del messaggio.",
+            _SHARED_COPY["it"]["fallback"],
+            "Se non hai creato un account BOOKPILE, puoi ignorare questo messaggio.",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -134,6 +146,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["ca"]["fallback"],
             "Si no has sol·licitat restablir la contrasenya, ignora aquest missatge. La contrasenya no ha canviat.",
         ),
+        "it": EmailCopy(
+            "BOOKPILE: Reimposta la password", "Sicurezza dell'account", "Reimposta la password",
+            "È stata richiesta la reimpostazione della password del tuo account BOOKPILE.",
+            "Scegli una nuova password", "Questo link monouso scade 30 minuti dopo la consegna del messaggio.",
+            _SHARED_COPY["it"]["fallback"],
+            "Se non hai richiesto di reimpostare la password, ignora questo messaggio. La password non è stata modificata.",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -170,6 +189,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Recupera el compte", "Aquest enllaç de recuperació d'un sol ús caduca 48 hores després del lliurament del missatge.",
             _SHARED_COPY["ca"]["fallback"],
             "Si volies eliminar el compte, no cal que facis res. Les dades personals restants s'eliminaran quan acabi el termini de recuperació.",
+        ),
+        "it": EmailCopy(
+            "BOOKPILE: Recupera il tuo account", "Recupero dell'account", "Recupera il tuo account",
+            "Il tuo account BOOKPILE è programmato per l'eliminazione definitiva.",
+            "Recupera l'account", "Questo link di recupero monouso scade 48 ore dopo la consegna del messaggio.",
+            _SHARED_COPY["it"]["fallback"],
+            "Se intendevi eliminare l'account, non devi fare nulla. I dati personali rimanenti verranno rimossi al termine del periodo di recupero.",
         ),
     },
 }

@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { cataloguePt } from "./locales/pt/catalogue";
 import { catalogueCa } from "./locales/ca/catalogue";
+import { catalogueIt } from "./locales/it/catalogue";
 
 export const en = {
   serverUnavailable: "BOOKPILE could not reach the server. Please try again.",
@@ -507,8 +508,9 @@ export const es = {
 
 export const pt = cataloguePt;
 export const ca = catalogueCa;
+export const it = catalogueIt;
 
-const catalogues: Record<AppLocale, Record<CatalogueCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<CatalogueCopyKey, string>> = { en, gl, es, pt, ca, it };
 
 export function catalogueCopy(locale: AppLocale): CatalogueCopy {
   const catalogue = catalogues[locale];

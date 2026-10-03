@@ -166,6 +166,27 @@ def test_registration_stores_locale_and_rejects_unsupported_locale(
     assert '<html lang="ca">' in email_sender.emails[0].html
 
 
+def test_registration_stores_italian_locale_and_sends_localized_email(
+    client, session: Session, email_sender
+) -> None:
+    service = AccountInvitationService(AccountInvitationRepository(session))
+    invitation = service.create()
+    response = client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(
+            invitation.raw_token,
+            username="italian_reader",
+            email="italian@example.com",
+            preferred_locale="it",
+        ),
+    )
+    assert response.status_code == 201
+    user = session.scalar(select(User).where(User.username == "italian_reader"))
+    assert user is not None and user.preferred_locale == "it"
+    assert email_sender.emails[0].subject == "BOOKPILE: Verifica il tuo indirizzo email"
+    assert '<html lang="it">' in email_sender.emails[0].html
+
+
 def test_verification_resend_is_generic_and_revokes_old_token(
     client, session: Session, email_sender
 ) -> None:

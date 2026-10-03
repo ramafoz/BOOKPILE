@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { authenticatedPt } from "./locales/pt/authenticated";
 import { authenticatedCa } from "./locales/ca/authenticated";
+import { authenticatedIt } from "./locales/it/authenticated";
 
 export const en = {
   requestFailed: "BOOKPILE could not complete that request.",
@@ -423,8 +424,9 @@ export const es = {
 
 export const pt = authenticatedPt;
 export const ca = authenticatedCa;
+export const it = authenticatedIt;
 
-const catalogues: Record<AppLocale, Record<AuthenticatedCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<AuthenticatedCopyKey, string>> = { en, gl, es, pt, ca, it };
 
 export function authenticatedCopy(locale: AppLocale) {
   const catalogue = catalogues[locale];
