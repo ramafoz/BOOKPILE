@@ -5,7 +5,7 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es", "pt"]
+EmailLocale = Literal["en", "gl", "es", "pt", "ca"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
@@ -52,6 +52,11 @@ _SHARED_COPY = {
         "footer": "Esta mensagem automática foi enviada em resposta a uma ação na sua conta BOOKPILE. Não carrega conteúdo externo.",
         "fallback": "Se o botão não funcionar, copie e cole este endereço no navegador:",
     },
+    "ca": {
+        "tagline": "La teva biblioteca personal, situada de manera segura.",
+        "footer": "Aquest missatge automàtic s'ha enviat com a resposta a una acció al teu compte de BOOKPILE. No carrega contingut extern.",
+        "fallback": "Si el botó no funciona, copia i enganxa aquesta adreça al navegador:",
+    },
 }
 
 
@@ -85,6 +90,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["pt"]["fallback"],
             "Se não criou uma conta BOOKPILE, pode ignorar esta mensagem em segurança.",
         ),
+        "ca": EmailCopy(
+            "BOOKPILE: Verifica el teu correu", "Un últim pas", "Verifica el teu correu",
+            "Confirma que aquesta adreça de correu és teva per activar el compte de BOOKPILE.",
+            "Verifica el correu", "Aquest enllaç d'un sol ús caduca 24 hores després del lliurament del missatge.",
+            _SHARED_COPY["ca"]["fallback"],
+            "Si no has creat cap compte de BOOKPILE, pots ignorar aquest missatge.",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -115,6 +127,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["pt"]["fallback"],
             "Se não pediu a redefinição da palavra-passe, ignore esta mensagem. A sua palavra-passe não foi alterada.",
         ),
+        "ca": EmailCopy(
+            "BOOKPILE: Restableix la contrasenya", "Seguretat del compte", "Restableix la contrasenya",
+            "S'ha sol·licitat restablir la contrasenya del teu compte de BOOKPILE.",
+            "Tria una contrasenya nova", "Aquest enllaç d'un sol ús caduca 30 minuts després del lliurament del missatge.",
+            _SHARED_COPY["ca"]["fallback"],
+            "Si no has sol·licitat restablir la contrasenya, ignora aquest missatge. La contrasenya no ha canviat.",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -144,6 +163,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Recuperar conta", "Esta ligação de recuperação de utilização única expira 48 horas após a entrega da mensagem.",
             _SHARED_COPY["pt"]["fallback"],
             "Se pretendia eliminar a conta, não é necessária qualquer ação. Os restantes dados pessoais serão removidos quando o prazo de recuperação terminar.",
+        ),
+        "ca": EmailCopy(
+            "BOOKPILE: Recupera el teu compte", "Recuperació del compte", "Recupera el teu compte",
+            "El teu compte de BOOKPILE està programat per eliminar-se definitivament.",
+            "Recupera el compte", "Aquest enllaç de recuperació d'un sol ús caduca 48 hores després del lliurament del missatge.",
+            _SHARED_COPY["ca"]["fallback"],
+            "Si volies eliminar el compte, no cal que facis res. Les dades personals restants s'eliminaran quan acabi el termini de recuperació.",
         ),
     },
 }

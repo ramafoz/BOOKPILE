@@ -225,3 +225,13 @@ access. Email tests verify Portuguese subjects, expiry wording, HTML language,
 privacy footer and escaped action URLs. The remaining launch languages are
 Basque, Catalan/Valencian, Aranese Occitan, Italian, French and Simplified
 Chinese.
+
+## Thirteenth branch checkpoint
+
+Catalan (`ca`) is being prepared as the single BOOKPILE catalogue for Catalan
+and Valencian users. Its complete public account catalogue and all three
+transactional email templates are translated and structurally tested. Catalan
+is intentionally absent from `availableLocales`, is not yet accepted as an
+account preference and cannot be selected in invitations: the authenticated
+workspaces and invitation copy must be completed and reviewed first. Until
+then, no user can encounter a partially translated Catalan interface.
