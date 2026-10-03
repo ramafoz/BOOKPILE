@@ -202,7 +202,7 @@ function LoginPage({
   onLogin,
 }: {
   navigate: (route: Route) => void;
-  onLogin: (user: CurrentUser) => void;
+  onLogin: (user: CurrentUser) => Promise<void>;
 }) {
   const { t } = useLocale();
   const [identifier, setIdentifier] = useState("");
@@ -216,7 +216,7 @@ function LoginPage({
     setBusy(true);
     setError(null);
     try {
-      onLogin(await serverApi.login(identifier, password, rememberMe));
+      await onLogin(await serverApi.login(identifier, password, rememberMe));
     } catch (caught) {
       setError(caught);
     } finally {
