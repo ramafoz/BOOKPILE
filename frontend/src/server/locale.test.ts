@@ -12,6 +12,7 @@ describe("Server locale foundation", () => {
     expect(availableLocales).toEqual(["en", "gl", "es", "pt"]);
     expect(parseLocale("es-ES")).toBe("es");
     expect(parseLocale("pt-PT")).toBe("pt");
+    expect(parseLocale("pt-BR")).toBe("pt");
   });
 
   it("keeps Spanish entry copy complete", () => {
@@ -27,6 +28,7 @@ describe("Server locale foundation", () => {
     expect(resolveLocale("gl-ES", ["en-US"])).toBe("gl");
     expect(resolveLocale("unsupported", ["zh-CN", "gl-ES", "en-GB"])).toBe("gl");
     expect(resolveLocale(null, ["pt-PT", "en-GB"])).toBe("pt");
+    expect(resolveLocale(null, ["pt-BR", "en-GB"])).toBe("pt");
     expect(resolveLocale(null, ["zh-CN"])).toBe("en");
     expect(parseLocale("ca-ES")).toBeNull();
   });

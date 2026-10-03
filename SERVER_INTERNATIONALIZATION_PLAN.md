@@ -207,8 +207,12 @@ formatting and review rather than route architecture.
 
 ## Twelfth branch checkpoint
 
-Spanish (`es`) and European Portuguese (`pt-PT`) now follow the same complete
-contract as English and Galician. Public account routes, every authenticated
+Spanish (`es`) and Portuguese (`pt`) now follow the same complete contract as
+English and Galician. BOOKPILE deliberately provides one Portuguese catalogue
+for all regional variants: browser preferences such as `pt-PT` and `pt-BR`
+both resolve to `pt`. The application uses `pt-PT` only as its stable convention
+for Portuguese date and number formatting, not as a restriction on who receives
+the translation. Public account routes, every authenticated
 workspace, member and account invitations, regional date/number formatting,
 stable error presentation and all three transactional emails have statically
 checked catalogues. Registration and the protected account preference endpoint

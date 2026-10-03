@@ -20,6 +20,9 @@ export const localeNames: Record<AppLocale, string> = {
 };
 
 const intlLocales: Record<AppLocale, string> = {
+  // BOOKPILE deliberately offers one Portuguese catalogue for every regional
+  // variant. pt-PT provides deterministic date and number conventions; it
+  // does not restrict language matching to Portugal.
   en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT",
 };
 const catalogues: Record<AppLocale, Record<MessageKey, string>> = {
