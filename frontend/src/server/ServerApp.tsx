@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -42,6 +42,7 @@ import { useTimedNotices } from "./timedNotices";
 import LocaleProvider from "./LocaleProvider";
 import { type LocaleContextValue, useLocale } from "./LocaleContext";
 import { availableLocales, intlLocale, localeNames } from "./locale";
+import { loadLocaleCatalogues } from "./localeCatalogues";
 import { libraryInvitationMessage } from "./invitationCopy";
 import { authenticatedCopy } from "./authenticatedCopy";
 import { type LibraryAdminCopy, libraryAdminCopy } from "./libraryAdminCopy";
@@ -118,7 +119,7 @@ function AuthShell({ children }: { children: ReactNode }) {
         </a>
         <label className="server-locale-choice">
           <span>{t("languageLabel")}</span>
-          <select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)}>
+          <select value={locale} onChange={(event) => void setLocale(event.target.value as typeof locale)}>
             {availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}
           </select>
         </label>
@@ -201,7 +202,7 @@ function LoginPage({
   onLogin,
 }: {
   navigate: (route: Route) => void;
-  onLogin: (user: CurrentUser) => void;
+  onLogin: (user: CurrentUser) => Promise<void>;
 }) {
   const { t } = useLocale();
   const [identifier, setIdentifier] = useState("");
@@ -215,7 +216,7 @@ function LoginPage({
     setBusy(true);
     setError(null);
     try {
-      onLogin(await serverApi.login(identifier, password, rememberMe));
+      await onLogin(await serverApi.login(identifier, password, rememberMe));
     } catch (caught) {
       setError(caught);
     } finally {
@@ -514,6 +515,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const [inviteRole, setInviteRole] = useState<"OWNER" | "VIEWER">("VIEWER");
   const [inviteScope, setInviteScope] = useState<"CATALOG_ONLY" | "CATALOG_AND_MAP">("CATALOG_ONLY");
   const [invitationLocale, setInvitationLocale] = useState(locale);
+  const invitationLocaleRequest = useRef(0);
   const [ownerWarning, setOwnerWarning] = useState(false);
   const [generatedInvitation, setGeneratedInvitation] = useState<{
     link: string;
@@ -521,6 +523,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
     role: "OWNER" | "VIEWER";
     scope: "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
   } | null>(null);
+
   const [dataBusy, setDataBusy] = useState(false);
   const [pendingMemberChange, setPendingMemberChange] = useState<PendingMemberChange | null>(null);
   const [memberChangePassword, setMemberChangePassword] = useState("");
@@ -528,6 +531,17 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
   const workspaceLocale = locale;
   const copy = authenticatedCopy(workspaceLocale);
   const adminCopy = libraryAdminCopy(workspaceLocale);
+
+  async function changeInvitationLocale(nextLocale: typeof invitationLocale) {
+    const request = invitationLocaleRequest.current + 1;
+    invitationLocaleRequest.current = request;
+    try {
+      await loadLocaleCatalogues(nextLocale);
+      if (invitationLocaleRequest.current === request) setInvitationLocale(nextLocale);
+    } catch {
+      if (invitationLocaleRequest.current === request) setError(adminCopy("requestFailed"));
+    }
+  }
   const [controlsPanel, setControlsPanel] = useState<"LIBRARIES" | "VIEW" | "LIBRARY_SETTINGS" | null>(null);
   const [panelAnchor, setPanelAnchor] = useState<PanelAnchor | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
@@ -1068,7 +1082,7 @@ function AccountHome({ user, onSignedOut }: { user: CurrentUser; onSignedOut: ()
                   <form className="server-invite-form" onSubmit={createInvitation}>
                     <label>{adminCopy("role")}<select value={inviteRole} onChange={(event) => { setInviteRole(event.target.value as "OWNER" | "VIEWER"); setOwnerWarning(false); }}><option value="VIEWER">{adminCopy("viewer")}</option><option value="OWNER">{adminCopy("equalCoOwner")}</option></select></label>
                     {inviteRole === "VIEWER" && <label>{adminCopy("access")}<select value={inviteScope} onChange={(event) => setInviteScope(event.target.value as typeof inviteScope)}><option value="CATALOG_ONLY">{adminCopy("catalogueOnly")}</option><option value="CATALOG_AND_MAP">{adminCopy("catalogueMap")}</option></select></label>}
-                    <label>{adminCopy("invitationLanguage")}<select value={invitationLocale} onChange={(event) => setInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
+                    <label>{adminCopy("invitationLanguage")}<select value={invitationLocale} onChange={(event) => void changeInvitationLocale(event.target.value as typeof invitationLocale)}>{availableLocales.map((code) => <option value={code} key={code}>{localeNames[code]}</option>)}</select></label>
                     {inviteRole === "OWNER" && <label className="server-check"><input type="checkbox" checked={ownerWarning} onChange={(event) => setOwnerWarning(event.target.checked)} /> {adminCopy("ownerAcknowledgement")}</label>}
                     <button type="submit" disabled={dataBusy}>{adminCopy("generateInvitation")}</button>
                   </form>
@@ -1179,9 +1193,9 @@ function ServerAppContent() {
     setRoute(next);
   }, []);
 
-  const acceptAuthenticatedUser = useCallback((current: CurrentUser) => {
+  const acceptAuthenticatedUser = useCallback(async (current: CurrentUser) => {
+    await setLocale(current.preferred_locale);
     setUser(current);
-    setLocale(current.preferred_locale);
   }, [setLocale]);
 
   useEffect(() => {
@@ -1193,7 +1207,7 @@ function ServerAppContent() {
   useEffect(() => {
     let active = true;
     void serverApi.me()
-      .then((current) => { if (active) acceptAuthenticatedUser(current); })
+      .then(async (current) => { if (active) await acceptAuthenticatedUser(current); })
       .catch((error: unknown) => {
         if (active && (!(error instanceof ServerApiError) || error.status !== 401)) {
           setBootError(error);

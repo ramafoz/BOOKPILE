@@ -1,7 +1,4 @@
 import type { AppLocale } from "./locale";
-import { profilePt } from "./locales/pt/profile";
-import { profileCa } from "./locales/ca/profile";
-import { profileIt } from "./locales/it/profile";
 
 export const en = {
   openFailed: "This profile could not be opened.", closeProfile: "Close profile", openingProfile: "Opening profile…",
@@ -10,23 +7,19 @@ export const en = {
   empty: "This member has not shared any profile details with you.",
 } as const;
 export type ProfileCopyKey = keyof typeof en;
-const gl = {
-  openFailed: "Non se puido abrir este perfil.", closeProfile: "Pechar perfil", openingProfile: "Abrindo o perfil…",
-  member: "Membro de BOOKPILE", timezone: "Fuso horario", gender: "Xénero", pronouns: "Pronomes", city: "Cidade", state: "Estado / rexión", country: "País", dateOfBirth: "Data de nacemento",
-  female: "muller", male: "home", nonBinary: "non binario", other: "outro", they: "elu",
-  empty: "Este membro non compartiu contigo ningún dato do seu perfil.",
-} satisfies Record<ProfileCopyKey, string>;
-export const es = {
-  openFailed: "No se ha podido abrir este perfil.", closeProfile: "Cerrar perfil", openingProfile: "Abriendo el perfil…",
-  member: "Miembro de BOOKPILE", timezone: "Zona horaria", gender: "Género", pronouns: "Pronombres", city: "Ciudad", state: "Provincia / región", country: "País", dateOfBirth: "Fecha de nacimiento",
-  female: "mujer", male: "hombre", nonBinary: "no binario", other: "otro", they: "elle",
-  empty: "Este miembro no ha compartido contigo ningún dato de su perfil.",
-} satisfies Record<ProfileCopyKey, string>;
-export const pt = profilePt;
-export const ca = profileCa;
-export const it = profileIt;
 
-const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es, pt, ca, it };
+
+
+const catalogues: Partial<Record<AppLocale, Record<ProfileCopyKey, string>>> = { en };
+
+export function registerProfileCatalogue(
+  locale: AppLocale,
+  catalogue: Record<ProfileCopyKey, string>,
+): void {
+  catalogues[locale] = catalogue;
+}
 export function profileCopy(locale: AppLocale) {
-  return (key: ProfileCopyKey) => catalogues[locale][key];
+  const catalogue = catalogues[locale];
+  if (!catalogue) throw new Error(`Locale catalogue not loaded: ${locale}`);
+  return (key: ProfileCopyKey) => catalogue[key];
 }

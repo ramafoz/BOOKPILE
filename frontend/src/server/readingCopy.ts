@@ -1,7 +1,4 @@
 import type { AppLocale } from "./locale";
-import { readingPt } from "./locales/pt/reading";
-import { readingCa } from "./locales/ca/reading";
-import { readingIt } from "./locales/it/reading";
 
 export const en = {
   pending: "Pending", reading: "Reading…", rereading: "Re-reading…", read: "Read", loading: "Loading…",
@@ -18,41 +15,20 @@ export const en = {
   myGoodreadsReview: "My Goodreads review", reviewUrl: "Review URL", removeReviewHelp: "Leave this empty to remove your saved review link.", saveGoodreads: "Save Goodreads link",
 } as const;
 export type ReadingCopyKey = keyof typeof en;
-const gl = {
-  pending: "Pendente", reading: "En lectura…", rereading: "En relectura…", read: "Lido", loading: "Cargando…",
-  copyBeingRead: "Este exemplar físico está en lectura", updateStatus: "Actualizar o teu estado de lectura", readOnly: "Esta perspectiva de lectura é de só lectura",
-  unknown: "Descoñecida", datesUnknown: "Datas de lectura descoñecidas", since: "Desde o {date}", dateRange: "{start} – {finish}",
-  history: "Historial de lectura", personalRecord: "Rexistro persoal de lectura de {name}", readingNumber: "Lectura {number}", noSessions: "Non hai sesións de lectura rexistradas para esta perspectiva.",
-  goodreadsReviews: "Recensións en Goodreads", usersReview: "Recensión de {username}",
-  finishRereading: "Remataches a relectura?", didYouFinish: "Remataches?", rereadBook: "Reler este libro?", startReading: "Comezar a ler?",
-  cancelActive: "Cancelar esta {kind} activa? A sesión activa eliminarase definitivamente.", kindReading: "lectura", kindRereading: "relectura",
-  close: "Pechar", personalReading: "Lectura persoal", finished: "Rematada", started: "Comezada", cancelReading: "Cancelar lectura", back: "Volver", saving: "Gardando…", confirm: "Confirmar",
-  requestFailed: "BOOKPILE non puido completar esa solicitude.", permanentDelete: "Eliminar definitivamente esta lectura ({description})? Esta acción non se pode desfacer.",
-  myPersonalData: "Os meus datos persoais", myReading: "A miña lectura", loadingRecord: "Cargando o teu rexistro de lectura…", edit: "Editar", delete: "Eliminar", noReadings: "Aínda non hai lecturas rexistradas.",
-  editHistorical: "Editar lectura histórica", addHistorical: "Engadir lectura histórica", cancelEdit: "Cancelar edición", saveReading: "Gardar lectura", addReading: "Engadir lectura",
-  myGoodreadsReview: "A miña recensión en Goodreads", reviewUrl: "URL da recensión", removeReviewHelp: "Déixao baleiro para eliminar a ligazón gardada da recensión.", saveGoodreads: "Gardar ligazón de Goodreads",
-} satisfies Record<ReadingCopyKey, string>;
-export const es = {
-  pending: "Pendiente", reading: "En lectura…", rereading: "En relectura…", read: "Leído", loading: "Cargando…",
-  copyBeingRead: "Este ejemplar físico está en lectura", updateStatus: "Actualizar tu estado de lectura", readOnly: "Esta perspectiva de lectura es de solo lectura",
-  unknown: "Desconocida", datesUnknown: "Fechas de lectura desconocidas", since: "Desde el {date}", dateRange: "{start} – {finish}",
-  history: "Historial de lectura", personalRecord: "Registro personal de lectura de {name}", readingNumber: "Lectura {number}", noSessions: "No hay sesiones de lectura registradas para esta perspectiva.",
-  goodreadsReviews: "Reseñas en Goodreads", usersReview: "Reseña de {username}",
-  finishRereading: "¿Has terminado la relectura?", didYouFinish: "¿Has terminado?", rereadBook: "¿Volver a leer este libro?", startReading: "¿Empezar a leer?",
-  cancelActive: "¿Cancelar esta {kind} activa? La sesión activa se eliminará definitivamente.", kindReading: "lectura", kindRereading: "relectura",
-  close: "Cerrar", personalReading: "Lectura personal", finished: "Terminada", started: "Iniciada", cancelReading: "Cancelar lectura", back: "Volver", saving: "Guardando…", confirm: "Confirmar",
-  requestFailed: "BOOKPILE no ha podido completar esa solicitud.", permanentDelete: "¿Eliminar definitivamente esta lectura ({description})? Esta acción no se puede deshacer.",
-  myPersonalData: "Mis datos personales", myReading: "Mi lectura", loadingRecord: "Cargando tu registro de lectura…", edit: "Editar", delete: "Eliminar", noReadings: "Todavía no hay lecturas registradas.",
-  editHistorical: "Editar lectura histórica", addHistorical: "Añadir lectura histórica", cancelEdit: "Cancelar edición", saveReading: "Guardar lectura", addReading: "Añadir lectura",
-  myGoodreadsReview: "Mi reseña en Goodreads", reviewUrl: "URL de la reseña", removeReviewHelp: "Déjalo vacío para eliminar el enlace guardado de la reseña.", saveGoodreads: "Guardar enlace de Goodreads",
-} satisfies Record<ReadingCopyKey, string>;
-export const pt = readingPt;
-export const ca = readingCa;
-export const it = readingIt;
+
+
 
 export type ReadingCopy = (key: ReadingCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<ReadingCopyKey, string>> = { en, gl, es, pt, ca, it };
+const catalogues: Partial<Record<AppLocale, Record<ReadingCopyKey, string>>> = { en };
+
+export function registerReadingCatalogue(
+  locale: AppLocale,
+  catalogue: Record<ReadingCopyKey, string>,
+): void {
+  catalogues[locale] = catalogue;
+}
 export function readingCopy(locale: AppLocale): ReadingCopy {
   const catalogue = catalogues[locale];
+  if (!catalogue) throw new Error(`Locale catalogue not loaded: ${locale}`);
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);
 }
