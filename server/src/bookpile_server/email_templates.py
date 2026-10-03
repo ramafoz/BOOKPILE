@@ -5,11 +5,11 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es"]
+EmailLocale = Literal["en", "gl", "es", "pt"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt"} else "en"
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,11 @@ _SHARED_COPY = {
         "footer": "Este mensaje automático se ha enviado como respuesta a una acción en tu cuenta de BOOKPILE. No carga contenido externo.",
         "fallback": "Si el botón no funciona, copia y pega esta dirección en el navegador:",
     },
+    "pt": {
+        "tagline": "A sua biblioteca pessoal, organizada em segurança.",
+        "footer": "Esta mensagem automática foi enviada em resposta a uma ação na sua conta BOOKPILE. Não carrega conteúdo externo.",
+        "fallback": "Se o botão não funcionar, copie e cole este endereço no navegador:",
+    },
 }
 
 
@@ -73,6 +78,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["es"]["fallback"],
             "Si no has creado una cuenta de BOOKPILE, puedes ignorar este mensaje.",
         ),
+        "pt": EmailCopy(
+            "BOOKPILE: Verifique o seu correio eletrónico", "Um último passo", "Verifique o seu correio eletrónico",
+            "Confirme que este endereço de correio eletrónico lhe pertence para ativar a sua conta BOOKPILE.",
+            "Verificar correio eletrónico", "Esta ligação de utilização única expira 24 horas após a entrega da mensagem.",
+            _SHARED_COPY["pt"]["fallback"],
+            "Se não criou uma conta BOOKPILE, pode ignorar esta mensagem em segurança.",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -96,6 +108,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["es"]["fallback"],
             "Si no has solicitado restablecer la contraseña, ignora este mensaje. Tu contraseña no ha cambiado.",
         ),
+        "pt": EmailCopy(
+            "BOOKPILE: Redefina a sua palavra-passe", "Segurança da conta", "Redefina a sua palavra-passe",
+            "Foi pedida a redefinição da palavra-passe da sua conta BOOKPILE.",
+            "Escolher uma nova palavra-passe", "Esta ligação de utilização única expira 30 minutos após a entrega da mensagem.",
+            _SHARED_COPY["pt"]["fallback"],
+            "Se não pediu a redefinição da palavra-passe, ignore esta mensagem. A sua palavra-passe não foi alterada.",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -118,6 +137,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Recuperar la cuenta", "Este enlace de recuperación de un solo uso caduca 48 horas después de la entrega del mensaje.",
             _SHARED_COPY["es"]["fallback"],
             "Si querías eliminar la cuenta, no tienes que hacer nada. Los datos personales restantes se eliminarán al terminar el plazo de recuperación.",
+        ),
+        "pt": EmailCopy(
+            "BOOKPILE: Recupere a sua conta", "Recuperação da conta", "Recupere a sua conta",
+            "A sua conta BOOKPILE está agendada para eliminação definitiva.",
+            "Recuperar conta", "Esta ligação de recuperação de utilização única expira 48 horas após a entrega da mensagem.",
+            _SHARED_COPY["pt"]["fallback"],
+            "Se pretendia eliminar a conta, não é necessária qualquer ação. Os restantes dados pessoais serão removidos quando o prazo de recuperação terminar.",
         ),
     },
 }

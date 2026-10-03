@@ -29,7 +29,7 @@ and fallback.
 - [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining eight launch locales in reviewed batches; verify plural rules,
+- [ ] Add the remaining six launch locales in reviewed batches; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
@@ -204,3 +204,20 @@ and audit continuity. All current authenticated workspaces can therefore apply
 the saved English or Galician account preference end to end; adding the next
 launch language is now primarily catalogue translation plus locale-specific
 formatting and review rather than route architecture.
+
+## Twelfth branch checkpoint
+
+Spanish (`es`) and European Portuguese (`pt-PT`) now follow the same complete
+contract as English and Galician. Public account routes, every authenticated
+workspace, member and account invitations, regional date/number formatting,
+stable error presentation and all three transactional emails have statically
+checked catalogues. Registration and the protected account preference endpoint
+accept each completed locale; unsupported languages continue to fail closed.
+
+Portuguese is exposed only after structural tests prove exact key and
+interpolation-marker equivalence across every catalogue. Its invitation copy
+distinguishes account, catalogue-only, catalogue-and-map and equal co-Owner
+access. Email tests verify Portuguese subjects, expiry wording, HTML language,
+privacy footer and escaped action URLs. The remaining launch languages are
+Basque, Catalan/Valencian, Aranese Occitan, Italian, French and Simplified
+Chinese.

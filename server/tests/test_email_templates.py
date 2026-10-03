@@ -98,7 +98,31 @@ def test_prepared_spanish_transactional_templates_are_complete_and_private(
     assert "does not load external content" not in rendered.html
 
 
+@pytest.mark.parametrize(
+    ("renderer", "subject", "expiry"),
+    (
+        (verification_email, "BOOKPILE: Verifique o seu correio eletrónico", "24 horas"),
+        (password_reset_email, "BOOKPILE: Redefina a sua palavra-passe", "30 minutos"),
+        (account_recovery_email, "BOOKPILE: Recupere a sua conta", "48 horas"),
+    ),
+)
+def test_portuguese_transactional_templates_are_complete_and_private(
+    renderer, subject: str, expiry: str
+) -> None:
+    url = "https://staging.bookpile.gal/action?token=secret-token&next=%2F"
+    rendered = renderer(url, locale="pt")
+    assert rendered.subject == subject
+    assert expiry in rendered.text and expiry in rendered.html
+    assert '<html lang="pt">' in rendered.html
+    assert "Não carrega conteúdo externo" in rendered.html
+    assert "token=secret-token&amp;next=%2F" in rendered.html
+    assert url in rendered.text
+    assert "Your personal library" not in rendered.text + rendered.html
+    assert "does not load external content" not in rendered.html
+
+
 def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("gl") == "gl"
     assert resolve_email_locale("es") == "es"
-    assert resolve_email_locale("pt") == "en"
+    assert resolve_email_locale("pt") == "pt"
+    assert resolve_email_locale("ca") == "en"

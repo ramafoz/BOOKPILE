@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { statisticsPt } from "./locales/pt/statistics";
 
 export const en = {
   loadFailed: "Statistics could not be loaded.", days: "{count} days", noUsableDates: "No usable dates", durationSummary: "Median {median} · {measured} measured · {excluded} excluded",
@@ -34,9 +35,10 @@ export const es = {
   sharedCustody: "Custodia física compartida", loanStatistics: "Estadísticas de préstamos", loanHelp: "Estos totales pertenecen a la biblioteca y no cambian con la perspectiva de lectura.", currentlyLoaned: "Prestados actualmente", overdue: "Atrasados", returnedLoans: "Préstamos devueltos", unknownDates: "Fechas desconocidas", unknownDateSummary: "{loaned} prestados · {returned} devueltos",
   loansByYear: "Préstamos por año", loaned: "Prestados", returned: "Devueltos", noDatedLoans: "No hay préstamos con fecha que coincidan con estos filtros.", mostLoaned: "Libros más prestados", loans: "Préstamos", noLoans: "No hay préstamos que coincidan con estos filtros.",
 } satisfies Record<StatisticsCopyKey, string>;
+export const pt = statisticsPt;
 
 export type StatisticsCopy = (key: StatisticsCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<StatisticsCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<StatisticsCopyKey, string>> = { en, gl, es, pt };
 export function statisticsCopy(locale: AppLocale): StatisticsCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

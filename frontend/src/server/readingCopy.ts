@@ -1,4 +1,5 @@
 import type { AppLocale } from "./locale";
+import { readingPt } from "./locales/pt/reading";
 
 export const en = {
   pending: "Pending", reading: "Reading…", rereading: "Re-reading…", read: "Read", loading: "Loading…",
@@ -43,9 +44,10 @@ export const es = {
   editHistorical: "Editar lectura histórica", addHistorical: "Añadir lectura histórica", cancelEdit: "Cancelar edición", saveReading: "Guardar lectura", addReading: "Añadir lectura",
   myGoodreadsReview: "Mi reseña en Goodreads", reviewUrl: "URL de la reseña", removeReviewHelp: "Déjalo vacío para eliminar el enlace guardado de la reseña.", saveGoodreads: "Guardar enlace de Goodreads",
 } satisfies Record<ReadingCopyKey, string>;
+export const pt = readingPt;
 
 export type ReadingCopy = (key: ReadingCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<ReadingCopyKey, string>> = { en, gl, es };
+const catalogues: Record<AppLocale, Record<ReadingCopyKey, string>> = { en, gl, es, pt };
 export function readingCopy(locale: AppLocale): ReadingCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

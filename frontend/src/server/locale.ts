@@ -1,6 +1,7 @@
 import { english, type MessageKey } from "./locales/en";
 import { galician } from "./locales/gl";
 import { spanish } from "./locales/es";
+import { portuguese } from "./locales/pt";
 
 export { english } from "./locales/en";
 export type { MessageKey } from "./locales/en";
@@ -8,20 +9,24 @@ export type { MessageKey } from "./locales/en";
 export const LOCALE_STORAGE_KEY = "bookpile.server.locale";
 
 // A language belongs here only after the current route is fully translated.
-export const availableLocales = ["en", "gl", "es"] as const;
+export const availableLocales = ["en", "gl", "es", "pt"] as const;
 export type AppLocale = (typeof availableLocales)[number];
 
 export const localeNames: Record<AppLocale, string> = {
   en: "English",
   gl: "Galego",
   es: "Español",
+  pt: "Português",
 };
 
-const intlLocales: Record<AppLocale, string> = { en: "en-GB", gl: "gl-ES", es: "es-ES" };
+const intlLocales: Record<AppLocale, string> = {
+  en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT",
+};
 const catalogues: Record<AppLocale, Record<MessageKey, string>> = {
   en: english,
   gl: galician,
   es: spanish,
+  pt: portuguese,
 };
 
 export function intlLocale(locale: AppLocale): string {
