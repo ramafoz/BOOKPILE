@@ -9,7 +9,7 @@ EmailLocale = Literal["en", "gl", "es", "pt", "ca"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es", "pt"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca"} else "en"
 
 
 @dataclass(frozen=True)

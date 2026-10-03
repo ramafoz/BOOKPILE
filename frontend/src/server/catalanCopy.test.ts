@@ -11,6 +11,14 @@ import { readingCa } from "./locales/ca/reading";
 import { statisticsCa } from "./locales/ca/statistics";
 import { en as catalogueEn } from "./catalogueCopy";
 import { catalogueCa } from "./locales/ca/catalogue";
+import { en as authenticatedEn } from "./authenticatedCopy";
+import { en as libraryAdminEn } from "./libraryAdminCopy";
+import { authenticatedCa } from "./locales/ca/authenticated";
+import { libraryAdminCa } from "./locales/ca/libraryAdmin";
+import { en as mapEn } from "./mapCopy";
+import { mapCa } from "./locales/ca/map";
+import { en as physicalEn } from "./physicalCopy";
+import { physicalCa } from "./locales/ca/physical";
 import { accountInvitationMessage, libraryInvitationMessage } from "./invitationCopy";
 
 function expectEquivalent(
@@ -25,7 +33,7 @@ function expectEquivalent(
   }
 }
 
-describe("Catalan public copy", () => {
+describe("Catalan copy", () => {
   it("matches every public key and interpolation marker", () => {
     expectEquivalent(english, catalan);
   });
@@ -36,6 +44,10 @@ describe("Catalan public copy", () => {
     expectEquivalent(readingEn, readingCa);
     expectEquivalent(statisticsEn, statisticsCa);
     expectEquivalent(catalogueEn, catalogueCa);
+    expectEquivalent(authenticatedEn, authenticatedCa);
+    expectEquivalent(libraryAdminEn, libraryAdminCa);
+    expectEquivalent(mapEn, mapCa);
+    expectEquivalent(physicalEn, physicalCa);
   });
 
   it("distinguishes every prepared invitation permission", () => {

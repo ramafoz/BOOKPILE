@@ -148,4 +148,5 @@ def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("gl") == "gl"
     assert resolve_email_locale("es") == "es"
     assert resolve_email_locale("pt") == "pt"
-    assert resolve_email_locale("ca") == "en"
+    assert resolve_email_locale("ca") == "ca"
+    assert resolve_email_locale("eu") == "en"

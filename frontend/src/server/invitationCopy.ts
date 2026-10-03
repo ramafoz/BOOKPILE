@@ -2,9 +2,7 @@ import type { AppLocale } from "./locale";
 
 export type LibraryInvitationRole = "OWNER" | "VIEWER";
 export type LibraryInvitationScope = "CATALOG_ONLY" | "CATALOG_AND_MAP" | null;
-// `ca` is prepared but remains unavailable in the UI until its complete
-// authenticated catalogue is reviewed and added to AppLocale.
-type InvitationLocale = AppLocale | "ca";
+type InvitationLocale = AppLocale;
 
 export function accountInvitationMessage(locale: InvitationLocale, url: string): string {
   if (locale === "gl") {

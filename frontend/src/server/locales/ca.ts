@@ -1,8 +1,7 @@
 import type { MessageKey } from "./en";
 
-// Catalan is prepared here before it is exposed in availableLocales. A locale
-// is selectable only after every authenticated workspace and email is reviewed.
-// This single catalogue also serves Valencian users by product decision.
+// This single reviewed Catalan catalogue also serves Valencian users by
+// product decision.
 export const catalan = {
   languageLabel: "Idioma",
   storyLabel: "Presentació de BOOKPILE",
