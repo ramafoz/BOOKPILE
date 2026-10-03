@@ -1,5 +1,6 @@
 import type { AppLocale } from "./locale";
 import { mapPt } from "./locales/pt/map";
+import { mapCa } from "./locales/ca/map";
 
 export const en = {
   unavailable: "Library Map unavailable.", bookUnavailable: "Book information unavailable.", previewFailed: "The destination could not be previewed.", undoFailed: "Undo failed.", applyFailed: "The rearrangement could not be applied.", loading: "Loading Library Map…",
@@ -42,9 +43,10 @@ export const es = {
   pending: "Pendiente", reading: "En lectura", onLoan: "Prestado", physicalCopyReading: "Este ejemplar físico está en lectura", physicalCopyOnLoan: "Este ejemplar físico está prestado", rereading: "En relectura", read: "Leído", notSelected: "No seleccionado", otherBooks: "Otros libros", chooseFocus: "Elegir {mode}", notRecorded: "Sin registrar", originalCollection: "Colección original", noAcquisitionDate: "Sin fecha de adquisición", stillReading: "Todavía en lectura", stillRereading: "Todavía en relectura", readNoData: "Leído · sin datos", noData: "Sin datos", days: "{count} días", pagesPerDay: "{count} páginas/día", noRecordedData: "No hay datos registrados", shortest: "Más breve", longest: "Más largo", slowest: "Más lento", fastest: "Más rápido", oldest: "Más antiguo", newest: "Más reciente", endpointOne: "{adjective}: «{title}» · {value}", endpointTie: "{adjective}: empate ({count}) · {value}",
 } satisfies Record<MapCopyKey, string>;
 export const pt = mapPt;
+export const ca = mapCa;
 
 export type MapCopy = (key: MapCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es, pt };
+const catalogues: Record<AppLocale, Record<MapCopyKey, string>> = { en, gl, es, pt, ca };
 export function mapCopy(locale: AppLocale): MapCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

@@ -3,8 +3,8 @@
 The private-beta launch targets English (`en`), Galician (`gl`), Spanish (`es`),
 Basque (`eu`), Catalan/Valencian (`ca`), Aranese Occitan (`oc-ES`), Portuguese
 (`pt`), Italian (`it`), French (`fr`), and Simplified Chinese (`zh-Hans`). The
-selector presents Catalan and Valencian together as `Català / Valencià`; BOOKPILE
-maintains one reviewed catalogue for them. German, Japanese, Dutch, Greek,
+selector presents this shared catalogue as `Català`; BOOKPILE does not maintain
+a separate Valencian variant. German, Japanese, Dutch, Greek,
 Arabic and Korean are post-launch candidates and must not appear as selectable
 languages until their routes are complete. Arabic additionally requires a full
 right-to-left layout and interaction audit. Language of the interface is
@@ -223,5 +223,16 @@ interpolation-marker equivalence across every catalogue. Its invitation copy
 distinguishes account, catalogue-only, catalogue-and-map and equal co-Owner
 access. Email tests verify Portuguese subjects, expiry wording, HTML language,
 privacy footer and escaped action URLs. The remaining launch languages are
-Basque, Catalan/Valencian, Aranese Occitan, Italian, French and Simplified
+Basque, Aranese Occitan, Italian, French and Simplified
 Chinese.
+
+## Thirteenth branch checkpoint
+
+Catalan (`ca`) now follows the complete launch contract as the single BOOKPILE
+catalogue for Catalan and Valencian users. Public account routes, every
+authenticated workspace, account and library invitation messages, regional
+`ca-ES` date and number formatting and all three transactional emails are
+translated and structurally tested. Registration and the protected account
+preference endpoint accept and persist `ca`, and browser preferences such as
+`ca-ES` and `ca-AD` resolve to it. The selector labels the shared catalogue
+`Català`; no separate Valencian locale is maintained.

@@ -1,5 +1,6 @@
 import type { AppLocale } from "./locale";
 import { libraryAdminPt } from "./locales/pt/libraryAdmin";
+import { libraryAdminCa } from "./locales/ca/libraryAdmin";
 
 export const en = {
   requestFailed: "BOOKPILE could not complete that request.", libraryCreated: "“{name}” was created. You are its first Owner.", joinedOwner: "You joined “{name}” as an Owner.", joinedViewer: "You joined “{name}” as a Viewer.",
@@ -73,9 +74,10 @@ export const es = {
   emptyTitle: "Crear o unirse a una biblioteca", emptyHelp: "Las cuentas y las bibliotecas son independientes: una cuenta puede poseer o ver varias bibliotecas.",
 } satisfies Record<LibraryAdminCopyKey, string>;
 export const pt = libraryAdminPt;
+export const ca = libraryAdminCa;
 
 export type LibraryAdminCopy = (key: LibraryAdminCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<LibraryAdminCopyKey, string>> = { en, gl, es, pt };
+const catalogues: Record<AppLocale, Record<LibraryAdminCopyKey, string>> = { en, gl, es, pt, ca };
 export function libraryAdminCopy(locale: AppLocale): LibraryAdminCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

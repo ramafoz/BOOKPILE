@@ -1,5 +1,6 @@
 import type { AppLocale } from "./locale";
 import { profilePt } from "./locales/pt/profile";
+import { profileCa } from "./locales/ca/profile";
 
 export const en = {
   openFailed: "This profile could not be opened.", closeProfile: "Close profile", openingProfile: "Opening profile…",
@@ -21,8 +22,9 @@ export const es = {
   empty: "Este miembro no ha compartido contigo ningún dato de su perfil.",
 } satisfies Record<ProfileCopyKey, string>;
 export const pt = profilePt;
+export const ca = profileCa;
 
-const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es, pt };
+const catalogues: Record<AppLocale, Record<ProfileCopyKey, string>> = { en, gl, es, pt, ca };
 export function profileCopy(locale: AppLocale) {
   return (key: ProfileCopyKey) => catalogues[locale][key];
 }
