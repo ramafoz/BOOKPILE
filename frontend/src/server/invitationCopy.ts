@@ -17,6 +17,9 @@ export function accountInvitationMessage(locale: InvitationLocale, url: string):
   if (locale === "ca") {
     return `Et convido a crear un compte a BOOKPILE, un espai privat per organitzar la teva biblioteca personal. La invitació només es pot utilitzar una vegada i caduca al cap de set dies.\n\n${url}`;
   }
+  if (locale === "it") {
+    return `Ti invito a creare un account su BOOKPILE, uno spazio privato per organizzare la tua biblioteca personale. L'invito può essere utilizzato una sola volta e scade dopo sette giorni.\n\n${url}`;
+  }
   return `I invite you to create an account on BOOKPILE, a private space for organising your personal library. This invitation can only be used once and expires after seven days.\n\n${url}`;
 }
 
@@ -62,6 +65,15 @@ export function libraryInvitationMessage(
       ? "veure el catàleg i el mapa físic"
       : "veure el catàleg";
     return `Et convido a ${access} de la biblioteca «${libraryName}» a BOOKPILE. La invitació només es pot utilitzar una vegada i caduca al cap de set dies.\n\n${url}`;
+  }
+  if (locale === "it") {
+    if (role === "OWNER") {
+      return `Ti invito a condividere la biblioteca «${libraryName}» su BOOKPILE come coproprietario/a con la stessa autorità amministrativa. L'invito può essere utilizzato una sola volta e scade dopo sette giorni.\n\n${url}`;
+    }
+    const access = scope === "CATALOG_AND_MAP"
+      ? "vedere il catalogo e la mappa fisica"
+      : "vedere il catalogo";
+    return `Ti invito a ${access} della biblioteca «${libraryName}» su BOOKPILE. L'invito può essere utilizzato una sola volta e scade dopo sette giorni.\n\n${url}`;
   }
   if (role === "OWNER") {
     return `I invite you to share the “${libraryName}” library on BOOKPILE as an equal co-Owner with the same administrative authority. This invitation can only be used once and expires after seven days.\n\n${url}`;

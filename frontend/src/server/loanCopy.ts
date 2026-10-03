@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { loanPt } from "./locales/pt/loan";
 import { loanCa } from "./locales/ca/loan";
+import { loanIt } from "./locales/it/loan";
 
 export const en = {
   loadFailed: "Loan data could not be loaded.", unknown: "Unknown", loanHistory: "Loan history", onLoanTo: "On loan to {borrower}", onLoan: "On loan", since: "since {date}", expected: "expected {date}", overdue: "overdue",
@@ -29,8 +30,9 @@ export const es = {
 } satisfies Record<LoanCopyKey, string>;
 export const pt = loanPt;
 export const ca = loanCa;
+export const it = loanIt;
 export type LoanCopy = (key: LoanCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<LoanCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<LoanCopyKey, string>> = { en, gl, es, pt, ca, it };
 export function loanCopy(locale: AppLocale): LoanCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

@@ -3,6 +3,7 @@ import { galician } from "./locales/gl";
 import { spanish } from "./locales/es";
 import { portuguese } from "./locales/pt";
 import { catalan } from "./locales/ca";
+import { italian } from "./locales/it";
 
 export { english } from "./locales/en";
 export type { MessageKey } from "./locales/en";
@@ -10,7 +11,7 @@ export type { MessageKey } from "./locales/en";
 export const LOCALE_STORAGE_KEY = "bookpile.server.locale";
 
 // A language belongs here only after the current route is fully translated.
-export const availableLocales = ["en", "gl", "es", "pt", "ca"] as const;
+export const availableLocales = ["en", "gl", "es", "pt", "ca", "it"] as const;
 export type AppLocale = (typeof availableLocales)[number];
 
 export const localeNames: Record<AppLocale, string> = {
@@ -19,13 +20,14 @@ export const localeNames: Record<AppLocale, string> = {
   es: "Español",
   pt: "Português",
   ca: "Català",
+  it: "Italiano",
 };
 
 const intlLocales: Record<AppLocale, string> = {
   // BOOKPILE deliberately offers one Portuguese catalogue for every regional
   // variant. pt-PT provides deterministic date and number conventions; it
   // does not restrict language matching to Portugal.
-  en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT", ca: "ca-ES",
+  en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT", ca: "ca-ES", it: "it-IT",
 };
 const catalogues: Record<AppLocale, Record<MessageKey, string>> = {
   en: english,
@@ -33,6 +35,7 @@ const catalogues: Record<AppLocale, Record<MessageKey, string>> = {
   es: spanish,
   pt: portuguese,
   ca: catalan,
+  it: italian,
 };
 
 export function intlLocale(locale: AppLocale): string {

@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { physicalPt } from "./locales/pt/physical";
 import { physicalCa } from "./locales/ca/physical";
+import { physicalIt } from "./locales/it/physical";
 
 export const en = {
   requestFailed: "BOOKPILE could not complete that request.", maintenance: "Physical library maintenance", editTarget: "Edit {target}", bookcase: "bookcase", shelf: "shelf", container: "container", nameRequired: "Name *", description: "Description", numberRequired: "{target} number *", optionalDimensions: "Optional physical dimensions", height: "Height", width: "Width", depth: "Depth", usableHeight: "Usable height", usableWidth: "Usable width", usableDepth: "Usable depth", cancel: "Cancel", saveChanges: "Save changes", dimensionsMissing: "Dimensions not recorded",
@@ -44,9 +45,10 @@ export const es = {
 } satisfies Record<PhysicalCopyKey, string>;
 export const pt = physicalPt;
 export const ca = physicalCa;
+export const it = physicalIt;
 
 export type PhysicalCopy = (key: PhysicalCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<PhysicalCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<PhysicalCopyKey, string>> = { en, gl, es, pt, ca, it };
 export function physicalCopy(locale: AppLocale): PhysicalCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);

@@ -223,8 +223,7 @@ interpolation-marker equivalence across every catalogue. Its invitation copy
 distinguishes account, catalogue-only, catalogue-and-map and equal co-Owner
 access. Email tests verify Portuguese subjects, expiry wording, HTML language,
 privacy footer and escaped action URLs. The remaining launch languages are
-Basque, Aranese Occitan, Italian, French and Simplified
-Chinese.
+Basque, Aranese Occitan, French and Simplified Chinese.
 
 ## Thirteenth branch checkpoint
 
@@ -236,3 +235,14 @@ translated and structurally tested. Registration and the protected account
 preference endpoint accept and persist `ca`, and browser preferences such as
 `ca-ES` and `ca-AD` resolve to it. The selector labels the shared catalogue
 `Català`; no separate Valencian locale is maintained.
+
+## Fourteenth branch checkpoint
+
+Italian (`it`) now follows the complete launch contract. Public account routes,
+every authenticated workspace, all account and library invitation permission
+variants, regional `it-IT` date and number formatting and all three
+transactional emails are translated and structurally tested. Registration and
+the protected account preference endpoint accept and persist `it`; Italian
+browser variants such as `it-IT` and `it-CH` resolve to the shared `Italiano`
+catalogue. Promotion copy explicitly warns that an equal co-Owner can remove
+the current Owner's membership.

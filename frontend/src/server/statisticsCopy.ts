@@ -1,6 +1,7 @@
 import type { AppLocale } from "./locale";
 import { statisticsPt } from "./locales/pt/statistics";
 import { statisticsCa } from "./locales/ca/statistics";
+import { statisticsIt } from "./locales/it/statistics";
 
 export const en = {
   loadFailed: "Statistics could not be loaded.", days: "{count} days", noUsableDates: "No usable dates", durationSummary: "Median {median} · {measured} measured · {excluded} excluded",
@@ -38,9 +39,10 @@ export const es = {
 } satisfies Record<StatisticsCopyKey, string>;
 export const pt = statisticsPt;
 export const ca = statisticsCa;
+export const it = statisticsIt;
 
 export type StatisticsCopy = (key: StatisticsCopyKey, values?: Record<string, string | number>) => string;
-const catalogues: Record<AppLocale, Record<StatisticsCopyKey, string>> = { en, gl, es, pt, ca };
+const catalogues: Record<AppLocale, Record<StatisticsCopyKey, string>> = { en, gl, es, pt, ca, it };
 export function statisticsCopy(locale: AppLocale): StatisticsCopy {
   const catalogue = catalogues[locale];
   return (key, values = {}) => catalogue[key].replace(/\{(\w+)\}/g, (token, name: string) => Object.hasOwn(values, name) ? String(values[name]) : token);
