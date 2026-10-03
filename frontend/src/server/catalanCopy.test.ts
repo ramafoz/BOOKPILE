@@ -62,4 +62,9 @@ describe("Catalan copy", () => {
     expect(owner).toContain("copropietari/ària");
     expect(owner).toContain("mateixa autoritat administrativa");
   });
+
+  it("warns that a promoted co-owner can remove the current owner", () => {
+    expect(libraryAdminCa.promoteHelp).toContain("eliminar la teva pertinença");
+    expect(libraryAdminCa.promoteHelp).not.toContain("eliminar la seva pròpia pertinença");
+  });
 });
