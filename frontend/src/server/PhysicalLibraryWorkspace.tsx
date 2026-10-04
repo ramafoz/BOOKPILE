@@ -36,6 +36,7 @@ const dimensionReferences: Record<AppLocale, { singular: string; plural: string 
   it: { singular: "la misura", plural: "le misure" },
   fr: { singular: "la mesure", plural: "les mesures" },
   eu: { singular: "neurria", plural: "neurriak" },
+  oc: { singular: "era mesura", plural: "es mesures" },
 };
 
 function errorMessage(_error: unknown, copy: PhysicalCopy): string {

@@ -5,11 +5,11 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr", "eu"]
+EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr", "eu"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr", "eu", "oc"} else "en"
 
 
 @dataclass(frozen=True)
@@ -72,6 +72,11 @@ _SHARED_COPY = {
         "footer": "Zerbitzu-mezu automatiko hau BOOKPILE kontuko ekintza bati erantzunez bidali da. Ez du kanpoko edukirik kargatzen.",
         "fallback": "Botoiak ez badu funtzionatzen, kopiatu eta itsatsi helbide hau nabigatzailean:",
     },
+    "oc": {
+        "tagline": "Era tua bibliotèca personau, organizada damb seguretat.",
+        "footer": "Aguest messatge automatic de servici s'a enviat en responsa a ua accion deth tòn compde BOOKPILE. Non cargue contengut extèrne.",
+        "fallback": "S'eth boton non foncione, còpia e pèga aguesta adreça en navegador:",
+    },
 }
 
 
@@ -133,6 +138,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["eu"]["fallback"],
             "BOOKPILE konturik sortu ez baduzu, mezu hau bazter dezakezu.",
         ),
+        "oc": EmailCopy(
+            "BOOKPILE: verifica era tua adreça de corrèu", "Un darrèr pas", "Verifica era tua adreça de corrèu",
+            "Confirma qu'aguesta adreça de corrèu ei tua entà activar eth tòn compde BOOKPILE.",
+            "Verificar era adreça", "Aguest ligam d'un solet us expire 24 ores dempús dera liurança deth messatge.",
+            _SHARED_COPY["oc"]["fallback"],
+            "Se non as creat cap de compde BOOKPILE, pòs ignorar aguest messatge.",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -191,6 +203,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["eu"]["fallback"],
             "Pasahitza berrezartzea eskatu ez baduzu, baztertu mezu hau. Zure pasahitza ez da aldatu.",
         ),
+        "oc": EmailCopy(
+            "BOOKPILE: restablís eth tòn senhal", "Seguretat deth compde", "Restablís eth tòn senhal",
+            "S'a demanat restablir eth senhal deth tòn compde BOOKPILE.",
+            "Causir un senhal nau", "Aguest ligam d'un solet us expire 30 minutes dempús dera liurança deth messatge.",
+            _SHARED_COPY["oc"]["fallback"],
+            "Se non as demanat restablir eth senhal, ignòra aguest messatge. Eth tòn senhal non a cambiat.",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -248,6 +267,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Berreskuratu kontua", "Erabilera bakarreko berreskurapen-esteka hau mezua entregatu eta 48 ordura iraungitzen da.",
             _SHARED_COPY["eu"]["fallback"],
             "Kontua ezabatu nahi bazenuen, ez duzu ezer egin behar. Gainerako datu pertsonalak berreskurapen-epea amaitzean kenduko dira.",
+        ),
+        "oc": EmailCopy(
+            "BOOKPILE: recupèra eth tòn compde", "Recuperacion deth compde", "Recupèra eth tòn compde",
+            "Eth tòn compde BOOKPILE ei programat entara eliminacion definitiva.",
+            "Recuperar eth compde", "Aguest ligam de recuperacion d'un solet us expire 48 ores dempús dera liurança deth messatge.",
+            _SHARED_COPY["oc"]["fallback"],
+            "Se volies eliminar eth compde, non cau hèr arren. Es donades personaus restantes s'eliminaràn quan acabe eth periòde de recuperacion.",
         ),
     },
 }
