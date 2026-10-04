@@ -27,6 +27,16 @@ type DimensionDraft = {
   third: string;
 };
 
+const dimensionReferences: Record<AppLocale, { singular: string; plural: string }> = {
+  en: { singular: "the measurement", plural: "the measurements" },
+  gl: { singular: "a medida", plural: "as medidas" },
+  es: { singular: "la medida", plural: "las medidas" },
+  pt: { singular: "a medida", plural: "as medidas" },
+  ca: { singular: "la mesura", plural: "les mesures" },
+  it: { singular: "la misura", plural: "le misure" },
+  fr: { singular: "la mesure", plural: "les mesures" },
+};
+
 function errorMessage(_error: unknown, copy: PhysicalCopy): string {
   return copy("requestFailed");
 }
@@ -518,7 +528,7 @@ export function GeometryDialog({
         {selectedBookcase && <>
           {draft.geometry_mode === "PHYSICAL" && selectedBookcaseRecord && (selectedBookcaseRecord.width_mm || selectedBookcaseRecord.height_mm) && <div className="server-geometry-locked-notice" role="note">
             <LockKeyhole size={18} />
-            <span><b>{copy("sizeFixed")}</b> {copy("sizeFixedHelp", { dimensions: copy(selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "exteriorBoth" : selectedBookcaseRecord.width_mm ? "exteriorWidth" : "exteriorHeight"), pronoun: selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "them" : "it" })}</span>
+            <span><b>{copy("sizeFixed")}</b> {copy("sizeFixedHelp", { dimensions: copy(selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? "exteriorBoth" : selectedBookcaseRecord.width_mm ? "exteriorWidth" : "exteriorHeight"), pronoun: selectedBookcaseRecord.width_mm && selectedBookcaseRecord.height_mm ? dimensionReferences[locale].plural : dimensionReferences[locale].singular })}</span>
           </div>}
           <div className="server-dimension-grid">
             {numberField(copy("horizontalLeft"), selectedBookcase.x_mm, (value) => updateBookcase("x_mm", value), { step: 1 })}
