@@ -43,13 +43,23 @@ export function intlLocale(locale: AppLocale): string {
 
 export function parseLocale(value: string | null | undefined): AppLocale | null {
   const normalized = value?.trim().toLowerCase().replaceAll("_", "-");
-  const base = normalized?.split("-")[0];
+  const subtags = normalized?.split("-") ?? [];
+  const base = subtags[0];
   if (base === "zh") {
     if (normalized === "zh" || normalized === "zh-cn" || normalized === "zh-sg"
-      || normalized?.includes("hans")) return "zh";
+      || subtags.includes("hans")) return "zh";
     return null;
   }
   return availableLocales.find((locale) => locale === base) ?? null;
+}
+
+function parseBrowserLocale(value: string): AppLocale | null {
+  const normalized = value.trim().toLowerCase().replaceAll("_", "-");
+  const subtags = normalized.split("-");
+  if (subtags[0] !== "zh") return parseLocale(normalized);
+  if (subtags.includes("hant")) return null;
+  if (subtags.includes("hans") || normalized === "zh-cn" || normalized === "zh-sg") return "zh";
+  return null;
 }
 
 export function resolveLocale(
@@ -59,7 +69,7 @@ export function resolveLocale(
   const preference = parseLocale(saved);
   if (preference) return preference;
   for (const language of browserLanguages) {
-    const supported = parseLocale(language);
+    const supported = parseBrowserLocale(language);
     if (supported) return supported;
   }
   return "en";

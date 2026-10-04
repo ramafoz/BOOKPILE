@@ -54,6 +54,8 @@ describe("Server locale foundation", () => {
     expect(resolveLocale(null, ["oc-ES", "en-GB"])).toBe("oc");
     expect(resolveLocale(null, ["zh-CN"])).toBe("zh");
     expect(resolveLocale(null, ["zh-Hans-SG"])).toBe("zh");
+    expect(resolveLocale("zh", ["en-GB"])).toBe("zh");
+    expect(resolveLocale(null, ["zh", "en-GB"])).toBe("en");
     expect(resolveLocale(null, ["zh-Hant-TW"])).toBe("en");
     expect(parseLocale("de-DE")).toBeNull();
   });
