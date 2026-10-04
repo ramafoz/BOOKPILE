@@ -64,7 +64,28 @@ EOF
 
   cat >"${fixture}/fake-bin/curl" <<EOF
 #!/usr/bin/env bash
-printf '%s\\n' '{"status":"ready","revision":"${target_revision}"}'
+if [[ -n "\${FAKE_CURL_LOG:-}" ]]; then
+  printf '%s\\n' "\$*" >>"\${FAKE_CURL_LOG}"
+fi
+attempt=0
+if [[ -n "\${FAKE_CURL_COUNTER:-}" && -f "\${FAKE_CURL_COUNTER}" ]]; then
+  attempt="\$(<"\${FAKE_CURL_COUNTER}")"
+fi
+attempt="\$((attempt + 1))"
+if [[ -n "\${FAKE_CURL_COUNTER:-}" ]]; then
+  printf '%s\\n' "\${attempt}" >"\${FAKE_CURL_COUNTER}"
+fi
+if [[ "\${FAKE_PUBLIC_HEALTH_MODE:-ready}" == "fail" \
+  || "\${attempt}" -le "\${FAKE_CURL_FAILURES_BEFORE_SUCCESS:-0}" ]]; then
+  printf '%s\\n' 'fixture connection refused' >&2
+  exit 7
+fi
+url="\${!#}"
+if [[ "\${url}" == */health/live ]]; then
+  printf '%s\\n' '{"status":"alive","revision":"${target_revision}"}'
+else
+  printf '%s\\n' '{"status":"ready","revision":"${target_revision}"}'
+fi
 EOF
   cat >"${fixture}/fake-bin/flock" <<'EOF'
 #!/usr/bin/env bash
@@ -80,10 +101,13 @@ EOF
 
 successful_fixture="$(make_fixture success)"
 successful_log="${successful_fixture}/docker.log"
+successful_curl_log="${successful_fixture}/curl.log"
+successful_output="${successful_fixture}/deploy.out"
 PATH="${successful_fixture}/fake-bin:${PATH}" \
 FAKE_DOCKER_LOG="${successful_log}" \
+FAKE_CURL_LOG="${successful_curl_log}" \
 BOOKPILE_DEPLOY_LOCK_FILE="${successful_fixture}/deploy.lock" \
-  bash "${successful_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null
+  bash "${successful_fixture}/server/deploy/deploy-staging.sh" --yes >"${successful_output}"
 
 grep -qx "BOOKPILE_SERVER_DEPLOYMENT_REVISION=${target_revision}" \
   "${successful_fixture}/server/.env.staging"
@@ -96,6 +120,32 @@ grep -qx "BOOKPILE_BACKUP_IMAGE=bookpile-backup:git-${short_revision}" \
 grep -q "backup create" "${successful_log}"
 grep -q "run --rm migrate" "${successful_log}"
 grep -q "bookpile-maintenance check --deep" "${successful_log}"
+grep -q '^previous_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$' \
+  "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
+grep -q '^pre_deployment_backup_id=fixture$' \
+  "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
+grep -q 'Previous revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${successful_output}"
+grep -q 'Pre-deployment backup: fixture' "${successful_output}"
+grep -q 'Assisted application rollback' "${successful_output}"
+test -f "${successful_fixture}/.bookpile-runtime/deployments/rollback-${short_revision}.env"
+test -f "${successful_fixture}/.bookpile-runtime/deployments/rollback-${short_revision}.backup.env"
+
+retry_fixture="$(make_fixture retry)"
+retry_log="${retry_fixture}/docker.log"
+retry_curl_log="${retry_fixture}/curl.log"
+retry_counter="${retry_fixture}/curl.counter"
+PATH="${retry_fixture}/fake-bin:${PATH}" \
+FAKE_DOCKER_LOG="${retry_log}" \
+FAKE_CURL_LOG="${retry_curl_log}" \
+FAKE_CURL_COUNTER="${retry_counter}" \
+FAKE_CURL_FAILURES_BEFORE_SUCCESS=2 \
+BOOKPILE_DEPLOY_HEALTH_RETRY_DELAY_SECONDS=0 \
+BOOKPILE_DEPLOY_LOCK_FILE="${retry_fixture}/deploy.lock" \
+  bash "${retry_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null 2>&1
+if [[ "$(wc -l <"${retry_curl_log}")" -ne 4 ]]; then
+  echo "Transient public-health failure was not retried as expected." >&2
+  exit 1
+fi
 
 dirty_fixture="$(make_fixture dirty)"
 dirty_log="${dirty_fixture}/docker.log"
@@ -109,6 +159,25 @@ if PATH="${dirty_fixture}/fake-bin:${PATH}" \
 fi
 if [[ -e "${dirty_log}" ]]; then
   echo "Dirty-worktree preflight reached Docker unexpectedly." >&2
+  exit 1
+fi
+
+leading_zero_fixture="$(make_fixture leading-zero-attempts)"
+leading_zero_log="${leading_zero_fixture}/docker.log"
+leading_zero_output="${leading_zero_fixture}/deploy.out"
+if PATH="${leading_zero_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${leading_zero_log}" \
+  BOOKPILE_DEPLOY_HEALTH_ATTEMPTS=08 \
+  BOOKPILE_DEPLOY_LOCK_FILE="${leading_zero_fixture}/deploy.lock" \
+    bash "${leading_zero_fixture}/server/deploy/deploy-staging.sh" --check \
+      >"${leading_zero_output}" 2>&1; then
+  echo "Expected a leading-zero health-attempt count to fail validation." >&2
+  exit 1
+fi
+grep -q 'BOOKPILE_DEPLOY_HEALTH_ATTEMPTS must be a positive integer.' \
+  "${leading_zero_output}"
+if [[ -e "${leading_zero_log}" ]]; then
+  echo "Invalid health-attempt validation reached Docker unexpectedly." >&2
   exit 1
 fi
 
@@ -134,5 +203,55 @@ if [[ "$(grep -c 'up -d --no-deps --force-recreate api email-worker web' "${fail
   echo "Failure path did not attempt the application rollback." >&2
   exit 1
 fi
+
+health_failure_fixture="$(make_fixture health-failure)"
+health_failure_log="${health_failure_fixture}/docker.log"
+health_failure_curl_log="${health_failure_fixture}/curl.log"
+health_failure_output="${health_failure_fixture}/deploy.out"
+if PATH="${health_failure_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${health_failure_log}" \
+  FAKE_CURL_LOG="${health_failure_curl_log}" \
+  FAKE_PUBLIC_HEALTH_MODE=fail \
+  BOOKPILE_DEPLOY_HEALTH_ATTEMPTS=3 \
+  BOOKPILE_DEPLOY_HEALTH_RETRY_DELAY_SECONDS=0 \
+  BOOKPILE_DEPLOY_LOCK_FILE="${health_failure_fixture}/deploy.lock" \
+    bash "${health_failure_fixture}/server/deploy/deploy-staging.sh" --yes \
+      >"${health_failure_output}" 2>&1; then
+  echo "Expected exhausted public-health retries to fail the deployment." >&2
+  exit 1
+fi
+if [[ "$(wc -l <"${health_failure_curl_log}")" -ne 3 ]]; then
+  echo "Public-health failure did not exhaust the configured attempts." >&2
+  exit 1
+fi
+grep -q 'Public /health/live attempt 3/3 could not connect' "${health_failure_output}"
+grep -q 'Public health verification failed. Current service state:' "${health_failure_output}"
+grep -q 'compose .* ps' "${health_failure_log}"
+grep -q 'logs --since=5m --tail=100 api email-worker web' "${health_failure_log}"
+grep -qx \
+  'BOOKPILE_SERVER_DEPLOYMENT_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  "${health_failure_fixture}/server/.env.staging"
+if [[ "$(grep -c 'up -d --no-deps --force-recreate api email-worker web' "${health_failure_log}")" -ne 2 ]]; then
+  echo "Public-health failure did not attempt the application rollback." >&2
+  exit 1
+fi
+
+skip_fixture="$(make_fixture skip-backup)"
+skip_log="${skip_fixture}/docker.log"
+skip_output="${skip_fixture}/deploy.out"
+PATH="${skip_fixture}/fake-bin:${PATH}" \
+FAKE_DOCKER_LOG="${skip_log}" \
+FAKE_CURL_LOG="${skip_fixture}/curl.log" \
+BOOKPILE_DEPLOY_LOCK_FILE="${skip_fixture}/deploy.lock" \
+  bash "${skip_fixture}/server/deploy/deploy-staging.sh" --yes --skip-backup \
+    >"${skip_output}" 2>&1
+if grep -q 'backup create' "${skip_log}"; then
+  echo "--skip-backup unexpectedly created a backup." >&2
+  exit 1
+fi
+grep -q 'WARNING: Pre-deployment backup explicitly skipped.' "${skip_output}"
+grep -q '^pre_deployment_backup_id=SKIPPED$' \
+  "${skip_fixture}/.bookpile-runtime/deployments/staging-current"
+grep -q 'data restoration is unavailable' "${skip_output}"
 
 echo "Staging deployment script tests passed."
