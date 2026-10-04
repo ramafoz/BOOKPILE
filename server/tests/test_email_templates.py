@@ -190,6 +190,29 @@ def test_french_transactional_templates_are_complete_and_private(
     assert "does not load external content" not in rendered.html
 
 
+@pytest.mark.parametrize(
+    ("renderer", "subject", "expiry"),
+    (
+        (verification_email, "BOOKPILE: egiaztatu zure helbide elektronikoa", "24 ordura"),
+        (password_reset_email, "BOOKPILE: berrezarri pasahitza", "30 minutura"),
+        (account_recovery_email, "BOOKPILE: berreskuratu zure kontua", "48 ordura"),
+    ),
+)
+def test_basque_transactional_templates_are_complete_and_private(
+    renderer, subject: str, expiry: str
+) -> None:
+    url = "https://staging.bookpile.gal/action?token=secret-token&next=%2F"
+    rendered = renderer(url, locale="eu")
+    assert rendered.subject == subject
+    assert expiry in rendered.text and expiry in rendered.html
+    assert '<html lang="eu">' in rendered.html
+    assert "Ez du kanpoko edukirik kargatzen" in rendered.html
+    assert "token=secret-token&amp;next=%2F" in rendered.html
+    assert url in rendered.text
+    assert "Your personal library" not in rendered.text + rendered.html
+    assert "does not load external content" not in rendered.html
+
+
 def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("gl") == "gl"
     assert resolve_email_locale("es") == "es"
@@ -197,4 +220,5 @@ def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("ca") == "ca"
     assert resolve_email_locale("it") == "it"
     assert resolve_email_locale("fr") == "fr"
-    assert resolve_email_locale("eu") == "en"
+    assert resolve_email_locale("eu") == "eu"
+    assert resolve_email_locale("de") == "en"

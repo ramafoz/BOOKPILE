@@ -9,10 +9,11 @@ import { portuguese } from "./locales/pt";
 import { catalan } from "./locales/ca";
 import { italian } from "./locales/it";
 import { french } from "./locales/fr";
+import { basque } from "./locales/eu";
 
 describe("Server locale foundation", () => {
   it("exposes only reviewed locales", () => {
-    expect(availableLocales).toEqual(["en", "gl", "es", "pt", "ca", "it", "fr"]);
+    expect(availableLocales).toEqual(["en", "gl", "es", "pt", "ca", "it", "fr", "eu"]);
     expect(parseLocale("es-ES")).toBe("es");
     expect(parseLocale("pt-PT")).toBe("pt");
     expect(parseLocale("pt-BR")).toBe("pt");
@@ -20,6 +21,7 @@ describe("Server locale foundation", () => {
     expect(parseLocale("ca-AD")).toBe("ca");
     expect(parseLocale("it-IT")).toBe("it");
     expect(parseLocale("fr-FR")).toBe("fr");
+    expect(parseLocale("eu-ES")).toBe("eu");
   });
 
   it("keeps Spanish entry copy complete", () => {
@@ -39,8 +41,9 @@ describe("Server locale foundation", () => {
     expect(resolveLocale(null, ["ca-ES", "en-GB"])).toBe("ca");
     expect(resolveLocale(null, ["it-CH", "en-GB"])).toBe("it");
     expect(resolveLocale(null, ["fr-CA", "en-GB"])).toBe("fr");
+    expect(resolveLocale(null, ["eu-ES", "en-GB"])).toBe("eu");
     expect(resolveLocale(null, ["zh-CN"])).toBe("en");
-    expect(parseLocale("eu-ES")).toBeNull();
+    expect(parseLocale("de-DE")).toBeNull();
   });
 
   it("translates fixed and parameterized copy", () => {
@@ -52,6 +55,7 @@ describe("Server locale foundation", () => {
     expect(translate("ca", "welcomeBack")).toBe("Et donem la benvinguda");
     expect(translate("it", "welcomeBack")).toBe("Bentornato/a");
     expect(translate("fr", "welcomeBack")).toBe("Bon retour");
+    expect(translate("eu", "welcomeBack")).toBe("Ongi etorri berriro");
   });
 
   it("keeps Portuguese entry copy complete", () => {
@@ -86,6 +90,15 @@ describe("Server locale foundation", () => {
     for (const key of Object.keys(english) as Array<keyof typeof english>) {
       expect(french[key].trim(), key).not.toBe("");
       expect(french[key].match(/\{\w+\}/g) ?? [], key)
+        .toEqual(english[key].match(/\{\w+\}/g) ?? []);
+    }
+  });
+
+  it("keeps Basque entry copy complete", () => {
+    expect(Object.keys(basque).sort()).toEqual(Object.keys(english).sort());
+    for (const key of Object.keys(english) as Array<keyof typeof english>) {
+      expect(basque[key].trim(), key).not.toBe("");
+      expect(basque[key].match(/\{\w+\}/g) ?? [], key)
         .toEqual(english[key].match(/\{\w+\}/g) ?? []);
     }
   });
@@ -130,5 +143,9 @@ describe("Server locale foundation", () => {
       dateStyle: "medium", timeStyle: "short",
     }).format(new Date(date)));
     expect(formatLocalNumber(1234.5, "fr")).toBe(new Intl.NumberFormat("fr-FR").format(1234.5));
+    expect(formatLocalDateTime(date, "eu")).toBe(new Intl.DateTimeFormat("eu-ES", {
+      dateStyle: "medium", timeStyle: "short",
+    }).format(new Date(date)));
+    expect(formatLocalNumber(1234.5, "eu")).toBe(new Intl.NumberFormat("eu-ES").format(1234.5));
   });
 });
