@@ -6,7 +6,7 @@ export type { MessageKey } from "./locales/en";
 export const LOCALE_STORAGE_KEY = "bookpile.server.locale";
 
 // A language belongs here only after the current route is fully translated.
-export const availableLocales = ["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc"] as const;
+export const availableLocales = ["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc", "zh"] as const;
 export type AppLocale = (typeof availableLocales)[number];
 
 export const localeNames: Record<AppLocale, string> = {
@@ -19,13 +19,14 @@ export const localeNames: Record<AppLocale, string> = {
   fr: "Français",
   eu: "Euskara",
   oc: "Aranés",
+  zh: "简体中文",
 };
 
 const intlLocales: Record<AppLocale, string> = {
   // BOOKPILE deliberately offers one Portuguese catalogue for every regional
   // variant. pt-PT provides deterministic date and number conventions; it
   // does not restrict language matching to Portugal.
-  en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT", ca: "ca-ES", it: "it-IT", fr: "fr-FR", eu: "eu-ES", oc: "oc-ES",
+  en: "en-GB", gl: "gl-ES", es: "es-ES", pt: "pt-PT", ca: "ca-ES", it: "it-IT", fr: "fr-FR", eu: "eu-ES", oc: "oc-ES", zh: "zh-CN",
 };
 const catalogues: Partial<Record<AppLocale, Record<MessageKey, string>>> = { en: english };
 
@@ -41,8 +42,24 @@ export function intlLocale(locale: AppLocale): string {
 }
 
 export function parseLocale(value: string | null | undefined): AppLocale | null {
-  const base = value?.trim().toLowerCase().split(/[-_]/)[0];
+  const normalized = value?.trim().toLowerCase().replaceAll("_", "-");
+  const subtags = normalized?.split("-") ?? [];
+  const base = subtags[0];
+  if (base === "zh") {
+    if (normalized === "zh" || normalized === "zh-cn" || normalized === "zh-sg"
+      || subtags.includes("hans")) return "zh";
+    return null;
+  }
   return availableLocales.find((locale) => locale === base) ?? null;
+}
+
+function parseBrowserLocale(value: string): AppLocale | null {
+  const normalized = value.trim().toLowerCase().replaceAll("_", "-");
+  const subtags = normalized.split("-");
+  if (subtags[0] !== "zh") return parseLocale(normalized);
+  if (subtags.includes("hant")) return null;
+  if (subtags.includes("hans") || normalized === "zh-cn" || normalized === "zh-sg") return "zh";
+  return null;
 }
 
 export function resolveLocale(
@@ -52,7 +69,7 @@ export function resolveLocale(
   const preference = parseLocale(saved);
   if (preference) return preference;
   for (const language of browserLanguages) {
-    const supported = parseLocale(language);
+    const supported = parseBrowserLocale(language);
     if (supported) return supported;
   }
   return "en";

@@ -250,6 +250,27 @@ def test_registration_stores_aranese_locale_and_sends_localized_email(
     assert '<html lang="oc">' in email_sender.emails[0].html
 
 
+def test_registration_stores_simplified_chinese_locale_and_sends_localized_email(
+    client, session: Session, email_sender
+) -> None:
+    service = AccountInvitationService(AccountInvitationRepository(session))
+    invitation = service.create()
+    response = client.post(
+        "/api/v1/auth/register",
+        json=registration_payload(
+            invitation.raw_token,
+            username="chinese_reader",
+            email="chinese@example.com",
+            preferred_locale="zh",
+        ),
+    )
+    assert response.status_code == 201
+    user = session.scalar(select(User).where(User.username == "chinese_reader"))
+    assert user is not None and user.preferred_locale == "zh"
+    assert email_sender.emails[0].subject == "BOOKPILE：验证电子邮箱"
+    assert '<html lang="zh">' in email_sender.emails[0].html
+
+
 def test_verification_resend_is_generic_and_revokes_old_token(
     client, session: Session, email_sender
 ) -> None:

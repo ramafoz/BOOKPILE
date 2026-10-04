@@ -236,6 +236,29 @@ def test_aranese_transactional_templates_are_complete_and_private(
     assert "does not load external content" not in rendered.html
 
 
+@pytest.mark.parametrize(
+    ("renderer", "subject", "expiry"),
+    (
+        (verification_email, "BOOKPILE：验证电子邮箱", "24 小时"),
+        (password_reset_email, "BOOKPILE：重置密码", "30 分钟"),
+        (account_recovery_email, "BOOKPILE：恢复账户", "48 小时"),
+    ),
+)
+def test_simplified_chinese_transactional_templates_are_complete_and_private(
+    renderer, subject: str, expiry: str
+) -> None:
+    url = "https://staging.bookpile.gal/action?token=secret-token&next=%2F"
+    rendered = renderer(url, locale="zh")
+    assert rendered.subject == subject
+    assert expiry in rendered.text and expiry in rendered.html
+    assert '<html lang="zh">' in rendered.html
+    assert "不会加载外部内容" in rendered.html
+    assert "token=secret-token&amp;next=%2F" in rendered.html
+    assert url in rendered.text
+    assert "Your personal library" not in rendered.text + rendered.html
+    assert "does not load external content" not in rendered.html
+
+
 def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("gl") == "gl"
     assert resolve_email_locale("es") == "es"
@@ -245,4 +268,5 @@ def test_email_locale_falls_back_safely_for_untranslated_languages() -> None:
     assert resolve_email_locale("fr") == "fr"
     assert resolve_email_locale("eu") == "eu"
     assert resolve_email_locale("oc") == "oc"
+    assert resolve_email_locale("zh") == "zh"
     assert resolve_email_locale("de") == "en"

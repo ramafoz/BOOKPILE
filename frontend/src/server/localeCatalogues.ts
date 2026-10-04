@@ -50,6 +50,7 @@ const loaders: Record<DeferredLocale, () => Promise<BundleModule>> = {
   fr: () => import("./locales/bundles/fr"),
   eu: () => import("./locales/bundles/eu"),
   oc: () => import("./locales/bundles/oc"),
+  zh: () => import("./locales/bundles/zh"),
 };
 const loaded = new Set<AppLocale>(["en"]);
 const pending = new Map<AppLocale, Promise<void>>();
