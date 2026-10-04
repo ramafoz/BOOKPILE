@@ -162,6 +162,25 @@ if [[ -e "${dirty_log}" ]]; then
   exit 1
 fi
 
+leading_zero_fixture="$(make_fixture leading-zero-attempts)"
+leading_zero_log="${leading_zero_fixture}/docker.log"
+leading_zero_output="${leading_zero_fixture}/deploy.out"
+if PATH="${leading_zero_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${leading_zero_log}" \
+  BOOKPILE_DEPLOY_HEALTH_ATTEMPTS=08 \
+  BOOKPILE_DEPLOY_LOCK_FILE="${leading_zero_fixture}/deploy.lock" \
+    bash "${leading_zero_fixture}/server/deploy/deploy-staging.sh" --check \
+      >"${leading_zero_output}" 2>&1; then
+  echo "Expected a leading-zero health-attempt count to fail validation." >&2
+  exit 1
+fi
+grep -q 'BOOKPILE_DEPLOY_HEALTH_ATTEMPTS must be a positive integer.' \
+  "${leading_zero_output}"
+if [[ -e "${leading_zero_log}" ]]; then
+  echo "Invalid health-attempt validation reached Docker unexpectedly." >&2
+  exit 1
+fi
+
 failure_fixture="$(make_fixture failure)"
 failure_log="${failure_fixture}/docker.log"
 if PATH="${failure_fixture}/fake-bin:${PATH}" \
