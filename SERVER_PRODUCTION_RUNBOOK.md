@@ -130,8 +130,18 @@ displays the current and target revisions, and requires the operator to type
    environment files;
 4. runs the one-shot migration explicitly;
 5. recreates API, email worker and web without touching PostgreSQL volumes;
-6. verifies the public revision through liveness and readiness; and
+6. waits for liveness and readiness to return both the expected status and the
+   exact target revision; and
 7. requires the deep operational check to report healthy.
+
+Public health verification makes 18 explicit attempts by default, five seconds
+apart, with a ten-second timeout per request. Temporary connection errors and
+unexpected payloads are numbered in the output. If the service never becomes
+ready, the deployment fails and prints Compose service state plus the latest
+API, email-worker and web logs. The limits can be adjusted for an exceptional
+host with `BOOKPILE_DEPLOY_HEALTH_ATTEMPTS`,
+`BOOKPILE_DEPLOY_HEALTH_RETRY_DELAY_SECONDS` and
+`BOOKPILE_DEPLOY_HEALTH_REQUEST_TIMEOUT_SECONDS`.
 
 Only a trusted interactive host operator should use `--yes`; it suppresses the
 confirmation but none of the safety gates. The script uses `flock` to reject
@@ -140,6 +150,29 @@ changed, it restores the previous image configuration and recreates the prior
 application services. It deliberately never downgrades the database. A failed
 migration or an application/schema incompatibility therefore still requires
 operator review of the logs and the migration-specific recovery procedure.
+
+After a successful deployment, the script records the previous revision, the
+pre-deployment backup ID, immutable image tags and protected copies of both
+previous environment files under `.bookpile-runtime/deployments`. It prints
+the exact commands needed to restore that application configuration. Those
+commands roll back images and settings only: they never reverse a migration.
+Restoring the data backup remains a separate disaster-recovery operation.
+
+For an exceptional staging change where a fresh recovery point is deliberately
+unnecessary, the operator may run:
+
+```bash
+bash server/deploy/deploy-staging.sh --skip-backup
+```
+
+This keeps the clean-tree, immutable-image, migration, public-health and deep
+health gates, but skips creation of the pre-deployment snapshot. The script
+prints a prominent warning and records `pre_deployment_backup_id=SKIPPED`.
+Interactive use requires the distinct confirmation `DEPLOY WITHOUT BACKUP`.
+Application rollback remains available, but there is no point-in-time data
+restore for that deployment. Do not use this option for production, schema
+changes, destructive operations or any deployment whose data cannot be safely
+recreated.
 
 The script does not receive secrets as arguments, emit environment files, run
 from arbitrary branches, accept a non-fast-forward history or deploy directly
