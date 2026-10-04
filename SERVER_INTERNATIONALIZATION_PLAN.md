@@ -29,7 +29,7 @@ and fallback.
 - [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining two launch locales in reviewed batches; verify plural rules,
+- [ ] Add the remaining launch locale in a reviewed batch; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
@@ -287,3 +287,13 @@ browser variants resolve to the shared `Euskara` catalogue. Equal co-Owner
 copy explicitly warns that the new co-Owner can remove the current Owner's
 membership. The remaining launch languages are Aranese Occitan and Simplified
 Chinese.
+
+## Seventeenth branch checkpoint
+
+Aranese Occitan (`oc`) now follows the complete launch contract. Public account
+routes, every authenticated workspace, all invitation permission variants,
+regional `oc-ES` formatting and the three transactional account emails are
+translated and structurally tested. Registration and the protected account
+preference endpoint accept and persist `oc`; Occitan browser variants resolve
+to the shared `Aranés` catalogue. The only remaining launch language is
+Simplified Chinese.
