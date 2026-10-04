@@ -11,10 +11,11 @@ import { italian } from "./locales/it";
 import { french } from "./locales/fr";
 import { basque } from "./locales/eu";
 import { aranese } from "./locales/oc";
+import { simplifiedChinese } from "./locales/zh";
 
 describe("Server locale foundation", () => {
   it("exposes only reviewed locales", () => {
-    expect(availableLocales).toEqual(["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc"]);
+    expect(availableLocales).toEqual(["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc", "zh"]);
     expect(parseLocale("es-ES")).toBe("es");
     expect(parseLocale("pt-PT")).toBe("pt");
     expect(parseLocale("pt-BR")).toBe("pt");
@@ -24,6 +25,12 @@ describe("Server locale foundation", () => {
     expect(parseLocale("fr-FR")).toBe("fr");
     expect(parseLocale("eu-ES")).toBe("eu");
     expect(parseLocale("oc-ES")).toBe("oc");
+    expect(parseLocale("zh-CN")).toBe("zh");
+    expect(parseLocale("zh-SG")).toBe("zh");
+    expect(parseLocale("zh-Hans-CN")).toBe("zh");
+    expect(parseLocale("zh-TW")).toBeNull();
+    expect(parseLocale("zh-HK")).toBeNull();
+    expect(parseLocale("zh-Hant")).toBeNull();
   });
 
   it("keeps Spanish entry copy complete", () => {
@@ -37,7 +44,7 @@ describe("Server locale foundation", () => {
 
   it("prefers a valid saved choice, then the first supported browser language", () => {
     expect(resolveLocale("gl-ES", ["en-US"])).toBe("gl");
-    expect(resolveLocale("unsupported", ["zh-CN", "gl-ES", "en-GB"])).toBe("gl");
+    expect(resolveLocale("unsupported", ["zh-TW", "gl-ES", "en-GB"])).toBe("gl");
     expect(resolveLocale(null, ["pt-PT", "en-GB"])).toBe("pt");
     expect(resolveLocale(null, ["pt-BR", "en-GB"])).toBe("pt");
     expect(resolveLocale(null, ["ca-ES", "en-GB"])).toBe("ca");
@@ -45,7 +52,9 @@ describe("Server locale foundation", () => {
     expect(resolveLocale(null, ["fr-CA", "en-GB"])).toBe("fr");
     expect(resolveLocale(null, ["eu-ES", "en-GB"])).toBe("eu");
     expect(resolveLocale(null, ["oc-ES", "en-GB"])).toBe("oc");
-    expect(resolveLocale(null, ["zh-CN"])).toBe("en");
+    expect(resolveLocale(null, ["zh-CN"])).toBe("zh");
+    expect(resolveLocale(null, ["zh-Hans-SG"])).toBe("zh");
+    expect(resolveLocale(null, ["zh-Hant-TW"])).toBe("en");
     expect(parseLocale("de-DE")).toBeNull();
   });
 
@@ -60,6 +69,7 @@ describe("Server locale foundation", () => {
     expect(translate("fr", "welcomeBack")).toBe("Bon retour");
     expect(translate("eu", "welcomeBack")).toBe("Ongi etorri berriro");
     expect(translate("oc", "welcomeBack")).toBe("Benvengut/da de nau");
+    expect(translate("zh", "welcomeBack")).toBe("欢迎回来");
   });
 
   it("keeps Portuguese entry copy complete", () => {
@@ -116,6 +126,15 @@ describe("Server locale foundation", () => {
     }
   });
 
+  it("keeps Simplified Chinese entry copy complete", () => {
+    expect(Object.keys(simplifiedChinese).sort()).toEqual(Object.keys(english).sort());
+    for (const key of Object.keys(english) as Array<keyof typeof english>) {
+      expect(simplifiedChinese[key].trim(), key).not.toBe("");
+      expect(simplifiedChinese[key].match(/\{\w+\}/g) ?? [], key)
+        .toEqual(english[key].match(/\{\w+\}/g) ?? []);
+    }
+  });
+
   it("provides non-empty translations with matching interpolation variables", () => {
     expect(Object.keys(galician).sort()).toEqual(Object.keys(english).sort());
     for (const key of Object.keys(english) as Array<keyof typeof english>) {
@@ -164,5 +183,9 @@ describe("Server locale foundation", () => {
       dateStyle: "medium", timeStyle: "short",
     }).format(new Date(date)));
     expect(formatLocalNumber(1234.5, "oc")).toBe(new Intl.NumberFormat("oc-ES").format(1234.5));
+    expect(formatLocalDateTime(date, "zh")).toBe(new Intl.DateTimeFormat("zh-CN", {
+      dateStyle: "medium", timeStyle: "short",
+    }).format(new Date(date)));
+    expect(formatLocalNumber(1234.5, "zh")).toBe(new Intl.NumberFormat("zh-CN").format(1234.5));
   });
 });

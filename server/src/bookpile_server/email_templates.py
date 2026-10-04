@@ -5,11 +5,11 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc"]
+EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr", "eu", "oc", "zh"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr", "eu", "oc"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr", "eu", "oc", "zh"} else "en"
 
 
 @dataclass(frozen=True)
@@ -76,6 +76,11 @@ _SHARED_COPY = {
         "tagline": "Era tua bibliotèca personau, organizada damb seguretat.",
         "footer": "Aguest messatge automatic de servici s'a enviat en responsa a ua accion deth tòn compde BOOKPILE. Non cargue contengut extèrne.",
         "fallback": "S'eth boton non foncione, còpia e pèga aguesta adreça en navegador:",
+    },
+    "zh": {
+        "tagline": "安全整理您的私人藏书。",
+        "footer": "这封自动服务邮件是为响应您的 BOOKPILE 账户操作而发送的，不会加载外部内容。",
+        "fallback": "如果按钮无效，请将以下地址复制并粘贴到浏览器中：",
     },
 }
 
@@ -145,6 +150,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["oc"]["fallback"],
             "Se non as creat cap de compde BOOKPILE, pòs ignorar aguest messatge.",
         ),
+        "zh": EmailCopy(
+            "BOOKPILE：验证电子邮箱", "最后一步", "验证电子邮箱",
+            "请确认此电子邮箱属于您，以激活 BOOKPILE 账户。",
+            "验证电子邮箱", "此一次性链接将在邮件送达 24 小时后过期。",
+            _SHARED_COPY["zh"]["fallback"],
+            "如果您没有创建 BOOKPILE 账户，可以忽略此邮件。",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -210,6 +222,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["oc"]["fallback"],
             "Se non as demanat restablir eth senhal, ignòra aguest messatge. Eth tòn senhal non a cambiat.",
         ),
+        "zh": EmailCopy(
+            "BOOKPILE：重置密码", "账户安全", "重置密码",
+            "有人申请重置您的 BOOKPILE 账户密码。",
+            "设置新密码", "此一次性链接将在邮件送达 30 分钟后过期。",
+            _SHARED_COPY["zh"]["fallback"],
+            "如果您没有申请重置密码，请忽略此邮件。您的密码尚未更改。",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -274,6 +293,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Recuperar eth compde", "Aguest ligam de recuperacion d'un solet us expire 48 ores dempús dera liurança deth messatge.",
             _SHARED_COPY["oc"]["fallback"],
             "Se volies eliminar eth compde, non cau hèr arren. Es donades personaus restantes s'eliminaràn quan acabe eth periòde de recuperacion.",
+        ),
+        "zh": EmailCopy(
+            "BOOKPILE：恢复账户", "账户恢复", "恢复账户",
+            "您的 BOOKPILE 账户已计划永久删除。",
+            "恢复账户", "此一次性恢复链接将在邮件送达 48 小时后过期。",
+            _SHARED_COPY["zh"]["fallback"],
+            "如果您确实要删除账户，无需执行任何操作。恢复期结束后，剩余个人数据将被移除。",
         ),
     },
 }

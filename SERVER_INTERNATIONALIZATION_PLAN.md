@@ -29,7 +29,7 @@ and fallback.
 - [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining launch locale in a reviewed batch; verify plural rules,
+- [x] Add every launch locale in reviewed batches; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
@@ -297,3 +297,17 @@ translated and structurally tested. Registration and the protected account
 preference endpoint accept and persist `oc`; Occitan browser variants resolve
 to the shared `Aranés` catalogue. The only remaining launch language is
 Simplified Chinese.
+
+## Eighteenth branch checkpoint
+
+Simplified Chinese (`zh`) now follows the complete launch contract. Public
+account routes, every authenticated workspace, all invitation permission
+variants, regional `zh-CN` date and number formatting and the three
+transactional account emails are translated and structurally tested.
+Registration and the protected account preference endpoint accept and persist
+`zh`. Browser preferences explicitly identifying Simplified Chinese (`zh-CN`,
+`zh-SG` or a `Hans` script tag) resolve to this catalogue; Traditional Chinese
+preferences such as `zh-TW`, `zh-HK` and `Hant` deliberately fall back rather
+than receiving the wrong writing system. All ten private-beta launch languages
+are now implemented; joint end-to-end, accessibility and mobile review remains
+part of beta acceptance.
