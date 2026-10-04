@@ -29,7 +29,7 @@ and fallback.
 - [x] Localize every transactional email in text and HTML, using the account
   preference captured when the message is queued. Keep subject, action and
   expiry copy consistent, and preserve SMTP/DKIM behavior and privacy rules.
-- [ ] Add the remaining four launch locales in reviewed batches; verify plural rules,
+- [ ] Add the remaining three launch locales in reviewed batches; verify plural rules,
   dates, numbers and relative time with `Intl`, plus typography and CJK font
   fallback. User-generated names and book metadata are never machine-translated.
 - [ ] Run end-to-end language switching, reload, fresh browser, cross-device,
@@ -246,6 +246,18 @@ the protected account preference endpoint accept and persist `it`; Italian
 browser variants such as `it-IT` and `it-CH` resolve to the shared `Italiano`
 catalogue. Promotion copy explicitly warns that an equal co-Owner can remove
 the current Owner's membership.
+
+## Fifteenth branch checkpoint
+
+French (`fr`) now follows the complete launch contract. Public account routes,
+every authenticated workspace, all account and library invitation permission
+variants, regional `fr-FR` date and number formatting and all three
+transactional emails are translated and structurally tested. Registration and
+the protected account preference endpoint accept and persist `fr`; browser
+variants such as `fr-FR` and `fr-CA` resolve to the shared `Français`
+catalogue. Promotion copy explicitly warns that an equal co-Owner can remove
+the current Owner's membership. The remaining launch languages are Basque,
+Aranese Occitan and Simplified Chinese.
 
 ## Deferred catalogue loading
 
