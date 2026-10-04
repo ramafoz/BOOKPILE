@@ -5,11 +5,11 @@ from html import escape
 from typing import Literal
 
 
-EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr"]
+EmailLocale = Literal["en", "gl", "es", "pt", "ca", "it", "fr", "eu"]
 
 
 def resolve_email_locale(preferred_locale: str) -> EmailLocale:
-    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr"} else "en"
+    return preferred_locale if preferred_locale in {"gl", "es", "pt", "ca", "it", "fr", "eu"} else "en"
 
 
 @dataclass(frozen=True)
@@ -67,6 +67,11 @@ _SHARED_COPY = {
         "footer": "Ce message de service automatique a été envoyé en réponse à une action sur votre compte BOOKPILE. Il ne charge aucun contenu externe.",
         "fallback": "Si le bouton ne fonctionne pas, copiez et collez cette adresse dans votre navigateur :",
     },
+    "eu": {
+        "tagline": "Zure liburutegi pertsonala, modu seguruan antolatuta.",
+        "footer": "Zerbitzu-mezu automatiko hau BOOKPILE kontuko ekintza bati erantzunez bidali da. Ez du kanpoko edukirik kargatzen.",
+        "fallback": "Botoiak ez badu funtzionatzen, kopiatu eta itsatsi helbide hau nabigatzailean:",
+    },
 }
 
 
@@ -121,6 +126,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["fr"]["fallback"],
             "Si vous n’avez pas créé de compte BOOKPILE, vous pouvez ignorer ce message.",
         ),
+        "eu": EmailCopy(
+            "BOOKPILE: egiaztatu zure helbide elektronikoa", "Azken urratsa", "Egiaztatu zure helbide elektronikoa",
+            "Berretsi helbide elektroniko hau zurea dela BOOKPILE kontua aktibatzeko.",
+            "Egiaztatu helbide elektronikoa", "Erabilera bakarreko esteka hau mezua entregatu eta 24 ordura iraungitzen da.",
+            _SHARED_COPY["eu"]["fallback"],
+            "BOOKPILE konturik sortu ez baduzu, mezu hau bazter dezakezu.",
+        ),
     },
     "password_reset": {
         "en": EmailCopy(
@@ -172,6 +184,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             _SHARED_COPY["fr"]["fallback"],
             "Si vous n’avez pas demandé cette réinitialisation, ignorez ce message. Votre mot de passe n’a pas été modifié.",
         ),
+        "eu": EmailCopy(
+            "BOOKPILE: berrezarri pasahitza", "Kontuaren segurtasuna", "Berrezarri pasahitza",
+            "Zure BOOKPILE kontuaren pasahitza berrezartzeko eskaera egin da.",
+            "Aukeratu pasahitz berria", "Erabilera bakarreko esteka hau mezua entregatu eta 30 minutura iraungitzen da.",
+            _SHARED_COPY["eu"]["fallback"],
+            "Pasahitza berrezartzea eskatu ez baduzu, baztertu mezu hau. Zure pasahitza ez da aldatu.",
+        ),
     },
     "account_recovery": {
         "en": EmailCopy(
@@ -222,6 +241,13 @@ _EMAIL_COPY: dict[str, dict[EmailLocale, EmailCopy]] = {
             "Récupérer le compte", "Ce lien de récupération à usage unique expire 48 heures après la livraison du message.",
             _SHARED_COPY["fr"]["fallback"],
             "Si vous souhaitiez supprimer le compte, aucune action n’est nécessaire. Les données personnelles restantes seront supprimées à la fin de la période de récupération.",
+        ),
+        "eu": EmailCopy(
+            "BOOKPILE: berreskuratu zure kontua", "Kontuaren berreskurapena", "Berreskuratu zure kontua",
+            "Zure BOOKPILE kontua behin betiko ezabatzeko programatuta dago.",
+            "Berreskuratu kontua", "Erabilera bakarreko berreskurapen-esteka hau mezua entregatu eta 48 ordura iraungitzen da.",
+            _SHARED_COPY["eu"]["fallback"],
+            "Kontua ezabatu nahi bazenuen, ez duzu ezer egin behar. Gainerako datu pertsonalak berreskurapen-epea amaitzean kenduko dira.",
         ),
     },
 }
