@@ -898,7 +898,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     outbox, leased retrying worker, stale-action cancellation, deterministic
     message IDs and delivery-relative recovery windows. Provider delivery and
     worker monitoring are exercised in staging during 9F.
-  - [ ] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
+  - [x] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
     authenticated chunk encryption, separate S3 repository, completion marker,
     29-day compliance retention, guarded restore and local 36-table/869-object
     recovery rehearsal are implemented. Backblaze EU passed exact-version
@@ -910,9 +910,10 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     configured 29-day period, and the first final-bucket snapshot then returned
     `NoSuchKey`. Review then established that the original prune omitted S3
     version IDs and therefore created delete markers rather than proving
-    permanent deletion. Exact-version pruning and absence verification must be
-    deployed and exercised against the retained historical versions before the
-    final lifecycle gate can close.
+    permanent deletion. The corrected exact-version implementation was then
+    deployed: it removed all three snapshots and an independent version listing
+    returned zero versions for every affected prefix. A recent backup remained
+    healthy and the 435-object deep check passed, closing the lifecycle gate.
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
