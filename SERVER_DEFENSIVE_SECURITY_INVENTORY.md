@@ -8,8 +8,8 @@ staging** must not be treated as controls until runtime evidence exists.
 
 | Boundary | Current control | Evidence | Remaining work |
 | --- | --- | --- | --- |
-| Internet to host | Only Caddy publishes `80:8080` and `443:8443` | `server/compose.production.yaml` | Verify the VPS firewall exposes only SSH, HTTP and HTTPS and record IPv4/IPv6 rules. |
-| Caddy to API | API has no host `ports`; Caddy reaches `api:8100` on the internal `backend` network | Compose and `server/docker/Caddyfile` | Add an automated assertion that port 8100 is unreachable from the host and Internet. |
+| Internet to host | The accepted IONOS IPv4 firewall permits only TCP 22, 80 and 443; staging has no global IPv6 address or `AAAA` record | `SERVER_STAGING_PROVISIONING_CHECKLIST.md` and `SERVER_OPERATIONS_AND_SECURITY.md`; listener freshness rechecked 2026-10-14 | Recheck after firewall, DNS or network changes; do not treat inactive UFW as the control. |
+| Caddy to API | API has no host `ports`; Caddy reaches `api:8100` on the internal `backend` network | Compose, `server/docker/Caddyfile`, accepted 2026-09-16 evidence and 2026-10-14 `ss`/Compose recheck | Add an automated regression assertion; no new staging acceptance is required. |
 | API/worker to PostgreSQL | PostgreSQL has no host `ports` and `backend` is `internal: true` | Compose | Retain this design and test it in the production checklist. |
 | API/worker to Internet | Explicit `egress` network | Compose | Document required destinations; unrestricted outbound traffic is not yet an application firewall. |
 | Browser to API | Same-origin HTTPS, opaque HttpOnly session cookie, double-submit CSRF token, hosted secure-cookie validation | Auth routes, dependencies and settings | Exercise cross-origin and forged-CSRF cases in the final audit. |
@@ -48,13 +48,20 @@ documentation and OpenAPI endpoints are disabled by configuration validation.
 This means a rule based on “60 different 404s” cannot currently detect the
 common scanner traffic described in the threat model.
 
+The 2026-10-14 staging probe confirmed the distinction: `/.env`,
+`/.git/config` and `/wp-admin` each returned `200 text/html`, while
+`/api/v1/does-not-exist` returned `404 application/json`.
+
 ## 3. Client-IP identity
 
 BOOKPILE currently uses `request.client.host` for IP-based limits, session
 events and account-action events. The versioned Uvicorn command does not set
 `--forwarded-allow-ips`; Uvicorn 0.34.3 trusts forwarded headers only from
 `127.0.0.1` by default, while Caddy connects over a Docker network. The
-versioned Compose environment does not establish an explicit trust rule.
+versioned Compose environment does not establish an explicit trust rule. The
+2026-10-14 runtime inspection confirmed that `FORWARDED_ALLOW_IPS` is unset,
+the Uvicorn command supplies no equivalent argument, and Caddy currently has
+the backend address `172.18.0.5`.
 
 Therefore the effective client identity is **not yet proven**. It may be the
 Caddy container address rather than the Internet client address. Blindly
@@ -145,7 +152,9 @@ details. Maintenance currently retains these events for 180 days.
 - The API request event does not contain client IP, response size or a reason
   classification for 401/403/404/422/429.
 - Caddy access logs are disabled, so static and scanner traffic is absent.
-- Journald/Caddy retention and disk caps are not versioned here.
+- Journald/Caddy retention and disk caps are not versioned here. Journald used
+  37.7 MiB on 2026-10-14, but that observation does not prove a retention or
+  maximum-disk policy.
 - The proposed short retention for raw IP telemetry conflicts with the current
   180-day `security_events` retention and must be resolved in policy and code.
 - No aggregate counters or alert thresholds exist for unmatched routes,
@@ -183,7 +192,6 @@ access, and retention explicitly. Reference: <https://caddyserver.com/docs/caddy
 
 D1 is complete when the following evidence is attached to this inventory:
 
-- effective firewall and listening-socket inventory from staging;
 - effective Caddy and Uvicorn proxy-header configuration;
 - genuine and forged client-IP test results;
 - representative response evidence for 401, 403, API 404, SPA fallback,
