@@ -1050,11 +1050,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   monitoring and privacy-safe request correlation are implemented. Stock Caddy
   deliberately has no misleading per-process rate limiter.
 - [ ] Complete the staged defensive-security programme. The code-backed D1
-  baseline, threat/control matrix, accepted firewall evidence and remaining
-  runtime proofs are recorded in `SERVER_DEFENSIVE_SECURITY_INVENTORY.md`.
-  Next prove the real client-IP boundary (including forged forwarded headers), then add
-  privacy-minimized edge observation before selecting or enabling new limits
-  and temporary scanner blocking.
+  inventory and threat model closed on 2026-10-14 and are recorded in
+  `SERVER_DEFENSIVE_SECURITY_INVENTORY.md`. D2 must now replace the confirmed
+  shared Caddy-IP identity with an explicit trusted-proxy boundary and prove
+  both genuine attribution and spoof resistance. Then add privacy-minimized
+  edge observation before selecting or enabling new limits and temporary
+  scanner blocking.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,

@@ -1,8 +1,8 @@
 # BOOKPILE Server defensive-security inventory
 
-Status: initial code-backed inventory, 2026-10-14. This document records what
-the versioned staging/production stack does today. Items marked **prove on
-staging** must not be treated as controls until runtime evidence exists.
+Status: D1 inventory and threat model completed on 2026-10-14. This document
+records what the versioned staging/production stack does today and separates
+accepted controls from the D2-D7 work that remains.
 
 ## 1. Trust boundaries and exposed services
 
@@ -70,7 +70,14 @@ all clients currently share one effective key for limits described as IP-based.
 Blindly trusting `*` would restore forwarded attribution but would make
 spoofing possible if the API were ever reached through another path.
 
-Required proof before adding IP blocking:
+A controlled pair of public login failures completed the baseline proof. The
+ordinary request and a request carrying the forged value
+`X-Forwarded-For: 203.0.113.77` both returned the intended generic 401 and both
+produced `login_failed` events with `ip_address = 172.18.0.5`. Caddy therefore
+prevents the external spoof from reaching the application as client identity,
+but Uvicorn also discards Caddy's legitimate forwarded client address.
+
+Required D2 correction and acceptance proof before adding IP blocking:
 
 1. Configure an explicit Caddy-to-Uvicorn trust boundary.
 2. Send two requests from distinct known client addresses and show distinct
@@ -190,17 +197,23 @@ access, and retention explicitly. Reference: <https://caddyserver.com/docs/caddy
 | Health-check amplification | Separate live/ready endpoints | Ready performs dependency checks and is public/unlimited | P1 control |
 | Volumetric DDoS | Caddy and small containerized surface | One VPS cannot absorb serious volumetric traffic; application limits are insufficient | P2 provider/CDN decision |
 
-## 9. D1 closure criteria and next PRs
+## 9. D1 closure and next PRs
 
-D1 is complete when the following evidence is attached to this inventory:
+D1 closed on 2026-10-14 with the following evidence:
 
-- corrected Caddy/Uvicorn proxy-header configuration plus genuine-client and
-  forged-header evidence;
-- genuine and forged client-IP test results;
-- representative response evidence for 401, 403, API 404, SPA fallback,
-  422 and 429;
-- effective journald retention/disk policy;
-- decision on raw-IP purpose and retention.
+- the previously accepted IONOS firewall, listener and IPv6 records;
+- a fresh listener and Compose-port check showing only 22, 80 and 443 on the
+  host, with no published PostgreSQL or API port;
+- the effective Uvicorn command, unset `FORWARDED_ALLOW_IPS`, Docker subnet and
+  Caddy backend address;
+- ordinary and forged-header login probes showing the shared Caddy address;
+- scanner-path probes showing the SPA 200/API 404 distinction;
+- current journald disk usage, with retention policy deliberately left to D3.
+
+Response-shape/timing comparisons for 401, 403, inaccessible-resource 404,
+422 and 429 remain part of the Owner/Viewer and abuse-test work. The purpose
+and retention of raw IP telemetry remain a D3 privacy-policy decision, not a
+reason to keep D1 open.
 
 Recommended implementation sequence:
 
