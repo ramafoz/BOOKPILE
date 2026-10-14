@@ -126,7 +126,11 @@ be an additional convenience only.
   false pass.
 - [x] Create the `bookpile-staging-backups-2026` private encrypted EU Central
   bucket with Object Lock and a bucket-scoped `staging/` application key.
-  Exact capability minimization and final lifecycle expiry remain to be checked.
+  The bucket/prefix-scoped credential is accepted for staging. On 2026-10-14,
+  the daily job created and verified a fresh snapshot, reported three expired
+  snapshots removed after the configured 29-day period, and the first completed
+  final-bucket snapshot independently returned `NoSuchKey`. Repeat credential
+  isolation when provisioning production rather than reusing staging access.
 - [x] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
   `600`, and keep its encryption secret in an off-host password manager.
 

@@ -160,10 +160,11 @@ credentials, and securely delete the restore environment file.
 - The disposable restore database, bucket/container and local staging were
   removed after the rehearsal; source data was read-only.
 
-## Spanish staging recovery evidence (2026-09-14/18)
+## Spanish staging recovery and retention evidence (2026-09-14 to 2026-10-14)
 
 - Final bucket: `bookpile-staging-backups-2026`, private, encrypted and
-  Object-Locked in EU Central; final 29-day lifecycle expiry is not yet proven.
+  Object-Locked in EU Central. The effective staging configuration was confirmed
+  as 29 days before the final lifecycle test.
 - Backup `276b0264-4aad-43ff-b9fc-591984cbbe77` contained a 119,314-byte
   PostgreSQL custom dump and one private Dinahosting S3 object. Create and an
   independent `verify` returned `verified: true`; `status` was healthy.
@@ -211,7 +212,21 @@ credentials, and securely delete the restore environment file.
   were ready; all overdue/failed counters were zero; and the active inventory
   still contained 434 expected/stored objects with zero missing, mismatched or
   orphaned objects.
+- On 2026-10-14 at 02:17 UTC, the daily systemd unit created backup
+  `ff2111c2-6e12-4be5-822a-c66d8f4eefe0`, uploaded 435 private objects and
+  independently verified all 436 artefacts. Its completion result reported
+  `expired_snapshots_removed: 3` and `verified: true`; systemd then completed
+  successfully.
+- The first final-bucket snapshot,
+  `276b0264-4aad-43ff-b9fc-591984cbbe77`, had independently verified before
+  expiry and returned provider `NoSuchKey` after the scheduled prune. This
+  proves removal of a completed application snapshot after the real configured
+  29-day COMPLIANCE period, rather than only the earlier disposable lock probe.
+- Post-prune `status` selected the new snapshot and returned `healthy: true`.
+  A deep operational check found 435 expected/stored private objects, zero
+  missing, mismatched or orphaned objects, all other checks ready and all
+  overdue/failed counters zero.
 
-The measured RPO/RTO and external alerting gates have passed. Final lifecycle
-expiry evidence and consolidation of the private provider/cost record remain;
-neither the apex domain nor production data has been switched.
+The measured RPO/RTO, external alerting, private provider/cost record and final
+29-day lifecycle-expiry gates have passed. Phase 9D is accepted. Neither the
+apex domain nor production data has been switched.

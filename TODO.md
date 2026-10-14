@@ -898,14 +898,18 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     outbox, leased retrying worker, stale-action cancellation, deterministic
     message IDs and delivery-relative recovery windows. Provider delivery and
     worker monitoring are exercised in staging during 9F.
-  - [ ] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
+  - [x] 9D encrypted off-site backup: consistent PostgreSQL custom dumps,
     authenticated chunk encryption, separate S3 repository, completion marker,
     29-day compliance retention, guarded restore and local 36-table/869-object
     recovery rehearsal are implemented. Backblaze EU passed exact-version
     COMPLIANCE enforcement and post-expiry deletion. On 2026-09-14, staging
     created/verified a real database-plus-one-object backup, restored 36 tables
     and that object into disposable targets, and proved the daily systemd job.
-    Close after final lifecycle expiry and remaining provider acceptance.
+    On 2026-10-14, the scheduled job created and independently verified backup
+    `ff2111c2-6e12-4be5-822a-c66d8f4eefe0`, pruned three snapshots after the
+    configured 29-day period, and the first final-bucket snapshot then returned
+    `NoSuchKey`. Backup freshness and the deep database/object check remained
+    healthy. The final lifecycle and provider-acceptance gates are closed.
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit
