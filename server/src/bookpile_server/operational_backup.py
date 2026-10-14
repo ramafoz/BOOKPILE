@@ -265,7 +265,8 @@ class OperationalBackupService:
             return manifest
 
     def prune(self, *, retention_days: int, now: datetime | None = None) -> list[UUID]:
-        cutoff = (now or datetime.now(UTC)) - timedelta(days=retention_days)
+        moment = now or datetime.now(UTC)
+        cutoff = moment - timedelta(days=retention_days)
         removed: list[UUID] = []
         all_versions = self.repository.list_versions("snapshots")
         completion_versions = [
@@ -288,6 +289,15 @@ class OperationalBackupService:
             created = datetime.fromisoformat(marker["created_at"])
             if created < cutoff:
                 snapshot_versions = self.repository.list_versions(f"snapshots/{backup_id}")
+                retained_until = [
+                    value
+                    for item in snapshot_versions
+                    if not item.is_delete_marker
+                    for value in [self.repository.retention_until(item)]
+                    if value is not None
+                ]
+                if any(value > moment for value in retained_until):
+                    continue
                 content = [item for item in snapshot_versions if item.key != expected_marker_key]
                 marker_content = [
                     item
@@ -300,8 +310,8 @@ class OperationalBackupService:
                     if item.key == expected_marker_key and item.is_delete_marker
                 ]
                 self.repository.delete_versions(content)
-                self.repository.delete_versions(marker_content)
                 self.repository.delete_versions(marker_deletions)
+                self.repository.delete_versions(marker_content)
                 if self.repository.list_versions(f"snapshots/{backup_id}"):
                     raise OSError("Expired backup versions remain after deletion")
                 removed.append(backup_id)

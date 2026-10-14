@@ -38,6 +38,7 @@ class BackupRepository(Protocol):
     def get_bytes(self, key: str, *, version_id: str | None = None) -> bytes: ...
     def list_keys(self, prefix: str) -> list[str]: ...
     def list_versions(self, prefix: str) -> list[BackupObjectVersion]: ...
+    def retention_until(self, version: BackupObjectVersion) -> datetime | None: ...
     def delete_keys(self, keys: list[str]) -> None: ...
     def delete_versions(self, versions: list[BackupObjectVersion]) -> None: ...
 
@@ -292,6 +293,24 @@ class S3BackupRepository:
                     if logical is not None and version_id:
                         versions.append(BackupObjectVersion(logical, version_id, is_delete_marker))
         return sorted(versions, key=lambda item: (item.key, item.is_delete_marker, item.version_id or ""))
+
+    def retention_until(self, version: BackupObjectVersion) -> datetime | None:
+        if version.is_delete_marker:
+            return None
+        if version.version_id is None:
+            raise ValueError("S3 retention lookup requires an exact version ID")
+        head = self._client.head_object(
+            Bucket=self._bucket,
+            Key=self._remote(version.key),
+            VersionId=version.version_id,
+        )
+        retain_until = head.get("ObjectLockRetainUntilDate")
+        if self._object_lock_days and (
+            head.get("ObjectLockMode") != "COMPLIANCE"
+            or not isinstance(retain_until, datetime)
+        ):
+            raise OSError("Backup object version has no COMPLIANCE retention timestamp")
+        return retain_until if isinstance(retain_until, datetime) else None
 
     def delete_versions(self, versions: list[BackupObjectVersion]) -> None:
         for offset in range(0, len(versions), 1000):
