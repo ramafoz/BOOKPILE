@@ -265,16 +265,55 @@ class OperationalBackupService:
             return manifest
 
     def prune(self, *, retention_days: int, now: datetime | None = None) -> list[UUID]:
-        cutoff = (now or datetime.now(UTC)) - timedelta(days=retention_days)
+        moment = now or datetime.now(UTC)
+        cutoff = moment - timedelta(days=retention_days)
         removed: list[UUID] = []
-        for key in self.repository.list_keys("snapshots"):
-            if not key.endswith("/complete.json"):
+        all_versions = self.repository.list_versions("snapshots")
+        completion_versions = [
+            item
+            for item in all_versions
+            if item.key.endswith("/complete.json") and not item.is_delete_marker
+        ]
+        seen: set[UUID] = set()
+        for completion in completion_versions:
+            marker = json.loads(
+                self.repository.get_bytes(completion.key, version_id=completion.version_id)
+            )
+            backup_id = UUID(marker["backup_id"])
+            if backup_id in seen:
                 continue
-            marker = json.loads(self.repository.get_bytes(key))
+            seen.add(backup_id)
+            expected_marker_key = f"snapshots/{backup_id}/complete.json"
+            if completion.key != expected_marker_key:
+                raise RuntimeError("Backup completion marker identity mismatch")
             created = datetime.fromisoformat(marker["created_at"])
             if created < cutoff:
-                backup_id = UUID(marker["backup_id"])
-                self.repository.delete_keys(self.repository.list_keys(f"snapshots/{backup_id}"))
+                snapshot_versions = self.repository.list_versions(f"snapshots/{backup_id}")
+                retained_until = [
+                    value
+                    for item in snapshot_versions
+                    if not item.is_delete_marker
+                    for value in [self.repository.retention_until(item)]
+                    if value is not None
+                ]
+                if any(value > moment for value in retained_until):
+                    continue
+                content = [item for item in snapshot_versions if item.key != expected_marker_key]
+                marker_content = [
+                    item
+                    for item in snapshot_versions
+                    if item.key == expected_marker_key and not item.is_delete_marker
+                ]
+                marker_deletions = [
+                    item
+                    for item in snapshot_versions
+                    if item.key == expected_marker_key and item.is_delete_marker
+                ]
+                self.repository.delete_versions(content)
+                self.repository.delete_versions(marker_deletions)
+                self.repository.delete_versions(marker_content)
+                if self.repository.list_versions(f"snapshots/{backup_id}"):
+                    raise OSError("Expired backup versions remain after deletion")
                 removed.append(backup_id)
         return removed
 

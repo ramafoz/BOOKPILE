@@ -1,6 +1,7 @@
 """Off-site repository boundary for encrypted operational snapshots."""
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from os import urandom
@@ -23,13 +24,23 @@ def validate_backup_key(key: str) -> str:
     return path.as_posix()
 
 
+@dataclass(frozen=True)
+class BackupObjectVersion:
+    key: str
+    version_id: str | None
+    is_delete_marker: bool = False
+
+
 class BackupRepository(Protocol):
     def put_file(self, key: str, source: Path, *, sha256: str) -> None: ...
     def get_file(self, key: str, target: Path, *, sha256: str) -> None: ...
     def put_bytes(self, key: str, content: bytes) -> None: ...
-    def get_bytes(self, key: str) -> bytes: ...
+    def get_bytes(self, key: str, *, version_id: str | None = None) -> bytes: ...
     def list_keys(self, prefix: str) -> list[str]: ...
+    def list_versions(self, prefix: str) -> list[BackupObjectVersion]: ...
+    def retention_until(self, version: BackupObjectVersion) -> datetime | None: ...
     def delete_keys(self, keys: list[str]) -> None: ...
+    def delete_versions(self, versions: list[BackupObjectVersion]) -> None: ...
 
 
 class S3BackupRepository:
@@ -245,9 +256,12 @@ class S3BackupRepository:
                 pass
             raise OSError("Off-site backup marker verification failed")
 
-    def get_bytes(self, key: str) -> bytes:
+    def get_bytes(self, key: str, *, version_id: str | None = None) -> bytes:
         from hashlib import sha256
-        response = self._client.get_object(Bucket=self._bucket, Key=self._remote(key))
+        arguments = {"Bucket": self._bucket, "Key": self._remote(key)}
+        if version_id is not None:
+            arguments["VersionId"] = version_id
+        response = self._client.get_object(**arguments)
         body = response["Body"]
         try:
             content = body.read()
@@ -268,14 +282,61 @@ class S3BackupRepository:
                     keys.append(logical)
         return sorted(keys)
 
+    def list_versions(self, prefix: str) -> list[BackupObjectVersion]:
+        versions: list[BackupObjectVersion] = []
+        paginator = self._client.get_paginator("list_object_versions")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=self._remote(prefix)):
+            for collection, is_delete_marker in (("Versions", False), ("DeleteMarkers", True)):
+                for item in page.get(collection, []):
+                    logical = self._logical(item["Key"])
+                    version_id = item.get("VersionId")
+                    if logical is not None and version_id:
+                        versions.append(BackupObjectVersion(logical, version_id, is_delete_marker))
+        return sorted(versions, key=lambda item: (item.key, item.is_delete_marker, item.version_id or ""))
+
+    def retention_until(self, version: BackupObjectVersion) -> datetime | None:
+        if version.is_delete_marker:
+            return None
+        if version.version_id is None:
+            raise ValueError("S3 retention lookup requires an exact version ID")
+        head = self._client.head_object(
+            Bucket=self._bucket,
+            Key=self._remote(version.key),
+            VersionId=version.version_id,
+        )
+        retain_until = head.get("ObjectLockRetainUntilDate")
+        if self._object_lock_days and (
+            head.get("ObjectLockMode") != "COMPLIANCE"
+            or not isinstance(retain_until, datetime)
+        ):
+            raise OSError("Backup object version has no COMPLIANCE retention timestamp")
+        return retain_until if isinstance(retain_until, datetime) else None
+
+    def delete_versions(self, versions: list[BackupObjectVersion]) -> None:
+        for offset in range(0, len(versions), 1000):
+            batch = versions[offset:offset + 1000]
+            if not batch:
+                continue
+            if any(item.version_id is None for item in batch):
+                raise ValueError("S3 version deletion requires an exact version ID")
+            response = self._client.delete_objects(
+                Bucket=self._bucket,
+                Delete={
+                    "Objects": [
+                        {"Key": self._remote(item.key), "VersionId": item.version_id}
+                        for item in batch
+                    ],
+                    "Quiet": True,
+                },
+            )
+            errors = response.get("Errors", [])
+            if errors:
+                codes = sorted({str(item.get("Code", "Unknown")) for item in errors})
+                raise OSError(f"Off-site backup version deletion failed: {', '.join(codes)}")
+
     def delete_keys(self, keys: list[str]) -> None:
-        for offset in range(0, len(keys), 1000):
-            batch = keys[offset:offset + 1000]
-            if batch:
-                self._client.delete_objects(
-                    Bucket=self._bucket,
-                    Delete={
-                        "Objects": [{"Key": self._remote(key)} for key in batch],
-                        "Quiet": True,
-                    },
-                )
+        requested = set(keys)
+        versions: list[BackupObjectVersion] = []
+        for key in sorted(requested):
+            versions.extend(item for item in self.list_versions(key) if item.key == key)
+        self.delete_versions(versions)

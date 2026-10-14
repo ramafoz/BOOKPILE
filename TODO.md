@@ -905,7 +905,14 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     COMPLIANCE enforcement and post-expiry deletion. On 2026-09-14, staging
     created/verified a real database-plus-one-object backup, restored 36 tables
     and that object into disposable targets, and proved the daily systemd job.
-    Close after final lifecycle expiry and remaining provider acceptance.
+    On 2026-10-14, the scheduled job created and independently verified backup
+    `ff2111c2-6e12-4be5-822a-c66d8f4eefe0`, pruned three snapshots after the
+    configured 29-day period, and the first final-bucket snapshot then returned
+    `NoSuchKey`. Review then established that the original prune omitted S3
+    version IDs and therefore created delete markers rather than proving
+    permanent deletion. Exact-version pruning and absence verification must be
+    deployed and exercised against the retained historical versions before the
+    final lifecycle gate can close.
   - [x] 9E edge/operations implementation: Caddy limits and isolation headers,
     retention maintenance, light/deep invariant checks, backup freshness,
     privacy-safe delivery logs, systemd schedules, Dependabot and the explicit

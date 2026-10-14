@@ -83,8 +83,13 @@ evidence is saved without credentials:
   probe and rejected deletion before its 2026-09-14 18:04 UTC expiry. BOOKPILE
   then deleted and independently confirmed absence of that exact version after
   expiry. The final `bookpile-staging-backups-2026` bucket is private, encrypted
-  and Object-Locked with a bucket-scoped `staging/` key. Final lifecycle expiry
-  after 29-day retention remains an acceptance gate.
+  and Object-Locked with a bucket-scoped `staging/` key. On 2026-10-14 the
+  scheduled backup verified a new database-plus-435-object snapshot, pruned
+  three snapshots after the configured 29-day period and the first completed
+  final-bucket snapshot returned `NoSuchKey`. Review established that the
+  versionless deletes created current delete markers while historical versions
+  could remain. The lifecycle gate therefore remains open pending exact-version
+  cleanup and version-list absence evidence.
 - Dinahosting SMTP accepted authenticated TLS delivery from the worker and the
   recipient completed a real account-verification link on 2026-09-14. SPF uses
   the domain's `a`/`mx` authorization, Dinahosting DKIM is enabled and DMARC
