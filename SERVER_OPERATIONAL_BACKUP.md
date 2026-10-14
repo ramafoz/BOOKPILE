@@ -223,6 +223,13 @@ credentials, and securely delete the restore environment file.
   found that this was not sufficient deletion evidence: the original batch
   request omitted `VersionId`, so a versioned Backblaze bucket could retain the
   encrypted versions behind current delete markers.
+- A read-only Backblaze console inspection on 2026-10-14 confirmed the three
+  affected prefixes were still represented with the provider's deleted-version
+  asterisk: `276b0264-4aad-43ff-b9fc-591984cbbe77`,
+  `0598e4bc-5433-46f5-95b9-44422e9733ea` and
+  `0ec5ab57-56c0-4887-b375-20f12fe1280c`. Each detail view reported eight files,
+  194.5 KB and a 2026-10-14 04:24 local display timestamp. This corroborates the
+  delete-marker finding; it is not accepted as permanent-deletion evidence.
 - Post-prune `status` selected the new snapshot and returned `healthy: true`.
   A deep operational check found 435 expected/stored private objects, zero
   missing, mismatched or orphaned objects, all other checks ready and all
