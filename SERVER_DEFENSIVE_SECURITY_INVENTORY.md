@@ -63,16 +63,18 @@ versioned Compose environment does not establish an explicit trust rule. The
 the Uvicorn command supplies no equivalent argument, and Caddy currently has
 the backend address `172.18.0.5`.
 
-Therefore the effective client identity is **not yet proven**. It may be the
-Caddy container address rather than the Internet client address. Blindly
-trusting `*` would fix attribution but would make spoofing possible if the API
-were ever reached through another path.
+The defect is now confirmed: the two existing `login_failed` security events
+inspected on 2026-10-14 both recorded `172.18.0.5`, which is Caddy's current
+backend address, rather than the originating Internet client. Consequently,
+all clients currently share one effective key for limits described as IP-based.
+Blindly trusting `*` would restore forwarded attribution but would make
+spoofing possible if the API were ever reached through another path.
 
 Required proof before adding IP blocking:
 
-1. Record the effective Uvicorn forwarded-header configuration.
+1. Configure an explicit Caddy-to-Uvicorn trust boundary.
 2. Send two requests from distinct known client addresses and show distinct
-   `request.client.host` values without retaining unrelated personal data.
+   `request.client.host` values without publishing those addresses.
 3. Send a forged `X-Forwarded-For` from outside Caddy and prove it is ignored or
    overwritten.
 4. Send a controlled forwarded value through Caddy and prove it is accepted.
@@ -179,8 +181,8 @@ access, and retention explicitly. Reference: <https://caddyserver.com/docs/caddy
 | Threat | Existing control | Gap | Priority |
 | --- | --- | --- | --- |
 | `.env`, `.git`, WordPress and panel scans | Sensitive files are not in Caddy's static root | SPA returns 200; no Caddy visibility, scanner counter or throttling | P0 observability |
-| Login brute force/account enumeration | IP + identity limits, Argon2, generic invalid-credential response | IP identity unproven; no alerting/repeat-offender policy | P0 correctness |
-| Registration/recovery abuse | Invitation requirement, IP/token/email limits, generic 202 email endpoints | IP identity unproven; distributed abuse remains possible | P0 correctness |
+| Login brute force/account enumeration | IP + identity limits, Argon2, generic invalid-credential response | Confirmed shared Caddy-IP key; no alerting/repeat-offender policy | P0 correctness |
+| Registration/recovery abuse | Invitation requirement, IP/token/email limits, generic 202 email endpoints | Confirmed shared Caddy-IP key; distributed abuse remains possible | P0 correctness |
 | Forged forwarded IP | API not exposed to host | Explicit trusted-proxy configuration and spoof test absent | P0 correctness |
 | Malformed request flood | Pydantic/FastAPI validation and bounded fields | No general edge limit or aggregate 422 telemetry | P1 monitor |
 | Unauthorized role/ID manipulation | Server-side session, CSRF and service-layer Owner/Viewer checks | Full adversarial Owner/Viewer matrix not yet executed | P0 audit |
@@ -192,7 +194,8 @@ access, and retention explicitly. Reference: <https://caddyserver.com/docs/caddy
 
 D1 is complete when the following evidence is attached to this inventory:
 
-- effective Caddy and Uvicorn proxy-header configuration;
+- corrected Caddy/Uvicorn proxy-header configuration plus genuine-client and
+  forged-header evidence;
 - genuine and forged client-IP test results;
 - representative response evidence for 401, 403, API 404, SPA fallback,
   422 and 429;
