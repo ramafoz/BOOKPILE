@@ -57,6 +57,12 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert "backend:\n    internal: true" in compose
 
 
+def test_api_runtime_leaves_forwarded_headers_to_bookpile_middleware() -> None:
+    dockerfile = (Path(__file__).resolve().parents[1] / "docker" / "api.Dockerfile").read_text()
+
+    assert '"--no-proxy-headers"' in dockerfile
+
+
 def _proxied_scope(
     peer: str,
     forwarded_headers: list[bytes],
