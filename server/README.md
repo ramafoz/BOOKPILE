@@ -291,6 +291,10 @@ staging environments must obtain unique secrets from deployment configuration.
 Production refuses to start with the development rate-limit HMAC secret,
 insecure session cookies, or a non-HTTPS public URL. Set
 `BOOKPILE_SERVER_RATE_LIMIT_KEY_SECRET` to a long random deployment secret.
+Hosted environments must also set `BOOKPILE_SERVER_TRUSTED_PROXY_CIDRS` to the
+exact private Compose network through which Caddy reaches the API. BOOKPILE
+accepts Caddy's sanitized client address only when the immediate peer belongs
+to that network; it never accepts a public or all-addresses trust range.
 
 Common lifecycle commands preserve the named volume unless `-v` is explicitly
 requested:

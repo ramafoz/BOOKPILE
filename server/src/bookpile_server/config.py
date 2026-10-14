@@ -1,4 +1,5 @@
 from functools import lru_cache
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -11,6 +12,23 @@ SERVER_DIRECTORY = Path(__file__).resolve().parents[2]
 DEVELOPMENT_RATE_LIMIT_SECRET = "bookpile-development-rate-limit-secret"
 DEVELOPMENT_OUTBOX_SECRET = "bookpile-development-outbox-encryption-secret"
 DEVELOPMENT_BACKUP_SECRET = "bookpile-development-operational-backup-encryption-secret"
+TRUSTED_PROXY_PRIVATE_NETWORKS = (
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("127.0.0.0/8"),
+    ip_network("fc00::/7"),
+    ip_network("::1/128"),
+)
+
+
+def _is_private_use_or_loopback_network(
+    network: IPv4Network | IPv6Network,
+) -> bool:
+    return any(
+        network.version == allowed.version and network.subnet_of(allowed)
+        for allowed in TRUSTED_PROXY_PRIVATE_NETWORKS
+    )
 
 
 class Settings(BaseSettings):
@@ -31,6 +49,7 @@ class Settings(BaseSettings):
     sql_echo: bool = False
     deployment_revision: str = "development"
     allowed_hosts: str = ""
+    trusted_proxy_cidrs: str = ""
     api_docs_enabled: bool = True
     database_pool_size: int = Field(default=5, ge=1, le=50)
     database_max_overflow: int = Field(default=5, ge=0, le=100)
@@ -105,6 +124,14 @@ class Settings(BaseSettings):
         hostname = urlsplit(self.public_base_url).hostname
         return [hostname] if self.is_hosted and hostname else ["127.0.0.1", "localhost", "testserver"]
 
+    @property
+    def trusted_proxy_networks(self) -> list[IPv4Network | IPv6Network]:
+        return [
+            ip_network(item.strip(), strict=False)
+            for item in self.trusted_proxy_cidrs.split(",")
+            if item.strip()
+        ]
+
     @model_validator(mode="after")
     def require_production_security_settings(self) -> "Settings":
         if self.smtp_starttls and self.smtp_implicit_tls:
@@ -149,6 +176,20 @@ class Settings(BaseSettings):
                 raise ValueError("Hosted allowed hosts must include the public hostname")
             if any("://" in host or "/" in host for host in hosts):
                 raise ValueError("Allowed hosts contain hostnames only, without scheme or path")
+            try:
+                trusted_proxy_networks = self.trusted_proxy_networks
+            except ValueError as exc:
+                raise ValueError("Trusted proxy CIDRs must contain valid IP networks") from exc
+            if not trusted_proxy_networks:
+                raise ValueError("Hosted environments require at least one trusted proxy CIDR")
+            if any(
+                not _is_private_use_or_loopback_network(network)
+                for network in trusted_proxy_networks
+            ):
+                raise ValueError(
+                    "Hosted trusted proxy CIDRs must use RFC 1918, IPv6 ULA, "
+                    "or loopback networks"
+                )
             if self.private_object_backend != "s3":
                 raise ValueError("Hosted environments require private S3-compatible object storage")
             if (

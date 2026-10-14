@@ -15,9 +15,12 @@ accepted controls from the D2-D7 work that remains.
 | Browser to API | Same-origin HTTPS, opaque HttpOnly session cookie, double-submit CSRF token, hosted secure-cookie validation | Auth routes, dependencies and settings | Exercise cross-origin and forged-CSRF cases in the final audit. |
 | Host headers and API docs | Trusted-host middleware; wildcard hosts and hosted API docs are rejected | `main.py` and `config.py` | Verify effective staging values. |
 
-The containers run as non-root and the API, worker and web filesystems are
-read-only. The API has a 64 MiB temporary filesystem. These are useful blast-
-radius controls, not request-abuse controls.
+The API, worker and web containers run as non-root with read-only root
+filesystems. Deliberate writable exceptions remain: the API mounts import and
+export staging volumes plus a 64 MiB `/tmp`; the worker has a 32 MiB `/tmp`;
+and Caddy mounts its persistent data and configuration volumes. A compromise
+can therefore modify those locations even though it cannot modify the image
+root. These are useful blast-radius controls, not request-abuse controls.
 
 ## 2. Public attack surface
 

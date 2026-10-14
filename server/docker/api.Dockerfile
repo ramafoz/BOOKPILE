@@ -29,5 +29,5 @@ COPY --chown=bookpile:bookpile server/migrations ./migrations
 
 USER 10001:10001
 EXPOSE 8100
-CMD ["uvicorn", "bookpile_server.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "2", "--no-access-log"]
+CMD ["uvicorn", "bookpile_server.main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "2", "--no-access-log", "--no-proxy-headers"]
 

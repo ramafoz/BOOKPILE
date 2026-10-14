@@ -22,6 +22,8 @@
 	}
 
 	handle /health* {
+		# Caddy ignores client-supplied X-Forwarded-* values by default. The API
+		# accepts its sanitized address only from configured private proxy CIDRs.
 		reverse_proxy api:8100
 	}
 

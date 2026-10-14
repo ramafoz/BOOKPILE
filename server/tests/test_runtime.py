@@ -1,6 +1,6 @@
+import asyncio
 import json
 import logging
-from pathlib import Path
 from pathlib import Path
 
 import pytest
@@ -10,6 +10,7 @@ from bookpile_server.config import Settings
 from bookpile_server.database import get_session
 from bookpile_server import main
 from bookpile_server import error_reporting
+from bookpile_server.proxy_headers import TrustedProxyHeadersMiddleware
 
 
 class UnavailableObjects:
@@ -56,6 +57,70 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert "backend:\n    internal: true" in compose
 
 
+def test_api_runtime_leaves_forwarded_headers_to_bookpile_middleware() -> None:
+    dockerfile = (Path(__file__).resolve().parents[1] / "docker" / "api.Dockerfile").read_text()
+
+    assert '"--no-proxy-headers"' in dockerfile
+
+
+def _proxied_scope(
+    peer: str,
+    forwarded_headers: list[bytes],
+    proto_headers: list[bytes] | None = None,
+) -> dict:
+    captured = {}
+
+    async def downstream(scope, _receive, _send):
+        captured.update(scope)
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    async def send(_message):
+        return None
+
+    middleware = TrustedProxyHeadersMiddleware(
+        downstream,
+        _hosted_settings().trusted_proxy_networks,
+    )
+    scope = {
+        "type": "http",
+        "client": (peer, 12345),
+        "scheme": "http",
+        "headers": (
+            [(b"x-forwarded-for", value) for value in forwarded_headers]
+            + [(b"x-forwarded-proto", value) for value in (proto_headers or [])]
+        ),
+    }
+    asyncio.run(middleware(scope, receive, send))
+    return captured
+
+
+def _proxied_client(peer: str, forwarded_headers: list[bytes]) -> str:
+    return _proxied_scope(peer, forwarded_headers)["client"][0]
+
+
+def test_trusted_proxy_supplies_one_valid_client_address() -> None:
+    assert _proxied_client("172.18.0.5", [b"198.51.100.24"]) == "198.51.100.24"
+    assert _proxied_client("198.51.100.24", [b"203.0.113.77"]) == "198.51.100.24"
+
+
+def test_trusted_proxy_supplies_only_a_known_forwarded_scheme() -> None:
+    assert _proxied_scope("172.18.0.5", [], [b"https"])["scheme"] == "https"
+    assert _proxied_scope("172.18.0.5", [], [b"javascript"])["scheme"] == "http"
+
+
+@pytest.mark.parametrize(
+    ("peer", "headers"),
+    [
+        ("172.18.0.5", [b"not-an-ip"]),
+        ("172.18.0.5", [b"198.51.100.24", b"203.0.113.77"]),
+    ],
+)
+def test_untrusted_or_ambiguous_forwarded_address_fails_closed(peer, headers) -> None:
+    assert _proxied_client(peer, headers) == peer
+
+
 def test_production_healthcheck_uses_the_configured_trusted_host() -> None:
     compose = (Path(__file__).resolve().parents[1] / "compose.production.yaml").read_text()
 
@@ -85,6 +150,7 @@ def _hosted_settings(**changes) -> Settings:
         "deployment_revision": "git-1234567",
         "api_docs_enabled": False,
         "allowed_hosts": "staging.bookpile.example",
+        "trusted_proxy_cidrs": "172.18.0.0/16",
         "private_object_backend": "s3",
         "private_object_s3_endpoint_url": "https://objects.example",
         "private_object_s3_region": "eu-test-1",
@@ -222,10 +288,40 @@ def test_error_reporting_initialization_disables_automatic_data_collection(
     {"private_object_backend": "filesystem"},
     {"private_object_s3_endpoint_url": "http://objects.example"},
     {"error_reporting_dsn": "http://errors.example.test/123"},
+    {"trusted_proxy_cidrs": ""},
+    {"trusted_proxy_cidrs": "0.0.0.0/0"},
+    {"trusted_proxy_cidrs": "8.8.8.8/32"},
+    {"trusted_proxy_cidrs": "100.64.0.0/10"},
+    {"trusted_proxy_cidrs": "169.254.0.0/16"},
+    {"trusted_proxy_cidrs": "192.0.2.0/24"},
+    {"trusted_proxy_cidrs": "198.51.100.0/24"},
+    {"trusted_proxy_cidrs": "203.0.113.0/24"},
+    {"trusted_proxy_cidrs": "::ffff:0:0/96"},
+    {"trusted_proxy_cidrs": "fe80::/10"},
+    {"trusted_proxy_cidrs": "2001:db8::/32"},
 ])
 def test_hosted_configuration_rejects_unsafe_values(changes) -> None:
     with pytest.raises(ValueError):
         _hosted_settings(**changes)
+
+
+@pytest.mark.parametrize(
+    "trusted_proxy_cidrs",
+    [
+        "10.42.0.0/16",
+        "172.18.0.0/16",
+        "192.168.50.0/24",
+        "127.0.0.1/32",
+        "fd42::/64",
+        "::1/128",
+    ],
+)
+def test_hosted_configuration_accepts_explicit_private_use_proxy_networks(
+    trusted_proxy_cidrs,
+) -> None:
+    settings = _hosted_settings(trusted_proxy_cidrs=trusted_proxy_cidrs)
+
+    assert settings.trusted_proxy_cidrs == trusted_proxy_cidrs
 
 
 def test_hosted_configuration_accepts_implicit_smtp_tls() -> None:
