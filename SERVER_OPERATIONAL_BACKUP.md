@@ -234,9 +234,19 @@ credentials, and securely delete the restore environment file.
   A deep operational check found 435 expected/stored private objects, zero
   missing, mismatched or orphaned objects, all other checks ready and all
   overdue/failed counters zero.
+- Later on 2026-10-14, corrected pruning enumerated historical versions and
+  delete markers, checked each exact version's COMPLIANCE retain-until timestamp
+  and reported `{"removed": 3}`. An independent `list_object_versions`-backed
+  query returned zero versions for each affected prefix:
+  `276b0264-4aad-43ff-b9fc-591984cbbe77`,
+  `0598e4bc-5433-46f5-95b9-44422e9733ea` and
+  `0ec5ab57-56c0-4887-b375-20f12fe1280c`.
+- After exact deletion, backup `ab364d90-b80b-4a9e-973f-6cb8d8a11208` was the
+  latest snapshot and `status` returned `healthy: true` at an age of 1,500
+  seconds. The deep operational check remained healthy with 435 expected/stored
+  private objects, no inventory discrepancies and no overdue or failed work.
 
 The measured RPO/RTO, external alerting and private provider/cost gates have
-passed. The final 29-day lifecycle gate remains open until corrected pruning
-enumerates and deletes every exact object version and delete marker, then proves
-that no versions remain below the expired snapshot prefixes. Neither the apex
-domain nor production data has been switched.
+passed. Exact-version absence after the real 29-day retention period closes the
+final lifecycle gate, so Phase 9D is accepted. Neither the apex domain nor
+production data has been switched.

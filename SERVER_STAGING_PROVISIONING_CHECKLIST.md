@@ -131,8 +131,10 @@ be an additional convenience only.
   snapshots removed after the configured 29-day period, and the first completed
   final-bucket snapshot returned `NoSuchKey`. That result was subsequently
   identified as delete-marker evidence rather than proof that historical
-  versions were permanently removed. Exact-version cleanup and version-list
-  absence remain required. Repeat credential isolation when provisioning
+  versions were permanently removed. Corrected pruning then removed the three
+  snapshots by exact version ID, and an independent version listing returned
+  zero versions for every affected prefix. Backup freshness and the deep object
+  check remained healthy. Repeat credential isolation when provisioning
   production rather than reusing staging access.
 - [x] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
   `600`, and keep its encryption secret in an off-host password manager.

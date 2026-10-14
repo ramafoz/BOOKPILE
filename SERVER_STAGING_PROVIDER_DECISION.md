@@ -88,8 +88,10 @@ evidence is saved without credentials:
   three snapshots after the configured 29-day period and the first completed
   final-bucket snapshot returned `NoSuchKey`. Review established that the
   versionless deletes created current delete markers while historical versions
-  could remain. The lifecycle gate therefore remains open pending exact-version
-  cleanup and version-list absence evidence.
+  could remain. Corrected pruning subsequently removed the three snapshots by
+  exact version ID and an independent version listing returned zero for all
+  three prefixes. Backup freshness and the deep object check remained healthy;
+  the staging lifecycle gate is closed.
 - Dinahosting SMTP accepted authenticated TLS delivery from the worker and the
   recipient completed a real account-verification link on 2026-09-14. SPF uses
   the domain's `a`/`mx` authorization, Dinahosting DKIM is enabled and DMARC
