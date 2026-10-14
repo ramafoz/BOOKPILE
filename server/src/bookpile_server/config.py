@@ -12,6 +12,23 @@ SERVER_DIRECTORY = Path(__file__).resolve().parents[2]
 DEVELOPMENT_RATE_LIMIT_SECRET = "bookpile-development-rate-limit-secret"
 DEVELOPMENT_OUTBOX_SECRET = "bookpile-development-outbox-encryption-secret"
 DEVELOPMENT_BACKUP_SECRET = "bookpile-development-operational-backup-encryption-secret"
+TRUSTED_PROXY_PRIVATE_NETWORKS = (
+    ip_network("10.0.0.0/8"),
+    ip_network("172.16.0.0/12"),
+    ip_network("192.168.0.0/16"),
+    ip_network("127.0.0.0/8"),
+    ip_network("fc00::/7"),
+    ip_network("::1/128"),
+)
+
+
+def _is_private_use_or_loopback_network(
+    network: IPv4Network | IPv6Network,
+) -> bool:
+    return any(
+        network.version == allowed.version and network.subnet_of(allowed)
+        for allowed in TRUSTED_PROXY_PRIVATE_NETWORKS
+    )
 
 
 class Settings(BaseSettings):
@@ -166,11 +183,13 @@ class Settings(BaseSettings):
             if not trusted_proxy_networks:
                 raise ValueError("Hosted environments require at least one trusted proxy CIDR")
             if any(
-                network.prefixlen == 0
-                or not (network.is_private or network.is_loopback)
+                not _is_private_use_or_loopback_network(network)
                 for network in trusted_proxy_networks
             ):
-                raise ValueError("Hosted trusted proxy CIDRs must be private or loopback networks")
+                raise ValueError(
+                    "Hosted trusted proxy CIDRs must use RFC 1918, IPv6 ULA, "
+                    "or loopback networks"
+                )
             if self.private_object_backend != "s3":
                 raise ValueError("Hosted environments require private S3-compatible object storage")
             if (

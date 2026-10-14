@@ -292,10 +292,36 @@ def test_error_reporting_initialization_disables_automatic_data_collection(
     {"trusted_proxy_cidrs": "0.0.0.0/0"},
     {"trusted_proxy_cidrs": "8.8.8.8/32"},
     {"trusted_proxy_cidrs": "100.64.0.0/10"},
+    {"trusted_proxy_cidrs": "169.254.0.0/16"},
+    {"trusted_proxy_cidrs": "192.0.2.0/24"},
+    {"trusted_proxy_cidrs": "198.51.100.0/24"},
+    {"trusted_proxy_cidrs": "203.0.113.0/24"},
+    {"trusted_proxy_cidrs": "::ffff:0:0/96"},
+    {"trusted_proxy_cidrs": "fe80::/10"},
+    {"trusted_proxy_cidrs": "2001:db8::/32"},
 ])
 def test_hosted_configuration_rejects_unsafe_values(changes) -> None:
     with pytest.raises(ValueError):
         _hosted_settings(**changes)
+
+
+@pytest.mark.parametrize(
+    "trusted_proxy_cidrs",
+    [
+        "10.42.0.0/16",
+        "172.18.0.0/16",
+        "192.168.50.0/24",
+        "127.0.0.1/32",
+        "fd42::/64",
+        "::1/128",
+    ],
+)
+def test_hosted_configuration_accepts_explicit_private_use_proxy_networks(
+    trusted_proxy_cidrs,
+) -> None:
+    settings = _hosted_settings(trusted_proxy_cidrs=trusted_proxy_cidrs)
+
+    assert settings.trusted_proxy_cidrs == trusted_proxy_cidrs
 
 
 def test_hosted_configuration_accepts_implicit_smtp_tls() -> None:
