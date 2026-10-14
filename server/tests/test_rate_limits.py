@@ -105,6 +105,7 @@ def test_production_rejects_development_security_defaults() -> None:
         deployment_revision="git-1234567",
         api_docs_enabled=False,
         allowed_hosts="bookpile.example",
+        trusted_proxy_cidrs="172.18.0.0/16",
         private_object_backend="s3",
         private_object_s3_endpoint_url="https://objects.example",
         private_object_s3_region="eu-test-1",

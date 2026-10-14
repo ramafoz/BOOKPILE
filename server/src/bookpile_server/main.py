@@ -24,6 +24,7 @@ from .error_reporting import (
     capture_unhandled_request_error,
     initialize_error_reporting,
 )
+from .proxy_headers import TrustedProxyHeadersMiddleware
 
 
 request_logger = logging.getLogger("bookpile.requests")
@@ -42,6 +43,10 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_values)
+    app.add_middleware(
+        TrustedProxyHeadersMiddleware,
+        trusted_networks=settings.trusted_proxy_networks,
+    )
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(catalogue_router, prefix="/api/v1")
     app.include_router(libraries_router, prefix="/api/v1")
