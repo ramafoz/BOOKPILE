@@ -129,8 +129,11 @@ be an additional convenience only.
   The bucket/prefix-scoped credential is accepted for staging. On 2026-10-14,
   the daily job created and verified a fresh snapshot, reported three expired
   snapshots removed after the configured 29-day period, and the first completed
-  final-bucket snapshot independently returned `NoSuchKey`. Repeat credential
-  isolation when provisioning production rather than reusing staging access.
+  final-bucket snapshot returned `NoSuchKey`. That result was subsequently
+  identified as delete-marker evidence rather than proof that historical
+  versions were permanently removed. Exact-version cleanup and version-list
+  absence remain required. Repeat credential isolation when provisioning
+  production rather than reusing staging access.
 - [x] Copy `.env.staging.backup.example` to `.env.staging.backup`, set mode
   `600`, and keep its encryption secret in an off-host password manager.
 

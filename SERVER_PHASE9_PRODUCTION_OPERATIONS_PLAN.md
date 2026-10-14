@@ -123,7 +123,8 @@ the queued email; retries do not create uncontrolled duplicates.
 
 ### 9D — backup, restore and retention automation
 
-Status: accepted. Provider-neutral implementation and local plus live-provider
+Status: recovery accepted; final retention deletion remains open.
+Provider-neutral implementation and local plus live-provider
 PostgreSQL 17/object recovery rehearsals pass. Backblaze B2 EU Central accepted
 a versioned
 COMPLIANCE probe, rejected premature deletion and allowed verified deletion of
@@ -135,9 +136,11 @@ loss rehearsal restored 36 tables and 434 exact objects, migrated the recovered
 database, and started a ready isolated API. RPO was 6 h 36 min 22 s and total
 RTO was 35 min 48 s. On 2026-10-14 the scheduled job created and verified a
 fresh backup, pruned three completed snapshots after the configured 29-day
-period, and independent verification confirmed the first final-bucket snapshot
-was absent. Freshness and deep operational checks remained healthy; see
-`SERVER_OPERATIONAL_BACKUP.md`.
+period, and a current-object read reported the first final-bucket snapshot
+absent. Subsequent review found that versionless S3 deletion produced delete
+markers without proving permanent version removal. Exact-version cleanup and
+absence verification are required to close 9D; freshness and deep operational
+checks otherwise remained healthy. See `SERVER_OPERATIONAL_BACKUP.md`.
 
 - Produce encrypted PostgreSQL custom dumps and private-object inventories to
   off-site storage on a schedule.

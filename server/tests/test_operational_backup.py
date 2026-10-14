@@ -1,14 +1,14 @@
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from botocore.exceptions import ClientError
 from pydantic import SecretStr
 
 from bookpile_server.backup_crypto import BackupIntegrityError, decrypt_file, encrypt_file
-from bookpile_server.backup_repository import S3BackupRepository
+from bookpile_server.backup_repository import BackupObjectVersion, S3BackupRepository
 from bookpile_server.cli import operational_backup as backup_cli
 from bookpile_server.config import (
     DEVELOPMENT_BACKUP_SECRET,
@@ -86,11 +86,18 @@ class MemoryRepository:
     def put_bytes(self, key: str, content: bytes) -> None:
         self.items[key] = content
 
-    def get_bytes(self, key: str) -> bytes:
+    def get_bytes(self, key: str, *, version_id: str | None = None) -> bytes:
+        assert version_id is None
         return self.items[key]
 
     def list_keys(self, prefix: str) -> list[str]:
         return sorted(key for key in self.items if key.startswith(prefix))
+
+    def list_versions(self, prefix: str) -> list[BackupObjectVersion]:
+        return [BackupObjectVersion(key, None) for key in self.list_keys(prefix)]
+
+    def delete_versions(self, versions: list[BackupObjectVersion]) -> None:
+        self.delete_keys([item.key for item in versions])
 
     def delete_keys(self, keys: list[str]) -> None:
         for key in keys:
@@ -185,6 +192,71 @@ class FakeExpiredComplianceS3(FakeComplianceS3):
         self.deleted = True
 
 
+class FakeVersionPaginator:
+    def __init__(self, client) -> None:
+        self.client = client
+
+    def paginate(self, *, Bucket, Prefix):
+        yield {
+            "Versions": [item for item in self.client.versions if item["Key"].startswith(Prefix)],
+            "DeleteMarkers": [
+                item for item in self.client.delete_markers if item["Key"].startswith(Prefix)
+            ],
+        }
+
+
+class FakeVersionedS3:
+    def __init__(self) -> None:
+        marker = b'{"backup_id":"00000000-0000-0000-0000-000000000001","created_at":"2026-01-01T00:00:00+00:00"}'
+        self.marker = marker
+        self.versions = [
+            {
+                "Key": "staging/snapshots/00000000-0000-0000-0000-000000000001/database.bpbk",
+                "VersionId": "database-v1",
+            },
+            {
+                "Key": "staging/snapshots/00000000-0000-0000-0000-000000000001/complete.json",
+                "VersionId": "marker-v1",
+            },
+        ]
+        self.delete_markers = [
+            {
+                "Key": "staging/snapshots/00000000-0000-0000-0000-000000000001/complete.json",
+                "VersionId": "delete-v1",
+            },
+        ]
+        self.deleted: list[tuple[str, str]] = []
+
+    def get_paginator(self, name):
+        assert name == "list_object_versions"
+        return FakeVersionPaginator(self)
+
+    def get_object(self, *, Bucket, Key, VersionId=None):
+        assert Key.endswith("/complete.json")
+        assert VersionId == "marker-v1"
+        return {
+            "Body": Body(self.marker),
+            "Metadata": {"bookpile-sha256": sha256(self.marker).hexdigest()},
+        }
+
+    def delete_objects(self, *, Bucket, Delete):
+        for item in Delete["Objects"]:
+            assert "VersionId" in item
+            pair = (item["Key"], item["VersionId"])
+            self.deleted.append(pair)
+            self.versions = [
+                version
+                for version in self.versions
+                if (version["Key"], version["VersionId"]) != pair
+            ]
+            self.delete_markers = [
+                marker
+                for marker in self.delete_markers
+                if (marker["Key"], marker["VersionId"]) != pair
+            ]
+        return {}
+
+
 def object_entry(key: str, content: bytes) -> ExpectedPrivateObject:
     return ExpectedPrivateObject(key, len(content), sha256(content).hexdigest())
 
@@ -273,6 +345,36 @@ def test_retention_removes_only_expired_complete_snapshot(tmp_path: Path) -> Non
     assert removed == [old.backup_id]
     assert any(str(current.backup_id) in key for key in repository.items)
     assert not any(str(old.backup_id) in key for key in repository.items)
+
+
+def test_s3_retention_removes_exact_versions_and_delete_markers(tmp_path: Path) -> None:
+    client = FakeVersionedS3()
+    repository = S3BackupRepository(client, bucket="backup", prefix="staging")
+    service = OperationalBackupService(
+        repository,
+        encryption_secret="test-secret",
+        staging_root=tmp_path,
+    )
+
+    removed = service.prune(retention_days=29, now=datetime(2026, 2, 1, tzinfo=UTC))
+
+    assert removed == [UUID("00000000-0000-0000-0000-000000000001")]
+    assert client.versions == []
+    assert client.delete_markers == []
+    assert client.deleted == [
+        (
+            "staging/snapshots/00000000-0000-0000-0000-000000000001/database.bpbk",
+            "database-v1",
+        ),
+        (
+            "staging/snapshots/00000000-0000-0000-0000-000000000001/complete.json",
+            "marker-v1",
+        ),
+        (
+            "staging/snapshots/00000000-0000-0000-0000-000000000001/complete.json",
+            "delete-v1",
+        ),
+    ]
 
 
 def test_full_restore_verifies_before_database_restore(tmp_path: Path) -> None:

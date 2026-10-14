@@ -86,8 +86,10 @@ evidence is saved without credentials:
   and Object-Locked with a bucket-scoped `staging/` key. On 2026-10-14 the
   scheduled backup verified a new database-plus-435-object snapshot, pruned
   three snapshots after the configured 29-day period and the first completed
-  final-bucket snapshot independently returned `NoSuchKey`. The staging
-  lifecycle-acceptance gate is closed.
+  final-bucket snapshot returned `NoSuchKey`. Review established that the
+  versionless deletes created current delete markers while historical versions
+  could remain. The lifecycle gate therefore remains open pending exact-version
+  cleanup and version-list absence evidence.
 - Dinahosting SMTP accepted authenticated TLS delivery from the worker and the
   recipient completed a real account-verification link on 2026-09-14. SPF uses
   the domain's `a`/`mx` authorization, Dinahosting DKIM is enabled and DMARC

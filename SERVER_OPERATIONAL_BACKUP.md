@@ -219,14 +219,17 @@ credentials, and securely delete the restore environment file.
   successfully.
 - The first final-bucket snapshot,
   `276b0264-4aad-43ff-b9fc-591984cbbe77`, had independently verified before
-  expiry and returned provider `NoSuchKey` after the scheduled prune. This
-  proves removal of a completed application snapshot after the real configured
-  29-day COMPLIANCE period, rather than only the earlier disposable lock probe.
+  expiry and returned provider `NoSuchKey` after the scheduled prune. Review
+  found that this was not sufficient deletion evidence: the original batch
+  request omitted `VersionId`, so a versioned Backblaze bucket could retain the
+  encrypted versions behind current delete markers.
 - Post-prune `status` selected the new snapshot and returned `healthy: true`.
   A deep operational check found 435 expected/stored private objects, zero
   missing, mismatched or orphaned objects, all other checks ready and all
   overdue/failed counters zero.
 
-The measured RPO/RTO, external alerting, private provider/cost record and final
-29-day lifecycle-expiry gates have passed. Phase 9D is accepted. Neither the
-apex domain nor production data has been switched.
+The measured RPO/RTO, external alerting and private provider/cost gates have
+passed. The final 29-day lifecycle gate remains open until corrected pruning
+enumerates and deletes every exact object version and delete marker, then proves
+that no versions remain below the expired snapshot prefixes. Neither the apex
+domain nor production data has been switched.
