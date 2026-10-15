@@ -111,10 +111,26 @@ never consume the library key.
 Leases use a short renewable lifetime rather than a maximum operation duration:
 the initial staging values are a two-minute TTL and a heartbeat no slower than
 30 seconds. Heartbeats use a separate short database session so a long-running
-operation or transaction cannot hide renewal. Before every irreversible commit
-or object publication, the worker verifies that it still owns the current
-fencing token. If renewal or ownership fails, it aborts without committing new
-durable state. Only the current fenced owner can release the lease.
+operation or transaction cannot hide renewal. A check immediately before a
+write is not sufficient fencing. Every protected database commit must lock or
+compare-and-swap the lease row using the lease ID, fencing token and database
+clock **inside the same transaction** as the domain writes. The transaction
+renews the unexpired lease and holds that row lock through commit; a new owner
+cannot acquire the expired row between validation and commit. A protected
+operation that uses multiple commits repeats this atomic fence for each one.
+
+Object storage has no transaction shared with PostgreSQL. Object-producing
+work therefore writes immutable, private, lease-scoped staging keys first.
+Those objects are not reachable by an API record. Only a database transaction
+that passes the atomic fence may publish them by creating the authoritative
+database reference. A stale worker may leave an unreferenced staging object,
+but cannot replace or expose the current owner's object; bounded-age
+maintenance removes such orphans. Destructive provider actions occur only
+after a fenced database state transition, must be idempotent and may target
+only the exact immutable key recorded by that transition, never a reusable
+logical key. If renewal or ownership fails, the worker aborts without
+publishing new durable state. Only the current fenced owner can release the
+lease.
 
 ### 3. Initial staging matrix
 
@@ -258,12 +274,15 @@ file cleanup.
    alert-only until evidence supports safe blocking.
 
 Acceptance requires tests for two concurrent workers, fixed-window reset,
-lease acquisition/renewal/fencing/release, stale-owner rejection, slow export
-streaming and disconnect cleanup, multiple users behind one IP, multiple co-
-Owners in one library, unauthorized library identifiers, `Retry-After`,
-distinct non-overlapping health labels, IPv4/IPv6 canonicalization, forged
-forwarding headers, restart persistence, dry-run and emergency unban. Normal
-frontend and external health monitoring must complete without a 429.
+lease acquisition/renewal/fencing/release, a stale worker paused after its
+initial check while a new owner acquires the lease, atomic rejection of the
+stale database commit, private staged-object publication and orphan cleanup,
+slow export streaming and disconnect cleanup, multiple users behind one IP,
+multiple co-Owners in one library, unauthorized library identifiers,
+`Retry-After`, distinct non-overlapping health labels, IPv4/IPv6
+canonicalization, forged forwarding headers, restart persistence, dry-run and
+emergency unban. Normal frontend and external health monitoring must complete
+without a 429.
 
 ## Disable and rollback
 
