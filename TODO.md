@@ -1056,7 +1056,11 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   forged client address. D3 adds privacy-minimized edge/API observation,
   bounded logs and explicit scanner responses. Before production, complete
   strict time-based expiry for Caddy's active log, collect staging evidence,
-  then select shared limits and temporary blocking from measured traffic.
+  then implement the reviewed D4/D6 design in
+  [ADR 0016](docs/adr/0016-defensive-request-limits.md): shared PostgreSQL
+  limits and leases in observation mode first, followed by a dry-run and narrow
+  temporary ban for high-confidence scanner traffic. Do not introduce an
+  in-memory-only Python or Caddy counter.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,
