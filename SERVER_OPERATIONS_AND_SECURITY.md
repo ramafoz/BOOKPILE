@@ -18,6 +18,31 @@ material 30 days; security events 180 days. Library audit history is not
 globally pruned because it belongs to each active library and requires a
 separate product retention decision.
 
+### Defensive HTTP observation
+
+Caddy writes a minimized access log for non-API, non-health traffic to
+`/data/access.log` in its private persistent volume. It records the original
+path, client address, method, status, duration and size, but deletes request
+and response headers and the complete URI including its query string. Known
+scanner probes are labelled `scanner_probe`. The file rolls at 10 MiB, keeps at
+most 14 rolled files and removes rolled files after 14 days. Caddy 2.10.2 does
+not support time-triggered rolling, so strict expiry of a low-traffic active
+file remains a production prerequisite.
+
+API request events contain route templates rather than raw identifiers, a
+keyed client pseudonym rather than the raw IP, and no bodies, queries, cookies
+or authorization material. Core service stdout/stderr uses Docker's `local`
+driver with five 10 MiB files per service. Access to either source requires
+host Docker authority; do not export these logs into tickets or routine chat.
+
+Inspect recent scanner evidence on the host without copying the full file:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml \
+  exec -T web sh -c 'grep -F scanner_probe /data/access.log | tail -n 20'
+```
+
 Example systemd units and timers live in `server/deploy/systemd`: backup daily,
 maintenance hourly, lightweight checks every 15 minutes, backup freshness every
 15 minutes and full private-object reconciliation daily.

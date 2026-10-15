@@ -42,54 +42,36 @@ documentation and OpenAPI endpoints are disabled by configuration validation.
 
 - Unknown `/api/*` paths reach FastAPI, return an API 404 and are logged as the
   normalized route `unmatched` by the application request logger.
-- Unknown non-API paths pass through `try_files {path} /index.html`; scanner
-  probes such as `/.env`, `/.git/config` and `/wp-admin` are therefore expected
-  to receive the SPA entry point with status 200 rather than a 404.
-- Caddy access logging is not enabled in the versioned Caddyfile. Those
-  non-API probes are consequently invisible to BOOKPILE's API request log.
+- Unknown non-API paths normally pass through `try_files {path} /index.html`
+  because BOOKPILE uses client-side routes.
+- A deliberately narrow, case-insensitive Caddy matcher now intercepts known
+  `.env`, `.git`, WordPress-login/admin and phpMyAdmin probes before the SPA,
+  returns an empty 404 and labels the access event `scanner_probe`.
+- Other unknown non-API paths still receive the SPA until a broader rule can be
+  proven not to break legitimate client-side routes.
 
-This means a rule based on “60 different 404s” cannot currently detect the
-common scanner traffic described in the threat model.
-
-The 2026-10-14 staging probe confirmed the distinction: `/.env`,
+The 2026-10-14 pre-change staging probe confirmed the original distinction: `/.env`,
 `/.git/config` and `/wp-admin` each returned `200 text/html`, while
 `/api/v1/does-not-exist` returned `404 application/json`.
 
 ## 3. Client-IP identity
 
-BOOKPILE currently uses `request.client.host` for IP-based limits, session
-events and account-action events. The versioned Uvicorn command does not set
-`--forwarded-allow-ips`; Uvicorn 0.34.3 trusts forwarded headers only from
-`127.0.0.1` by default, while Caddy connects over a Docker network. The
-versioned Compose environment does not establish an explicit trust rule. The
-2026-10-14 runtime inspection confirmed that `FORWARDED_ALLOW_IPS` is unset,
-the Uvicorn command supplies no equivalent argument, and Caddy currently has
-the backend address `172.18.0.5`.
+BOOKPILE uses `request.client.host` for IP-based limits, session events and
+account-action events. D2 closed on 2026-10-14 with an explicit application
+trust boundary: Uvicorn starts with `--no-proxy-headers`, and BOOKPILE alone
+accepts one syntactically valid forwarded client address from configured RFC
+1918, IPv6 ULA or loopback proxy networks. Public, link-local, documentation,
+CGNAT and IPv4-mapped IPv6 trust ranges are rejected in hosted configuration.
 
-The defect is now confirmed: the two existing `login_failed` security events
-inspected on 2026-10-14 both recorded `172.18.0.5`, which is Caddy's current
-backend address, rather than the originating Internet client. Consequently,
-all clients currently share one effective key for limits described as IP-based.
-Blindly trusting `*` would restore forwarded attribution but would make
-spoofing possible if the API were ever reached through another path.
+The post-deployment staging proof sent an ordinary failed login and another
+with forged `X-Forwarded-For: 203.0.113.77`. Both returned the intended generic
+401 and recorded the same real public client address, not the forged address
+and not Caddy's `172.18.0.5` backend address. Automated tests cover trusted,
+untrusted, malformed, duplicate and comma-separated forwarding values and
+ensure Uvicorn cannot rewrite the peer first.
 
-A controlled pair of public login failures completed the baseline proof. The
-ordinary request and a request carrying the forged value
-`X-Forwarded-For: 203.0.113.77` both returned the intended generic 401 and both
-produced `login_failed` events with `ip_address = 172.18.0.5`. Caddy therefore
-prevents the external spoof from reaching the application as client identity,
-but Uvicorn also discards Caddy's legitimate forwarded client address.
-
-Required D2 correction and acceptance proof before adding IP blocking:
-
-1. Configure an explicit Caddy-to-Uvicorn trust boundary.
-2. Send two requests from distinct known client addresses and show distinct
-   `request.client.host` values without publishing those addresses.
-3. Send a forged `X-Forwarded-For` from outside Caddy and prove it is ignored or
-   overwritten.
-4. Send a controlled forwarded value through Caddy and prove it is accepted.
-5. Repeat for IPv6 when an IPv6 public path exists.
-6. Add automated proxy-boundary and spoofing tests.
+An IPv6 runtime proof remains conditional on production acquiring a public
+IPv6 path; no public IPv6 address currently exists on staging.
 
 Reference: Uvicorn's official settings document defines the default trusted
 proxy as `127.0.0.1` and warns that forwarded headers must be accepted only
@@ -148,6 +130,9 @@ The API emits structured JSON per request with:
 - method;
 - normalized route template or `unmatched`;
 - response status;
+- aggregate outcome class;
+- response `Content-Length` when known;
+- a 16-hex-character HMAC client correlation key, never the raw address;
 - duration;
 - deployment revision.
 
@@ -155,20 +140,26 @@ It deliberately does not include bodies, query strings, cookies,
 authorization headers or raw route identifiers. Unhandled hosted errors carry
 the request ID and are sent to the configured error-reporting service.
 
+The Caddy edge log covers non-API, non-health traffic. It retains the original
+path but removes the complete URI, query string, request headers and response
+headers. Known probes carry `event_class=scanner_probe`. Logs are private in
+the Caddy data volume, rotate at 10 MiB, keep at most 14 rolled files and prune
+rolled files older than 14 days. Long-running container stdout/stderr logs use
+Docker's bounded `local` driver with five 10 MiB files per core service.
+
 The database also stores selected security/domain events. Security events may
 contain a user ID, IP address, event type and deliberately small structured
 details. Maintenance currently retains these events for 180 days.
 
 ### Missing or undecided
 
-- The API request event does not contain client IP, response size or a reason
-  classification for 401/403/404/422/429.
-- Caddy access logs are disabled, so static and scanner traffic is absent.
-- Journald/Caddy retention and disk caps are not versioned here. Journald used
-  37.7 MiB on 2026-10-14, but that observation does not prove a retention or
-  maximum-disk policy.
-- The proposed short retention for raw IP telemetry conflicts with the current
-  180-day `security_events` retention and must be resolved in policy and code.
+- Caddy 2.10.2 rotates by size but cannot rotate on a time interval. Its active
+  file can therefore exceed 14 days during very low traffic even though rolled
+  files have a 14-day policy. Exact temporal expiry requires a compatible
+  Caddy upgrade or separately managed rotation before production.
+- Sparse, purpose-specific `security_events` retain raw IP for 180 days. The
+  privacy policy must distinguish those security records from the short-lived
+  edge log and justify or shorten that period before production.
 - No aggregate counters or alert thresholds exist for unmatched routes,
   malformed input, authentication failures or 429s.
 
@@ -190,17 +181,17 @@ access, and retention explicitly. Reference: <https://caddyserver.com/docs/caddy
 
 | Threat | Existing control | Gap | Priority |
 | --- | --- | --- | --- |
-| `.env`, `.git`, WordPress and panel scans | Sensitive files are not in Caddy's static root | SPA returns 200; no Caddy visibility, scanner counter or throttling | P0 observability |
-| Login brute force/account enumeration | IP + identity limits, Argon2, generic invalid-credential response | Confirmed shared Caddy-IP key; no alerting/repeat-offender policy | P0 correctness |
-| Registration/recovery abuse | Invitation requirement, IP/token/email limits, generic 202 email endpoints | Confirmed shared Caddy-IP key; distributed abuse remains possible | P0 correctness |
-| Forged forwarded IP | API not exposed to host | Explicit trusted-proxy configuration and spoof test absent | P0 correctness |
+| `.env`, `.git`, WordPress and panel scans | Explicit empty 404 plus minimized `scanner_probe` edge event | No aggregate threshold or temporary throttle yet | P1 monitor |
+| Login brute force/account enumeration | Real client IP + identity limits, Argon2, generic invalid-credential response | No alerting/repeat-offender policy | P1 monitor |
+| Registration/recovery abuse | Invitation requirement, real-IP/token/email limits, generic 202 email endpoints | Distributed abuse remains possible | P1 monitor |
+| Forged forwarded IP | Private proxy allowlist, sole application parser and spoof tests | Repeat runtime proof if public IPv6 is enabled | Closed/conditional |
 | Malformed request flood | Pydantic/FastAPI validation and bounded fields | No general edge limit or aggregate 422 telemetry | P1 monitor |
 | Unauthorized role/ID manipulation | Server-side session, CSRF and service-layer Owner/Viewer checks | Full adversarial Owner/Viewer matrix not yet executed | P0 audit |
 | Import/export exhaustion | Archive safety limits, authorization, cleanup | No per-user/library frequency or concurrency limits | P1 control |
 | Health-check amplification | Separate live/ready endpoints | Ready performs dependency checks and is public/unlimited | P1 control |
 | Volumetric DDoS | Caddy and small containerized surface | One VPS cannot absorb serious volumetric traffic; application limits are insufficient | P2 provider/CDN decision |
 
-## 9. D1 closure and next PRs
+## 9. Completed foundations and next PRs
 
 D1 closed on 2026-10-14 with the following evidence:
 
@@ -218,13 +209,12 @@ Response-shape/timing comparisons for 401, 403, inaccessible-resource 404,
 and retention of raw IP telemetry remain a D3 privacy-policy decision, not a
 reason to keep D1 open.
 
-Recommended implementation sequence:
+Subsequent progress:
 
-1. **D2 proxy identity PR:** explicit trusted-proxy boundary plus spoofing and
-   multi-client tests. Do not introduce IP blocking in the same PR.
-2. **D3 observation PR:** privacy-filtered Caddy access events, explicit
-   scanner-path responses, log rotation/retention and aggregate counters; deploy
-   in observation mode.
+1. **D2 proxy identity:** closed and accepted in staging on 2026-10-14.
+2. **D3 observation baseline:** minimized Caddy and API events, bounded logs and
+   explicit scanner responses implemented for staging observation. Exact
+   time-based active-log expiry and aggregate thresholds remain open.
 3. **D4 limit PR:** conservative general edge limits and separate policies for
    unknown routes, auth, import/export and health. Use a shared store for any
    application-level counters.
