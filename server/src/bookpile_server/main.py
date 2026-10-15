@@ -72,10 +72,6 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_values)
-    app.add_middleware(
-        TrustedProxyHeadersMiddleware,
-        trusted_networks=settings.trusted_proxy_networks,
-    )
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(catalogue_router, prefix="/api/v1")
     app.include_router(libraries_router, prefix="/api/v1")
@@ -168,6 +164,13 @@ def create_app() -> FastAPI:
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    # Starlette wraps the most recently added middleware around earlier ones.
+    # Resolve the trusted proxy scope before the HTTP logger creates Request.
+    app.add_middleware(
+        TrustedProxyHeadersMiddleware,
+        trusted_networks=settings.trusted_proxy_networks,
+    )
 
     @app.get("/health", include_in_schema=False)
     def health() -> dict[str, str]:

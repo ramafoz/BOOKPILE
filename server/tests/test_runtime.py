@@ -252,6 +252,41 @@ def test_request_client_key_is_stable_but_does_not_expose_the_address() -> None:
     assert main._request_client_key(None, secret) is None
 
 
+def test_request_log_keys_the_validated_forwarded_client(
+    monkeypatch, caplog
+) -> None:
+    settings = _hosted_settings()
+    monkeypatch.setattr(main, "get_settings", lambda: settings)
+    app = main.create_app()
+    from fastapi.testclient import TestClient
+
+    with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+        with TestClient(
+            app,
+            base_url="https://staging.bookpile.example",
+            client=("172.18.0.5", 12345),
+        ) as client:
+            response = client.get(
+                "/health/live",
+                headers={
+                    "X-Forwarded-For": "198.51.100.24",
+                    "X-Forwarded-Proto": "https",
+                },
+            )
+
+    assert response.status_code == 200
+    record = next(record for record in caplog.records if record.name == "bookpile.requests")
+    payload = json.loads(record.message)
+    expected = main._request_client_key(
+        "198.51.100.24", settings.rate_limit_key_secret
+    )
+    proxy_key = main._request_client_key(
+        "172.18.0.5", settings.rate_limit_key_secret
+    )
+    assert payload["client_key"] == expected
+    assert payload["client_key"] != proxy_key
+
+
 def _hosted_settings(**changes) -> Settings:
     values = {
         "environment": "staging",
