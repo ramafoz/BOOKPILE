@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,52 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert "BOOKPILE_SERVER_ALLOWED_HOSTS" in compose
     assert compose.count("networks: [backend, egress]") == 4
     assert "backend:\n    internal: true" in compose
+    assert compose.count("logging: *container-logging") == 4
+
+
+def test_caddy_access_log_is_minimized_rotated_and_coarsens_api_traffic() -> None:
+    caddyfile = (Path(__file__).resolve().parents[1] / "docker" / "Caddyfile").read_text()
+
+    assert "roll_size 10mb" in caddyfile
+    assert "roll_keep_for 336h" in caddyfile
+    assert "request>uri delete" in caddyfile
+    assert "request>headers delete" in caddyfile
+    assert "resp_headers delete" in caddyfile
+    assert "log_append @api_traffic request_path /api/*" in caddyfile
+    assert "log_append @health_traffic request_path /health*" in caddyfile
+    assert "log_append @browser_traffic request_path {orig_path}" in caddyfile
+    assert "log_skip" not in caddyfile
+
+
+def test_caddy_scanner_probe_matcher_is_narrow_and_explicit() -> None:
+    caddyfile = (Path(__file__).resolve().parents[1] / "docker" / "Caddyfile").read_text()
+    matcher_line = next(
+        line.strip()
+        for line in caddyfile.splitlines()
+        if line.strip().startswith("@scanner_probe path_regexp")
+    )
+    pattern = matcher_line.split(" ", 3)[3]
+
+    for hostile_path in (
+        "/.env",
+        "/.env.production",
+        "/.git/config",
+        "/wp-admin",
+        "/wp-admin/install.php",
+        "/wp-login.php",
+        "/phpMyAdmin/index.php",
+    ):
+        assert re.fullmatch(pattern, hostile_path)
+    for application_path in (
+        "/",
+        "/login",
+        "/libraries",
+        "/.environment",
+        "/.gitignore",
+        "/wp-administrator",
+        "/assets/wp-admin.svg",
+    ):
+        assert not re.fullmatch(pattern, application_path)
 
 
 def test_api_runtime_leaves_forwarded_headers_to_bookpile_middleware() -> None:
@@ -136,8 +183,109 @@ def test_request_log_uses_route_template_and_omits_query(client, caplog) -> None
     payload = json.loads(record.message)
     assert payload["route"] == "/health/live"
     assert payload["request_id"] == response.headers["x-request-id"]
+    assert payload["status"] == 200
+    assert payload["outcome_class"] == "success"
+    assert payload["response_bytes"] == int(response.headers["content-length"])
+    assert len(payload["client_key"]) == 16
+    assert "testclient" not in record.message
     assert "secret" not in record.message
     assert "must-not-appear" not in record.message
+
+
+def test_request_log_classifies_unmatched_and_validation_statuses(
+    client, caplog
+) -> None:
+    expected = {
+        "/api/v1/does-not-exist": (404, "not_found"),
+        "/api/v1/auth/login": (422, "invalid"),
+    }
+
+    with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+        for path in expected:
+            if path.endswith("login"):
+                client.post(path, json={})
+            else:
+                client.get(path)
+
+    payloads = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "bookpile.requests"
+    ]
+    for path, (status, outcome_class) in expected.items():
+        payload = next(item for item in payloads if item["status"] == status)
+        expected_route = "unmatched" if status == 404 else path
+        assert payload["route"] == expected_route
+        assert payload["outcome_class"] == outcome_class
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (200, "success"),
+        (401, "unauthenticated"),
+        (403, "forbidden"),
+        (404, "not_found"),
+        (409, "client_error"),
+        (422, "invalid"),
+        (429, "rate_limited"),
+        (500, "server_error"),
+    ],
+)
+def test_request_outcome_classes_are_aggregate_and_content_free(
+    status, expected
+) -> None:
+    assert main._request_outcome_class(status) == expected
+
+
+def test_request_client_key_is_stable_but_does_not_expose_the_address() -> None:
+    secret = "private-rate-limit-secret-with-at-least-32-characters"
+
+    first = main._request_client_key("198.51.100.24", secret)
+    repeated = main._request_client_key("198.51.100.24", secret)
+    other = main._request_client_key("203.0.113.77", secret)
+
+    assert first == repeated
+    assert first != other
+    assert first is not None
+    assert len(first) == 16
+    assert "198.51.100.24" not in first
+    assert main._request_client_key(None, secret) is None
+
+
+def test_request_log_keys_the_validated_forwarded_client(
+    monkeypatch, caplog
+) -> None:
+    settings = _hosted_settings()
+    monkeypatch.setattr(main, "get_settings", lambda: settings)
+    app = main.create_app()
+    from fastapi.testclient import TestClient
+
+    with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+        with TestClient(
+            app,
+            base_url="https://staging.bookpile.example",
+            client=("172.18.0.5", 12345),
+        ) as client:
+            response = client.get(
+                "/health/live",
+                headers={
+                    "X-Forwarded-For": "198.51.100.24",
+                    "X-Forwarded-Proto": "https",
+                },
+            )
+
+    assert response.status_code == 200
+    record = next(record for record in caplog.records if record.name == "bookpile.requests")
+    payload = json.loads(record.message)
+    expected = main._request_client_key(
+        "198.51.100.24", settings.rate_limit_key_secret
+    )
+    proxy_key = main._request_client_key(
+        "172.18.0.5", settings.rate_limit_key_secret
+    )
+    assert payload["client_key"] == expected
+    assert payload["client_key"] != proxy_key
 
 
 def _hosted_settings(**changes) -> Settings:

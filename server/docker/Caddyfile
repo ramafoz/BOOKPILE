@@ -8,8 +8,40 @@
 {$BOOKPILE_SITE_ADDRESS} {
 	encode zstd gzip
 
+	# Keep short-lived edge evidence without retaining headers, cookies or query
+	# strings. API and health traffic has its own normalized application log.
+	log {
+		output file /data/access.log {
+			mode 0600
+			roll_size 10mb
+			roll_keep 14
+			roll_keep_for 336h
+		}
+		format filter {
+			request>uri delete
+			request>headers delete
+			resp_headers delete
+			wrap json
+		}
+	}
+	# Preserve edge-only 413/502 evidence while avoiding raw API identifiers.
+	@api_traffic path /api/*
+	log_append @api_traffic request_path /api/*
+	@health_traffic path /health*
+	log_append @health_traffic request_path /health*
+	@browser_traffic {
+		not path /api/* /health*
+	}
+	log_append @browser_traffic request_path {orig_path}
+
 	request_body {
 		max_size 110MB
+	}
+
+	@scanner_probe path_regexp scanner_probe (?i)^/(?:\.env(?:[./].*)?|\.git(?:/.*)?|wp-admin(?:/.*)?|wp-login\.php|phpmyadmin(?:/.*)?)$
+	handle @scanner_probe {
+		log_append event_class scanner_probe
+		respond 404
 	}
 
 	handle /api/* {

@@ -1,5 +1,7 @@
+import hmac
 import json
 import logging
+from hashlib import sha256
 from time import perf_counter
 from uuid import uuid4
 
@@ -31,6 +33,33 @@ request_logger = logging.getLogger("bookpile.requests")
 error_logger = logging.getLogger("bookpile.errors")
 
 
+def _request_client_key(client_ip: str | None, secret: str) -> str | None:
+    if not client_ip:
+        return None
+    return hmac.new(
+        secret.encode("utf-8"),
+        f"request-log\0{client_ip}".encode("utf-8"),
+        sha256,
+    ).hexdigest()[:16]
+
+
+def _request_outcome_class(status_code: int) -> str:
+    return {
+        401: "unauthenticated",
+        403: "forbidden",
+        404: "not_found",
+        422: "invalid",
+        429: "rate_limited",
+    }.get(
+        status_code,
+        "server_error"
+        if status_code >= 500
+        else "client_error"
+        if status_code >= 400
+        else "success",
+    )
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     initialize_error_reporting(settings)
@@ -43,10 +72,6 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_values)
-    app.add_middleware(
-        TrustedProxyHeadersMiddleware,
-        trusted_networks=settings.trusted_proxy_networks,
-    )
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(catalogue_router, prefix="/api/v1")
     app.include_router(libraries_router, prefix="/api/v1")
@@ -73,6 +98,7 @@ def create_app() -> FastAPI:
         request_id = uuid4().hex
         started = perf_counter()
         status_code = 500
+        response = None
         try:
             response = await call_next(request)
             status_code = response.status_code
@@ -101,12 +127,26 @@ def create_app() -> FastAPI:
         finally:
             route = request.scope.get("route")
             route_path = getattr(route, "path", "unmatched")
+            content_length = (
+                response.headers.get("content-length") if response else None
+            )
+            response_bytes = (
+                int(content_length)
+                if content_length and content_length.isdecimal()
+                else None
+            )
             request_logger.info(json.dumps({
                 "event": "http_request",
                 "request_id": request_id,
                 "method": request.method,
                 "route": route_path,
                 "status": status_code,
+                "outcome_class": _request_outcome_class(status_code),
+                "response_bytes": response_bytes,
+                "client_key": _request_client_key(
+                    request.client.host if request.client else None,
+                    settings.rate_limit_key_secret,
+                ),
                 "duration_ms": round((perf_counter() - started) * 1000, 2),
                 "deployment_revision": settings.deployment_revision,
             }, separators=(",", ":")))
@@ -124,6 +164,13 @@ def create_app() -> FastAPI:
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    # Starlette wraps the most recently added middleware around earlier ones.
+    # Resolve the trusted proxy scope before the HTTP logger creates Request.
+    app.add_middleware(
+        TrustedProxyHeadersMiddleware,
+        trusted_networks=settings.trusted_proxy_networks,
+    )
 
     @app.get("/health", include_in_schema=False)
     def health() -> dict[str, str]:

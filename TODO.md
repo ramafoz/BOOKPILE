@@ -1051,11 +1051,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   deliberately has no misleading per-process rate limiter.
 - [ ] Complete the staged defensive-security programme. The code-backed D1
   inventory and threat model closed on 2026-10-14 and are recorded in
-  `SERVER_DEFENSIVE_SECURITY_INVENTORY.md`. D2 must now replace the confirmed
-  shared Caddy-IP identity with an explicit trusted-proxy boundary and prove
-  both genuine attribution and spoof resistance. Then add privacy-minimized
-  edge observation before selecting or enabling new limits and temporary
-  scanner blocking.
+  `SERVER_DEFENSIVE_SECURITY_INVENTORY.md`. D2 closed in staging the same day:
+  the trusted-proxy boundary now preserves genuine attribution and rejects a
+  forged client address. D3 adds privacy-minimized edge/API observation,
+  bounded logs and explicit scanner responses. Before production, complete
+  strict time-based expiry for Caddy's active log, collect staging evidence,
+  then select shared limits and temporary blocking from measured traffic.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,
