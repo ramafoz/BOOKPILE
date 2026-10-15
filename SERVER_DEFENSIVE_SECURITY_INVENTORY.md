@@ -140,12 +140,15 @@ It deliberately does not include bodies, query strings, cookies,
 authorization headers or raw route identifiers. Unhandled hosted errors carry
 the request ID and are sent to the configured error-reporting service.
 
-The Caddy edge log covers non-API, non-health traffic. It retains the original
-path but removes the complete URI, query string, request headers and response
-headers. Known probes carry `event_class=scanner_probe`. Logs are private in
-the Caddy data volume, rotate at 10 MiB, keep at most 14 rolled files and prune
-rolled files older than 14 days. Long-running container stdout/stderr logs use
-Docker's bounded `local` driver with five 10 MiB files per core service.
+The Caddy edge log covers all traffic so that edge-generated 413 and 502
+responses remain observable. It removes the complete URI, query string,
+request headers and response headers. API and health paths are replaced by the
+fixed `/api/*` and `/health*` categories rather than retaining private resource
+identifiers; browser paths retain their original path. Known probes carry
+`event_class=scanner_probe`. Logs are private in the Caddy data volume, rotate
+at 10 MiB, keep at most 14 rolled files and prune rolled files older than 14
+days. Long-running container stdout/stderr logs use Docker's bounded `local`
+driver with five 10 MiB files per core service.
 
 The database also stores selected security/domain events. Security events may
 contain a user ID, IP address, event type and deliberately small structured

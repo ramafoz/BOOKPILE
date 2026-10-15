@@ -59,7 +59,7 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert compose.count("logging: *container-logging") == 4
 
 
-def test_caddy_access_log_is_minimized_rotated_and_separates_api_traffic() -> None:
+def test_caddy_access_log_is_minimized_rotated_and_coarsens_api_traffic() -> None:
     caddyfile = (Path(__file__).resolve().parents[1] / "docker" / "Caddyfile").read_text()
 
     assert "roll_size 10mb" in caddyfile
@@ -67,9 +67,10 @@ def test_caddy_access_log_is_minimized_rotated_and_separates_api_traffic() -> No
     assert "request>uri delete" in caddyfile
     assert "request>headers delete" in caddyfile
     assert "resp_headers delete" in caddyfile
-    assert "log_append request_path {orig_path}" in caddyfile
-    assert "@application_traffic path /api/* /health*" in caddyfile
-    assert "log_skip @application_traffic" in caddyfile
+    assert "log_append @api_traffic request_path /api/*" in caddyfile
+    assert "log_append @health_traffic request_path /health*" in caddyfile
+    assert "log_append @browser_traffic request_path {orig_path}" in caddyfile
+    assert "log_skip" not in caddyfile
 
 
 def test_caddy_scanner_probe_matcher_is_narrow_and_explicit() -> None:

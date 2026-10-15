@@ -24,9 +24,15 @@
 			wrap json
 		}
 	}
-	log_append request_path {orig_path}
-	@application_traffic path /api/* /health*
-	log_skip @application_traffic
+	# Preserve edge-only 413/502 evidence while avoiding raw API identifiers.
+	@api_traffic path /api/*
+	log_append @api_traffic request_path /api/*
+	@health_traffic path /health*
+	log_append @health_traffic request_path /health*
+	@browser_traffic {
+		not path /api/* /health*
+	}
+	log_append @browser_traffic request_path {orig_path}
 
 	request_body {
 		max_size 110MB

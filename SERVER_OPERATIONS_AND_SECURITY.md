@@ -20,14 +20,16 @@ separate product retention decision.
 
 ### Defensive HTTP observation
 
-Caddy writes a minimized access log for non-API, non-health traffic to
-`/data/access.log` in its private persistent volume. It records the original
-path, client address, method, status, duration and size, but deletes request
-and response headers and the complete URI including its query string. Known
-scanner probes are labelled `scanner_probe`. The file rolls at 10 MiB, keeps at
-most 14 rolled files and removes rolled files after 14 days. Caddy 2.10.2 does
-not support time-triggered rolling, so strict expiry of a low-traffic active
-file remains a production prerequisite.
+Caddy writes a minimized access log to `/data/access.log` in its private
+persistent volume. It records client address, method, status, duration and
+size, but deletes request and response headers and the complete URI including
+its query string. Browser requests retain their original path; API and health
+paths are reduced to `/api/*` and `/health*` so edge-generated 413/502 responses
+remain visible without retaining private identifiers. Known scanner probes are
+labelled `scanner_probe`. The file rolls at 10 MiB, keeps at most 14 rolled
+files and removes rolled files after 14 days. Caddy 2.10.2 does not support
+time-triggered rolling, so strict expiry of a low-traffic active file remains
+a production prerequisite.
 
 API request events contain route templates rather than raw identifiers, a
 keyed client pseudonym rather than the raw IP, and no bodies, queries, cookies
