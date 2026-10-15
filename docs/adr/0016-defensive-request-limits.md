@@ -94,9 +94,11 @@ Concurrency limits require a separate additive `operation_leases` table with:
 
 - `scope` and HMAC `key_hash` as the uniqueness boundary;
 - an opaque lease ID;
-- `acquired_at` and `expires_at`;
+- a monotonically increasing fencing token;
+- `acquired_at`, `renewed_at` and `expires_at`;
 - atomic acquire-if-absent-or-expired semantics;
-- release in `finally`, plus expiry recovery after worker failure.
+- compare-and-swap renewal and release using both lease ID and fencing token;
+- expiry recovery after worker failure.
 
 A frequency bucket is not a concurrency lock. Database connection-pool limits
 are capacity controls and must not be presented as user-facing request limits.
@@ -105,6 +107,14 @@ in one database transaction. Failure to acquire either leaves neither lease
 held. Authorized attempts consume frequency before work starts, whether or not
 later domain validation succeeds; requests denied before library authorization
 never consume the library key.
+
+Leases use a short renewable lifetime rather than a maximum operation duration:
+the initial staging values are a two-minute TTL and a heartbeat no slower than
+30 seconds. Heartbeats use a separate short database session so a long-running
+operation or transaction cannot hide renewal. Before every irreversible commit
+or object publication, the worker verifies that it still owns the current
+fencing token. If renewal or ownership fails, it aborts without committing new
+durable state. Only the current fenced owner can release the lease.
 
 ### 3. Initial staging matrix
 
@@ -122,9 +132,9 @@ only after D7 and at least 24 hours of representative staging traffic.
 | Cover upload | library | 120/hour | enforce alongside existing 30/hour/user | Existing generic upload 429 |
 | Import preflight/upload | user | 6/hour | enforce | Generic costly-operation 429 |
 | Import preflight/upload | library | 12/hour | enforce | Generic costly-operation 429 |
-| Import/consolidation | user and library | one active lease each, 20-minute lease ceiling | enforce | 409 while already active; 429 for frequency |
-| Portable export | user | 6/hour and one active lease | enforce | Generic costly-operation 429 |
-| Portable export | library | 12/hour and one active lease | enforce | Generic costly-operation 429 |
+| Import/consolidation | user and library | one renewable fenced lease each; 2-minute TTL, heartbeat at most every 30 seconds | enforce | 409 while already active; 429 for frequency |
+| Portable export | user | 6/hour and one renewable fenced response-lifetime lease | enforce | Generic costly-operation 429 |
+| Portable export | library | 12/hour and one renewable fenced response-lifetime lease | enforce | Generic costly-operation 429 |
 | Rearrangement preview/apply | user | 120/minute | observe first; enforce only if normal UI remains below 25% | Generic 429 |
 | Rearrangement preview/apply | library | 240/minute | observe first; enforce only if normal UI remains below 25% | Generic 429 |
 | Public `/health/live` | client IP at edge | 120/minute | D6 observe first; never add a database dependency | Temporary edge response only after acceptance |
@@ -146,7 +156,7 @@ by the separate user/library limits and by keeping edge bans narrow.
 | Body size, known scanner paths, static routing, upstream timeouts | Caddy | Deterministic and cheapest before Python |
 | General API IP frequency | application middleware backed by PostgreSQL | Uses the validated client address and remains consistent across workers |
 | Account, user and library frequency | route/dependency layer backed by PostgreSQL | Requires normalization, session and authorization context |
-| Costly-operation frequency and leases | service boundary backed by PostgreSQL | Must surround the actual work and release safely |
+| Costly-operation frequency and leases | service plus response-lifecycle boundary backed by PostgreSQL | Must cover work and, for exports, the complete stream and cleanup |
 | High-confidence scanner temporary ban | host firewall driven by minimized Caddy events | Stops repeat probes before TLS/application work without a Caddy plugin |
 | Volumetric DDoS | hosting provider or future CDN/WAF | A single VPS and its database cannot absorb it safely |
 
@@ -156,6 +166,14 @@ independent of PostgreSQL so it can report a live API process during a database
 failure. Internal container health traffic reaches the API directly and is not
 treated as public traffic. No client-supplied forwarding header participates
 until the trusted-proxy middleware has validated and rewritten the ASGI scope.
+
+Before either public health threshold can leave observation mode, Caddy must
+replace the current aggregate `/health*` label with three fixed privacy-safe
+classes: `health_class=live` for the exact `/health/live` path,
+`health_class=ready` for the exact `/health/ready` path and
+`health_class=other` for every remaining `/health*` request. Queries and the
+original URI remain deleted. D6 must refuse to load separate health jails if
+these labels are absent or if a fixture can match one request in both classes.
 
 ### 5. D6 temporary edge response
 
@@ -178,8 +196,8 @@ Initial staging policy:
 | `event_class=scanner_probe` | 60 seconds | 60 | 10 minutes | observe/dry-run for 24 hours, then enforce |
 | Repeated scanner bans | 24 hours | 3 completed bans | 1 hour | observe until one week of evidence |
 | General request volume | 60 seconds | 1,200 | candidate 10-minute ban after seven clean observation days; D5 alert first | observe |
-| Public `/health/live` | 60 seconds | 120 | candidate 10-minute ban after monitor validation | observe |
-| Public `/health/ready` | 60 seconds | 30 | candidate 10-minute ban after monitor validation | observe |
+| `health_class=live` | 60 seconds | 120 | candidate 10-minute ban after distinct-label and monitor validation | observe |
+| `health_class=ready` | 60 seconds | 30 | candidate 10-minute ban after distinct-label and monitor validation | observe |
 | Authentication 401/429 | any | no edge ban | application limits only | observe |
 | API 404/422 | any | no edge ban until Owner/Viewer and malformed-input baselines exist | D5 alert only | observe |
 
@@ -213,26 +231,39 @@ returns 503 rather than silently bypassing enforcement. This does not apply to
 failure is fail-open for HTTP availability, raises an operational alert and
 must never alter Caddy's ability to serve or proxy requests.
 
+An export lease covers archive creation **and the complete response body**. It
+is renewed while `FileResponse` is streaming and is released only by the same
+response-completion/disconnect cleanup that removes the temporary ZIP. A slow
+download therefore cannot overlap another export for the same key. If the
+worker dies, lease expiry permits recovery. D4 implementation must also add a
+bounded-age maintenance cleanup for abandoned export files; no such cleanup is
+assumed to exist today. Implementation tests must exercise normal completion,
+slow streaming, client disconnect, renewal failure, worker failure and stale-
+file cleanup.
+
 ### 7. Rollout and acceptance
 
-1. Add configuration, shared D4 policies and leases with mode `off`.
-2. Deploy staging in `observe`; run D7 normal-navigation and abuse scenarios.
-3. Collect at least 24 hours including normal mobile/catalogue/map/import and
+1. Add and test the distinct `live`, `ready` and `other` Caddy health labels;
+   keep every health response in observation mode.
+2. Add configuration, shared D4 policies and leases with mode `off`.
+3. Deploy staging in `observe`; run D7 normal-navigation and abuse scenarios.
+4. Collect at least 24 hours including normal mobile/catalogue/map/import and
    export use. Raise a threshold if legitimate peaks exceed 25% of it.
-4. Enforce costly-operation limits and leases first.
-5. Enforce general IP, user and library limits.
-6. Install D6 in dry-run, validate parsed addresses and counts, then enable the
+5. Enforce costly-operation limits and leases first.
+6. Enforce general IP, user and library limits.
+7. Install D6 in dry-run, validate parsed addresses and counts, then enable the
    scanner-only 10-minute ban.
-7. Enable the 1,200/minute general-volume ban only after seven observation
+8. Enable the 1,200/minute general-volume ban only after seven observation
    days with no legitimate threshold crossing. Keep 401/404/422 signals
    alert-only until evidence supports safe blocking.
 
 Acceptance requires tests for two concurrent workers, fixed-window reset,
-lease expiry/release, multiple users behind one IP, multiple co-Owners in one
-library, unauthorized library identifiers, `Retry-After`, IPv4/IPv6
-canonicalization, forged forwarding headers, restart persistence, dry-run and
-emergency unban. Normal frontend and external health monitoring must complete
-without a 429.
+lease acquisition/renewal/fencing/release, stale-owner rejection, slow export
+streaming and disconnect cleanup, multiple users behind one IP, multiple co-
+Owners in one library, unauthorized library identifiers, `Retry-After`,
+distinct non-overlapping health labels, IPv4/IPv6 canonicalization, forged
+forwarding headers, restart persistence, dry-run and emergency unban. Normal
+frontend and external health monitoring must complete without a 429.
 
 ## Disable and rollback
 
