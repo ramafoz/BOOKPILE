@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from bookpile_server.config import Settings
@@ -9,9 +10,21 @@ from bookpile_server.models import RateLimitBucket, SecurityEvent
 from bookpile_server.repositories.rate_limits import RateLimitRepository
 from bookpile_server.services.rate_limits import (
     RateLimitExceededError,
+    RateLimitDecisionUnavailableError,
     RateLimiter,
     RateLimitPolicy,
 )
+
+
+class UnavailableRateLimitRepository:
+    def __init__(self) -> None:
+        self.rolled_back = False
+
+    def consume(self, **_kwargs):
+        raise OperationalError("rate-limit probe", {}, RuntimeError("offline"))
+
+    def rollback(self) -> None:
+        self.rolled_back = True
 
 
 def test_rate_limit_uses_hashed_atomic_bucket_and_resets_window(
@@ -198,3 +211,17 @@ def test_operation_lease_heartbeat_must_fit_safely_inside_ttl() -> None:
             operation_lease_ttl_seconds=60,
             operation_lease_heartbeat_seconds=31,
         )
+
+
+def test_database_failure_is_explicit_and_rolls_back() -> None:
+    repository = UnavailableRateLimitRepository()
+    limiter = RateLimiter(repository, "test-secret")  # type: ignore[arg-type]
+
+    with pytest.raises(RateLimitDecisionUnavailableError):
+        limiter.apply(
+            RateLimitPolicy("unavailable", 1, timedelta(minutes=1)),
+            key="logical-key",
+            mode="observe",
+        )
+
+    assert repository.rolled_back is True

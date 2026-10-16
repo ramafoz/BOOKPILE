@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
@@ -18,10 +19,46 @@ from ...services.local_imports import (
     LocalImportUploadTooLarge,
     LocalImportStateConflict,
 )
-from ..dependencies import CsrfDependency, CurrentAuthDependency, LocalImportServiceDependency
+from ...services.rate_limits import (
+    RateLimitDecisionUnavailableError,
+    RateLimitExceededError,
+)
+from ..dependencies import (
+    CostlyOperationLimiterDependency,
+    CsrfDependency,
+    CurrentAuthDependency,
+    LocalImportServiceDependency,
+)
 
 
 router = APIRouter(tags=["imports"])
+
+
+def apply_import_limit(
+    limiter: CostlyOperationLimiterDependency,
+    *,
+    phase: Literal["preflight", "consolidation"],
+    user_id: UUID,
+    library_id: UUID,
+) -> None:
+    try:
+        if phase == "preflight":
+            limiter.check_import_preflight(user_id=user_id, library_id=library_id)
+        else:
+            limiter.check_import_consolidation(
+                user_id=user_id, library_id=library_id
+            )
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
 
 
 def response_for(job) -> LocalImportJobResponse:
@@ -54,12 +91,22 @@ def response_for(job) -> LocalImportJobResponse:
 def preflight_local_import(
     library_id: UUID,
     service: LocalImportServiceDependency,
+    limiter: CostlyOperationLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
     reading_owner_user_id: UUID = Form(...),
     backup: UploadFile = File(...),
 ) -> LocalImportPreflightResponse:
     try:
+        service.require_owner(
+            library_id=library_id, actor_user_id=context.user_id
+        )
+        apply_import_limit(
+            limiter,
+            phase="preflight",
+            user_id=context.user_id,
+            library_id=library_id,
+        )
         job = service.preflight(
             library_id=library_id,
             actor_user_id=context.user_id,
@@ -85,11 +132,21 @@ def preflight_local_import(
 def preflight_server_import(
     library_id: UUID,
     service: LocalImportServiceDependency,
+    limiter: CostlyOperationLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
     backup: UploadFile = File(...),
 ) -> LocalImportPreflightResponse:
     try:
+        service.require_owner(
+            library_id=library_id, actor_user_id=context.user_id
+        )
+        apply_import_limit(
+            limiter,
+            phase="preflight",
+            user_id=context.user_id,
+            library_id=library_id,
+        )
         job = service.preflight_server(
             library_id=library_id,
             actor_user_id=context.user_id,
@@ -160,10 +217,20 @@ def consolidate_import_job(
     import_id: UUID,
     payload: ConsolidateLocalImportRequest,
     service: LocalImportServiceDependency,
+    limiter: CostlyOperationLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> LocalImportJobResponse:
     try:
+        service.require_owner(
+            library_id=library_id, actor_user_id=context.user_id
+        )
+        apply_import_limit(
+            limiter,
+            phase="consolidation",
+            user_id=context.user_id,
+            library_id=library_id,
+        )
         return response_for(
             service.consolidate(
                 import_id=import_id,
@@ -191,10 +258,20 @@ def consolidate_import_job_as_new_library(
     import_id: UUID,
     payload: ConsolidateLocalImportAsNewLibraryRequest,
     service: LocalImportServiceDependency,
+    limiter: CostlyOperationLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> LocalImportJobResponse:
     try:
+        service.require_owner(
+            library_id=library_id, actor_user_id=context.user_id
+        )
+        apply_import_limit(
+            limiter,
+            phase="consolidation",
+            user_id=context.user_id,
+            library_id=library_id,
+        )
         return response_for(
             service.consolidate_as_new_library(
                 import_id=import_id,

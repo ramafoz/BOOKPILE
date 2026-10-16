@@ -148,6 +148,8 @@ only after D7 and at least 24 hours of representative staging traffic.
 | Cover upload | library | 120/hour | enforce alongside existing 30/hour/user | Existing generic upload 429 |
 | Import preflight/upload | user | 6/hour | enforce | Generic costly-operation 429 |
 | Import preflight/upload | library | 12/hour | enforce | Generic costly-operation 429 |
+| Import consolidation | user | 6/hour plus lease | enforce | Generic costly-operation 429; 409 for concurrent work |
+| Import consolidation | library | 12/hour plus lease | enforce | Generic costly-operation 429; 409 for concurrent work |
 | Import/consolidation | user and library | one renewable fenced lease each; 2-minute TTL, heartbeat at most every 30 seconds | enforce | 409 while already active; 429 for frequency |
 | Portable export | user | 6/hour and one renewable fenced response-lifetime lease | enforce | Generic costly-operation 429 |
 | Portable export | library | 12/hour and one renewable fenced response-lifetime lease | enforce | Generic costly-operation 429 |
