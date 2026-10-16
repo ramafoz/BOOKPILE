@@ -5,6 +5,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import BetaInvitationProgress, SecurityEvent, User, UserSession
+from ..security.identities import normalize_account_identifier
 
 
 class AuthRepository:
@@ -12,7 +13,7 @@ class AuthRepository:
         self._session = session
 
     def find_user_by_identifier(self, identifier: str) -> User | None:
-        normalized = identifier.strip().lower()
+        normalized = normalize_account_identifier(identifier)
         return self._session.scalar(
             select(User).where(
                 or_(User.username == normalized, User.email == normalized)

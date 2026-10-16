@@ -10,6 +10,7 @@ from ..models import (
     User,
     UserProfileImage,
 )
+from ..security.identities import normalize_account_identifier
 from .storage import StorageRepository
 
 
@@ -26,7 +27,7 @@ class AccountDeletionRepository:
         )
 
     def user_by_identifier(self, identifier: str) -> User | None:
-        normalized = identifier.strip().lower()
+        normalized = normalize_account_identifier(identifier)
         return self.session.scalar(
             select(User).where(
                 (User.username == normalized) | (User.email == normalized)

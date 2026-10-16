@@ -63,6 +63,66 @@ def test_rate_limit_uses_hashed_atomic_bucket_and_resets_window(
     assert bucket.attempt_count == 1
 
 
+def test_defensive_modes_are_off_observable_and_privacy_preserving(
+    session: Session,
+) -> None:
+    limiter = RateLimiter(RateLimitRepository(session), "test-secret")
+    policy = RateLimitPolicy("defensive_test", 1, timedelta(minutes=1))
+    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+
+    off = limiter.apply(
+        policy,
+        key="account@example.com",
+        mode="off",
+        ip_address="203.0.113.10",
+        now=started_at,
+    )
+    assert off.consumed is False
+    assert session.scalar(select(RateLimitBucket)) is None
+
+    limiter.apply(policy, key="account@example.com", mode="observe", now=started_at)
+    observed = limiter.apply(
+        policy,
+        key="account@example.com",
+        mode="observe",
+        ip_address="203.0.113.10",
+        now=started_at,
+    )
+    assert observed.exceeded is True
+    assert observed.retry_after == 60
+    event = session.scalar(
+        select(SecurityEvent).where(
+            SecurityEvent.event_type == "rate_limit_observed"
+        )
+    )
+    assert event is not None
+    assert event.ip_address is None
+    assert event.details == {"scope": "defensive_test", "mode": "observe"}
+
+
+def test_defensive_enforcement_does_not_record_raw_ip_by_default(
+    session: Session,
+) -> None:
+    limiter = RateLimiter(RateLimitRepository(session), "test-secret")
+    policy = RateLimitPolicy("defensive_enforce", 1, timedelta(minutes=1))
+    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+
+    limiter.apply(policy, key="key", mode="enforce", now=started_at)
+    with pytest.raises(RateLimitExceededError):
+        limiter.apply(
+            policy,
+            key="key",
+            mode="enforce",
+            ip_address="203.0.113.10",
+            now=started_at,
+        )
+    event = session.scalar(
+        select(SecurityEvent).where(SecurityEvent.event_type == "rate_limit_blocked")
+    )
+    assert event is not None
+    assert event.ip_address is None
+
+
 def test_login_rate_limit_is_generic_and_supplies_retry_after(
     client, monkeypatch
 ) -> None:
@@ -119,3 +179,11 @@ def test_production_rejects_development_security_defaults() -> None:
         email_outbox_encryption_secret="private-outbox-secret-with-at-least-32-characters",
     )
     assert settings.session_cookie_secure is True
+
+
+def test_operation_lease_heartbeat_must_fit_safely_inside_ttl() -> None:
+    with pytest.raises(ValueError, match="heartbeat"):
+        Settings(
+            operation_lease_ttl_seconds=60,
+            operation_lease_heartbeat_seconds=31,
+        )

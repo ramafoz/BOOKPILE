@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed for review on 2026-10-15. This ADR fixes the D4 and D6 design before
-implementation; it does not enable new limits or host bans.
+Accepted on 2026-10-16. This ADR fixes the D4 and D6 design; acceptance and the
+first infrastructure implementation do not enable new limits or host bans.
 
 ## Context
 

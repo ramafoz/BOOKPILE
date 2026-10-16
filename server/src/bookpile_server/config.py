@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     email_outbox_max_attempts: int = Field(default=8, ge=1, le=20)
     email_outbox_lease_seconds: int = Field(default=120, ge=30, le=900)
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
+    defensive_limit_mode: Literal["off", "observe", "enforce"] = "off"
+    operation_lease_ttl_seconds: int = Field(default=120, ge=30, le=900)
+    operation_lease_heartbeat_seconds: int = Field(default=30, ge=5, le=300)
     private_object_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "private-objects"
     import_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "import-staging"
     import_staging_ttl_minutes: int = 30
@@ -136,6 +139,13 @@ class Settings(BaseSettings):
     def require_production_security_settings(self) -> "Settings":
         if self.smtp_starttls and self.smtp_implicit_tls:
             raise ValueError("SMTP STARTTLS and implicit TLS are mutually exclusive")
+        if (
+            self.operation_lease_heartbeat_seconds * 2
+            > self.operation_lease_ttl_seconds
+        ):
+            raise ValueError(
+                "The operation-lease heartbeat must be no more than half its TTL"
+            )
         if self.is_hosted:
             if self.rate_limit_key_secret == DEVELOPMENT_RATE_LIMIT_SECRET:
                 raise ValueError(

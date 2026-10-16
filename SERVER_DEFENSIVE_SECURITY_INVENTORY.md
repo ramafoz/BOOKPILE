@@ -224,8 +224,14 @@ Subsequent progress:
    leases. D6 keeps Caddy's deterministic controls and reserves persistent
    host-level temporary bans for high-confidence scanner traffic. No process-
    local Caddy/Python limiter is accepted.
-4. **D4 implementation:** deploy new controls disabled, observe staging for at
-   least 24 hours, then enforce costly operations before general API limits.
+4. **D4 implementation:** the first infrastructure slice adds the explicit
+   `off`/`observe`/`enforce` setting, privacy-safe observed-limit decisions,
+   one shared account-identifier normalizer and PostgreSQL-backed renewable
+   operation leases with monotonic fencing tokens. The default remains `off`.
+   Route policies, protected import/export commits, staged-object publication
+   and export-stream lifetime wiring remain separate work; deploy those
+   controls disabled, observe staging for at least 24 hours, then enforce
+   costly operations before general API limits.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

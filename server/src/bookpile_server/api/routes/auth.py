@@ -33,6 +33,7 @@ from ...services.rate_limits import (
     RateLimiter,
     RateLimitPolicy,
 )
+from ...security.identities import normalize_account_identifier
 from ..dependencies import (
     AccountActionServiceDependency,
     AccountDeletionServiceDependency,
@@ -209,7 +210,7 @@ def resend_verification(
     enforce_rate_limit(
         rate_limiter,
         VERIFICATION_EMAIL,
-        key=payload.email.strip().lower(),
+        key=normalize_account_identifier(payload.email),
         request=request,
     )
     try:
@@ -268,7 +269,7 @@ def request_password_reset(
     enforce_rate_limit(
         rate_limiter,
         PASSWORD_RESET_EMAIL,
-        key=payload.email.strip().lower(),
+        key=normalize_account_identifier(payload.email),
         request=request,
     )
     try:
@@ -339,7 +340,7 @@ def login(
     enforce_rate_limit(
         rate_limiter,
         LOGIN_IDENTITY,
-        key=payload.identifier.strip().lower(),
+        key=normalize_account_identifier(payload.identifier),
         request=request,
     )
     try:

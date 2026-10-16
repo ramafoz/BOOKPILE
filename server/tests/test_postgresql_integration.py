@@ -38,6 +38,7 @@ from bookpile_server.models import (
     LibraryMembership,
     Loan,
     PersonalBookRecord,
+    OperationLease,
     RateLimitBucket,
     ReadingSession,
     SecurityEvent,
@@ -62,6 +63,12 @@ from bookpile_server.services.account_invitations import (
     AccountInvitationService,
 )
 from bookpile_server.repositories.rate_limits import RateLimitRepository
+from bookpile_server.repositories.operation_leases import OperationLeaseRepository
+from bookpile_server.services.operation_leases import (
+    LeaseRequest,
+    OperationLeaseManager,
+    OperationLeaseUnavailableError,
+)
 from bookpile_server.services.rate_limits import (
     RateLimitExceededError,
     RateLimiter,
@@ -177,6 +184,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             "account_action_tokens",
             "email_outbox_messages",
             "rate_limit_buckets",
+            "operation_leases",
             "library_memberships",
             "library_invitations",
             "library_audit_events",
@@ -212,6 +220,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             column["name"] for column in inspect(engine).get_columns("users")
         }
         assert "preferred_locale" not in downgraded_user_columns
+        assert "operation_leases" not in set(inspect(engine).get_table_names())
         downgraded_email_columns = {
             column["name"]
             for column in inspect(engine).get_columns("email_outbox_messages")
@@ -720,6 +729,38 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+
+        lease_started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+
+        def acquire_operation_lease_concurrently(_: int) -> bool:
+            with Session(engine) as concurrent_session:
+                manager = OperationLeaseManager(
+                    OperationLeaseRepository(concurrent_session),
+                    "integration-secret",
+                    ttl=timedelta(minutes=2),
+                )
+                try:
+                    manager.acquire(
+                        [LeaseRequest("postgres_import", "same-library")],
+                        now=lease_started_at,
+                    )
+                except OperationLeaseUnavailableError:
+                    return False
+                return True
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            lease_results = list(
+                executor.map(acquire_operation_lease_concurrently, (1, 2))
+            )
+        assert sorted(lease_results) == [False, True]
+        with Session(engine) as session:
+            lease = session.scalar(
+                select(OperationLease).where(
+                    OperationLease.scope == "postgres_import"
+                )
+            )
+            assert lease is not None
+            assert lease.fencing_token == 1
 
         # Two growth transactions that individually fit but jointly exceed the
         # entitlement must serialize at the quota boundary; exactly one wins.
