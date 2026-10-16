@@ -218,12 +218,22 @@ Subsequent progress:
 2. **D3 observation baseline:** minimized Caddy and API events, bounded logs and
    explicit scanner responses implemented for staging observation. Exact
    time-based active-log expiry and aggregate thresholds remain open.
-3. **D4 limit PR:** conservative general edge limits and separate policies for
-   unknown routes, auth, import/export and health. Use a shared store for any
-   application-level counters.
-4. **D7 abuse harness:** normal navigation, bursts, scanner paths, forged IP,
+3. **D4/D6 design:** completed in
+   [ADR 0016](docs/adr/0016-defensive-request-limits.md). D4 uses PostgreSQL-backed IP,
+   account, user, library and costly-operation policies plus shared operation
+   leases. D6 keeps Caddy's deterministic controls and reserves persistent
+   host-level temporary bans for high-confidence scanner traffic. No process-
+   local Caddy/Python limiter is accepted.
+4. **D4 implementation:** deploy new controls disabled, observe staging for at
+   least 24 hours, then enforce costly operations before general API limits.
+5. **D6 implementation:** dry-run scanner detection before enabling narrow
+   10-minute bans. General volume remains alert-only for seven clean observation
+   days and may then receive the ADR's high-threshold temporary ban; ambiguous
+   401/404/422 signals remain alerts.
+6. **D7 abuse harness:** normal navigation, bursts, scanner paths, forged IP,
    expiry, IPv4/IPv6, secret-redaction and health-check exemptions.
-5. Observe staging for at least 24 hours before enabling temporary blocking.
+7. Observe staging for at least 24 hours before enabling temporary blocking.
 
-Numeric thresholds are intentionally not finalized in this inventory. They
-must be derived from staging measurements and must have a documented rollback.
+[ADR 0016](docs/adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,
+independent disable switches and rollback. Production values remain subject to
+the resulting staging measurements.
