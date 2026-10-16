@@ -16,6 +16,7 @@ from ..models import (
     BookCover,
     User,
 )
+from ..security.identities import normalize_account_identifier
 
 
 class LibraryRepository:
@@ -147,7 +148,9 @@ class LibraryRepository:
 
     def find_user_by_username(self, username: str) -> User | None:
         return self._session.scalar(
-            select(User).where(User.username == username.strip().lower())
+            select(User).where(
+                User.username == normalize_account_identifier(username)
+            )
         )
 
     def slug_exists(self, slug: str) -> bool:

@@ -64,13 +64,38 @@ class RateLimitRepository:
             window_started_at=row.window_started_at,
         )
 
-    def add_blocked_event(self, *, scope: str, ip_address: str | None) -> None:
+    def add_event(
+        self,
+        *,
+        event_type: str,
+        scope: str,
+        mode: str | None,
+        deployment_revision: str | None,
+        ip_address: str | None,
+    ) -> None:
         self._session.add(
             SecurityEvent(
-                event_type="rate_limit_blocked",
+                event_type=event_type,
                 ip_address=ip_address,
-                details={"scope": scope},
+                details={
+                    "scope": scope,
+                    **({"mode": mode} if mode is not None else {}),
+                    **(
+                        {"deployment_revision": deployment_revision}
+                        if deployment_revision is not None
+                        else {}
+                    ),
+                },
             )
+        )
+
+    def add_blocked_event(self, *, scope: str, ip_address: str | None) -> None:
+        self.add_event(
+            event_type="rate_limit_blocked",
+            scope=scope,
+            mode=None,
+            deployment_revision=None,
+            ip_address=ip_address,
         )
 
     def commit(self) -> None:

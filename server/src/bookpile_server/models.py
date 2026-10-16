@@ -505,6 +505,25 @@ class RateLimitBucket(Base):
     )
 
 
+class OperationLease(Base):
+    __tablename__ = "operation_leases"
+    __table_args__ = (
+        CheckConstraint("fencing_token > 0", name="ck_operation_leases_fencing_token"),
+        Index("ix_operation_leases_expires_at", "expires_at"),
+    )
+
+    scope: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    lease_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, unique=True)
+    fencing_token: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    renewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
     __table_args__ = (

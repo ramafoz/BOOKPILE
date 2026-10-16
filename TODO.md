@@ -1055,12 +1055,16 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   the trusted-proxy boundary now preserves genuine attribution and rejects a
   forged client address. D3 adds privacy-minimized edge/API observation,
   bounded logs and explicit scanner responses. Before production, complete
-  strict time-based expiry for Caddy's active log, collect staging evidence,
-  then implement the reviewed D4/D6 design in
+  strict time-based expiry for Caddy's active log and collect staging evidence.
+  The first implementation slice of the reviewed D4 design adds disabled-by-
+  default configuration, shared account normalization, privacy-safe
+  observation decisions and PostgreSQL operation leases with renewable,
+  monotonically fenced ownership. Next wire explicit route policies and the
+  import/export transaction and object-publication boundaries described in
   [ADR 0016](docs/adr/0016-defensive-request-limits.md): shared PostgreSQL
-  limits and leases in observation mode first, followed by a dry-run and narrow
-  temporary ban for high-confidence scanner traffic. Do not introduce an
-  in-memory-only Python or Caddy counter.
+  limits and leases must enter observation mode first, followed by a dry-run
+  and narrow temporary ban for high-confidence scanner traffic. Do not
+  introduce an in-memory-only Python or Caddy counter.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,

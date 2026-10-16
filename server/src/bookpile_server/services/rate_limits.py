@@ -3,8 +3,11 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import hmac
 import math
+from typing import Literal
 
 from ..repositories.rate_limits import RateLimitRepository
+
+RateLimitMode = Literal["off", "observe", "enforce"]
 
 
 @dataclass(frozen=True)
@@ -19,10 +22,23 @@ class RateLimitExceededError(Exception):
     retry_after: int
 
 
+@dataclass(frozen=True)
+class RateLimitDecision:
+    consumed: bool
+    exceeded: bool
+    retry_after: int | None = None
+
+
 class RateLimiter:
-    def __init__(self, repository: RateLimitRepository, key_secret: str) -> None:
+    def __init__(
+        self,
+        repository: RateLimitRepository,
+        key_secret: str,
+        deployment_revision: str = "development",
+    ) -> None:
         self._repository = repository
         self._key_secret = key_secret.encode("utf-8")
+        self._deployment_revision = deployment_revision
 
     def enforce(
         self,
@@ -32,6 +48,27 @@ class RateLimiter:
         ip_address: str | None,
         now: datetime | None = None,
     ) -> None:
+        self.apply(
+            policy,
+            key=key,
+            mode="enforce",
+            ip_address=ip_address,
+            record_ip=True,
+            now=now,
+        )
+
+    def apply(
+        self,
+        policy: RateLimitPolicy,
+        *,
+        key: str,
+        mode: RateLimitMode,
+        ip_address: str | None = None,
+        record_ip: bool = False,
+        now: datetime | None = None,
+    ) -> RateLimitDecision:
+        if mode == "off":
+            return RateLimitDecision(consumed=False, exceeded=False)
         checked_at = now or datetime.now(UTC)
         key_hash = hmac.new(
             self._key_secret,
@@ -45,21 +82,44 @@ class RateLimiter:
             reset_before=checked_at - policy.window,
         )
         if consumed.attempt_count > policy.attempts:
-            if consumed.attempt_count == policy.attempts + 1:
-                self._repository.add_blocked_event(
-                    scope=policy.scope, ip_address=ip_address
-                )
-            self._repository.commit()
-            window_started_at = consumed.window_started_at
-            if window_started_at.tzinfo is None:
-                window_started_at = window_started_at.replace(tzinfo=UTC)
-            retry_after = max(
-                1,
-                math.ceil(
-                    (
-                        window_started_at + policy.window - checked_at
-                    ).total_seconds()
-                ),
+            retry_after = self._retry_after(
+                consumed.window_started_at, policy.window, checked_at
             )
-            raise RateLimitExceededError(retry_after=retry_after)
+            if consumed.attempt_count == policy.attempts + 1:
+                if record_ip:
+                    self._repository.add_blocked_event(
+                        scope=policy.scope, ip_address=ip_address
+                    )
+                else:
+                    self._repository.add_event(
+                        event_type=(
+                            "rate_limit_blocked"
+                            if mode == "enforce"
+                            else "rate_limit_observed"
+                        ),
+                        scope=policy.scope,
+                        mode=mode,
+                        deployment_revision=self._deployment_revision,
+                        ip_address=None,
+                    )
+            self._repository.commit()
+            if mode == "enforce":
+                raise RateLimitExceededError(retry_after=retry_after)
+            return RateLimitDecision(
+                consumed=True, exceeded=True, retry_after=retry_after
+            )
         self._repository.commit()
+        return RateLimitDecision(consumed=True, exceeded=False)
+
+    @staticmethod
+    def _retry_after(
+        window_started_at: datetime,
+        window: timedelta,
+        checked_at: datetime,
+    ) -> int:
+        if window_started_at.tzinfo is None:
+            window_started_at = window_started_at.replace(tzinfo=UTC)
+        return max(
+            1,
+            math.ceil((window_started_at + window - checked_at).total_seconds()),
+        )

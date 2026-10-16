@@ -24,8 +24,14 @@ class IdentityValidationError(ValueError):
     pass
 
 
+def normalize_account_identifier(identifier: str) -> str:
+    """Canonicalize an email-or-username value without asserting its type."""
+
+    return identifier.strip().lower()
+
+
 def normalize_username(username: str) -> str:
-    normalized = username.strip().lower()
+    normalized = normalize_account_identifier(username)
     if not USERNAME_PATTERN.fullmatch(normalized):
         raise IdentityValidationError(
             "Username must contain 3 to 30 ASCII letters, numbers, or underscores."
