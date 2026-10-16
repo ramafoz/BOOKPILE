@@ -257,7 +257,9 @@ AccountActionServiceDependency = Annotated[
 def get_rate_limiter(session: SessionDependency) -> RateLimiter:
     settings = get_settings()
     return RateLimiter(
-        RateLimitRepository(session), settings.rate_limit_key_secret
+        RateLimitRepository(session),
+        settings.rate_limit_key_secret,
+        settings.deployment_revision,
     )
 
 

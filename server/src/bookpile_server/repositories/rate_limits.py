@@ -69,7 +69,8 @@ class RateLimitRepository:
         *,
         event_type: str,
         scope: str,
-        mode: str,
+        mode: str | None,
+        deployment_revision: str | None,
         ip_address: str | None,
     ) -> None:
         self._session.add(
@@ -78,7 +79,12 @@ class RateLimitRepository:
                 ip_address=ip_address,
                 details={
                     "scope": scope,
-                    **({"mode": mode} if mode != "enforce" else {}),
+                    **({"mode": mode} if mode is not None else {}),
+                    **(
+                        {"deployment_revision": deployment_revision}
+                        if deployment_revision is not None
+                        else {}
+                    ),
                 },
             )
         )
@@ -87,7 +93,8 @@ class RateLimitRepository:
         self.add_event(
             event_type="rate_limit_blocked",
             scope=scope,
-            mode="enforce",
+            mode=None,
+            deployment_revision=None,
             ip_address=ip_address,
         )
 

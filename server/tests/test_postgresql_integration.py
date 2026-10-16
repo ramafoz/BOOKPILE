@@ -730,8 +730,6 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             assert bucket is not None
             assert bucket.attempt_count == 2
 
-        lease_started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
-
         def acquire_operation_lease_concurrently(_: int) -> bool:
             with Session(engine) as concurrent_session:
                 manager = OperationLeaseManager(
@@ -742,7 +740,6 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 try:
                     manager.acquire(
                         [LeaseRequest("postgres_import", "same-library")],
-                        now=lease_started_at,
                     )
                 except OperationLeaseUnavailableError:
                     return False

@@ -30,9 +30,15 @@ class RateLimitDecision:
 
 
 class RateLimiter:
-    def __init__(self, repository: RateLimitRepository, key_secret: str) -> None:
+    def __init__(
+        self,
+        repository: RateLimitRepository,
+        key_secret: str,
+        deployment_revision: str = "development",
+    ) -> None:
         self._repository = repository
         self._key_secret = key_secret.encode("utf-8")
+        self._deployment_revision = deployment_revision
 
     def enforce(
         self,
@@ -80,16 +86,22 @@ class RateLimiter:
                 consumed.window_started_at, policy.window, checked_at
             )
             if consumed.attempt_count == policy.attempts + 1:
-                self._repository.add_event(
-                    event_type=(
-                        "rate_limit_blocked"
-                        if mode == "enforce"
-                        else "rate_limit_observed"
-                    ),
-                    scope=policy.scope,
-                    mode=mode,
-                    ip_address=ip_address if record_ip else None,
-                )
+                if record_ip:
+                    self._repository.add_blocked_event(
+                        scope=policy.scope, ip_address=ip_address
+                    )
+                else:
+                    self._repository.add_event(
+                        event_type=(
+                            "rate_limit_blocked"
+                            if mode == "enforce"
+                            else "rate_limit_observed"
+                        ),
+                        scope=policy.scope,
+                        mode=mode,
+                        deployment_revision=self._deployment_revision,
+                        ip_address=None,
+                    )
             self._repository.commit()
             if mode == "enforce":
                 raise RateLimitExceededError(retry_after=retry_after)

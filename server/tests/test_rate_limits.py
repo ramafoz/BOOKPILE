@@ -66,7 +66,9 @@ def test_rate_limit_uses_hashed_atomic_bucket_and_resets_window(
 def test_defensive_modes_are_off_observable_and_privacy_preserving(
     session: Session,
 ) -> None:
-    limiter = RateLimiter(RateLimitRepository(session), "test-secret")
+    limiter = RateLimiter(
+        RateLimitRepository(session), "test-secret", "git-observation-test"
+    )
     policy = RateLimitPolicy("defensive_test", 1, timedelta(minutes=1))
     started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
 
@@ -97,7 +99,11 @@ def test_defensive_modes_are_off_observable_and_privacy_preserving(
     )
     assert event is not None
     assert event.ip_address is None
-    assert event.details == {"scope": "defensive_test", "mode": "observe"}
+    assert event.details == {
+        "scope": "defensive_test",
+        "mode": "observe",
+        "deployment_revision": "git-observation-test",
+    }
 
 
 def test_defensive_enforcement_does_not_record_raw_ip_by_default(
@@ -121,6 +127,11 @@ def test_defensive_enforcement_does_not_record_raw_ip_by_default(
     )
     assert event is not None
     assert event.ip_address is None
+    assert event.details == {
+        "scope": "defensive_enforce",
+        "mode": "enforce",
+        "deployment_revision": "development",
+    }
 
 
 def test_login_rate_limit_is_generic_and_supplies_retry_after(

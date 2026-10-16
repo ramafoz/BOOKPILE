@@ -1,7 +1,7 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from bookpile_server.models import OperationLease
@@ -24,47 +24,39 @@ def manager(session: Session) -> OperationLeaseManager:
 
 def test_lease_excludes_reacquires_and_fences_stale_owner(session: Session) -> None:
     leases = manager(session)
-    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
-    first = leases.acquire(
-        [LeaseRequest("library_import", "library-1")], now=started_at
-    )[0]
+    first = leases.acquire([LeaseRequest("library_import", "library-1")])[0]
 
     with pytest.raises(OperationLeaseUnavailableError):
-        leases.acquire(
-            [LeaseRequest("library_import", "library-1")],
-            now=started_at + timedelta(minutes=1),
-        )
+        leases.acquire([LeaseRequest("library_import", "library-1")])
 
-    second = leases.acquire(
-        [LeaseRequest("library_import", "library-1")],
-        now=started_at + timedelta(minutes=2, seconds=1),
-    )[0]
+    session.execute(
+        update(OperationLease).values(
+            expires_at=func.datetime("now", "-1 second")
+        )
+    )
+    session.commit()
+
+    second = leases.acquire([LeaseRequest("library_import", "library-1")])[0]
     assert second.lease_id != first.lease_id
     assert second.fencing_token == first.fencing_token + 1
     with pytest.raises(OperationLeaseLostError):
-        leases.fence(first, now=started_at + timedelta(minutes=2, seconds=2))
+        leases.fence(first)
     session.rollback()
 
 
 def test_release_preserves_monotonic_fencing_token(session: Session) -> None:
     leases = manager(session)
-    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
-    first = leases.acquire(
-        [LeaseRequest("export", "user-1")], now=started_at
-    )[0]
-    assert leases.release(first, now=started_at + timedelta(seconds=1)) is True
+    first = leases.acquire([LeaseRequest("export", "user-1")])[0]
+    assert leases.release(first) is True
 
-    second = leases.acquire(
-        [LeaseRequest("export", "user-1")], now=started_at + timedelta(seconds=2)
-    )[0]
+    second = leases.acquire([LeaseRequest("export", "user-1")])[0]
     assert second.fencing_token == first.fencing_token + 1
-    assert leases.release(first, now=started_at + timedelta(seconds=3)) is False
+    assert leases.release(first) is False
 
 
 def test_group_acquisition_is_all_or_nothing(session: Session) -> None:
     leases = manager(session)
-    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
-    leases.acquire([LeaseRequest("library", "blocked")], now=started_at)
+    leases.acquire([LeaseRequest("library", "blocked")])
 
     with pytest.raises(OperationLeaseUnavailableError):
         leases.acquire(
@@ -72,7 +64,6 @@ def test_group_acquisition_is_all_or_nothing(session: Session) -> None:
                 LeaseRequest("account", "would-have-been-acquired"),
                 LeaseRequest("library", "blocked"),
             ],
-            now=started_at + timedelta(seconds=1),
         )
 
     rows = list(session.scalars(select(OperationLease)))
@@ -81,11 +72,10 @@ def test_group_acquisition_is_all_or_nothing(session: Session) -> None:
 
 def test_renewal_requires_the_current_unexpired_owner(session: Session) -> None:
     leases = manager(session)
-    started_at = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
-    handle = leases.acquire([LeaseRequest("import", "user-1")], now=started_at)[0]
-    renewed = leases.renew(handle, now=started_at + timedelta(seconds=30))
-    assert renewed.expires_at == started_at + timedelta(minutes=2, seconds=30)
+    handle = leases.acquire([LeaseRequest("import", "user-1")])[0]
+    renewed = leases.renew(handle)
+    assert renewed.expires_at >= handle.expires_at
 
-    assert leases.release(renewed, now=started_at + timedelta(seconds=31)) is True
+    assert leases.release(renewed) is True
     with pytest.raises(OperationLeaseLostError):
-        leases.renew(renewed, now=started_at + timedelta(seconds=32))
+        leases.renew(renewed)

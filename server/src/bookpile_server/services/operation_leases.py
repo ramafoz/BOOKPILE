@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from hashlib import sha256
 import hmac
 from uuid import UUID, uuid4
@@ -59,10 +59,7 @@ class OperationLeaseManager:
     def acquire(
         self,
         requests: list[LeaseRequest] | tuple[LeaseRequest, ...],
-        *,
-        now: datetime | None = None,
     ) -> tuple[OperationLeaseHandle, ...]:
-        checked_at = now or datetime.now(UTC)
         prepared = sorted(
             (self._prepare(request) for request in requests),
             key=lambda item: (item[0], item[1]),
@@ -79,8 +76,7 @@ class OperationLeaseManager:
                     scope=scope,
                     key_hash=key_hash,
                     lease_id=uuid4(),
-                    now=checked_at,
-                    expires_at=checked_at + self._ttl,
+                    ttl=self._ttl,
                 )
                 if stored is None:
                     raise OperationLeaseUnavailableError(scope=scope)
@@ -94,11 +90,8 @@ class OperationLeaseManager:
     def renew(
         self,
         handle: OperationLeaseHandle,
-        *,
-        now: datetime | None = None,
     ) -> OperationLeaseHandle:
-        checked_at = now or datetime.now(UTC)
-        stored = self._renew_or_fence(handle, checked_at)
+        stored = self._renew_or_fence(handle)
         if stored is None:
             self._repository.rollback()
             raise OperationLeaseLostError(scope=handle.scope)
@@ -108,13 +101,10 @@ class OperationLeaseManager:
     def fence(
         self,
         handle: OperationLeaseHandle,
-        *,
-        now: datetime | None = None,
     ) -> OperationLeaseHandle:
         """Lock and validate a lease inside the caller's domain transaction."""
 
-        checked_at = now or datetime.now(UTC)
-        stored = self._renew_or_fence(handle, checked_at)
+        stored = self._renew_or_fence(handle)
         if stored is None:
             raise OperationLeaseLostError(scope=handle.scope)
         return self._handle(stored)
@@ -122,15 +112,12 @@ class OperationLeaseManager:
     def release(
         self,
         handle: OperationLeaseHandle,
-        *,
-        now: datetime | None = None,
     ) -> bool:
         released = self._repository.release(
             scope=handle.scope,
             key_hash=handle.key_hash,
             lease_id=handle.lease_id,
             fencing_token=handle.fencing_token,
-            now=now or datetime.now(UTC),
         )
         self._repository.commit()
         return released
@@ -150,15 +137,14 @@ class OperationLeaseManager:
         return scope, key_hash
 
     def _renew_or_fence(
-        self, handle: OperationLeaseHandle, checked_at: datetime
+        self, handle: OperationLeaseHandle
     ) -> StoredOperationLease | None:
         return self._repository.renew_or_fence(
             scope=handle.scope,
             key_hash=handle.key_hash,
             lease_id=handle.lease_id,
             fencing_token=handle.fencing_token,
-            now=checked_at,
-            expires_at=checked_at + self._ttl,
+            ttl=self._ttl,
         )
 
     @staticmethod
