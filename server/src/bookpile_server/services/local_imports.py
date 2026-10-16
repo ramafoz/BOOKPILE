@@ -60,6 +60,10 @@ class LocalImportService:
         self.object_storage = object_storage
         self.settings = settings
 
+    def require_owner(self, *, library_id: UUID, actor_user_id: UUID) -> None:
+        if self.repository.owner_membership(library_id, actor_user_id) is None:
+            raise LocalImportOwnerRequired
+
     @staticmethod
     def _staging_fingerprint(directory: Path) -> str:
         digest = sha256()
@@ -188,8 +192,7 @@ class LocalImportService:
         upload: BinaryIO,
     ) -> LibraryImportJob:
         self.cleanup_expired()
-        if self.repository.owner_membership(library_id, actor_user_id) is None:
-            raise LocalImportOwnerRequired
+        self.require_owner(library_id=library_id, actor_user_id=actor_user_id)
         if self.repository.owner_membership(library_id, reading_owner_user_id) is None:
             raise LocalImportReadingOwnerInvalid
 

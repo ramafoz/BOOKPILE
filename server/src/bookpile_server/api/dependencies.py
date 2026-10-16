@@ -25,6 +25,7 @@ from ..services.account_invitations import AccountInvitationService
 from ..services.account_deletion import AccountDeletionService
 from ..services.account_actions import AccountActionService
 from ..services.rate_limits import RateLimiter
+from ..services.costly_operation_limits import CostlyOperationLimiter
 from ..config import get_settings
 from ..services.auth import (
     AuthContext,
@@ -264,6 +265,17 @@ def get_rate_limiter(session: SessionDependency) -> RateLimiter:
 
 
 RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
+def get_costly_operation_limiter(
+    rate_limiter: RateLimiterDependency,
+) -> CostlyOperationLimiter:
+    return CostlyOperationLimiter(rate_limiter, get_settings())
+
+
+CostlyOperationLimiterDependency = Annotated[
+    CostlyOperationLimiter, Depends(get_costly_operation_limiter)
+]
 
 
 def get_current_auth(

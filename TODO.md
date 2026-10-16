@@ -1059,8 +1059,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   The first implementation slice of the reviewed D4 design adds disabled-by-
   default configuration, shared account normalization, privacy-safe
   observation decisions and PostgreSQL operation leases with renewable,
-  monotonically fenced ownership. Next wire explicit route policies and the
-  import/export transaction and object-publication boundaries described in
+  monotonically fenced ownership. The second slice wires disabled-by-default
+  user/library frequency policies to
+  authorized import preflight, consolidation and portable export operations,
+  including revision-labelled observation and fail-closed 503 behavior. Next,
+  complete the renewable lease lifecycle and the import/export transaction
+  and object-publication boundaries described in
   [ADR 0016](docs/adr/0016-defensive-request-limits.md): shared PostgreSQL
   limits and leases must enter observation mode first, followed by a dry-run
   and narrow temporary ban for high-confidence scanner traffic. Do not

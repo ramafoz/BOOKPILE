@@ -232,6 +232,13 @@ Subsequent progress:
    and export-stream lifetime wiring remain separate work; deploy those
    controls disabled, observe staging for at least 24 hours, then enforce
    costly operations before general API limits.
+   The second slice connects separate user/library frequency counters to
+   authorized import preflight, import consolidation and portable export
+   operations. They remain inert in `off`, emit revision-labelled aggregate
+   events in `observe`, return generic 429 responses only in `enforce`, and
+   fail closed with 503 when PostgreSQL cannot decide. Renewable leases remain
+   unwired until heartbeat, fenced domain commits and response-lifetime export
+   cleanup can be delivered together.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

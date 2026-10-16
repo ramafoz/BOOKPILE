@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     email_outbox_lease_seconds: int = Field(default=120, ge=30, le=900)
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
     defensive_limit_mode: Literal["off", "observe", "enforce"] = "off"
+    import_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)
+    import_attempts_per_library_per_hour: int = Field(default=12, ge=1, le=200)
+    export_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)
+    export_attempts_per_library_per_hour: int = Field(default=12, ge=1, le=200)
     operation_lease_ttl_seconds: int = Field(default=120, ge=30, le=900)
     operation_lease_heartbeat_seconds: int = Field(default=30, ge=5, le=300)
     private_object_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "private-objects"

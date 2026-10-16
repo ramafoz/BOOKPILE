@@ -29,10 +29,14 @@ class PortableExportService:
         self.storage = storage
         self.export_root = export_root.resolve()
 
-    def create(self, *, library_id: UUID, actor_user_id: UUID) -> PreparedPortableExport:
-        membership = self.repository.owner_membership(library_id, actor_user_id)
-        if membership is None:
+    def require_owner(self, *, library_id: UUID, actor_user_id: UUID) -> None:
+        if self.repository.owner_membership(library_id, actor_user_id) is None:
             raise PortableExportNotFound
+
+    def create(self, *, library_id: UUID, actor_user_id: UUID) -> PreparedPortableExport:
+        self.require_owner(library_id=library_id, actor_user_id=actor_user_id)
+        membership = self.repository.owner_membership(library_id, actor_user_id)
+        assert membership is not None
         token = uuid4().hex
         path = self.export_root / f"{token}.zip"
         create_server_library_export(
