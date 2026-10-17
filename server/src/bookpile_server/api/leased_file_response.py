@@ -37,17 +37,23 @@ class LeaseProtectedFileResponse(FileResponse):
         async def guarded_send(message) -> None:
             self._lease_guard.ensure_owned()
             send_task = asyncio.create_task(send(message))
-            done, _ = await asyncio.wait(
-                (send_task, failure_task),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if failure_task in done:
-                send_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await send_task
+            try:
+                done, _ = await asyncio.wait(
+                    (send_task, failure_task),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if failure_task in done:
+                    send_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await send_task
+                    self._lease_guard.ensure_owned()
+                await send_task
                 self._lease_guard.ensure_owned()
-            await send_task
-            self._lease_guard.ensure_owned()
+            finally:
+                if not send_task.done():
+                    send_task.cancel()
+                    with suppress(asyncio.CancelledError, Exception):
+                        await send_task
 
         try:
             await super().__call__(scope, receive, guarded_send)

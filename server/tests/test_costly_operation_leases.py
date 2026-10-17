@@ -213,6 +213,62 @@ def test_lease_failure_cancels_a_blocked_send(tmp_path: Path) -> None:
     assert not archive.exists()
 
 
+def test_response_cancellation_awaits_the_blocked_send_before_cleanup(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "cancelled-portable.zip"
+    archive.write_bytes(b"x" * 100_000)
+    guard = RecordingGuard()
+    response = LeaseProtectedFileResponse(
+        archive,
+        guard,  # type: ignore[arg-type]
+        filename="portable.zip",
+        media_type="application/zip",
+    )
+
+    async def invoke() -> None:
+        import asyncio
+
+        send_started = asyncio.Event()
+        send_finished = asyncio.Event()
+
+        async def receive():
+            return {"type": "http.disconnect"}
+
+        async def blocked_send(_message) -> None:
+            send_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                send_finished.set()
+
+        response_task = asyncio.create_task(
+            response(
+                {
+                    "type": "http",
+                    "method": "GET",
+                    "path": "/export",
+                    "headers": [],
+                    "extensions": {},
+                },
+                receive,
+                blocked_send,
+            )
+        )
+        await asyncio.wait_for(send_started.wait(), timeout=1)
+        response_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await response_task
+        assert send_finished.is_set()
+
+    import anyio
+
+    anyio.run(invoke)
+    assert guard.closed is True
+    assert guard.listeners == set()
+    assert not archive.exists()
+
+
 def test_lease_failure_interrupts_stream_and_still_cleans_up(
     tmp_path: Path,
 ) -> None:
