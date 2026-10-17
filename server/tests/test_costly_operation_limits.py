@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from bookpile_server.config import Settings
@@ -13,9 +14,18 @@ from bookpile_server.repositories.rate_limits import RateLimitRepository
 from bookpile_server.services.costly_operation_limits import CostlyOperationLimiter
 from bookpile_server.services.rate_limits import RateLimitExceededError, RateLimiter
 from bookpile_server.services.rate_limits import RateLimitDecisionUnavailableError
-from bookpile_server.api.routes.imports import apply_import_limit
+from bookpile_server.api.routes.imports import (
+    apply_import_limit,
+    ensure_import_lease_owned,
+    fence_import_lease,
+)
 from bookpile_server.api.routes.exports import download_portable_export
 from bookpile_server.services.portable_exports import PortableExportNotFound
+from bookpile_server.services.costly_operation_leases import (
+    CostlyOperationLeaseDecisionUnavailableError,
+    CostlyOperationLeaseUnavailableError,
+)
+from bookpile_server.services.operation_leases import OperationLeaseLostError
 
 
 def costly_limiter(session: Session, mode: str) -> CostlyOperationLimiter:
@@ -103,6 +113,42 @@ def test_import_route_returns_503_when_limit_decision_is_unavailable() -> None:
 
     assert unavailable.value.status_code == 503
     assert unavailable.value.detail == "Request limiting is temporarily unavailable."
+
+
+class FailedImportGuard:
+    def __init__(self, failure: Exception) -> None:
+        self.failure = failure
+
+    def ensure_owned(self) -> None:
+        raise self.failure
+
+    def fence(self, _session) -> None:
+        raise self.failure
+
+
+@pytest.mark.parametrize("callback", ("ensure", "fence"))
+def test_post_acquisition_import_lease_loss_is_translated(callback: str) -> None:
+    guard = FailedImportGuard(OperationLeaseLostError("import_consolidation_user"))
+
+    with pytest.raises(CostlyOperationLeaseUnavailableError):
+        if callback == "ensure":
+            ensure_import_lease_owned(guard)  # type: ignore[arg-type]
+        else:
+            fence_import_lease(guard, object())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("callback", ("ensure", "fence"))
+def test_post_acquisition_import_database_failure_is_translated(
+    callback: str,
+) -> None:
+    failure = OperationalError("lease statement", {}, RuntimeError("database down"))
+    guard = FailedImportGuard(failure)
+
+    with pytest.raises(CostlyOperationLeaseDecisionUnavailableError):
+        if callback == "ensure":
+            ensure_import_lease_owned(guard)  # type: ignore[arg-type]
+        else:
+            fence_import_lease(guard, object())  # type: ignore[arg-type]
 
 
 class MissingExportService:

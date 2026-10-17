@@ -1,7 +1,10 @@
+from functools import partial
 from uuid import UUID
 from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from ...imports.local_zip import LocalImportValidationError
 from ...schemas import (
@@ -27,6 +30,10 @@ from ...services.costly_operation_leases import (
     CostlyOperationLeaseDecisionUnavailableError,
     CostlyOperationLeaseUnavailableError,
 )
+from ...services.operation_leases import (
+    OperationLeaseLostError,
+    RenewableOperationLeaseGuard,
+)
 from ..dependencies import (
     CostlyOperationLimiterDependency,
     CostlyOperationLeaseServiceDependency,
@@ -37,6 +44,26 @@ from ..dependencies import (
 
 
 router = APIRouter(tags=["imports"])
+
+
+def ensure_import_lease_owned(guard: RenewableOperationLeaseGuard) -> None:
+    try:
+        guard.ensure_owned()
+    except OperationLeaseLostError as exc:
+        raise CostlyOperationLeaseUnavailableError(exc.scope) from exc
+    except SQLAlchemyError as exc:
+        raise CostlyOperationLeaseDecisionUnavailableError from exc
+
+
+def fence_import_lease(
+    guard: RenewableOperationLeaseGuard, session: Session
+) -> None:
+    try:
+        guard.fence(session)
+    except OperationLeaseLostError as exc:
+        raise CostlyOperationLeaseUnavailableError(exc.scope) from exc
+    except SQLAlchemyError as exc:
+        raise CostlyOperationLeaseDecisionUnavailableError from exc
 
 
 def apply_import_limit(
@@ -249,8 +276,16 @@ def consolidate_import_job(
                 allow_repeated_archive=payload.allow_repeated_archive,
                 member_mapping=payload.member_mapping,
                 allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
-                ownership_check=(guard.ensure_owned if guard is not None else None),
-                lease_fence=(guard.fence if guard is not None else None),
+                ownership_check=(
+                    partial(ensure_import_lease_owned, guard)
+                    if guard is not None
+                    else None
+                ),
+                lease_fence=(
+                    partial(fence_import_lease, guard)
+                    if guard is not None
+                    else None
+                ),
             )
         )
     except (LocalImportOwnerRequired, LocalImportReadingOwnerInvalid) as exc:
@@ -311,8 +346,16 @@ def consolidate_import_job_as_new_library(
                 allow_repeated_archive=payload.allow_repeated_archive,
                 member_mapping=payload.member_mapping,
                 allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
-                ownership_check=(guard.ensure_owned if guard is not None else None),
-                lease_fence=(guard.fence if guard is not None else None),
+                ownership_check=(
+                    partial(ensure_import_lease_owned, guard)
+                    if guard is not None
+                    else None
+                ),
+                lease_fence=(
+                    partial(fence_import_lease, guard)
+                    if guard is not None
+                    else None
+                ),
             )
         )
     except LocalImportOwnerRequired as exc:
