@@ -41,14 +41,32 @@ class CostlyOperationLeaseService:
     def acquire_export(
         self, *, user_id: UUID, library_id: UUID
     ) -> RenewableOperationLeaseGuard | None:
+        return self._acquire(
+            operation="portable_export",
+            user_id=user_id,
+            library_id=library_id,
+        )
+
+    def acquire_import_consolidation(
+        self, *, user_id: UUID, library_id: UUID
+    ) -> RenewableOperationLeaseGuard | None:
+        return self._acquire(
+            operation="import_consolidation",
+            user_id=user_id,
+            library_id=library_id,
+        )
+
+    def _acquire(
+        self, *, operation: str, user_id: UUID, library_id: UUID
+    ) -> RenewableOperationLeaseGuard | None:
         mode = self._settings.defensive_limit_mode
         if mode == "off":
             return None
         try:
             handles = self._manager.acquire(
                 (
-                    LeaseRequest("portable_export_user", str(user_id)),
-                    LeaseRequest("portable_export_library", str(library_id)),
+                    LeaseRequest(f"{operation}_user", str(user_id)),
+                    LeaseRequest(f"{operation}_library", str(library_id)),
                 )
             )
         except OperationLeaseUnavailableError as exc:

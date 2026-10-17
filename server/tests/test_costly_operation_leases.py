@@ -65,6 +65,45 @@ def test_export_guard_releases_user_and_library_leases(session: Session) -> None
     assert all(row.released_at is not None for row in rows)
 
 
+def test_import_guard_fences_and_releases_user_and_library_leases(
+    session: Session,
+) -> None:
+    service = lease_service(session, "enforce")
+
+    guard = service.acquire_import_consolidation(
+        user_id=uuid4(), library_id=uuid4()
+    )
+    assert guard is not None
+    guard.fence(session)
+    session.commit()
+    guard.close()
+
+    session.expire_all()
+    rows = list(session.scalars(select(OperationLease)))
+    assert {row.scope for row in rows} == {
+        "import_consolidation_user",
+        "import_consolidation_library",
+    }
+    assert all(row.released_at is not None for row in rows)
+
+
+def test_enforce_mode_rejects_import_collision(session: Session) -> None:
+    user_id = uuid4()
+    library_id = uuid4()
+    service = lease_service(session, "enforce")
+    held = service.acquire_import_consolidation(
+        user_id=user_id, library_id=library_id
+    )
+    assert held is not None
+    try:
+        with pytest.raises(CostlyOperationLeaseUnavailableError):
+            service.acquire_import_consolidation(
+                user_id=user_id, library_id=library_id
+            )
+    finally:
+        held.close()
+
+
 def test_observe_mode_records_collision_without_blocking(session: Session) -> None:
     user_id = uuid4()
     library_id = uuid4()

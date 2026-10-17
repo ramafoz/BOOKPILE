@@ -247,6 +247,17 @@ Subsequent progress:
    409, and `off` preserves the previous flow. Bounded-age cleanup for files
    abandoned by process or host failure runs in hourly maintenance and removes
    only ordinary top-level ZIP files older than the configured 24-hour TTL.
+   The fourth slice connects grouped user/library leases to import
+   consolidation. Cooperative ownership checks interrupt record and object
+   work after heartbeat failure, while every successful consolidation fences
+   both lease rows in the same PostgreSQL transaction as the imported rows,
+   storage accounting and final job state. Imported covers use fresh immutable
+   private keys and are not reachable until that fenced transaction commits;
+   ordinary failures roll back rows and delete uploaded objects. A crashed
+   process can still leave an unreferenced object, which the existing deep
+   private-object audit detects; bounded automatic orphan deletion remains a
+   separate recovery task because deleting an object without proving it is no
+   longer part of an in-flight transaction would be unsafe.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

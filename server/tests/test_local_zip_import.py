@@ -439,11 +439,40 @@ def test_atomic_consolidation_preserves_catalogue_readings_loans_and_layout(
             upload=source,
         )
 
+    def reject_stale_commit(domain_session) -> None:
+        assert domain_session is session
+        raise RuntimeError("operation lease was lost")
+
+    with pytest.raises(RuntimeError, match="operation lease was lost"):
+        service.consolidate(
+            import_id=job.id,
+            library_id=library.id,
+            actor_user_id=owner.id,
+            allow_repeated_archive=False,
+            lease_fence=reject_stale_commit,
+        )
+    session.expire_all()
+    assert session.query(Book).filter_by(library_id=library.id).count() == 0
+    assert session.get(LibraryImportJob, job.id).state == "READY"
+    assert list((tmp_path / "objects").rglob("*.webp")) == []
+
+    ownership_checks = 0
+    fenced_sessions = []
+
+    def check_ownership() -> None:
+        nonlocal ownership_checks
+        ownership_checks += 1
+
+    def fence_lease(domain_session) -> None:
+        fenced_sessions.append(domain_session)
+
     completed = service.consolidate(
         import_id=job.id,
         library_id=library.id,
         actor_user_id=owner.id,
         allow_repeated_archive=False,
+        ownership_check=check_ownership,
+        lease_fence=fence_lease,
     )
 
     assert completed.state == "IMPORTED"
@@ -457,6 +486,8 @@ def test_atomic_consolidation_preserves_catalogue_readings_loans_and_layout(
         "loans": 1,
         "covers": 1,
     }
+    assert ownership_checks > 1
+    assert fenced_sessions == [session]
     imported_book = session.query(Book).filter_by(library_id=library.id).one()
     assert imported_book.title == "A book"
     assert [item.name for item in session.query(BookContributor).filter_by(book_id=imported_book.id).order_by(BookContributor.position)] == ["First author", "Second author"]
