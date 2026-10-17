@@ -5,7 +5,11 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from ...services.portable_exports import PortableExportNotFound
+from ...services.portable_exports import (
+    PortableExportNotFound,
+    PreparedPortableExport,
+)
+from ...services.operation_leases import RenewableOperationLeaseGuard
 from ...services.costly_operation_leases import (
     CostlyOperationLeaseDecisionUnavailableError,
     CostlyOperationLeaseUnavailableError,
@@ -30,6 +34,18 @@ def remove_export(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def abandon_export(
+    prepared: PreparedPortableExport | None,
+    guard: RenewableOperationLeaseGuard | None,
+) -> None:
+    try:
+        if prepared is not None:
+            remove_export(prepared.path)
+    finally:
+        if guard is not None:
+            guard.close()
+
+
 @router.get("/libraries/{library_id}/exports/portable")
 def download_portable_export(
     library_id: UUID,
@@ -39,6 +55,7 @@ def download_portable_export(
     context: CurrentAuthDependency,
 ) -> FileResponse:
     guard = None
+    prepared = None
     try:
         service.require_owner(
             library_id=library_id, actor_user_id=context.user_id
@@ -47,12 +64,15 @@ def download_portable_export(
         guard = leases.acquire_export(
             user_id=context.user_id, library_id=library_id
         )
-        prepared = service.create(library_id=library_id, actor_user_id=context.user_id)
+        prepared = service.create(
+            library_id=library_id,
+            actor_user_id=context.user_id,
+            ownership_check=(guard.ensure_owned if guard is not None else None),
+        )
         if guard is not None:
             guard.ensure_owned()
     except PortableExportNotFound as exc:
-        if guard is not None:
-            guard.close()
+        abandon_export(prepared, guard)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library not found") from exc
     except RateLimitExceededError as exc:
         raise HTTPException(
@@ -76,9 +96,9 @@ def download_portable_export(
             detail="Operation coordination is temporarily unavailable.",
         ) from exc
     except Exception:
-        if guard is not None:
-            guard.close()
+        abandon_export(prepared, guard)
         raise
+    assert prepared is not None
     if guard is not None:
         return LeaseProtectedFileResponse(
             prepared.path,

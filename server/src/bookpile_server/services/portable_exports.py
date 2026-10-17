@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import Callable
 from uuid import UUID, uuid4
 
 from ..cover_storage import CoverStorage
@@ -33,7 +34,13 @@ class PortableExportService:
         if self.repository.owner_membership(library_id, actor_user_id) is None:
             raise PortableExportNotFound
 
-    def create(self, *, library_id: UUID, actor_user_id: UUID) -> PreparedPortableExport:
+    def create(
+        self,
+        *,
+        library_id: UUID,
+        actor_user_id: UUID,
+        ownership_check: Callable[[], None] | None = None,
+    ) -> PreparedPortableExport:
         self.require_owner(library_id=library_id, actor_user_id=actor_user_id)
         membership = self.repository.owner_membership(library_id, actor_user_id)
         assert membership is not None
@@ -45,6 +52,7 @@ class PortableExportService:
                 storage=self.storage,
                 library_id=library_id,
                 destination=path,
+                ownership_check=ownership_check,
             )
         except Exception:
             path.unlink(missing_ok=True)

@@ -665,6 +665,55 @@ def test_portable_export_endpoint_is_owner_only_and_removes_temporary_zip(
     assert client.get(f"/api/v1/libraries/{library.id}/exports/portable").status_code == 404
 
 
+def test_portable_export_aborts_and_removes_partial_zip_when_ownership_is_lost(
+    session, tmp_path: Path
+) -> None:
+    owner = User(
+        email="lease-export@example.test",
+        username="lease_export",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    session.add(owner)
+    session.flush()
+    library = Library(
+        name="Lease export",
+        slug="lease-export",
+        created_by_user_id=owner.id,
+    )
+    session.add(library)
+    session.flush()
+    session.add(
+        LibraryMembership(
+            library_id=library.id,
+            user_id=owner.id,
+            role="OWNER",
+            selected_reading_user_id=owner.id,
+        )
+    )
+    session.commit()
+    export_root = tmp_path / "lease-exports"
+    service = PortableExportService(
+        LocalImportRepository(session),
+        FilesystemCoverStorage(tmp_path / "lease-export-objects"),
+        export_root,
+    )
+
+    def lose_ownership_during_archive_write() -> None:
+        if list(export_root.glob("*.zip")):
+            raise RuntimeError("lease renewal failed")
+
+    with pytest.raises(RuntimeError, match="lease renewal failed"):
+        service.create(
+            library_id=library.id,
+            actor_user_id=owner.id,
+            ownership_check=lose_ownership_during_archive_write,
+        )
+
+    assert list(export_root.glob("*.zip")) == []
+
+
 def test_server_export_round_trip_requires_explicit_identity_mapping(
     session, tmp_path: Path
 ) -> None:
