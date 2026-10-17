@@ -39,11 +39,15 @@ class PortableExportService:
         assert membership is not None
         token = uuid4().hex
         path = self.export_root / f"{token}.zip"
-        create_server_library_export(
-            session=self.repository.session,
-            storage=self.storage,
-            library_id=library_id,
-            destination=path,
-        )
+        try:
+            create_server_library_export(
+                session=self.repository.session,
+                storage=self.storage,
+                library_id=library_id,
+                destination=path,
+            )
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", membership.library.name).strip("-.") or "library"
         return PreparedPortableExport(path, f"BOOKPILE-{safe_name}.zip")

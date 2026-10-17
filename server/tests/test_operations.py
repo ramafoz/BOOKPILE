@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+import os
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -156,6 +157,7 @@ def test_maintenance_prunes_only_records_beyond_retention(session, tmp_path) -> 
         session,
         FilesystemCoverStorage(tmp_path / "objects"),
         tmp_path / "staging",
+        tmp_path / "exports",
         now=now,
     )
 
@@ -212,6 +214,7 @@ def test_maintenance_does_not_expire_recently_running_import(session, tmp_path) 
         session,
         FilesystemCoverStorage(tmp_path / "objects"),
         tmp_path / "staging",
+        tmp_path / "exports",
         now=now,
     )
 
@@ -220,3 +223,38 @@ def test_maintenance_does_not_expire_recently_running_import(session, tmp_path) 
     assert result.expired_imports == 1
     assert recent.state == "IMPORTING"
     assert abandoned.state == "EXPIRED"
+
+
+def test_maintenance_removes_only_expired_top_level_export_zips(
+    session, tmp_path
+) -> None:
+    now = datetime.now(UTC)
+    export_root = tmp_path / "exports"
+    export_root.mkdir()
+    old_zip = export_root / "abandoned.zip"
+    current_zip = export_root / "current.ZIP"
+    unrelated = export_root / "keep.txt"
+    nested = export_root / "nested"
+    nested.mkdir()
+    nested_zip = nested / "nested.zip"
+    for path in (old_zip, current_zip, unrelated, nested_zip):
+        path.write_bytes(b"test")
+    old_timestamp = (now - timedelta(hours=25)).timestamp()
+    os.utime(old_zip, (old_timestamp, old_timestamp))
+    os.utime(unrelated, (old_timestamp, old_timestamp))
+    os.utime(nested_zip, (old_timestamp, old_timestamp))
+
+    result = run_maintenance(
+        session,
+        FilesystemCoverStorage(tmp_path / "objects"),
+        tmp_path / "imports",
+        export_root,
+        export_staging_ttl=timedelta(hours=24),
+        now=now,
+    )
+
+    assert result.removed_export_files == 1
+    assert not old_zip.exists()
+    assert current_zip.exists()
+    assert unrelated.exists()
+    assert nested_zip.exists()

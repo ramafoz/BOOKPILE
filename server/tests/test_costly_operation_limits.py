@@ -2,7 +2,7 @@ from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -116,15 +116,20 @@ class RecordingExportLimiter:
         self.called = True
 
 
+class UnexpectedExportLeases:
+    def acquire_export(self, **_kwargs):
+        raise AssertionError("leases must follow library authorization")
+
+
 def test_export_authorization_precedes_library_limit_consumption() -> None:
     limiter = RecordingExportLimiter()
 
     with pytest.raises(HTTPException) as missing:
         download_portable_export(
             library_id=uuid4(),
-            background=BackgroundTasks(),
             service=MissingExportService(),  # type: ignore[arg-type]
             limiter=limiter,  # type: ignore[arg-type]
+            leases=UnexpectedExportLeases(),  # type: ignore[arg-type]
             context=SimpleNamespace(user_id=uuid4()),  # type: ignore[arg-type]
         )
 

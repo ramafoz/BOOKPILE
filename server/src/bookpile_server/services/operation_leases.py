@@ -2,7 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from hashlib import sha256
 import hmac
+from threading import Event, Lock, Thread
+from types import TracebackType
+from typing import Callable
 from uuid import UUID, uuid4
+
+from sqlalchemy.orm import Session
 
 from ..repositories.operation_leases import (
     OperationLeaseRepository,
@@ -33,6 +38,100 @@ class OperationLeaseUnavailableError(Exception):
 @dataclass(frozen=True)
 class OperationLeaseLostError(Exception):
     scope: str
+
+
+class RenewableOperationLeaseGuard:
+    """Keep a set of leases alive using short, independent DB sessions."""
+
+    def __init__(
+        self,
+        handles: tuple[OperationLeaseHandle, ...],
+        session_factory: Callable[[], Session],
+        key_secret: str,
+        *,
+        ttl: timedelta,
+        heartbeat: timedelta,
+    ) -> None:
+        if not handles:
+            raise ValueError("At least one acquired lease is required")
+        if heartbeat <= timedelta(0) or heartbeat * 2 > ttl:
+            raise ValueError("Lease heartbeat must fit safely inside its TTL")
+        self._handles = handles
+        self._session_factory = session_factory
+        self._key_secret = key_secret
+        self._ttl = ttl
+        self._heartbeat_seconds = heartbeat.total_seconds()
+        self._stop = Event()
+        self._lock = Lock()
+        self._failure: Exception | None = None
+        self._closed = False
+        self._thread = Thread(
+            target=self._heartbeat_loop,
+            name="bookpile-operation-lease-heartbeat",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def ensure_owned(self) -> None:
+        with self._lock:
+            failure = self._failure
+        if failure is not None:
+            raise failure
+
+    def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        self._stop.set()
+        self._thread.join(timeout=self._heartbeat_seconds + 1)
+        with self._lock:
+            handles = self._handles
+        # Release is best effort: a failed release is recovered by lease expiry.
+        try:
+            with self._session_factory() as session:
+                manager = OperationLeaseManager(
+                    OperationLeaseRepository(session),
+                    self._key_secret,
+                    ttl=self._ttl,
+                )
+                for handle in handles:
+                    manager.release(handle)
+        except Exception:
+            pass
+
+    def __enter__(self) -> "RenewableOperationLeaseGuard":
+        return self
+
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def _heartbeat_loop(self) -> None:
+        while not self._stop.wait(self._heartbeat_seconds):
+            try:
+                renewed: list[OperationLeaseHandle] = []
+                with self._lock:
+                    handles = self._handles
+                with self._session_factory() as session:
+                    manager = OperationLeaseManager(
+                        OperationLeaseRepository(session),
+                        self._key_secret,
+                        ttl=self._ttl,
+                    )
+                    for handle in handles:
+                        renewed.append(manager.renew(handle))
+                with self._lock:
+                    self._handles = tuple(renewed)
+            except Exception as exc:
+                with self._lock:
+                    self._failure = exc
+                self._stop.set()
+                return
 
 
 class OperationLeaseManager:

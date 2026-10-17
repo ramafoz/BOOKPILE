@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     import_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "import-staging"
     import_staging_ttl_minutes: int = 30
     export_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "export-staging"
+    export_staging_ttl_hours: int = Field(default=24, ge=1, le=168)
     cover_max_upload_bytes: int = 12 * 1024 * 1024
     cover_max_pixels: int = 40_000_000
     cover_max_width: int = 900

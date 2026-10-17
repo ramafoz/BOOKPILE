@@ -46,6 +46,7 @@ class MaintenanceResult:
     removed_library_invitations: int = 0
     removed_outbox_messages: int = 0
     removed_security_events: int = 0
+    removed_export_files: int = 0
 
     def payload(self) -> dict[str, int]:
         return asdict(self)
@@ -72,11 +73,15 @@ def _safe_staging_path(root: Path, key: str) -> Path:
 def run_maintenance(
     session: Session,
     storage: CoverStorage,
-    staging_root: Path,
+    import_staging_root: Path,
+    export_staging_root: Path,
     *,
+    export_staging_ttl: timedelta = timedelta(hours=24),
     now: datetime | None = None,
 ) -> MaintenanceResult:
     moment = now or datetime.now(UTC)
+    if export_staging_ttl <= timedelta(0):
+        raise ValueError("Export staging TTL must be positive")
     finalized_libraries = finalize_expired_library_deletions(session, storage, now=moment)
     finalized_accounts = finalize_expired_account_deletions(session, storage, now=moment)
 
@@ -103,7 +108,7 @@ def run_maintenance(
     )
     for job in expiring_jobs:
         job.state = "EXPIRED"
-        shutil.rmtree(_safe_staging_path(staging_root, job.staging_key), ignore_errors=True)
+        shutil.rmtree(_safe_staging_path(import_staging_root, job.staging_key), ignore_errors=True)
 
     old_imports = list(
         session.scalars(
@@ -114,8 +119,27 @@ def run_maintenance(
         )
     )
     for job in old_imports:
-        shutil.rmtree(_safe_staging_path(staging_root, job.staging_key), ignore_errors=True)
+        shutil.rmtree(_safe_staging_path(import_staging_root, job.staging_key), ignore_errors=True)
         session.delete(job)
+
+    removed_export_files = 0
+    export_staging_root.mkdir(parents=True, exist_ok=True)
+    export_cutoff = moment - export_staging_ttl
+    for candidate in export_staging_root.iterdir():
+        try:
+            if (
+                candidate.suffix.lower() != ".zip"
+                or candidate.is_symlink()
+                or not candidate.is_file()
+            ):
+                continue
+            modified_at = datetime.fromtimestamp(candidate.stat().st_mtime, UTC)
+            if modified_at <= export_cutoff:
+                candidate.unlink()
+                removed_export_files += 1
+        except FileNotFoundError:
+            # A response may complete and remove its own ZIP during this scan.
+            continue
 
     removed_rate_buckets = session.execute(
         delete(RateLimitBucket).where(
@@ -177,6 +201,7 @@ def run_maintenance(
         removed_library_invitations=removed_library_invitations or 0,
         removed_outbox_messages=removed_outbox_messages or 0,
         removed_security_events=removed_security_events or 0,
+        removed_export_files=removed_export_files,
     )
 
 

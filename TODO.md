@@ -1062,9 +1062,12 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   monotonically fenced ownership. The second slice wires disabled-by-default
   user/library frequency policies to
   authorized import preflight, consolidation and portable export operations,
-  including revision-labelled observation and fail-closed 503 behavior. Next,
-  complete the renewable lease lifecycle and the import/export transaction
-  and object-publication boundaries described in
+  including revision-labelled observation and fail-closed 503 behavior. The
+  third slice protects portable-export creation and its complete response
+  lifetime with grouped renewable user/library leases, disconnect cleanup and
+  generic observe/enforce outcomes; hourly maintenance removes abandoned
+  top-level export ZIPs after a bounded TTL. Next, complete the import
+  transaction and object-publication boundaries described in
   [ADR 0016](docs/adr/0016-defensive-request-limits.md): shared PostgreSQL
   limits and leases must enter observation mode first, followed by a dry-run
   and narrow temporary ban for high-confidence scanner traffic. Do not

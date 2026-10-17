@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from time import monotonic, sleep
 from uuid import uuid4
 
 import pytest
@@ -68,6 +69,7 @@ from bookpile_server.services.operation_leases import (
     LeaseRequest,
     OperationLeaseManager,
     OperationLeaseUnavailableError,
+    RenewableOperationLeaseGuard,
 )
 from bookpile_server.services.rate_limits import (
     RateLimitExceededError,
@@ -758,6 +760,52 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             assert lease is not None
             assert lease.fencing_token == 1
+
+        with Session(engine) as session:
+            manager = OperationLeaseManager(
+                OperationLeaseRepository(session),
+                "integration-secret",
+                ttl=timedelta(seconds=4),
+            )
+            handles = manager.acquire(
+                [LeaseRequest("postgres_heartbeat", "same-library")]
+            )
+        with Session(engine) as session:
+            first_renewal = session.scalar(
+                select(OperationLease.renewed_at).where(
+                    OperationLease.scope == "postgres_heartbeat"
+                )
+            )
+        assert first_renewal is not None
+        guard = RenewableOperationLeaseGuard(
+            handles,
+            lambda: Session(engine),
+            "integration-secret",
+            ttl=timedelta(seconds=4),
+            heartbeat=timedelta(seconds=1),
+        )
+        renewed_at = first_renewal
+        deadline = monotonic() + 5
+        while renewed_at <= first_renewal and monotonic() < deadline:
+            sleep(0.1)
+            guard.ensure_owned()
+            with Session(engine) as session:
+                renewed_at = session.scalar(
+                    select(OperationLease.renewed_at).where(
+                        OperationLease.scope == "postgres_heartbeat"
+                    )
+                )
+            assert renewed_at is not None
+        guard.close()
+        assert renewed_at > first_renewal
+        with Session(engine) as session:
+            heartbeat_lease = session.scalar(
+                select(OperationLease).where(
+                    OperationLease.scope == "postgres_heartbeat"
+                )
+            )
+            assert heartbeat_lease is not None
+            assert heartbeat_lease.released_at is not None
 
         # Two growth transactions that individually fit but jointly exceed the
         # entitlement must serialize at the quota boundary; exactly one wins.
