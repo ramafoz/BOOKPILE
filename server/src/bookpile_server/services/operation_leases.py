@@ -79,6 +79,26 @@ class RenewableOperationLeaseGuard:
         if failure is not None:
             raise failure
 
+    def fence(self, session: Session) -> None:
+        """Atomically validate every lease inside a domain-write transaction.
+
+        The lease rows remain locked until the caller commits or rolls back the
+        supplied session. This closes the gap between an ownership check and
+        the protected domain commit.
+        """
+
+        self.ensure_owned()
+        manager = OperationLeaseManager(
+            OperationLeaseRepository(session),
+            self._key_secret,
+            ttl=self._ttl,
+        )
+        with self._lock:
+            handles = self._handles
+        fenced = tuple(manager.fence(handle) for handle in handles)
+        with self._lock:
+            self._handles = fenced
+
     def add_failure_listener(self, listener: Callable[[], None]) -> None:
         notify_now = False
         with self._lock:

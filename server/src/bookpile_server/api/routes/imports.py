@@ -23,8 +23,13 @@ from ...services.rate_limits import (
     RateLimitDecisionUnavailableError,
     RateLimitExceededError,
 )
+from ...services.costly_operation_leases import (
+    CostlyOperationLeaseDecisionUnavailableError,
+    CostlyOperationLeaseUnavailableError,
+)
 from ..dependencies import (
     CostlyOperationLimiterDependency,
+    CostlyOperationLeaseServiceDependency,
     CsrfDependency,
     CurrentAuthDependency,
     LocalImportServiceDependency,
@@ -218,9 +223,11 @@ def consolidate_import_job(
     payload: ConsolidateLocalImportRequest,
     service: LocalImportServiceDependency,
     limiter: CostlyOperationLimiterDependency,
+    leases: CostlyOperationLeaseServiceDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> LocalImportJobResponse:
+    guard = None
     try:
         service.require_owner(
             library_id=library_id, actor_user_id=context.user_id
@@ -231,6 +238,9 @@ def consolidate_import_job(
             user_id=context.user_id,
             library_id=library_id,
         )
+        guard = leases.acquire_import_consolidation(
+            user_id=context.user_id, library_id=library_id
+        )
         return response_for(
             service.consolidate(
                 import_id=import_id,
@@ -239,6 +249,8 @@ def consolidate_import_job(
                 allow_repeated_archive=payload.allow_repeated_archive,
                 member_mapping=payload.member_mapping,
                 allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
+                ownership_check=(guard.ensure_owned if guard is not None else None),
+                lease_fence=(guard.fence if guard is not None else None),
             )
         )
     except (LocalImportOwnerRequired, LocalImportReadingOwnerInvalid) as exc:
@@ -247,6 +259,19 @@ def consolidate_import_job(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InsufficientSharedCapacity as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The import no longer fits the Owners' shared storage capacity.") from exc
+    except CostlyOperationLeaseUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An import consolidation is already active.",
+        ) from exc
+    except CostlyOperationLeaseDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Operation coordination is temporarily unavailable.",
+        ) from exc
+    finally:
+        if guard is not None:
+            guard.close()
 
 
 @router.post(
@@ -259,9 +284,11 @@ def consolidate_import_job_as_new_library(
     payload: ConsolidateLocalImportAsNewLibraryRequest,
     service: LocalImportServiceDependency,
     limiter: CostlyOperationLimiterDependency,
+    leases: CostlyOperationLeaseServiceDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> LocalImportJobResponse:
+    guard = None
     try:
         service.require_owner(
             library_id=library_id, actor_user_id=context.user_id
@@ -272,6 +299,9 @@ def consolidate_import_job_as_new_library(
             user_id=context.user_id,
             library_id=library_id,
         )
+        guard = leases.acquire_import_consolidation(
+            user_id=context.user_id, library_id=library_id
+        )
         return response_for(
             service.consolidate_as_new_library(
                 import_id=import_id,
@@ -281,6 +311,8 @@ def consolidate_import_job_as_new_library(
                 allow_repeated_archive=payload.allow_repeated_archive,
                 member_mapping=payload.member_mapping,
                 allow_unmapped_personal_data=payload.allow_unmapped_personal_data,
+                ownership_check=(guard.ensure_owned if guard is not None else None),
+                lease_fence=(guard.fence if guard is not None else None),
             )
         )
     except LocalImportOwnerRequired as exc:
@@ -289,3 +321,16 @@ def consolidate_import_job_as_new_library(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InsufficientSharedCapacity as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The import does not fit your available storage capacity.") from exc
+    except CostlyOperationLeaseUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An import consolidation is already active.",
+        ) from exc
+    except CostlyOperationLeaseDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Operation coordination is temporarily unavailable.",
+        ) from exc
+    finally:
+        if guard is not None:
+            guard.close()

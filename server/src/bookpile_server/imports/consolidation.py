@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID, uuid4
 
 from sqlalchemy import Date, DateTime, Numeric, func, select
@@ -37,6 +37,11 @@ LOCAL_WORLD_SCALE_MM = Decimal("25")
 
 class LocalImportConflict(ValueError):
     pass
+
+
+def _ensure_owned(check: Callable[[], None] | None) -> None:
+    if check is not None:
+        check()
 
 
 def _date(value: Any) -> date | None:
@@ -115,8 +120,10 @@ def consolidate_local_v8(
     library_id: UUID,
     reading_owner_user_id: UUID,
     actor_user_id: UUID,
+    ownership_check: Callable[[], None] | None = None,
 ) -> tuple[dict[str, int], list[str]]:
     """Stage all canonical records in the caller's transaction and private store."""
+    _ensure_owned(ownership_check)
     existing_names = {
         name.casefold()
         for name in session.scalars(select(Bookcase.name).where(Bookcase.library_id == library_id))
@@ -143,6 +150,7 @@ def consolidate_local_v8(
         ]
     )
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all(
         [
             Shelf(
@@ -155,6 +163,7 @@ def consolidate_local_v8(
         ]
     )
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all(
         [
             Container(
@@ -169,9 +178,11 @@ def consolidate_local_v8(
         ]
     )
     session.flush()
+    _ensure_owned(ownership_check)
 
     book_rows: list[Book] = []
     for item in records.books:
+        _ensure_owned(ownership_check)
         source_container = item["source_container_id"]
         book_rows.append(
             Book(
@@ -206,6 +217,7 @@ def consolidate_local_v8(
         )
     session.add_all(book_rows)
     session.flush()
+    _ensure_owned(ownership_check)
 
     session.add_all(
         [
@@ -365,6 +377,7 @@ def consolidate_local_v8(
     stored_keys: list[str] = []
     try:
         for item in records.books:
+            _ensure_owned(ownership_check)
             filename = item["cover_filename"]
             if not filename:
                 continue
@@ -406,6 +419,7 @@ def consolidate_local_v8(
             )
         )
         session.flush()
+        _ensure_owned(ownership_check)
     except Exception:
         for key in stored_keys:
             try:
@@ -478,8 +492,10 @@ def consolidate_server_v1(
     library_id: UUID,
     member_mapping: dict[str, UUID],
     actor_user_id: UUID,
+    ownership_check: Callable[[], None] | None = None,
 ) -> tuple[dict[str, int], list[str]]:
     """Restore one portable Server library with fresh shared-domain UUIDs."""
+    _ensure_owned(ownership_check)
     existing_names = {
         name.casefold()
         for name in session.scalars(select(Bookcase.name).where(Bookcase.library_id == library_id))
@@ -502,6 +518,7 @@ def consolidate_server_v1(
         ) for item in records.bookcases
     ])
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all([
         Shelf(
             id=shelf_ids[str(item["id"])], library_id=library_id,
@@ -510,6 +527,7 @@ def consolidate_server_v1(
         ) for item in records.shelves
     ])
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all([
         Container(
             id=container_ids[str(item["id"])], library_id=library_id,
@@ -518,6 +536,7 @@ def consolidate_server_v1(
         ) for item in records.containers
     ])
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all([
         Book(
             id=book_ids[str(item["id"])], library_id=library_id,
@@ -526,6 +545,7 @@ def consolidate_server_v1(
         ) for item in records.books
     ])
     session.flush()
+    _ensure_owned(ownership_check)
     session.add_all([
         BookContributor(
             id=uuid4(), library_id=library_id,
@@ -595,6 +615,7 @@ def consolidate_server_v1(
     stored_keys: list[str] = []
     try:
         for item in records.covers:
+            _ensure_owned(ownership_check)
             processed = process_cover_image((extracted / str(item["archive_name"])).read_bytes(), settings)
             object_key = f"covers/{uuid4().hex}.webp"
             storage.put(object_key, processed.content)
@@ -627,6 +648,7 @@ def consolidate_server_v1(
             },
         ))
         session.flush()
+        _ensure_owned(ownership_check)
         checks = (
             (Bookcase, Bookcase.id, tuple(bookcase_ids.values()), counts["bookcases"]),
             (Shelf, Shelf.id, tuple(shelf_ids.values()), counts["shelves"]),

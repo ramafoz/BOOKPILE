@@ -3,7 +3,9 @@ from pathlib import Path
 from secrets import token_urlsafe
 import shutil
 from hashlib import sha256
-from typing import BinaryIO
+from typing import BinaryIO, Callable
+
+from sqlalchemy.orm import Session
 from uuid import UUID, uuid4
 
 from ..imports.local_zip import (
@@ -426,6 +428,8 @@ class LocalImportService:
         allow_repeated_archive: bool,
         member_mapping: dict[str, UUID] | None = None,
         allow_unmapped_personal_data: bool = False,
+        ownership_check: Callable[[], None] | None = None,
+        lease_fence: Callable[[Session], None] | None = None,
     ) -> LibraryImportJob:
         if self.repository.owner_membership(library_id, actor_user_id) is None:
             raise LocalImportOwnerRequired
@@ -454,6 +458,8 @@ class LocalImportService:
 
         stored_keys: list[str] = []
         try:
+            if ownership_check is not None:
+                ownership_check()
             job.state = "IMPORTING"
             self.repository.flush()
             if job.source_kind == "SERVER":
@@ -467,6 +473,7 @@ class LocalImportService:
                     settings=self.settings, records=records, extracted=extracted,
                     library_id=library_id, member_mapping=mapping,
                     actor_user_id=actor_user_id,
+                    ownership_check=ownership_check,
                 )
             else:
                 counts, stored_keys = consolidate_local_v8(
@@ -478,11 +485,16 @@ class LocalImportService:
                     library_id=library_id,
                     reading_owner_user_id=job.reading_owner_user_id,
                     actor_user_id=actor_user_id,
+                    ownership_check=ownership_check,
                 )
             job.result_counts = counts
             job.state = "IMPORTED"
             job.completed_at = datetime.now(UTC)
             self.storage_service.prepare_owned_library_usage()
+            if ownership_check is not None:
+                ownership_check()
+            if lease_fence is not None:
+                lease_fence(self.repository.session)
             self.repository.commit()
         except Exception:
             self.repository.rollback()
@@ -505,6 +517,8 @@ class LocalImportService:
         allow_repeated_archive: bool,
         member_mapping: dict[str, UUID] | None = None,
         allow_unmapped_personal_data: bool = False,
+        ownership_check: Callable[[], None] | None = None,
+        lease_fence: Callable[[Session], None] | None = None,
     ) -> LibraryImportJob:
         """Create the destination and consolidate in one database transaction."""
         if self.repository.owner_membership(source_library_id, actor_user_id) is None:
@@ -542,6 +556,8 @@ class LocalImportService:
                 allow_repeated_archive=allow_repeated_archive,
                 member_mapping=member_mapping,
                 allow_unmapped_personal_data=allow_unmapped_personal_data,
+                ownership_check=ownership_check,
+                lease_fence=lease_fence,
             )
         except Exception:
             self.repository.rollback()
