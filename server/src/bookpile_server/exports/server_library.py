@@ -5,7 +5,7 @@ from decimal import Decimal
 from hashlib import sha256
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 import zipfile
 
@@ -35,6 +35,8 @@ from ..models import (
 SERVER_LIBRARY_EXPORT_FORMAT = "BOOKPILE_SERVER_LIBRARY"
 SERVER_LIBRARY_EXPORT_VERSION = 1
 SERVER_LIBRARY_DATA_SCHEMA = 1
+EXPORT_CHUNK_SIZE = 1024 * 1024
+OwnershipCheck = Callable[[], None]
 
 
 class PortableExportError(ValueError):
@@ -49,17 +51,28 @@ def _json_value(value: Any) -> Any:
     raise PortableExportError(f"Unsupported portable value: {type(value).__name__}")
 
 
-def _model_rows(session: Session, model, library_id: UUID) -> list[dict[str, Any]]:
+def _check_ownership(check: OwnershipCheck | None) -> None:
+    if check is not None:
+        check()
+
+
+def _model_rows(
+    session: Session,
+    model,
+    library_id: UUID,
+    ownership_check: OwnershipCheck | None,
+) -> list[dict[str, Any]]:
     rows = session.scalars(
         select(model).where(model.library_id == library_id).order_by(*model.__table__.primary_key.columns)
     )
-    return [
-        {
+    result = []
+    for row in rows:
+        _check_ownership(ownership_check)
+        result.append({
             column.name: _json_value(getattr(row, column.name))
             for column in model.__table__.columns
-        }
-        for row in rows
-    ]
+        })
+    return result
 
 
 def _encoded_json(value: Any) -> bytes:
@@ -71,13 +84,41 @@ def _encoded_json(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def _checked_sha256(
+    content: bytes, ownership_check: OwnershipCheck | None
+) -> str:
+    digest = sha256()
+    view = memoryview(content)
+    for offset in range(0, len(view), EXPORT_CHUNK_SIZE):
+        _check_ownership(ownership_check)
+        digest.update(view[offset : offset + EXPORT_CHUNK_SIZE])
+    _check_ownership(ownership_check)
+    return digest.hexdigest()
+
+
+def _write_archive_member(
+    archive: zipfile.ZipFile,
+    name: str,
+    content: bytes,
+    ownership_check: OwnershipCheck | None,
+) -> None:
+    view = memoryview(content)
+    with archive.open(name, "w", force_zip64=True) as destination:
+        for offset in range(0, len(view), EXPORT_CHUNK_SIZE):
+            _check_ownership(ownership_check)
+            destination.write(view[offset : offset + EXPORT_CHUNK_SIZE])
+    _check_ownership(ownership_check)
+
+
 def create_server_library_export(
     *,
     session: Session,
     storage: CoverStorage,
     library_id: UUID,
     destination: Path,
+    ownership_check: OwnershipCheck | None = None,
 ) -> dict[str, Any]:
+    _check_ownership(ownership_check)
     library = session.get(Library, library_id)
     if library is None or library.state != "active":
         raise PortableExportError("Library not found.")
@@ -88,8 +129,10 @@ def create_server_library_export(
             .order_by(LibraryMembership.user_id)
         )
     )
-    members = [
-        {
+    members = []
+    for item in memberships:
+        _check_ownership(ownership_check)
+        members.append({
             "member_key": str(item.user_id),
             "username": item.user.username,
             "role": item.role,
@@ -97,9 +140,7 @@ def create_server_library_export(
             "selected_reading_member_key": (
                 str(item.selected_reading_user_id) if item.selected_reading_user_id else None
             ),
-        }
-        for item in memberships
-    ]
+        })
     model_groups = {
         "bookcases": Bookcase,
         "shelves": Shelf,
@@ -127,7 +168,10 @@ def create_server_library_export(
         "members": members,
     }
     for name, model in model_groups.items():
-        data[name] = _model_rows(session, model, library_id)
+        _check_ownership(ownership_check)
+        data[name] = _model_rows(
+            session, model, library_id, ownership_check
+        )
 
     cover_rows = list(
         session.scalars(
@@ -139,8 +183,13 @@ def create_server_library_export(
     cover_files: list[tuple[str, bytes]] = []
     data["covers"] = []
     for cover in cover_rows:
+        _check_ownership(ownership_check)
         content = storage.read(cover.object_key)
-        if len(content) != cover.byte_size or sha256(content).hexdigest() != cover.sha256:
+        _check_ownership(ownership_check)
+        if (
+            len(content) != cover.byte_size
+            or _checked_sha256(content, ownership_check) != cover.sha256
+        ):
             raise PortableExportError("A private cover failed export verification.")
         archive_name = f"covers/{cover.book_id}.webp"
         cover_files.append((archive_name, content))
@@ -162,15 +211,17 @@ def create_server_library_export(
             }
         )
 
+    _check_ownership(ownership_check)
     data_bytes = _encoded_json(data)
+    _check_ownership(ownership_check)
     files: dict[str, dict[str, Any]] = {
         "library.json": {
             "size": len(data_bytes),
-            "sha256": sha256(data_bytes).hexdigest(),
+            "sha256": _checked_sha256(data_bytes, ownership_check),
         }
     }
     for name, content in cover_files:
-        files[name] = {"size": len(content), "sha256": sha256(content).hexdigest()}
+        files[name] = {"size": len(content), "sha256": _checked_sha256(content, ownership_check)}
     counts = {
         "members": len(members),
         **{name: len(data[name]) for name in model_groups},
@@ -187,8 +238,13 @@ def create_server_library_export(
     }
     destination.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(destination, "x", zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-        archive.writestr("manifest.json", _encoded_json(manifest))
-        archive.writestr("library.json", data_bytes)
+        _write_archive_member(
+            archive, "manifest.json", _encoded_json(manifest), ownership_check
+        )
+        _write_archive_member(
+            archive, "library.json", data_bytes, ownership_check
+        )
         for name, content in cover_files:
-            archive.writestr(name, content)
+            _write_archive_member(archive, name, content, ownership_check)
+    _check_ownership(ownership_check)
     return manifest

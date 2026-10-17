@@ -1,14 +1,16 @@
+from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from ..database import get_session
 from ..email_delivery import EmailSender, SmtpEmailSender
 from ..email_outbox import TransactionalOutboxEmailSender
 from ..repositories.account_actions import AccountActionRepository
 from ..repositories.rate_limits import RateLimitRepository
+from ..repositories.operation_leases import OperationLeaseRepository
 from ..repositories.books import BookRepository
 from ..repositories.covers import CoverRepository
 from ..repositories.libraries import LibraryRepository
@@ -26,6 +28,8 @@ from ..services.account_deletion import AccountDeletionService
 from ..services.account_actions import AccountActionService
 from ..services.rate_limits import RateLimiter
 from ..services.costly_operation_limits import CostlyOperationLimiter
+from ..services.costly_operation_leases import CostlyOperationLeaseService
+from ..services.operation_leases import OperationLeaseManager
 from ..config import get_settings
 from ..services.auth import (
     AuthContext,
@@ -275,6 +279,30 @@ def get_costly_operation_limiter(
 
 CostlyOperationLimiterDependency = Annotated[
     CostlyOperationLimiter, Depends(get_costly_operation_limiter)
+]
+
+
+def get_costly_operation_lease_service(
+    session: SessionDependency,
+) -> CostlyOperationLeaseService:
+    settings = get_settings()
+    fresh_session_factory = sessionmaker(
+        bind=session.get_bind(), expire_on_commit=False
+    )
+    return CostlyOperationLeaseService(
+        OperationLeaseManager(
+            OperationLeaseRepository(session),
+            settings.rate_limit_key_secret,
+            ttl=timedelta(seconds=settings.operation_lease_ttl_seconds),
+        ),
+        RateLimitRepository(session),
+        fresh_session_factory,
+        settings,
+    )
+
+
+CostlyOperationLeaseServiceDependency = Annotated[
+    CostlyOperationLeaseService, Depends(get_costly_operation_lease_service)
 ]
 
 

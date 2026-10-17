@@ -237,8 +237,16 @@ Subsequent progress:
    operations. They remain inert in `off`, emit revision-labelled aggregate
    events in `observe`, return generic 429 responses only in `enforce`, and
    fail closed with 503 when PostgreSQL cannot decide. Renewable leases remain
-   unwired until heartbeat, fenced domain commits and response-lifetime export
-   cleanup can be delivered together.
+   unwired for import consolidation until heartbeat, fenced domain commits and
+   staged-object publication can be delivered together.
+   The third slice connects grouped user/library leases to portable exports.
+   Independent short sessions renew ownership during archive creation and the
+   complete response stream; completion, disconnect and renewal failure remove
+   the temporary ZIP before releasing the leases. `observe` records a
+   revision-labelled collision without blocking, `enforce` returns a generic
+   409, and `off` preserves the previous flow. Bounded-age cleanup for files
+   abandoned by process or host failure runs in hourly maintenance and removes
+   only ordinary top-level ZIP files older than the configured 24-hour TTL.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

@@ -1,8 +1,9 @@
 from uuid import uuid4
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -116,17 +117,71 @@ class RecordingExportLimiter:
         self.called = True
 
 
+class UnexpectedExportLeases:
+    def acquire_export(self, **_kwargs):
+        raise AssertionError("leases must follow library authorization")
+
+
 def test_export_authorization_precedes_library_limit_consumption() -> None:
     limiter = RecordingExportLimiter()
 
     with pytest.raises(HTTPException) as missing:
         download_portable_export(
             library_id=uuid4(),
-            background=BackgroundTasks(),
             service=MissingExportService(),  # type: ignore[arg-type]
             limiter=limiter,  # type: ignore[arg-type]
+            leases=UnexpectedExportLeases(),  # type: ignore[arg-type]
             context=SimpleNamespace(user_id=uuid4()),  # type: ignore[arg-type]
         )
 
     assert missing.value.status_code == 404
     assert limiter.called is False
+
+
+class CompletedExportService:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def require_owner(self, **_kwargs) -> None:
+        return None
+
+    def create(self, **_kwargs):
+        self.path.write_bytes(b"completed")
+        return SimpleNamespace(path=self.path, download_name="completed.zip")
+
+
+class FailedPostCreateGuard:
+    closed = False
+
+    def ensure_owned(self) -> None:
+        raise RuntimeError("lease lost after archive creation")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class RecordingExportLeases:
+    def __init__(self, guard: FailedPostCreateGuard) -> None:
+        self.guard = guard
+
+    def acquire_export(self, **_kwargs):
+        return self.guard
+
+
+def test_post_create_lease_failure_removes_completed_export(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "completed.zip"
+    guard = FailedPostCreateGuard()
+
+    with pytest.raises(RuntimeError, match="lease lost"):
+        download_portable_export(
+            library_id=uuid4(),
+            service=CompletedExportService(path),  # type: ignore[arg-type]
+            limiter=RecordingExportLimiter(),  # type: ignore[arg-type]
+            leases=RecordingExportLeases(guard),  # type: ignore[arg-type]
+            context=SimpleNamespace(user_id=uuid4()),  # type: ignore[arg-type]
+        )
+
+    assert not path.exists()
+    assert guard.closed is True

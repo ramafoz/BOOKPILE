@@ -1,5 +1,6 @@
 import argparse
 import json
+from datetime import timedelta
 
 from ..api.dependencies import get_private_object_storage
 from ..config import get_settings
@@ -21,6 +22,10 @@ def main() -> int:
                 session,
                 storage,
                 get_settings().import_staging_root,
+                get_settings().export_staging_root,
+                export_staging_ttl=timedelta(
+                    hours=get_settings().export_staging_ttl_hours
+                ),
             ).payload()
             exit_code = 0
         else:
