@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import suppress
 from pathlib import Path
 from time import sleep
 
@@ -20,14 +22,40 @@ class LeaseProtectedFileResponse(FileResponse):
         self._lease_guard = guard
 
     async def __call__(self, scope, receive, send) -> None:
+        loop = asyncio.get_running_loop()
+        failure_signal = asyncio.Event()
+
+        def signal_failure() -> None:
+            try:
+                loop.call_soon_threadsafe(failure_signal.set)
+            except RuntimeError:
+                pass
+
+        self._lease_guard.add_failure_listener(signal_failure)
+        failure_task = asyncio.create_task(failure_signal.wait())
+
         async def guarded_send(message) -> None:
             self._lease_guard.ensure_owned()
-            await send(message)
+            send_task = asyncio.create_task(send(message))
+            done, _ = await asyncio.wait(
+                (send_task, failure_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if failure_task in done:
+                send_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await send_task
+                self._lease_guard.ensure_owned()
+            await send_task
             self._lease_guard.ensure_owned()
 
         try:
             await super().__call__(scope, receive, guarded_send)
         finally:
+            self._lease_guard.remove_failure_listener(signal_failure)
+            failure_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await failure_task
             await run_in_threadpool(self._cleanup)
 
     def _cleanup(self) -> None:

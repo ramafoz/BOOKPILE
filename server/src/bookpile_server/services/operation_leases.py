@@ -64,6 +64,7 @@ class RenewableOperationLeaseGuard:
         self._stop = Event()
         self._lock = Lock()
         self._failure: Exception | None = None
+        self._failure_listeners: set[Callable[[], None]] = set()
         self._closed = False
         self._thread = Thread(
             target=self._heartbeat_loop,
@@ -77,6 +78,20 @@ class RenewableOperationLeaseGuard:
             failure = self._failure
         if failure is not None:
             raise failure
+
+    def add_failure_listener(self, listener: Callable[[], None]) -> None:
+        notify_now = False
+        with self._lock:
+            if self._failure is None:
+                self._failure_listeners.add(listener)
+            else:
+                notify_now = True
+        if notify_now:
+            listener()
+
+    def remove_failure_listener(self, listener: Callable[[], None]) -> None:
+        with self._lock:
+            self._failure_listeners.discard(listener)
 
     def close(self) -> None:
         with self._lock:
@@ -130,6 +145,12 @@ class RenewableOperationLeaseGuard:
             except Exception as exc:
                 with self._lock:
                     self._failure = exc
+                    listeners = tuple(self._failure_listeners)
+                for listener in listeners:
+                    try:
+                        listener()
+                    except Exception:
+                        pass
                 self._stop.set()
                 return
 
