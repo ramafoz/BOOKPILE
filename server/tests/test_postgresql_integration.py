@@ -162,6 +162,11 @@ def _request_mutation_limit_from_process(
 
     @app.put(
         "/api/v1/libraries/{library_id}/mutation-probe",
+        name=(
+            "select_reading_perspective"
+            if library_mode != "off"
+            else "update_preferred_locale"
+        ),
         dependencies=[Depends(api_dependencies.apply_mutation_limits)],
     )
     def mutation_probe(library_id: str) -> dict[str, str]:
