@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from bookpile_server import main
@@ -19,6 +20,7 @@ from bookpile_server.models import (
 )
 from bookpile_server.security.passwords import hash_password
 from bookpile_server.services.auth import hash_session_secret
+from bookpile_server.services.mutation_limits import MUTATION_ROUTES
 from bookpile_server.services.rate_limits import (
     RateLimitDecisionUnavailableError,
     RateLimiter,
@@ -196,6 +198,78 @@ def test_library_limit_counts_only_active_members(
     assert str(library.id) not in library_buckets[0].key_hash
 
 
+def test_viewer_cannot_spend_owner_library_allowance(
+    monkeypatch, session: Session
+) -> None:
+    settings = limit_settings(library_mode="enforce")
+    owner = add_user(session, "mutation_owner_guard")
+    viewer = add_user(session, "mutation_viewer_guard")
+    library = add_library(session, owner, viewer)
+    viewer_membership = session.scalar(
+        select(LibraryMembership).where(
+            LibraryMembership.library_id == library.id,
+            LibraryMembership.user_id == viewer.id,
+        )
+    )
+    assert viewer_membership is not None
+    viewer_membership.role = "VIEWER"
+    viewer_membership.viewer_scope = "CATALOG_ONLY"
+    session.commit()
+
+    with limited_client(monkeypatch, session, settings) as client:
+        authenticate(client, session, viewer)
+        forbidden = client.post(
+            f"/api/v1/libraries/{library.id}/invitations",
+            json={"role": "VIEWER", "viewer_scope": "CATALOG_ONLY"},
+            headers=csrf(),
+        )
+
+    assert forbidden.status_code == 404
+    assert buckets(session, "mutation_library") == []
+
+
+def test_read_only_post_preview_is_not_a_mutation(
+    monkeypatch, session: Session
+) -> None:
+    settings = limit_settings(user_mode="enforce", library_mode="enforce")
+    owner = add_user(session, "mutation_preview_owner")
+    library = add_library(session, owner)
+
+    with limited_client(monkeypatch, session, settings) as client:
+        authenticate(client, session, owner)
+        response = client.post(
+            f"/api/v1/libraries/{library.id}/physical-library/"
+            "rearrangements/preview",
+            json={"sort_mode": "TITLE_ASC"},
+        )
+
+    assert response.status_code != 429
+    assert buckets(session, "mutation_user") == []
+    assert buckets(session, "mutation_library") == []
+
+
+def test_every_unsafe_route_has_an_explicit_mutation_disposition() -> None:
+    deliberately_exempt = {
+        "register_account",
+        "resend_verification",
+        "confirm_verification",
+        "request_password_reset",
+        "confirm_password_reset",
+        "login",
+        "restore_deleted_account",
+        "preview_rearrangement",
+    }
+    unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
+    app = main.create_app()
+    unsafe_routes = {
+        route.name
+        for route in app.routes
+        if (getattr(route, "methods", set()) or set()) & unsafe_methods
+    }
+
+    assert unsafe_routes == MUTATION_ROUTES | deliberately_exempt
+
+
 def test_users_have_independent_buckets_behind_one_client(
     monkeypatch, session: Session
 ) -> None:
@@ -248,6 +322,26 @@ def test_mutation_limit_decision_failure_is_generic_503(
     monkeypatch.setattr(RateLimiter, "apply", unavailable)
     with limited_client(monkeypatch, session, settings) as client:
         authenticate(client, session, user)
+        response = client.put(
+            "/api/v1/auth/locale", json={"preferred_locale": "es"}, headers=csrf()
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Request limiting is temporarily unavailable."
+    }
+
+
+def test_mutation_authentication_database_failure_is_generic_503(
+    monkeypatch, session: Session
+) -> None:
+    settings = limit_settings(user_mode="enforce")
+
+    def unavailable(*_args, **_kwargs):
+        raise SQLAlchemyError("synthetic authentication outage")
+
+    monkeypatch.setattr(dependencies.AuthService, "authenticate", unavailable)
+    with limited_client(monkeypatch, session, settings) as client:
         response = client.put(
             "/api/v1/auth/locale", json={"preferred_locale": "es"}, headers=csrf()
         )

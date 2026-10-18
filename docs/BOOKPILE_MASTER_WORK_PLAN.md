@@ -164,10 +164,11 @@ Evidence: migration if required, tests, staging observe/enforce rehearsal and
 normal multi-owner functional test. The implementation uses the existing
 PostgreSQL/HMAC bucket schema and therefore needs no migration. User and
 library policies have separate mode switches and default to `off`. A matched
-route dependency authenticates first, counts every authenticated state-changing
-request by user, and counts a path-addressed library only after confirming an
-active membership; public requests, safe methods, absent libraries and
-libraries inaccessible to the user do not consume a library bucket. The
+route dependency authenticates first and uses an explicit reviewed registry so
+only state-changing routes count by user. A path-addressed library counts only
+after the route's required member or Owner role is confirmed; public requests,
+safe methods, read-only POST routes, absent libraries and unauthorized users do
+not consume a library bucket. The
 PostgreSQL gate starts independent processes with separate dependency stacks
 and pools for both user and co-Owner/library races. Staging observe/enforce and
 the normal multi-Owner acceptance remain open.

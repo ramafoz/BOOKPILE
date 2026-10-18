@@ -34,7 +34,12 @@ from ..services.rate_limits import (
     RateLimitExceededError,
 )
 from ..services.costly_operation_limits import CostlyOperationLimiter
-from ..services.mutation_limits import MutationRateLimiter
+from ..services.mutation_limits import (
+    LIBRARY_MUTATION_ROUTES,
+    MEMBER_LIBRARY_MUTATION_ROUTES,
+    MUTATION_ROUTES,
+    MutationRateLimiter,
+)
 from ..services.costly_operation_leases import CostlyOperationLeaseService
 from ..services.operation_leases import OperationLeaseManager
 from ..config import get_settings
@@ -334,12 +339,10 @@ def get_current_auth(
 CurrentAuthDependency = Annotated[AuthContext, Depends(get_current_auth)]
 
 
-MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
-
 def apply_mutation_limits(request: Request, session: SessionDependency) -> None:
     """Count authenticated mutations without turning IDs into an oracle."""
-    if request.method not in MUTATION_METHODS:
+    route_name = getattr(request.scope.get("route"), "name", None)
+    if route_name not in MUTATION_ROUTES:
         return
 
     settings = get_settings()
@@ -355,19 +358,27 @@ def apply_mutation_limits(request: Request, session: SessionDependency) -> None:
         )
     except InvalidSessionError:
         return
-    request.state.bookpile_auth_context = context
-
-    limiter = MutationRateLimiter(
-        RateLimiter(
-            RateLimitRepository(session),
-            settings.rate_limit_key_secret,
-            settings.deployment_revision,
-        ),
-        settings,
-    )
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
     try:
+        request.state.bookpile_auth_context = context
+        limiter = MutationRateLimiter(
+            RateLimiter(
+                RateLimitRepository(session),
+                settings.rate_limit_key_secret,
+                settings.deployment_revision,
+            ),
+            settings,
+        )
         limiter.check_user(context.user_id)
-        if settings.mutation_library_limit_mode == "off":
+        if (
+            settings.mutation_library_limit_mode == "off"
+            or route_name not in LIBRARY_MUTATION_ROUTES
+        ):
             return
         raw_library_id = request.path_params.get("library_id")
         if raw_library_id is None:
@@ -380,7 +391,11 @@ def apply_mutation_limits(request: Request, session: SessionDependency) -> None:
             library_id=library_id,
             user_id=context.user_id,
         )
-        if membership is not None:
+        authorized = membership is not None and (
+            route_name in MEMBER_LIBRARY_MUTATION_ROUTES
+            or membership.role == "OWNER"
+        )
+        if authorized:
             limiter.check_library(library_id)
     except RateLimitExceededError as exc:
         raise HTTPException(

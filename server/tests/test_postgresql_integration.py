@@ -882,7 +882,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             session.add_all(
                 (
                     LibraryMembership(
-                        library_id=first.id,
+                        library_id=first_library_id,
                         user_id=mutation_coowner.id,
                         role="OWNER",
                         selected_reading_user_id=mutation_coowner.id,
@@ -914,7 +914,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                     args=(
                         TEST_DATABASE_URL,
                         token,
-                        str(first.id),
+                        str(first_library_id),
                         user_mode,
                         library_mode,
                         ready,

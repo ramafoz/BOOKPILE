@@ -291,9 +291,11 @@ Subsequent progress:
    library-mutation policies at `240/15 minutes` and `600/15 minutes`. They use
    independent mode switches and the existing PostgreSQL/HMAC bucket schema.
    A matched-route dependency authenticates before counting, reuses that
-   context in the endpoint, and consumes a library bucket only after finding
-   an active membership, so missing and inaccessible library identifiers do
-   not spend a victim's allowance. Focused tests cover generic 429/503
+   context in the endpoint, and uses an explicit route registry to exclude
+   read-only POST operations. It consumes a library bucket only after the
+   route's required member or Owner role succeeds, so missing, inaccessible or
+   role-forbidden library identifiers do not spend a victim's allowance.
+   Focused tests cover generic 429/503
    responses, privacy, independent user keys behind one client, a shared
    library key across co-Owners and switch isolation. The PostgreSQL gate uses
    independent processes, middleware/dependency stacks and pools for the user
