@@ -19,8 +19,10 @@ neither creates an additional work queue.
   closure.
 - A newly discovered release-blocking task must be added here before work on it
   starts. It must not be tracked only in a PR, ADR, chat or external checklist.
-- Production may open only when every item explicitly labelled **production
-  blocker** is complete and the final go/no-go is recorded.
+- Production may open only when every task in sections 4 through 12 is complete
+  and the final go/no-go is recorded. Labels inside those sections are
+  explanatory only and cannot weaken this rule. Section 13 is explicitly
+  post-beta and is the only non-blocking task section.
 
 ## 2. Fixed product and operational decisions
 
@@ -457,7 +459,8 @@ This section is a **production blocker**.
 
 - [ ] Reconcile every active runbook and ADR with this plan; no active document
   may claim a conflicting quota, provider, domain, status or release gate.
-- [ ] Verify every **production blocker** in this document is complete.
+- [ ] Verify every task in sections 4 through 12 is complete. No exception may
+  be inferred from the absence of a local **production blocker** label.
 - [ ] Record the exact production release manifest, SBOM, migration revision,
   provider inventory, costs, unresolved low-risk limitations and rollback
   references.

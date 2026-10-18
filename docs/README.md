@@ -9,6 +9,8 @@ Other documentation has a narrower role:
 
 - `docs/adr/` records accepted architectural decisions. An ADR may define how a
   task must be implemented, but task status lives only in the master plan.
+- `docs/specifications/` contains active normative product/domain contracts.
+  Specifications define behaviour but do not maintain independent task status.
 - Root operational documents are live specifications and runbooks for
   deployment, backup, security and recovery. They must not maintain independent
   pending-work lists.

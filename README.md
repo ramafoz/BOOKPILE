@@ -404,7 +404,8 @@ third-party services.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
-- `docs/old/PHYSICAL_GEOMETRY_PLAN.md` records the approved single-geometry model for
+- `docs/specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md` defines the active
+  approved single-geometry model for
   manual and millimetre-driven layouts, accordion containers, supports,
   physical warnings, Server implementation, and later controlled Local work.
 - `docs/adr/` records architectural decisions that must remain traceable as

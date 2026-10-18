@@ -423,7 +423,8 @@ protects the completed catalogue.
   migrations and include it in details, editing, search, import/export, and
   ISBN candidate review.
 - [ ] **Server first; later controlled Local backport:** implement the approved
-  single canonical geometry model in `PHYSICAL_GEOMETRY_PLAN.md`. Support
+  single canonical geometry model in
+  `../specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`. Support
   Owner-selected `MANUAL`/`PHYSICAL` modes, integer millimetres, per-axis book
   fallbacks, furniture/shelf calibration, accordion containers, structured
   physical warnings, generic supports, and PILE alignment without maintaining
@@ -443,7 +444,8 @@ protects the completed catalogue.
     manipulation is now integrated and accepted in the map editor.
   - [x] Replace provisional sibling-normalized shelf `height_weight` geometry
     with the approved explicit shelf/frame/separator model in
-    `PHYSICAL_GEOMETRY_PLAN.md`: entered/fallback/derived measurement sources,
+    `../specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`:
+    entered/fallback/derived measurement sources,
     immutable furniture distribution direction, 2.5% default frames, 14%
     preferred shelf spans, 5 mm minima, open top shelves, optional homogeneous
     structure, atomic fitting, and hard no-overlap/no-escape validation.
@@ -780,7 +782,8 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
     container previews, undo, atomic Apply, stale-revision rejection, and
     structured audit passed desktop/mobile acceptance on 2026-09-02.
   - [x] Complete the Server physical-geometry engine specified in
-    `PHYSICAL_GEOMETRY_PLAN.md`; schema v9–v11, projection, explicit shelves,
+    `../specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`; schema v9–v11,
+    projection, explicit shelves,
     fallbacks, supports and structural controls are implemented and accepted.
   - [x] Integrate floating/minimizable layout editing and direct map
     manipulation over that same geometry service. Interaction is
