@@ -202,6 +202,17 @@ Evidence: metric catalogue, alert configuration and alert/recovery receipts.
 - [ ] Make Caddy emit mutually exclusive fixed labels `health_class=live`,
   `health_class=ready` and `health_class=other`, deleting original URI and query
   data; prove one fixture cannot match two classes.
+- [ ] Rehearse the public health policies independently in dry-run: more than
+  `120 /health/live` requests from one validated client IP in 60 seconds and
+  more than `30 /health/ready` requests in 60 seconds must produce separate,
+  correctly attributed decisions. Neither rehearsal may count the other health
+  class, and the internal Docker liveness probe must bypass the public policy.
+- [ ] For each public health policy, record an explicit `ENABLE` or `REJECT`
+  decision after validating normal external-monitor frequency and failure
+  behaviour. An `ENABLE` decision must prove its configured temporary ban,
+  expiration, restart persistence and monitor recovery. A `REJECT` decision
+  must name the compensating control, retained alert and explicit owner
+  approval; silence or an unbounded public endpoint is not a decision.
 - [ ] Expose only Caddy's minimized security-event log through a dedicated host
   directory readable by the host defence service and inaccessible to the web
   application.
@@ -221,8 +232,8 @@ Evidence: metric catalogue, alert configuration and alert/recovery receipts.
 - [ ] Prove equivalent rules before enabling public IPv6. Until then, record
   public IPv6 as disabled.
 
-Evidence: configuration, fixtures, dry-run counts, ban/unban/restart transcript
-and health-monitor continuity.
+Evidence: configuration, distinct health fixtures and decisions, dry-run counts,
+ban/unban/restart transcript and health-monitor continuity.
 
 ### D7 — Defensive regression harness
 

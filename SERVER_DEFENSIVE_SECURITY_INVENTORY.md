@@ -224,14 +224,15 @@ Subsequent progress:
    leases. D6 keeps Caddy's deterministic controls and reserves persistent
    host-level temporary bans for high-confidence scanner traffic. No process-
    local Caddy/Python limiter is accepted.
-4. **D4 implementation:** the first infrastructure slice adds the explicit
-   `off`/`observe`/`enforce` setting, privacy-safe observed-limit decisions,
+4. **D4 implementation:** the first infrastructure slice added explicit
+   `off`/`observe`/`enforce` settings, privacy-safe observed-limit decisions,
    one shared account-identifier normalizer and PostgreSQL-backed renewable
-   operation leases with monotonic fencing tokens. The default remains `off`.
-   Route policies, protected import/export commits, staged-object publication
-   and export-stream lifetime wiring remain separate work; deploy those
-   controls disabled, observe staging for at least 24 hours, then enforce
-   costly operations before general API limits.
+   operation leases with monotonic fencing tokens. Subsequent slices use their
+   policy-specific acceptance gates. Costly operations completed observe and
+   enforce acceptance. Because staging has no representative user cohort, the
+   general API ceiling uses deterministic two-worker tests, a bounded observe
+   burst, an enforce burst, normal functional use and a deep check; elapsed
+   24-hour observation without representative traffic is not a D4-G gate.
    The second slice connects separate user/library frequency counters to
    authorized import preflight, import consolidation and portable export
    operations. They remain inert in `off`, emit revision-labelled aggregate
