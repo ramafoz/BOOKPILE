@@ -135,8 +135,13 @@ lease.
 ### 3. Initial staging matrix
 
 These values are deliberately roomy for normal beta use and deliberately low
-for expensive operations. They start in observation mode; enforcement follows
-only after D7 and at least 24 hours of representative staging traffic.
+for expensive operations. They start in observation mode. Where staging has a
+representative user cohort, enforcement follows observation of that traffic.
+Before the invitation beta, where staging has only its operator, the general
+API ceiling instead uses deterministic two-worker tests, a bounded observe-mode
+burst, an enforce-mode burst, normal functional use and a deep operational
+check. Waiting longer without representative traffic is not acceptance
+evidence. D6 retains its explicit 24-hour and seven-day observation periods.
 
 | Class | Scope | Initial value | Mode after observation | Response |
 | --- | --- | ---: | --- | --- |
@@ -267,10 +272,12 @@ file cleanup.
    keep every health response in observation mode.
 2. Add configuration, shared D4 policies and leases with mode `off`.
 3. Deploy staging in `observe`; run D7 normal-navigation and abuse scenarios.
-4. Collect at least 24 hours including normal mobile/catalogue/map/import and
-   export use. Raise a threshold if legitimate peaks exceed 25% of it.
-5. Enforce costly-operation limits and leases first.
-6. Enforce general IP, user and library limits.
+4. Enforce costly-operation limits and leases first after their synthetic and
+   normal-use acceptance.
+5. For the general IP ceiling, use the deterministic acceptance described
+   above when no representative cohort exists. For user/library interaction
+   policies, raise a threshold if accepted normal UI automation exceeds 25%.
+6. Enforce general IP, user and library limits after their respective evidence.
 7. Install D6 in dry-run, validate parsed addresses and counts, then enable the
    scanner-only 10-minute ban.
 8. Enable the 1,200/minute general-volume ban only after seven observation

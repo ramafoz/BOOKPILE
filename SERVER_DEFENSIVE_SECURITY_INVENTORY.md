@@ -269,8 +269,11 @@ Subsequent progress:
    PostgreSQL/HMAC machinery across workers, excludes health and non-API
    traffic, records revision-labelled aggregate evidence in `observe`, returns
    a generic 429 with `Retry-After` in `enforce`, and fails closed with a
-   generic 503 if no decision can be made. Its default remains `off` pending a
-   separate staging observation and burst rehearsal.
+   generic 503 if no decision can be made. It is deployed in `observe` at
+   revision `b3700d2882fcde5c08a0ea69e585529880eaec06`; the bounded 650-request
+   rehearsal produced one 650-count bucket and one revision-labelled
+   observation event without `429` or `5xx`, and the deep check remained
+   healthy. Enforce-mode acceptance remains open in the master work plan.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous
@@ -283,7 +286,9 @@ Subsequent progress:
    to staging in `observe` or `enforce`, uses random identities, creates no
    accounts, libraries, archives or objects, and proves all six user/library
    policy scopes produce the expected observation or blocking event.
-7. Observe staging for at least 24 hours before enabling temporary blocking.
+7. Observe D6 scanner detection for at least 24 hours before enabling its
+   temporary ban. The D6 general-volume signal remains observation-only for
+   seven days. D4 application limits use their policy-specific acceptance gates.
 
 [ADR 0016](docs/adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,
 independent disable switches and rollback. Production values remain subject to

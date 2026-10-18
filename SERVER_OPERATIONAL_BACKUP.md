@@ -173,7 +173,8 @@ credentials, and securely delete the restore environment file.
   table counts and object inventory; disposable targets were removed.
 - Systemd created a second verified snapshot
   `0598e4bc-5433-46f5-95b9-44422e9733ea`; daily and 15-minute freshness
-  timers are enabled. Failure/paging tests remain open.
+  timers are enabled. Controlled failure, external DOWN paging, operator
+  recovery and external UP notification passed on 2026-09-18.
 - PostgreSQL backup login has `SELECT` but no `INSERT`/`DELETE` on the
   application table. Dinahosting could not supply a separate read-only key
   for the same active bucket; staging temporarily reuses its isolated

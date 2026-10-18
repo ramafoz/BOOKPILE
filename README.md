@@ -382,30 +382,29 @@ third-party services.
 - `LIMITATIONS.md` states the security and product boundaries of Local v1.
 - `RELEASE_NOTES.md` summarizes the Local v1.0.0 release for end users.
 - `RELEASE_CHECKLIST.md` records automated and manual release gates.
-- `TODO.md` is the authoritative roadmap and separates work possible with the
-  current database from schema expansion and product-scale development.
-- `SCANNING_PLAN.md` documents ISBN, barcode, OCR, catalogue matching, and
-  future live-camera work.
-- `BACKUP_EXPORT_PLAN.md` documents the backup format, restore validation, and
-  CSV export design.
+- `docs/BOOKPILE_MASTER_WORK_PLAN.md` is the single authoritative source for
+  current work, release blockers and go/no-go status. `TODO.md` is only a
+  stable pointer to it.
+- `docs/README.md` defines the documentation hierarchy. Completed phase and
+  feature plans are retained under `docs/old/` as non-authoritative history.
 - `MIGRATION_RECOVERY.md` documents versioned schema changes, isolated
   rehearsals, mandatory pre-migration backups, and recovery.
-- `MULTIUSER_IMPLEMENTATION_PLAN.md` defines the hosted product's identity,
-  tenancy, privacy, quota, migration, and deployment roadmap.
-- `SERVER_PHASE5_READING_PLAN.md` records the completed personal-reading phase:
+- `docs/old/MULTIUSER_IMPLEMENTATION_PLAN.md` preserves the hosted product's
+  historical identity, tenancy, privacy, quota, migration and deployment plan.
+- `docs/old/SERVER_PHASE5_READING_PLAN.md` records the completed personal-reading phase:
   per-Owner sessions and Goodreads links, shared custody, migration safety,
   API boundaries, frontend increments, and acceptance gates.
-- `SERVER_PHASE6_LOAN_PLAN.md` defines the shared-loan model, Owner-only
+- `docs/old/SERVER_PHASE6_LOAN_PLAN.md` defines the completed shared-loan model, Owner-only
   borrower privacy, migration protocol, concurrency rules, frontend increments,
   and completed acceptance gates.
-- `SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md` defines private profiles,
+- `docs/old/SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md` records private profiles,
   entitlement-ready accounting, co-Owner allocation, safe library/account
   deletion, earned beta invitations and empty-library map onboarding. Phase 7
   is complete through its final compatibility and acceptance gates.
 - `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
   future contributors/languages/dimensions, and specifies versioned conversion
   from Local ZIPs into Server libraries.
-- `PHYSICAL_GEOMETRY_PLAN.md` defines the approved single-geometry model for
+- `docs/old/PHYSICAL_GEOMETRY_PLAN.md` records the approved single-geometry model for
   manual and millimetre-driven layouts, accordion containers, supports,
   physical warnings, Server implementation, and later controlled Local work.
 - `docs/adr/` records architectural decisions that must remain traceable as
@@ -472,7 +471,7 @@ separate hosted Server edition; they are not assumptions in released Local v1.
 The agreed separation between stable BOOKPILE Local v1 and the hosted Server
 edition, together with its co-ownership, Viewer privacy, personal reading,
 quota, authentication, migration, and deployment roadmap, is documented in
-[MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_PLAN.md).
+[archived multi-user implementation plan](docs/old/MULTIUSER_IMPLEMENTATION_PLAN.md).
 
 The isolated Server edition has completed its Phase 3 membership foundation
 and Phase 4A–4D shared catalogue and physical-library foundation. Secure accounts can create and
@@ -522,7 +521,7 @@ never recreates memberships, and maps source personal records only through an
 explicit one-to-one selection of current Owners; unmapped personal data requires
 an explicit omission confirmation. Migration `0020`, automated round-trip and
 real-export UX acceptance gates pass; Phase 8 is complete as documented in
-[SERVER_PHASE8_IMPORT_EXPORT_PLAN.md](SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
+[archived Phase 8 plan](docs/old/SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
 
 Server barcode capture is implemented, accepted on mobile, and merged. Owners can
 type an ISBN or decode an EAN-13 from a temporary phone photograph while adding
@@ -532,7 +531,7 @@ library-scoped provider lookup. Every proposed metadata field starts unchecked
 and remains editable after explicit transfer. Mobile Add also exposes scan-first
 single and batch shortcuts; batch scanning preserves placement progression but
 clears book and personal-reading data between records. See
-[SCANNING_PLAN.md](SCANNING_PLAN.md).
+[archived scanning plan](docs/old/SCANNING_PLAN.md).
 
 Server Phase 9A–9E foundations now provide hardened hosted configuration,
 reproducible non-root images, private S3-compatible objects, an encrypted
@@ -540,9 +539,11 @@ transactional email outbox, encrypted off-site disaster recovery, bounded edge
 behaviour, scheduled retention/finalization work, aggregate health checks and
 backup-freshness monitoring. A local PostgreSQL 17/S3 rehearsal restored 36
 tables and 869 private objects exactly. This is not yet permission to publish:
-real-provider acceptance, alert delivery, capacity thresholds, Spanish staging
-deployment and the final go/no-go remain open in
-[SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md](SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
+provider acceptance, alert delivery and Spanish staging are complete. Capacity,
+production separation and the final go/no-go remain open in the
+[master work plan](docs/BOOKPILE_MASTER_WORK_PLAN.md); the earlier phase design
+is retained in the
+[archived Phase 9 plan](docs/old/SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
 The agreed Spanish/EU staging topology and guarded provisioning sequence are in
 [SERVER_STAGING_PROVIDER_DECISION.md](SERVER_STAGING_PROVIDER_DECISION.md) and
 [SERVER_STAGING_PROVISIONING_CHECKLIST.md](SERVER_STAGING_PROVISIONING_CHECKLIST.md).
@@ -553,7 +554,7 @@ perspective-aware catalogue headings, atomic physical placement inside Add and
 Edit, iterative Batch Add with retained destination, compact mobile map
 controls, and queued self-expiring success notifications. Its design and
 acceptance record are in
-[SERVER_FRONTEND_UX_PLAN.md](SERVER_FRONTEND_UX_PLAN.md).
+[archived Server frontend plan](docs/old/SERVER_FRONTEND_UX_PLAN.md).
 
 The post-4D architecture checkpoint now gives Local and Server explicit
 frontend entrypoints, commands, test scopes, output directories, proxies, and
@@ -587,7 +588,7 @@ On-loan map custody and shared statistics. Phase 6E compatibility, privacy,
 test, lint, build and PostgreSQL gates passed, and Phase 6 is merged into
 `main`.
 The complete implementation boundary and migration gates are defined in
-[SERVER_PHASE5_READING_PLAN.md](SERVER_PHASE5_READING_PLAN.md).
+[archived Phase 5 plan](docs/old/SERVER_PHASE5_READING_PLAN.md).
 
 ## Licence
 
