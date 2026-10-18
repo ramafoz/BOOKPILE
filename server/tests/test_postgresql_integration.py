@@ -8,6 +8,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from multiprocessing import get_context
 from pathlib import Path
 from time import monotonic, sleep
 from uuid import uuid4
@@ -15,14 +16,16 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
+from bookpile_server.config import Settings, get_settings
 from bookpile_server.database import get_session
-from bookpile_server.config import get_settings
+from bookpile_server.general_api_limits import GeneralApiRateLimitMiddleware
 from bookpile_server.main import create_app
 from bookpile_server.models import (
     AccountStorageEntitlement,
@@ -63,18 +66,12 @@ from bookpile_server.services.account_invitations import (
     AccountInvitationError,
     AccountInvitationService,
 )
-from bookpile_server.repositories.rate_limits import RateLimitRepository
 from bookpile_server.repositories.operation_leases import OperationLeaseRepository
 from bookpile_server.services.operation_leases import (
     LeaseRequest,
     OperationLeaseManager,
     OperationLeaseUnavailableError,
     RenewableOperationLeaseGuard,
-)
-from bookpile_server.services.rate_limits import (
-    RateLimitExceededError,
-    RateLimiter,
-    RateLimitPolicy,
 )
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
@@ -85,6 +82,46 @@ from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
+
+
+def _request_general_api_limit_from_process(
+    database_url: str,
+    ready_queue,
+    start_event,
+    result_queue,
+) -> None:
+    """Exercise one independent API-worker middleware stack."""
+    engine = create_engine(database_url)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    settings = Settings(
+        environment="test",
+        database_url=database_url,
+        deployment_revision="git-postgres-multiprocess",
+        rate_limit_key_secret="integration-secret",
+        general_api_limit_mode="enforce",
+    ).model_copy(update={"general_api_attempts_per_ip_per_minute": 1})
+    app = FastAPI()
+    app.add_middleware(
+        GeneralApiRateLimitMiddleware,
+        settings=settings,
+        session_factory=factory,
+    )
+    try:
+        with TestClient(app, client=("198.51.100.24", 12345)) as client:
+            ready_queue.put(os.getpid())
+            if not start_event.wait(timeout=30):
+                raise RuntimeError("Multiprocess limit gate did not start")
+            response = client.get("/api/v1/not-a-route")
+            result_queue.put(
+                (
+                    os.getpid(),
+                    response.status_code,
+                    response.json(),
+                    response.headers.get("retry-after"),
+                )
+            )
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.skipif(
@@ -701,36 +738,73 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 == 1
             )
 
-        def consume_rate_limit_concurrently(_: int) -> bool:
-            with Session(engine) as concurrent_session:
-                limiter = RateLimiter(
-                    RateLimitRepository(concurrent_session), "integration-secret"
-                )
-                try:
-                    limiter.enforce(
-                        RateLimitPolicy(
-                            "postgres_concurrency", 1, timedelta(minutes=1)
-                        ),
-                        key="same-logical-key",
-                        ip_address="127.0.0.1",
-                    )
-                except RateLimitExceededError:
-                    return False
-                return True
-
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            rate_results = list(
-                executor.map(consume_rate_limit_concurrently, (1, 2))
+        process_context = get_context("spawn")
+        ready_queue = process_context.Queue()
+        start_event = process_context.Event()
+        result_queue = process_context.Queue()
+        workers = [
+            process_context.Process(
+                target=_request_general_api_limit_from_process,
+                args=(
+                    TEST_DATABASE_URL,
+                    ready_queue,
+                    start_event,
+                    result_queue,
+                ),
             )
-        assert sorted(rate_results) == [False, True]
+            for _ in range(2)
+        ]
+        try:
+            for worker in workers:
+                worker.start()
+            ready_processes = {ready_queue.get(timeout=30) for _ in workers}
+            assert len(ready_processes) == 2
+            start_event.set()
+            process_results = [result_queue.get(timeout=30) for _ in workers]
+        finally:
+            start_event.set()
+            for worker in workers:
+                worker.join(timeout=30)
+                if worker.is_alive():
+                    worker.terminate()
+                    worker.join(timeout=5)
+
+        assert {result[0] for result in process_results} == ready_processes
+        assert sorted(result[1] for result in process_results) == [404, 429]
+        blocked_result = next(
+            result for result in process_results if result[1] == 429
+        )
+        assert blocked_result[2] == {
+            "detail": "Too many requests. Try again later."
+        }
+        assert blocked_result[3] is not None
+        assert int(blocked_result[3]) > 0
+        assert all(worker.exitcode == 0 for worker in workers)
         with Session(engine) as session:
             bucket = session.scalar(
                 select(RateLimitBucket).where(
-                    RateLimitBucket.scope == "postgres_concurrency"
+                    RateLimitBucket.scope == "general_api_ip"
                 )
             )
             assert bucket is not None
             assert bucket.attempt_count == 2
+            events = list(
+                session.scalars(
+                    select(SecurityEvent).where(
+                        SecurityEvent.event_type == "rate_limit_blocked",
+                        SecurityEvent.details["scope"].as_string()
+                        == "general_api_ip",
+                    )
+                )
+            )
+            assert len(events) == 1
+            event = events[0]
+            assert event.ip_address is None
+            assert event.details == {
+                "scope": "general_api_ip",
+                "mode": "enforce",
+                "deployment_revision": "git-postgres-multiprocess",
+            }
 
         def acquire_operation_lease_concurrently(_: int) -> bool:
             with Session(engine) as concurrent_session:
