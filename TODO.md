@@ -1074,7 +1074,7 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   until that commit and are compensated on ordinary failure. Add a bounded,
   proof-safe recovery path for objects abandoned by process or host failure.
   Shared PostgreSQL limits and leases must enter observation mode first,
-  followed by a dry-run
+  followed by the staging-only synthetic costly-limit rehearsal and a dry-run
   and narrow temporary ban for high-confidence scanner traffic. Do not
   introduce an in-memory-only Python or Caddy counter.
 - [ ] Define storage limits, backup retention, account deletion, and data

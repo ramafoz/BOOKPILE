@@ -264,6 +264,12 @@ Subsequent progress:
    401/404/422 signals remain alerts.
 6. **D7 abuse harness:** normal navigation, bursts, scanner paths, forged IP,
    expiry, IPv4/IPv6, secret-redaction and health-check exemptions.
+   The first harness slice adds `bookpile-defensive-limits status` for a
+   privacy-safe aggregate of costly-operation buckets, events and leases, plus
+   an explicitly confirmed synthetic rehearsal. The rehearsal is restricted
+   to staging in `observe` or `enforce`, uses random identities, creates no
+   accounts, libraries, archives or objects, and proves all six user/library
+   policy scopes produce the expected observation or blocking event.
 7. Observe staging for at least 24 hours before enabling temporary blocking.
 
 [ADR 0016](docs/adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,

@@ -208,6 +208,33 @@ them. Stock Caddy has no distributed rate-limit module; do not silently replace
 this with per-process edge counters. Additional volumetric protection may be
 selected with the hosting provider in 9F.
 
+### Costly-operation limit rehearsal
+
+Inspect the privacy-safe aggregate state of import/export limits and leases:
+
+```sh
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml exec -T api \
+  bookpile-defensive-limits status
+```
+
+After an ordinary import/export smoke test, one controlled rehearsal may cross
+every costly-operation user and library threshold:
+
+```sh
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml exec -T api \
+  bookpile-defensive-limits rehearse --confirm STAGING-LIMIT-REHEARSAL
+```
+
+The rehearsal refuses production, `off` mode and missing confirmation. It uses
+fresh random identifiers and creates only hashed limit buckets and aggregate
+security events: no account, library, archive or object is created. In
+`observe`, all requests proceed and each of the six scopes must emit
+`rate_limit_observed`; in `enforce`, the final request for each synthetic user
+and library must be rejected and emit `rate_limit_blocked`. Re-run `status` and
+retain both JSON outputs with the deployment revision as acceptance evidence.
+
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
 mandatory. Registry-backed vulnerability scans require explicit authorization
