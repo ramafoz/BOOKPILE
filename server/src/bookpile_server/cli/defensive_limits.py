@@ -190,16 +190,13 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
                     "operation_lease_observed",
                     "operation_lease_blocked",
                 )
-            )
+            ),
+            SecurityEvent.details["scope"].as_string().in_(COSTLY_SCOPES),
         )
         .order_by(SecurityEvent.occurred_at.desc())
         .limit(100)
     ):
         scope = event.details.get("scope")
-        if scope not in COSTLY_SCOPES and not str(scope).startswith(
-            ("import_consolidation_", "portable_export_")
-        ):
-            continue
         relevant_events.append(
             {
                 "occurred_at": event.occurred_at.isoformat(),

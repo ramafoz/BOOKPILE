@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -86,3 +87,34 @@ def test_rehearsal_requires_explicit_confirmation(session: Session) -> None:
         rehearse_costly_limits(session, settings("observe"), confirmation="no")
 
     assert list(session.scalars(select(RateLimitBucket))) == []
+
+
+def test_status_filters_events_before_limiting_results(session: Session) -> None:
+    selected = settings("observe")
+    started_at = datetime.now(UTC) - timedelta(minutes=5)
+    session.add(
+        SecurityEvent(
+            occurred_at=started_at,
+            event_type="rate_limit_observed",
+            details={
+                "scope": "portable_export_user",
+                "mode": "observe",
+                "deployment_revision": selected.deployment_revision,
+            },
+        )
+    )
+    session.add_all(
+        SecurityEvent(
+            occurred_at=started_at + timedelta(seconds=index + 1),
+            event_type="rate_limit_blocked",
+            details={"scope": "login_ip"},
+        )
+        for index in range(101)
+    )
+    session.commit()
+
+    status = costly_limit_status(session, selected)
+
+    assert [event["scope"] for event in status["events"]] == [
+        "portable_export_user"
+    ]
