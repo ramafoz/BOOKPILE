@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     email_outbox_lease_seconds: int = Field(default=120, ge=30, le=900)
     rate_limit_key_secret: str = DEVELOPMENT_RATE_LIMIT_SECRET
     defensive_limit_mode: Literal["off", "observe", "enforce"] = "off"
+    general_api_limit_mode: Literal["off", "observe", "enforce"] = "off"
+    general_api_attempts_per_ip_per_minute: int = Field(
+        default=600, ge=60, le=10_000
+    )
     import_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)
     import_attempts_per_library_per_hour: int = Field(default=12, ge=1, le=200)
     export_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)

@@ -26,6 +26,8 @@ from .error_reporting import (
     capture_unhandled_request_error,
     initialize_error_reporting,
 )
+from .database import SessionFactory
+from .general_api_limits import GeneralApiRateLimitMiddleware
 from .proxy_headers import TrustedProxyHeadersMiddleware
 
 
@@ -60,7 +62,7 @@ def _request_outcome_class(status_code: int) -> str:
     )
 
 
-def create_app() -> FastAPI:
+def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
     settings = get_settings()
     initialize_error_reporting(settings)
     app = FastAPI(
@@ -83,6 +85,11 @@ def create_app() -> FastAPI:
     app.include_router(imports_router, prefix="/api/v1")
     app.include_router(exports_router, prefix="/api/v1")
     app.include_router(profiles_router, prefix="/api/v1")
+    app.add_middleware(
+        GeneralApiRateLimitMiddleware,
+        settings=settings,
+        session_factory=rate_limit_session_factory,
+    )
 
     @app.exception_handler(InsufficientSharedCapacity)
     async def storage_capacity_error(

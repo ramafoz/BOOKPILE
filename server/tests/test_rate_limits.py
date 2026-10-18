@@ -213,6 +213,12 @@ def test_operation_lease_heartbeat_must_fit_safely_inside_ttl() -> None:
         )
 
 
+@pytest.mark.parametrize("attempts", (0, 59, 10_001))
+def test_general_api_limit_rejects_unsafe_thresholds(attempts: int) -> None:
+    with pytest.raises(ValueError):
+        Settings(general_api_attempts_per_ip_per_minute=attempts)
+
+
 def test_database_failure_is_explicit_and_rolls_back() -> None:
     repository = UnavailableRateLimitRepository()
     limiter = RateLimiter(repository, "test-secret")  # type: ignore[arg-type]

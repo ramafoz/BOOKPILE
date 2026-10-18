@@ -226,11 +226,13 @@ public IPv6 address is enabled.
 
 ### 6. Configuration, privacy and observability
 
-New controls have a separate hosted setting with `off`, `observe` and
-`enforce` modes. `off` affects only D4 additions, never the accepted
-authentication limits. Its initial default is `off`, so deployment alone cannot
-silently enable a new policy. Thresholds are explicit validated settings, with
-safe upper bounds; zero is not overloaded to mean unlimited.
+Costly-operation controls and the general API IP ceiling have independent
+hosted settings with `off`, `observe` and `enforce` modes. `off` affects only
+the selected D4 policy group, never the accepted authentication limits. Both
+initial defaults are `off`, so deploying code cannot silently enable a new
+policy or undo an already accepted costly-operation rollout. Thresholds are
+explicit validated settings, with safe lower and upper bounds; zero is not
+overloaded to mean unlimited.
 
 Observation mode consumes shared counters and emits aggregate policy/scope
 events but does not return 429. Events contain the policy name, scope class,
@@ -290,8 +292,8 @@ without a 429.
 
 Application rollback is configuration-first:
 
-1. set the new defensive mode from `enforce` to `observe` (preferred) or
-   `off`;
+1. set only the affected costly-operation or general-API mode from `enforce`
+   to `observe` (preferred) or `off`;
 2. redeploy the same application revision;
 3. confirm live/ready and normal authentication;
 4. retain additive tables and counters for diagnosis; do not downgrade a

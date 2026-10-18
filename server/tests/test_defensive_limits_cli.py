@@ -118,3 +118,36 @@ def test_status_filters_events_before_limiting_results(session: Session) -> None
     assert [event["scope"] for event in status["events"]] == [
         "portable_export_user"
     ]
+
+
+def test_status_includes_general_api_limit_evidence(session: Session) -> None:
+    selected = settings("observe").model_copy(
+        update={"general_api_attempts_per_ip_per_minute": 600}
+    )
+    session.add(
+        RateLimitBucket(
+            scope="general_api_ip",
+            key_hash="synthetic-hash",
+            attempt_count=601,
+            window_started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    session.add(
+        SecurityEvent(
+            event_type="rate_limit_observed",
+            details={
+                "scope": "general_api_ip",
+                "mode": "observe",
+                "deployment_revision": selected.deployment_revision,
+            },
+        )
+    )
+    session.commit()
+
+    status = costly_limit_status(session, selected)
+
+    assert status["thresholds"]["general_api_ip_per_minute"] == 600
+    assert status["general_api_mode"] == "off"
+    assert status["buckets"][0]["scope"] == "general_api_ip"
+    assert status["events"][0]["scope"] == "general_api_ip"
