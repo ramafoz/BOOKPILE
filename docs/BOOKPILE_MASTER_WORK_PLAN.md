@@ -14,6 +14,9 @@ neither creates an additional work queue.
   evidence all exist.
 - `[ ]` means at least one required result is absent. Partial work does not
   change the checkbox.
+- `**DECIDED:**` records a binding product or architecture choice. It is not a
+  completion marker; every implementation and acceptance obligation created by
+  that decision remains unchecked in sections 4 through 12 until evidenced.
 - Every completion change must name a commit or deployed revision and the
   retained evidence. A statement such as "works" without evidence is not a
   closure.
@@ -26,33 +29,37 @@ neither creates an additional work queue.
 
 ## 2. Fixed product and operational decisions
 
-- [x] The invitation-only beta has ten launch languages: English, Galician,
-  Spanish, Portuguese, Catalan/Valencian, Italian, Basque, French, Aranese
-  Occitan and Simplified Chinese.
-- [x] The beta storage entitlement is exactly `100_000_000` bytes per account
-  (decimal 100 MB). Entitlements remain rows in
+- **DECIDED:** The invitation-only beta has ten launch languages: English,
+  Galician, Spanish, Portuguese, Catalan/Valencian, Italian, Basque, French,
+  Aranese Occitan and Simplified Chinese.
+- **DECIDED:** The beta storage entitlement is exactly `100_000_000` bytes per
+  account (decimal 100 MB). Entitlements remain rows in
   `account_storage_entitlements`, so a future operator may assign different
   limits or plan codes without changing catalogue ownership semantics.
-- [x] Staging and production contain independent databases, object buckets,
-  backup repositories, SMTP credentials, monitoring projects, secrets and
-  cookies. No database, account, library, book or object is copied from staging
-  as part of deployment.
-- [x] A portable Server ZIP may be exported by an authorized Owner in staging
-  and imported by an authorized Owner in production through the normal guarded
-  import flow. This is user-directed data portability, not environment cloning.
-- [x] Production receives the same immutable application image digests already
-  accepted in staging. Environment configuration and secrets differ; code and
-  image contents do not.
-- [x] A web `SYSTEM_ADMIN` console is a production blocker. It is a separate
-  authorization domain and never grants library membership or implicit access
-  to private catalogues, maps, covers, readings, loans, exports or email bodies.
-- [x] Raw host, Docker, Caddy and application logs remain host-side. The admin
-  console exposes normalized, minimized security and operational events, not a
-  shell, arbitrary log reader, filesystem browser or secret viewer.
-- [x] The general API IP limit does not require representative public traffic
-  in staging. Its rollout gate is deterministic: automated concurrency tests,
-  a bounded observe-mode rehearsal, enforce-mode rehearsal, normal functional
-  use and a deep operational check.
+- **DECIDED:** Staging and production contain independent databases, object
+  buckets, backup repositories, SMTP credentials, monitoring projects, secrets
+  and cookies. No database, account, library, book or object is copied from
+  staging as part of deployment.
+- **DECIDED:** A portable Server ZIP may be exported by an authorized Owner in
+  staging and imported by an authorized Owner in production through the normal
+  guarded import flow. This is user-directed data portability, not environment
+  cloning.
+- **DECIDED:** Production receives the same immutable application image digests
+  already accepted in staging. Environment configuration and secrets differ;
+  code and image contents do not.
+- **DECIDED:** A web `SYSTEM_ADMIN` console is a production blocker. It is a
+  separate authorization domain and never grants library membership or implicit
+  access to private catalogues, maps, covers, readings, loans, exports or email
+  bodies.
+- **DECIDED:** Raw host, Docker, Caddy and application logs remain host-side. The
+  admin console exposes normalized, minimized security and operational events
+  and may reveal one retained client-IP field only through the mediated,
+  incident-bound control in section 6. It does not expose raw logs, a shell, an
+  arbitrary log reader, a filesystem browser or a secret viewer.
+- **DECIDED:** The general API IP limit does not require representative public
+  traffic in staging. Its rollout gate is deterministic: automated concurrency
+  tests, a bounded observe-mode rehearsal, enforce-mode rehearsal, normal
+  functional use and a deep operational check.
 
 ## 3. Accepted baseline
 
@@ -101,9 +108,11 @@ otherwise.
 - [ ] Verify that no retained event contains cookies, authorization headers,
   CSRF values, reset/invitation tokens, request bodies, email content, object
   keys or catalogue data.
-- [ ] Document and test the host-only incident procedure for authorized access
-  to raw IP evidence. Every access must record operator, reason, incident,
-  timestamp and result in the immutable admin audit.
+- [ ] Document and test the host-only procedure for access to raw log files.
+  Separately test the console's mediated reveal of one retained client-IP field
+  from one normalized security event. Both paths require operator, reason,
+  incident, timestamp and result in the immutable admin audit; the console path
+  must not permit raw-log access, bulk IP listing, arbitrary search or export.
 
 Evidence: committed retention table and runbook; staging rotation transcript;
 redaction tests; one audited raw-evidence access rehearsal.
@@ -312,9 +321,11 @@ This entire section is a **production blocker**.
 - [ ] Display service/backup/email/deep-check health and D5 aggregates.
 - [ ] Display filtered security cases and normalized events with time, event
   class, outcome, pseudonymous client correlation and deployment revision.
-- [ ] Permit audited access to a retained raw client IP only for an explicitly
-  opened security incident, after current WebAuthn step-up. Do not expose raw
-  request logs or arbitrary searches.
+- [ ] Permit audited reveal of one retained client-IP field from one normalized
+  security event only for an explicitly opened incident and after current
+  WebAuthn step-up. The endpoint accepts the incident ID and event ID, not an IP
+  search, and provides no bulk listing, export or access to the underlying raw
+  request log.
 - [ ] Provide no shell, Docker control, SQL console, secret viewer, raw-log
   browser, email body/token access, impersonation or private-library browsing.
 
@@ -453,6 +464,12 @@ This section is a **production blocker**.
 - [ ] Run import, export, restore, Owner/Viewer and concurrent-user journeys.
 - [ ] Pass current Chrome, Firefox and Safari on desktop and mobile/tablet where
   available; record exact versions and exceptions.
+- [ ] Pass mobile installation acceptance: install/add BOOKPILE to the home
+  screen from current Android Chrome and iOS Safari, launch it from the icon,
+  authenticate, retain the selected language, navigate catalogue and map, then
+  deploy a newer compatible build and prove the installed entry is not stranded
+  on stale assets. Document that the beta requires connectivity and makes no
+  offline-availability promise.
 - [ ] Pass keyboard-only use, visible focus, semantic labels, contrast and a
   basic screen-reader journey for authentication, catalogue, map and admin.
 - [ ] Rehearse final production deployment, application rollback, total-host
@@ -597,5 +614,5 @@ complete disposition. This table is an audit trail, not another task list.
 | Defensive security | Section 4. |
 | Storage, backup, deletion and export policies | Section 10. |
 | Deployment and rollback | Section 7. |
-| Responsive/accessibility/browser acceptance | Section 11. |
+| Responsive/accessibility/browser and mobile-installation acceptance | Section 11. |
 | Terms, privacy and consent | Section 10. |
