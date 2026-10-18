@@ -46,8 +46,9 @@ Local worktree.
 
 These items were tracked in the historical roadmap now archived at
 `old/TODO-legacy-2026-10-18.md`. Any newly discovered release work must be added
-to `BOOKPILE_MASTER_WORK_PLAN.md` rather than to this completed audit. Additional parity
-backport list; discovery never authorizes a direct edit of the populated Local
+to `BOOKPILE_MASTER_WORK_PLAN.md` rather than to this completed audit. Additional
+non-release parity improvements belong in that plan's post-beta Local-backport
+work. Discovery never authorizes a direct edit of the populated Local
 installation.
 
 ## Phase 4D parity gates

@@ -426,7 +426,8 @@ This section is a **production blocker**.
 - [ ] Publish export/portability instructions and test them against the released
   interface.
 - [ ] Publish account/library deletion, 48-hour recovery and permanent-cleanup
-  behaviour.
+  behaviour. Name exactly which authenticated role may cancel a pending shared-
+  library deletion and prove the published rule matches direct API tests.
 - [ ] Publish privacy information covering controller/contact, purposes, legal
   bases, data categories, processors/subprocessors, EU locations, retention,
   security-event/IP use, international transfers if any and data-subject rights.
@@ -442,6 +443,9 @@ This section is a **production blocker**.
 
 - [ ] Run invitation, registration, verification, login/logout, password reset,
   deletion recovery and session-revocation journeys.
+- [ ] Record and verify the effective invitation, verification, password-reset,
+  normal-session, remembered-session, deletion-recovery and admin-confirmation
+  expiry periods against configuration, UI/email copy and boundary-time tests.
 - [ ] Run a ten-language matrix covering preference change, reload, fresh
   browser, second device, auth links, email subjects/bodies, dates, numbers,
   accessibility names and mobile layout. The already accepted implementation
@@ -472,14 +476,74 @@ This section is a **production blocker**.
 
 ## 13. Post-beta work, not release blocking
 
-- [ ] Observe usage before defining paid plans; the entitlement model may assign
-  different byte limits and plan codes without changing library ownership.
-- [ ] Consider friendship, blocking and public catalogues only after a separate
-  moderation/privacy design.
-- [ ] Backport selected Server geometry and internationalization work to a
-  future Local release through its isolated maintenance process.
-- [ ] Consider German, Japanese, Dutch, Greek, Arabic and Korean; Arabic requires
-  a complete RTL audit.
+Every item here is intentionally non-blocking for the invitation beta. An
+evaluation task closes only with a committed decision record that says
+`ACCEPTED` or `REJECTED`, names the evidence and, when accepted, creates the
+implementation task in this section.
+
+### P1 — Local maintenance and parity
+
+- [ ] Add Local interface localization in an isolated maintenance branch while
+  preserving the English-only `v1.0.0` artifact; pass clean-install, backup,
+  restore and desktop/mobile language acceptance before releasing it.
+- [ ] Backport the accepted Server physical-geometry behaviour to Local using a
+  verified ZIP, isolated worktree, additive rehearsed SQLite migration and the
+  active geometry specification; never test against the populated Local data.
+- [ ] Publish Local manual-recovery and safe-backup-storage instructions and
+  rehearse them against an isolated installation.
+- [ ] Evaluate realistic supported-PILE tilt with two contact points, rotated
+  rendering, transformed hitboxes and collision rules; close with an accepted
+  or rejected geometry decision and prototype evidence.
+
+### P2 — Capture and bibliographic enrichment
+
+- [ ] Implement multi-source ISBN enrichment for Local and Server: normalize
+  candidates from every configured provider, preserve provenance, display
+  conflicts, merge genuine contributor roles without duplication and require
+  explicit field-level review before saving.
+- [ ] Evaluate continuous live barcode scanning over a trusted HTTPS/installable
+  capture path. The prototype must stop camera streams, debounce repeated codes
+  and retain typed ISBN/photo scanning as fallbacks; record `ACCEPTED` or
+  `REJECTED` with mobile evidence.
+- [ ] Evaluate advanced OCR only after measuring the current OCR workflow.
+  Record accuracy, latency, supported devices and maintenance cost, then record
+  `ACCEPTED` or `REJECTED`; no implementation follows without acceptance.
+- [ ] Audit Local and Server parity for edition language versus original work
+  language and ordered contributor roles. Implement every missing schema,
+  details/edit/search/import/export and ISBN-review path, with lossless migration
+  evidence in both editions.
+
+### P3 — Rich metadata and discovery
+
+- [ ] Add structured subjects with versioned import/export and searchable,
+  editable Local/Server projections.
+- [ ] Replace interim free-text genre storage with structured genres through a
+  lossless migration that preserves every existing value and exposes unresolved
+  values for review.
+- [ ] Add free-form tags with normalization, search, import/export and privacy-
+  safe Server ownership semantics.
+- [ ] Add an optional personal rating owned by the reader, never shared as
+  library metadata; cover Local/Server migration, import/export and privacy.
+- [ ] After ratings exist, add personal-rating map colouring with an accessible
+  legend and missing-data state.
+- [ ] Implement near-match suggestions only after committing a normalization
+  strategy for free-text language and genre values; prove that suggestions do
+  not silently rewrite metadata.
+- [ ] Evaluate optional physical-move history with retention, storage and
+  privacy costs; record `ACCEPTED` or `REJECTED` and, if accepted, add a separate
+  implementation task.
+
+### P4 — Later product policy
+
+- [ ] Observe beta storage usage before defining paid plans. Record an accepted
+  entitlement/tier decision; different byte limits and plan codes must not
+  change library ownership semantics.
+- [ ] Evaluate username-discovery opt-out with search-abuse and privacy evidence;
+  record `ACCEPTED` or `REJECTED` before changing discovery.
+- [ ] Consider friendship, blocking and public catalogues only after an accepted
+  moderation, reporting and privacy design.
+- [ ] Consider German, Japanese, Dutch, Greek, Arabic and Korean; each language
+  requires the full launch-language contract and Arabic requires an RTL audit.
 - [ ] Clean old merged branches while preserving branches with unique commits,
   open PRs and `release/local-v1`.
 
@@ -501,3 +565,37 @@ the sections above.
 7. **Readiness:** complete capacity, dependencies, policies/legal text and final
    cross-browser/accessibility acceptance.
 8. **Opening:** complete Phase 9G and record explicit `GO` or `NO-GO`.
+
+## 15. Legacy-roadmap disposition
+
+The unchecked items from `old/TODO-legacy-2026-10-18.md` have the following
+complete disposition. This table is an audit trail, not another task list.
+
+| Legacy item | Authoritative disposition |
+| --- | --- |
+| Multilingual Local and Server interfaces | Server implementation accepted in section 3; release regression in section 11; Local work in P1. |
+| Server-to-Local visual/geometry parity | Active specification plus P1. |
+| Manual recovery and safe backup documentation | P1. |
+| Multi-source ISBN enrichment | P2. |
+| Continuous barcode scanning | P2 evaluation. |
+| Advanced OCR | P2 evaluation. |
+| Original/edition language and contributor-role parity | P2 audit and implementation. |
+| Server canonical geometry | Completed baseline; Local backport in P1. |
+| Supported PILE tilt | P1 evaluation. |
+| Subjects, structured genres, tags and ratings | P3. |
+| Rating map colouring | P3, ordered after ratings. |
+| Near-match normalization/suggestions | P3. |
+| Physical-move history | P3 evaluation. |
+| Remaining multi-user decisions | Beta decisions are fixed in section 2 or covered by sections 4-12; discovery and monetization remain in P4. Portable exports are streamed and are not retained as user snapshots during the beta. |
+| Viewer-safe authorization for every domain | Section 5. |
+| Friendship, blocking and public catalogues | P4. |
+| Phase 9 and 9G | Sections 4-12. |
+| Server internationalization | Accepted baseline plus section 11 regression. |
+| Production providers/adapters | Section 7. |
+| Authorization checks | Section 5. |
+| Platform administration | Section 6 and ADR 0017. |
+| Defensive security | Section 4. |
+| Storage, backup, deletion and export policies | Section 10. |
+| Deployment and rollback | Section 7. |
+| Responsive/accessibility/browser acceptance | Section 11. |
+| Terms, privacy and consent | Section 10. |
