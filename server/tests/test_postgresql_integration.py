@@ -884,6 +884,7 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             session.add(mutation_coowner)
             session.flush()
+            mutation_coowner_id = mutation_coowner.id
             session.add_all(
                 (
                     LibraryMembership(
@@ -1009,6 +1010,15 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 == "git-mutation-multiprocess"
                 for event in mutation_events
             )
+
+        # This identity exists only for the two-Owner race. Remove it before
+        # the historical downgrade assertions, whose original two-user
+        # fixture is itself part of the migration contract.
+        with Session(engine) as session:
+            mutation_coowner = session.get(User, mutation_coowner_id)
+            assert mutation_coowner is not None
+            session.delete(mutation_coowner)
+            session.commit()
 
         def acquire_operation_lease_concurrently(_: int) -> bool:
             with Session(engine) as concurrent_session:
