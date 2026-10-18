@@ -35,8 +35,11 @@ shared co-Owner quota-allocation algorithm.
 - Save a new book before uploading its optional cover. A cover failure never
   rolls back or silently deletes the valid book; the interface reports partial
   success and permits a retry.
-- Defer the global 300 MB co-Owner allocation algorithm to its dedicated quota
-  phase. Exact object sizes recorded here provide its future accounting input.
+- At this phase, defer the then-proposed 300 MB co-Owner allocation algorithm
+  to its dedicated quota phase. Exact object sizes recorded here provide its
+  future accounting input. The later accepted implementation supersedes that
+  provisional number with a decimal 100 MB entitlement represented by an
+  entitlement row, as recorded in the master work plan.
 
 ## Consequences
 

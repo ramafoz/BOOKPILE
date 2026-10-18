@@ -538,7 +538,7 @@ map and page-proportional rearrangement. It must not be retroactively read as
 if v1.0.0 already used measured millimetres.
 
 BOOKPILE Server will first implement the successor model defined in
-`PHYSICAL_GEOMETRY_PLAN.md`: one canonical geometry with shared manual and
+`../specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`: one canonical geometry with shared manual and
 physical modes, millimetre furniture coordinates, measured book thickness,
 accordion container behaviour, generic supports, and visible physical
 diagnostics. The Server implementation should reuse the pure camera,

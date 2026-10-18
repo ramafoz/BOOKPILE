@@ -1,8 +1,9 @@
-# BOOKPILE physical-geometry implementation plan
+# BOOKPILE physical-geometry specification
 
-Status: implemented, accepted, and merged into `main` as the Server Phase 4D
-geometry contract. Optional refinements and a controlled future Local backport
-remain pending.
+Status: active normative specification. The Server Phase 4D implementation is
+accepted and merged into `main`. Any future refinement or controlled Local
+backport is tracked only in `../BOOKPILE_MASTER_WORK_PLAN.md`; this document
+defines behaviour and does not maintain a separate work queue.
 
 This document is the canonical specification for combining measured physical
 dimensions with BOOKPILE's editable visual layout. Implementation begins in

@@ -26,4 +26,5 @@ BOOKPILE Local v1 intentionally has a narrow deployment model.
   is intended to become its migration input; the Local application itself will
   not be converted into a switchable server edition.
 
-The authoritative future roadmap is maintained in [TODO.md](TODO.md).
+The authoritative work and release plan is maintained in
+[docs/BOOKPILE_MASTER_WORK_PLAN.md](docs/BOOKPILE_MASTER_WORK_PLAN.md).

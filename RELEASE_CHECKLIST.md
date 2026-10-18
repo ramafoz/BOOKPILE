@@ -60,5 +60,5 @@ complete and the release candidate has explicit user approval.
 - [x] Publish `BOOKPILE-Local-v1.0.0.zip`, its `.sha256`, and release notes on
   GitHub.
 - [x] Preserve `release/local-v1` for critical Local fixes.
-- [ ] Create the separate multi-user foundation branch only after Local v1 is
+- [x] Create the separate multi-user foundation branch only after Local v1 is
   recoverable from its public tag and artifact.

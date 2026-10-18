@@ -224,14 +224,15 @@ Subsequent progress:
    leases. D6 keeps Caddy's deterministic controls and reserves persistent
    host-level temporary bans for high-confidence scanner traffic. No process-
    local Caddy/Python limiter is accepted.
-4. **D4 implementation:** the first infrastructure slice adds the explicit
-   `off`/`observe`/`enforce` setting, privacy-safe observed-limit decisions,
+4. **D4 implementation:** the first infrastructure slice added explicit
+   `off`/`observe`/`enforce` settings, privacy-safe observed-limit decisions,
    one shared account-identifier normalizer and PostgreSQL-backed renewable
-   operation leases with monotonic fencing tokens. The default remains `off`.
-   Route policies, protected import/export commits, staged-object publication
-   and export-stream lifetime wiring remain separate work; deploy those
-   controls disabled, observe staging for at least 24 hours, then enforce
-   costly operations before general API limits.
+   operation leases with monotonic fencing tokens. Subsequent slices use their
+   policy-specific acceptance gates. Costly operations completed observe and
+   enforce acceptance. Because staging has no representative user cohort, the
+   general API ceiling uses deterministic two-worker tests, a bounded observe
+   burst, an enforce burst, normal functional use and a deep check; elapsed
+   24-hour observation without representative traffic is not a D4-G gate.
    The second slice connects separate user/library frequency counters to
    authorized import preflight, import consolidation and portable export
    operations. They remain inert in `off`, emit revision-labelled aggregate
@@ -269,8 +270,11 @@ Subsequent progress:
    PostgreSQL/HMAC machinery across workers, excludes health and non-API
    traffic, records revision-labelled aggregate evidence in `observe`, returns
    a generic 429 with `Retry-After` in `enforce`, and fails closed with a
-   generic 503 if no decision can be made. Its default remains `off` pending a
-   separate staging observation and burst rehearsal.
+   generic 503 if no decision can be made. It is deployed in `observe` at
+   revision `b3700d2882fcde5c08a0ea69e585529880eaec06`; the bounded 650-request
+   rehearsal produced one 650-count bucket and one revision-labelled
+   observation event without `429` or `5xx`, and the deep check remained
+   healthy. Enforce-mode acceptance remains open in the master work plan.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous
@@ -283,7 +287,9 @@ Subsequent progress:
    to staging in `observe` or `enforce`, uses random identities, creates no
    accounts, libraries, archives or objects, and proves all six user/library
    policy scopes produce the expected observation or blocking event.
-7. Observe staging for at least 24 hours before enabling temporary blocking.
+7. Observe D6 scanner detection for at least 24 hours before enabling its
+   temporary ban. The D6 general-volume signal remains observation-only for
+   seven days. D4 application limits use their policy-specific acceptance gates.
 
 [ADR 0016](docs/adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,
 independent disable switches and rollback. Production values remain subject to

@@ -7,16 +7,17 @@ separate authorization domain from `OWNER` and `VIEWER`. A platform operator
 receives no implicit membership and no application route may treat system
 administration as permission to read a private library.
 
-The private beta exposes no browser administration panel. Host-side maintenance
-may process expiry, aggregate health and integrity but must not print identities,
-library names, object keys, request queries, tokens or content. A later admin
-domain needs independent authentication, immutable operator audit and explicit
-per-action policy before UI work begins.
+The original decision deferred a browser administration panel during the
+private beta. That timing decision is superseded by ADR 0017: a restricted web
+`SYSTEM_ADMIN` console is now a production blocker. The authorization boundary
+in this ADR remains unchanged. Host-side maintenance may process expiry,
+aggregate health and integrity but must not print private content, object keys,
+request queries, tokens or email bodies.
 
 ## Consequences
 
 - Support cannot casually impersonate members or inspect their libraries.
 - Infrastructure recovery can touch encrypted/storage layers only for integrity
   restoration under incident procedure.
-- Account abuse tooling and public/social moderation remain separately designed
-  future work.
+- Account abuse tooling is limited by ADR 0017. Public/social moderation remains
+  separately designed future work.

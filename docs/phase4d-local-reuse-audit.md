@@ -44,9 +44,11 @@ A future Local release may backport these controls on a separate Local branch,
 after backup and isolated acceptance testing. Phase 4D never changes the live
 Local worktree.
 
-These items are now tracked explicitly in `TODO.md`. Any additional parity
-improvement discovered while building Server must be added to that controlled
-backport list; discovery never authorizes a direct edit of the populated Local
+These items were tracked in the historical roadmap now archived at
+`old/TODO-legacy-2026-10-18.md`. Any newly discovered release work must be added
+to `BOOKPILE_MASTER_WORK_PLAN.md` rather than to this completed audit. Additional
+non-release parity improvements belong in that plan's post-beta Local-backport
+work. Discovery never authorizes a direct edit of the populated Local
 installation.
 
 ## Phase 4D parity gates
@@ -91,7 +93,8 @@ The schema-v9 physical-geometry foundation, generic support rules, per-axis
 fallback engine, millimetre-only precise editor, and strict manual/physical
 rendering boundary were accepted on 2026-09-02. The remaining Phase 4D work is
 complete physical projection, accordion/warning behaviour, and floating/direct
-layout editing through the full model in `../PHYSICAL_GEOMETRY_PLAN.md`. Automated gates now
+layout editing through the full model in
+`specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`. Automated gates now
 cover the pure movement engine, read-only preview, stale-revision rejection,
 atomic application, authorization, and existing geometry rules.
 

@@ -269,7 +269,7 @@ baseline. Their occupied size is derived from their books, shelf limits,
 orientation, and layout rules.
 
 Map consequences are now specified normatively in
-`PHYSICAL_GEOMETRY_PLAN.md`. In summary:
+`docs/specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`. In summary:
 
 - A row uses book thickness along its stacking axis and book height on its
   vertical axis.

@@ -237,8 +237,9 @@ be an additional convenience only.
   and one exact object into a disposable PostgreSQL database and empty local
   volume on 2026-09-14. The disposable container, volumes and network were
   removed. A second verified backup ran successfully through systemd.
-- [ ] Consolidate RPO/RTO, CPU, memory, free disk, request/import/backup/restore
-  durations and every provider gap in the private staging evidence record. The
+- Capacity consolidation continues only under section 8 of
+  `docs/BOOKPILE_MASTER_WORK_PLAN.md`; this completed provisioning checklist no
+  longer carries an independent work item. The
   2026-09-18 recovery measurement is now recorded in
   `SERVER_OPERATIONAL_BACKUP.md`: RPO 6 h 36 min 22 s, successful restore
   5 min 11.48 s and total RTO 35 min 48 s for 36 tables/434 objects. Four CPUs,

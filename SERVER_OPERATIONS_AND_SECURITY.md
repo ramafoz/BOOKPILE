@@ -252,19 +252,23 @@ because they disclose the dependency graph to that registry.
 
 ## Platform administration and break glass
 
-`SYSTEM_ADMIN` is a future platform role, not a library membership. It may
+`SYSTEM_ADMIN` is a separate platform role, not a library membership. Its
+restricted web console is required before production under
+`docs/adr/0017-system-admin-console.md`. It may
 manage account invitations, account state, abuse controls and aggregate service
 health. It must not implicitly read catalogues, maps, loans, readings, covers,
 profiles or library audit contents. Owners remain the only ordinary principals
 with private library authority.
 
-The first staging/beta cut intentionally has no web `SYSTEM_ADMIN` panel.
-Host-side commands are authenticated by OS/SSH access. A future friendly
-operator panel is planned for an explicitly enrolled operator, not granted
-by matching the username `ramafoz` or by owning a library. Before UI work,
-it requires independent authentication, MFA or step-up for sensitive actions,
-immutable operator audit and a narrow backend command catalogue. It must not
-expose shell, Docker, environment secrets or user-private library data.
+Until that console passes acceptance, host-side commands remain authenticated
+by OS/SSH access and production invitations are not authorized. The console is
+available only to an explicitly enrolled operator, never by matching a username
+or owning a library. It requires WebAuthn/FIDO2, an independent short admin
+session, current step-up for sensitive actions, immutable operator audit and a
+narrow backend command catalogue. It exposes normalized security/operational
+events, not arbitrary raw logs, shell, Docker, SQL, environment secrets, tokens,
+email content or user-private library data. Exact controls and acceptance
+evidence are tracked only in `docs/BOOKPILE_MASTER_WORK_PLAN.md`.
 
 Break-glass access is an off-host custodied operator credential used only when
 normal deployment access is unavailable. It requires provider MFA, a second

@@ -908,7 +908,7 @@ compatible meanings and explicit import rules.
     scope-safe PostgreSQL transactions. Automated and manual acceptance passed
     on 2026-09-02.
   - [x] Complete the approved single-geometry physical-dimension model in
-    `PHYSICAL_GEOMETRY_PLAN.md`: millimetre world coordinates, shared
+    `../specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md`: millimetre world coordinates, shared
     `MANUAL`/`PHYSICAL` modes, per-axis fallbacks, accordion movement, generic
     supports, PILE alignment, and derived physical warnings.
     - [x] Apply and accept the reversible schema-v9 to schema-v11 foundation,
