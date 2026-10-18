@@ -84,10 +84,10 @@ neither creates an additional work queue.
   import preflight, import consolidation and portable export by user and
   library. Observe/enforce rehearsals and normal use passed at revision
   `6495d21b492dbdcaa55bf6aca0e00cf45483887e`.
-- [x] The general `/api/*` IP ceiling is deployed in observe mode at revision
-  `b3700d2882fcde5c08a0ea69e585529880eaec06`. A 650-request/10-second rehearsal
-  produced 650 normal `404` responses, one HMAC-keyed bucket with count 650 and
-  one revision-labelled `rate_limit_observed`; the deep check remained healthy.
+- [x] The general `/api/*` IP ceiling is enforced in staging at revision
+  `b3700d2882fcde5c08a0ea69e585529880eaec06`. Observe and enforce rehearsals,
+  privacy checks, excluded traffic, concurrent-worker decisions, normal use and
+  the deep operational check passed on 2026-10-18.
 
 ## 4. Defensive security programme
 
@@ -119,21 +119,32 @@ redaction tests; one audited raw-evidence access rehearsal.
 
 ### D4-G — General API IP ceiling
 
-- [ ] Change `BOOKPILE_SERVER_GENERAL_API_LIMIT_MODE` from `observe` to
+- [x] Change `BOOKPILE_SERVER_GENERAL_API_LIMIT_MODE` from `observe` to
   `enforce` in staging and recreate only the API.
-- [ ] In a fresh fixed window, run a bounded 650-request rehearsal and prove
+- [x] In a fresh fixed window, run a bounded 650-request rehearsal and prove
   that requests through the threshold retain their normal response, excess
   requests return generic `429` with `Retry-After`, exactly one
   `rate_limit_blocked` event is emitted and no raw IP is stored in the bucket or
   event.
-- [ ] Complete normal login, catalogue, cover and map use after the rehearsal;
+- [x] Complete normal login, catalogue, cover and map use after the rehearsal;
   prove `/health/live`, `/health/ready`, frontend and static assets are not
   counted; run the deep operational check.
-- [ ] Exercise two API workers concurrently and prove that their combined
+- [x] Exercise two API workers concurrently and prove that their combined
   decisions cannot exceed the configured shared threshold.
 
 Evidence: command output, event/bucket status, response headers, revision and
-deep-check result.
+deep-check result. The enforce rehearsal returned 600 normal `404` responses
+and 50 generic `429` responses in ten seconds; an additional blocked request
+carried `Retry-After: 51`, `Cache-Control: no-store` and a request ID. The
+shared bucket reached 651, its key was a 64-character HMAC, and exactly one
+revision-labelled event with a null `ip_address` was written. Three live and
+ready checks, the frontend and a built JavaScript asset left the bucket at 80;
+normal login, catalogue, cover and map use passed. Both Uvicorn workers were
+running, and the PostgreSQL integration gate starts two independent operating-
+system processes, gives each its own configured API middleware stack and
+database pool, releases both requests simultaneously against the same
+`general_api_ip` key, and requires one `404` plus one generic `429`. The deep
+check accounted for all 435 private objects with zero discrepancies.
 
 ### D4-M — Authenticated and library mutation ceilings
 

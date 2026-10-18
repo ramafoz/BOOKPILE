@@ -270,11 +270,18 @@ Subsequent progress:
    PostgreSQL/HMAC machinery across workers, excludes health and non-API
    traffic, records revision-labelled aggregate evidence in `observe`, returns
    a generic 429 with `Retry-After` in `enforce`, and fails closed with a
-   generic 503 if no decision can be made. It is deployed in `observe` at
-   revision `b3700d2882fcde5c08a0ea69e585529880eaec06`; the bounded 650-request
-   rehearsal produced one 650-count bucket and one revision-labelled
-   observation event without `429` or `5xx`, and the deep check remained
-   healthy. Enforce-mode acceptance remains open in the master work plan.
+   generic 503 if no decision can be made. Observe mode was accepted at
+   revision `b3700d2882fcde5c08a0ea69e585529880eaec06`, then staging moved to
+   `enforce` on 2026-10-18. A fresh 650-request rehearsal returned 600 normal
+   `404` responses and 50 generic `429` responses, followed by a blocked probe
+   with `Retry-After: 51`; the shared HMAC bucket reached 651 and exactly one
+   revision-labelled event was written without a raw IP. Health, frontend and
+   static traffic left the bucket unchanged, normal authenticated use passed,
+   both API workers were active, and the PostgreSQL gate starts two independent
+   operating-system processes with separate configured API middleware stacks
+   and database pools, synchronizes their requests to the same key and requires
+   one normal response plus one generic `429`. The deep check accounted for all
+   435 private objects. This closes D4-G.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous
