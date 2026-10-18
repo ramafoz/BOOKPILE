@@ -258,6 +258,19 @@ Subsequent progress:
    private-object audit detects; bounded automatic orphan deletion remains a
    separate recovery task because deleting an object without proving it is no
    longer part of an in-flight transaction would be unsafe.
+   Costly-operation D4 was accepted in staging on 2026-10-18 at revision
+   `6495d21b492dbdcaa55bf6aca0e00cf45483887e`: all six user/library scopes
+   emitted the expected observation events, then the expected blocking events
+   in `enforce`; ordinary import/export use and the deep operational check
+   remained healthy with all 435 private objects accounted for. This closes
+   the costly-operation rollout.
+   The fifth slice adds an independently disabled general `/api/*` client-IP
+   ceiling. It runs after trusted-proxy validation, uses the same atomic
+   PostgreSQL/HMAC machinery across workers, excludes health and non-API
+   traffic, records revision-labelled aggregate evidence in `observe`, returns
+   a generic 429 with `Retry-After` in `enforce`, and fails closed with a
+   generic 503 if no decision can be made. Its default remains `off` pending a
+   separate staging observation and burst rehearsal.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

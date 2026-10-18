@@ -1066,17 +1066,18 @@ are consolidated in [MULTIUSER_IMPLEMENTATION_PLAN.md](MULTIUSER_IMPLEMENTATION_
   third slice protects portable-export creation and its complete response
   lifetime with grouped renewable user/library leases, disconnect cleanup and
   generic observe/enforce outcomes; hourly maintenance removes abandoned
-  top-level export ZIPs after a bounded TTL. Next, complete the import
-  transaction and object-publication boundaries described in
-  [ADR 0016](docs/adr/0016-defensive-request-limits.md). Grouped renewable
-  import-consolidation leases now use cooperative cancellation and atomically
-  fence the final domain commit; fresh immutable cover keys remain private
-  until that commit and are compensated on ordinary failure. Add a bounded,
-  proof-safe recovery path for objects abandoned by process or host failure.
-  Shared PostgreSQL limits and leases must enter observation mode first,
-  followed by the staging-only synthetic costly-limit rehearsal and a dry-run
-  and narrow temporary ban for high-confidence scanner traffic. Do not
-  introduce an in-memory-only Python or Caddy counter.
+  top-level export ZIPs after a bounded TTL. Grouped renewable import-
+  consolidation leases use cooperative cancellation and atomically fence the
+  final domain commit; fresh immutable cover keys remain private until that
+  commit and are compensated on ordinary failure. The six costly-operation
+  scopes completed observe/enforce staging acceptance on 2026-10-18 with
+  normal functional and deep operational checks. The next D4 slice is an
+  independently disabled PostgreSQL-backed 600/minute general `/api/*` client-
+  IP ceiling; deploy it in `observe`, rehearse a bounded burst, retain revision-
+  labelled evidence and only then enable `enforce`. Also add a bounded, proof-
+  safe recovery path for objects abandoned by process or host failure,
+  followed by a dry-run and narrow temporary ban for high-confidence scanner
+  traffic. Do not introduce an in-memory-only Python or Caddy counter.
 - [ ] Define storage limits, backup retention, account deletion, and data
   export policies.
 - [x] Accept and merge private account deletion with password reauthentication,

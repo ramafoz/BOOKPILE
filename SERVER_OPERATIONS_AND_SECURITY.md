@@ -235,6 +235,16 @@ security events: no account, library, archive or object is created. In
 and library must be rejected and emit `rate_limit_blocked`. Re-run `status` and
 retain both JSON outputs with the deployment revision as acceptance evidence.
 
+The general `/api/*` client-IP ceiling has a separate rollout switch:
+`BOOKPILE_SERVER_GENERAL_API_LIMIT_MODE`. Keep it `off` on first deployment,
+then select `observe` in staging without changing the already accepted costly-
+operation mode. `bookpile-defensive-limits status` reports its
+`general_api_ip` bucket/event evidence and the configured 600/minute threshold.
+Only exact `/api/*` traffic is counted; public health and frontend/static paths
+remain independent. Move this policy to `enforce` only after a bounded public-
+path burst produces one revision-labelled observation event and normal
+navigation remains healthy.
+
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
 mandatory. Registry-backed vulnerability scans require explicit authorization

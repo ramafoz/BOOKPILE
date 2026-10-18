@@ -23,6 +23,7 @@ COSTLY_SCOPES = (
     "portable_export_user",
     "portable_export_library",
 )
+STATUS_SCOPES = (*COSTLY_SCOPES, "general_api_ip")
 REHEARSAL_CONFIRMATION = "STAGING-LIMIT-REHEARSAL"
 
 
@@ -175,7 +176,7 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
             func.min(RateLimitBucket.window_started_at).label("first_window"),
             func.max(RateLimitBucket.updated_at).label("last_activity"),
         )
-        .where(RateLimitBucket.scope.in_(COSTLY_SCOPES))
+        .where(RateLimitBucket.scope.in_(STATUS_SCOPES))
         .group_by(RateLimitBucket.scope)
         .order_by(RateLimitBucket.scope)
     ).all()
@@ -191,7 +192,7 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
                     "operation_lease_blocked",
                 )
             ),
-            SecurityEvent.details["scope"].as_string().in_(COSTLY_SCOPES),
+            SecurityEvent.details["scope"].as_string().in_(STATUS_SCOPES),
         )
         .order_by(SecurityEvent.occurred_at.desc())
         .limit(100)
@@ -239,8 +240,12 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
     return {
         "environment": settings.environment,
         "mode": settings.defensive_limit_mode,
+        "general_api_mode": settings.general_api_limit_mode,
         "deployment_revision": settings.deployment_revision,
         "thresholds": {
+            "general_api_ip_per_minute": (
+                settings.general_api_attempts_per_ip_per_minute
+            ),
             "import_user_per_hour": settings.import_attempts_per_user_per_hour,
             "import_library_per_hour": settings.import_attempts_per_library_per_hour,
             "export_user_per_hour": settings.export_attempts_per_user_per_hour,
