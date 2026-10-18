@@ -291,6 +291,11 @@ staging environments must obtain unique secrets from deployment configuration.
 Production refuses to start with the development rate-limit HMAC secret,
 insecure session cookies, or a non-HTTPS public URL. Set
 `BOOKPILE_SERVER_RATE_LIMIT_KEY_SECRET` to a long random deployment secret.
+Authenticated mutation and authorized-library mutation ceilings use separate
+`off`/`observe`/`enforce` switches and default to `off`; their default
+thresholds are respectively 240 and 600 attempts per 15 minutes. They reuse
+the shared PostgreSQL/HMAC buckets and can be rolled back independently without
+disabling authentication, general-IP or costly-operation controls.
 Hosted environments must also set `BOOKPILE_SERVER_TRUSTED_PROXY_CIDRS` to the
 exact private Compose network through which Caddy reaches the API. BOOKPILE
 accepts Caddy's sanitized client address only when the immediate peer belongs

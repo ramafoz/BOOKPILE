@@ -151,3 +151,44 @@ def test_status_includes_general_api_limit_evidence(session: Session) -> None:
     assert status["general_api_mode"] == "off"
     assert status["buckets"][0]["scope"] == "general_api_ip"
     assert status["events"][0]["scope"] == "general_api_ip"
+
+
+def test_status_includes_mutation_limit_configuration(session: Session) -> None:
+    selected = settings("observe").model_copy(
+        update={
+            "mutation_user_limit_mode": "observe",
+            "mutation_library_limit_mode": "enforce",
+            "mutation_attempts_per_user_per_15_minutes": 240,
+            "mutation_attempts_per_library_per_15_minutes": 600,
+        }
+    )
+    session.add_all(
+        (
+            RateLimitBucket(
+                scope="mutation_user",
+                key_hash="synthetic-user-hash",
+                attempt_count=241,
+                window_started_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+            RateLimitBucket(
+                scope="mutation_library",
+                key_hash="synthetic-library-hash",
+                attempt_count=601,
+                window_started_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ),
+        )
+    )
+    session.commit()
+
+    status = costly_limit_status(session, selected)
+
+    assert status["mutation_user_mode"] == "observe"
+    assert status["mutation_library_mode"] == "enforce"
+    assert status["thresholds"]["mutation_user_per_15_minutes"] == 240
+    assert status["thresholds"]["mutation_library_per_15_minutes"] == 600
+    assert [item["scope"] for item in status["buckets"]] == [
+        "mutation_library",
+        "mutation_user",
+    ]

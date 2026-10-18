@@ -5,7 +5,7 @@ from hashlib import sha256
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -20,7 +20,11 @@ from .api.routes.physical_library import router as physical_library_router
 from .api.routes.readings import overview_router as readings_overview_router, router as readings_router
 from .api.routes.profiles import router as profiles_router
 from .services.storage_domain import InsufficientSharedCapacity
-from .api.dependencies import PrivateObjectStorageDependency, SessionDependency
+from .api.dependencies import (
+    PrivateObjectStorageDependency,
+    SessionDependency,
+    apply_mutation_limits,
+)
 from .config import get_settings
 from .error_reporting import (
     capture_unhandled_request_error,
@@ -74,17 +78,46 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
         openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_values)
-    app.include_router(auth_router, prefix="/api/v1")
-    app.include_router(catalogue_router, prefix="/api/v1")
-    app.include_router(libraries_router, prefix="/api/v1")
-    app.include_router(physical_library_router, prefix="/api/v1")
-    app.include_router(readings_router, prefix="/api/v1")
-    app.include_router(readings_overview_router, prefix="/api/v1")
-    app.include_router(loans_router, prefix="/api/v1")
-    app.include_router(loans_overview_router, prefix="/api/v1")
-    app.include_router(imports_router, prefix="/api/v1")
-    app.include_router(exports_router, prefix="/api/v1")
-    app.include_router(profiles_router, prefix="/api/v1")
+    mutation_dependency = [Depends(apply_mutation_limits)]
+    app.include_router(
+        auth_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        catalogue_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        libraries_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        physical_library_router,
+        prefix="/api/v1",
+        dependencies=mutation_dependency,
+    )
+    app.include_router(
+        readings_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        readings_overview_router,
+        prefix="/api/v1",
+        dependencies=mutation_dependency,
+    )
+    app.include_router(
+        loans_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        loans_overview_router,
+        prefix="/api/v1",
+        dependencies=mutation_dependency,
+    )
+    app.include_router(
+        imports_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        exports_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
+    app.include_router(
+        profiles_router, prefix="/api/v1", dependencies=mutation_dependency
+    )
     app.add_middleware(
         GeneralApiRateLimitMiddleware,
         settings=settings,

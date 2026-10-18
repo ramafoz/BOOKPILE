@@ -219,6 +219,22 @@ def test_general_api_limit_rejects_unsafe_thresholds(attempts: int) -> None:
         Settings(general_api_attempts_per_ip_per_minute=attempts)
 
 
+@pytest.mark.parametrize(
+    ("field", "attempts"),
+    (
+        ("mutation_attempts_per_user_per_15_minutes", 29),
+        ("mutation_attempts_per_user_per_15_minutes", 10_001),
+        ("mutation_attempts_per_library_per_15_minutes", 59),
+        ("mutation_attempts_per_library_per_15_minutes", 20_001),
+    ),
+)
+def test_mutation_limits_reject_unsafe_thresholds(
+    field: str, attempts: int
+) -> None:
+    with pytest.raises(ValueError):
+        Settings(**{field: attempts})
+
+
 def test_database_failure_is_explicit_and_rolls_back() -> None:
     repository = UnavailableRateLimitRepository()
     limiter = RateLimiter(repository, "test-secret")  # type: ignore[arg-type]

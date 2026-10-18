@@ -16,13 +16,14 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from bookpile_server.api import dependencies as api_dependencies
 from bookpile_server.config import Settings, get_settings
 from bookpile_server.database import get_session
 from bookpile_server.general_api_limits import GeneralApiRateLimitMiddleware
@@ -112,6 +113,67 @@ def _request_general_api_limit_from_process(
             if not start_event.wait(timeout=30):
                 raise RuntimeError("Multiprocess limit gate did not start")
             response = client.get("/api/v1/not-a-route")
+            result_queue.put(
+                (
+                    os.getpid(),
+                    response.status_code,
+                    response.json(),
+                    response.headers.get("retry-after"),
+                )
+            )
+    finally:
+        engine.dispose()
+
+
+def _request_mutation_limit_from_process(
+    database_url: str,
+    raw_session_token: str,
+    library_id: str,
+    user_mode: str,
+    library_mode: str,
+    ready_queue,
+    start_event,
+    result_queue,
+) -> None:
+    """Exercise one independent mutation-dependency worker stack."""
+    engine = create_engine(database_url)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    settings = Settings(
+        environment="test",
+        database_url=database_url,
+        deployment_revision="git-mutation-multiprocess",
+        rate_limit_key_secret="integration-secret",
+        mutation_user_limit_mode=user_mode,
+        mutation_library_limit_mode=library_mode,
+    ).model_copy(
+        update={
+            "mutation_attempts_per_user_per_15_minutes": 1,
+            "mutation_attempts_per_library_per_15_minutes": 1,
+        }
+    )
+    api_dependencies.get_settings = lambda: settings
+    app = FastAPI()
+
+    def override_session():
+        with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_session
+
+    @app.put(
+        "/api/v1/libraries/{library_id}/mutation-probe",
+        dependencies=[Depends(api_dependencies.apply_mutation_limits)],
+    )
+    def mutation_probe(library_id: str) -> dict[str, str]:
+        return {"status": "accepted", "library_id": library_id}
+
+    try:
+        with TestClient(app, client=("198.51.100.24", 12345)) as client:
+            client.cookies.set(settings.session_cookie_name, raw_session_token)
+            ready_queue.put(os.getpid())
+            if not start_event.wait(timeout=30):
+                raise RuntimeError("Multiprocess mutation gate did not start")
+            response = client.put(f"/api/v1/libraries/{library_id}/mutation-probe")
             result_queue.put(
                 (
                     os.getpid(),
@@ -805,6 +867,143 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 "mode": "enforce",
                 "deployment_revision": "git-postgres-multiprocess",
             }
+
+        mutation_coowner_token = "postgres-mutation-coowner-session"
+        with Session(engine, expire_on_commit=False) as session:
+            mutation_coowner = User(
+                email="mutation-coowner@example.test",
+                username="mutation_coowner",
+                password_hash="not-a-real-password-hash",
+                state="active",
+                email_verified_at=datetime.now(UTC),
+            )
+            session.add(mutation_coowner)
+            session.flush()
+            session.add_all(
+                (
+                    LibraryMembership(
+                        library_id=first.id,
+                        user_id=mutation_coowner.id,
+                        role="OWNER",
+                        selected_reading_user_id=mutation_coowner.id,
+                    ),
+                    UserSession(
+                        user_id=mutation_coowner.id,
+                        token_hash=hash_session_secret(mutation_coowner_token),
+                        csrf_token_hash=hash_session_secret(
+                            "postgres-mutation-coowner-csrf"
+                        ),
+                        last_seen_at=datetime.now(UTC),
+                        expires_at=datetime.now(UTC) + timedelta(days=7),
+                        absolute_expires_at=datetime.now(UTC) + timedelta(days=30),
+                    ),
+                )
+            )
+            session.commit()
+
+        def exercise_mutation_workers(
+            tokens: tuple[str, str], *, user_mode: str, library_mode: str
+        ) -> list[tuple[int, int, dict[str, str], str | None]]:
+            context = get_context("spawn")
+            ready = context.Queue()
+            start = context.Event()
+            results = context.Queue()
+            processes = [
+                context.Process(
+                    target=_request_mutation_limit_from_process,
+                    args=(
+                        TEST_DATABASE_URL,
+                        token,
+                        str(first.id),
+                        user_mode,
+                        library_mode,
+                        ready,
+                        start,
+                        results,
+                    ),
+                )
+                for token in tokens
+            ]
+            try:
+                for process in processes:
+                    process.start()
+                ready_processes = {ready.get(timeout=30) for _ in processes}
+                assert len(ready_processes) == 2
+                start.set()
+                responses = [results.get(timeout=30) for _ in processes]
+            finally:
+                start.set()
+                for process in processes:
+                    process.join(timeout=30)
+                    if process.is_alive():
+                        process.terminate()
+                        process.join(timeout=5)
+            assert {response[0] for response in responses} == ready_processes
+            assert all(process.exitcode == 0 for process in processes)
+            return responses
+
+        user_limit_results = exercise_mutation_workers(
+            ("postgres-test-session", "postgres-test-session"),
+            user_mode="enforce",
+            library_mode="off",
+        )
+        assert sorted(result[1] for result in user_limit_results) == [200, 429]
+        user_blocked = next(
+            result for result in user_limit_results if result[1] == 429
+        )
+        assert user_blocked[2] == {
+            "detail": "Too many requests. Try again later."
+        }
+        assert user_blocked[3] is not None
+
+        library_limit_results = exercise_mutation_workers(
+            ("postgres-test-session", mutation_coowner_token),
+            user_mode="off",
+            library_mode="enforce",
+        )
+        assert sorted(result[1] for result in library_limit_results) == [200, 429]
+        library_blocked = next(
+            result for result in library_limit_results if result[1] == 429
+        )
+        assert library_blocked[2] == {
+            "detail": "Too many requests. Try again later."
+        }
+        assert library_blocked[3] is not None
+
+        with Session(engine) as session:
+            mutation_buckets = {
+                bucket.scope: bucket
+                for bucket in session.scalars(
+                    select(RateLimitBucket).where(
+                        RateLimitBucket.scope.in_(
+                            ("mutation_user", "mutation_library")
+                        )
+                    )
+                )
+            }
+            assert mutation_buckets["mutation_user"].attempt_count == 2
+            assert mutation_buckets["mutation_library"].attempt_count == 2
+            mutation_events = list(
+                session.scalars(
+                    select(SecurityEvent).where(
+                        SecurityEvent.event_type == "rate_limit_blocked",
+                        SecurityEvent.details["scope"].as_string().in_(
+                            ("mutation_user", "mutation_library")
+                        ),
+                    )
+                )
+            )
+            assert len(mutation_events) == 2
+            assert {event.details["scope"] for event in mutation_events} == {
+                "mutation_user",
+                "mutation_library",
+            }
+            assert all(event.ip_address is None for event in mutation_events)
+            assert all(
+                event.details["deployment_revision"]
+                == "git-mutation-multiprocess"
+                for event in mutation_events
+            )
 
         def acquire_operation_lease_concurrently(_: int) -> bool:
             with Session(engine) as concurrent_session:

@@ -148,20 +148,29 @@ check accounted for all 435 private objects with zero discrepancies.
 
 ### D4-M — Authenticated and library mutation ceilings
 
-- [ ] Implement a PostgreSQL-backed `240/15 minutes` ceiling per authenticated
+- [x] Implement a PostgreSQL-backed `240/15 minutes` ceiling per authenticated
   user for state-changing API operations, independently configurable as
   `off/observe/enforce`.
-- [ ] Implement a PostgreSQL-backed `600/15 minutes` ceiling per authorized
+- [x] Implement a PostgreSQL-backed `600/15 minutes` ceiling per authorized
   library for state-changing operations. An unauthorized or nonexistent
   library identifier must not consume a library bucket.
-- [ ] Prove atomic decisions across two workers, fixed-window reset,
+- [x] Prove atomic decisions across two workers, fixed-window reset,
   `Retry-After`, generic `429`, fail-closed generic `503`, HMAC key privacy and
   independent rollback switches.
 - [ ] Prove that two users behind one IP and two co-Owners in one library receive
   the intended independent user, library and IP decisions.
 
 Evidence: migration if required, tests, staging observe/enforce rehearsal and
-normal multi-owner functional test.
+normal multi-owner functional test. The implementation uses the existing
+PostgreSQL/HMAC bucket schema and therefore needs no migration. User and
+library policies have separate mode switches and default to `off`. A matched
+route dependency authenticates first, counts every authenticated state-changing
+request by user, and counts a path-addressed library only after confirming an
+active membership; public requests, safe methods, absent libraries and
+libraries inaccessible to the user do not consume a library bucket. The
+PostgreSQL gate starts independent processes with separate dependency stacks
+and pools for both user and co-Owner/library races. Staging observe/enforce and
+the normal multi-Owner acceptance remain open.
 
 ### D4-S — Specific operation ceilings
 
