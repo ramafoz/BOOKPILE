@@ -157,8 +157,9 @@ check accounted for all 435 private objects with zero discrepancies.
 - [x] Prove atomic decisions across two workers, fixed-window reset,
   `Retry-After`, generic `429`, fail-closed generic `503`, HMAC key privacy and
   independent rollback switches.
-- [ ] Prove that two users behind one IP and two co-Owners in one library receive
-  the intended independent user, library and IP decisions.
+- [x] Prove in one correlated rehearsal that two users behind one IP receive
+  independent user decisions, two co-Owners in one library receive one shared
+  library decision, and both users' requests consume the same IP bucket.
 
 Evidence: migration if required, tests, staging observe/enforce rehearsal and
 normal multi-owner functional test. The implementation uses the existing
@@ -168,10 +169,25 @@ route dependency authenticates first and uses an explicit reviewed registry so
 only state-changing routes count by user. A path-addressed library counts only
 after the route's required member or Owner role is confirmed; public requests,
 safe methods, read-only POST routes, absent libraries and unauthorized users do
-not consume a library bucket. The
-PostgreSQL gate starts independent processes with separate dependency stacks
-and pools for both user and co-Owner/library races. Staging observe/enforce and
-the normal multi-Owner acceptance remain open.
+not consume a library bucket. The PostgreSQL gate starts independent processes
+with separate dependency stacks and pools for both user and co-Owner/library
+races. Staging revision `f306f30363358363d17d561268b548c2b908a8ff` passed the
+bounded observe rehearsal with exactly one correlated
+`rate_limit_observed` event at 241 user attempts and 601 library attempts, then
+passed the enforce rehearsal with exactly one correlated
+`rate_limit_blocked` event at each threshold. A normal functional test with two
+co-Owners behind the same client IP produced independent real user buckets
+with counts 3 and 5 and one shared library bucket with count 4; every stored
+mutation key was a 64-character HMAC rather than a raw identifier. Both
+mutation policies are now in `enforce` on staging. Normal use remained correct
+and the final deep operational check accounted for all 435 private objects
+with zero discrepancies. This accepts the user and library portions of the
+final gate. The correlated shared-IP rehearsal then recorded the same
+`general_api_ip` HMAC bucket tag and the same
+`2026-10-19 22:04:00.527734+00` window after each account acted: its count rose
+from 6 to 13 by `22:04:21.839147+00`. This proves that the independent user
+decisions and shared library decision coexist with one combined IP decision
+for the two accounts. D4-M is accepted.
 
 ### D4-S — Specific operation ceilings
 
@@ -601,9 +617,10 @@ implementation task in this section.
 This ordering does not duplicate task status; completion is recorded only in
 the sections above.
 
-1. **Immediate:** complete D4-G enforce-mode acceptance and perform I1 staging
-   security updates/reboot in a separately announced maintenance window.
-2. **Application limits:** implement D4-M, D4-S and D4-O in small reviewed PRs.
+1. **Immediate:** perform I1 staging security updates/reboot in a separately
+   announced maintenance window.
+2. **Application limits:** implement D4-S and D4-O in small reviewed PRs. D4-G
+   and D4-M are accepted and active in staging.
 3. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
 4. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
    accumulates; authorization defects pre-empt all feature work.
