@@ -299,7 +299,13 @@ Subsequent progress:
    responses, privacy, independent user keys behind one client, a shared
    library key across co-Owners and switch isolation. The PostgreSQL gate uses
    independent processes, middleware/dependency stacks and pools for the user
-   and library races. Staging observation and enforcement remain open.
+   and library races. Staging revision
+   `f306f30363358363d17d561268b548c2b908a8ff` passed correlated observe and
+   enforce rehearsals at 241 user and 601 library attempts. A normal two-co-
+   Owner workflow behind one client IP produced separate user buckets and one
+   shared library bucket, all represented by 64-character HMAC keys. Both
+   policies are active in `enforce`; normal use and the 435-object deep check
+   remained healthy. This closes D4-M.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous
