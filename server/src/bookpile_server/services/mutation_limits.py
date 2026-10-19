@@ -90,7 +90,9 @@ class MutationRateLimiter:
         self._settings = settings
         self._window = timedelta(minutes=15)
 
-    def check_user(self, user_id: UUID) -> None:
+    def check_user(
+        self, user_id: UUID, *, correlation_id: str | None = None
+    ) -> None:
         self._rate_limiter.apply(
             RateLimitPolicy(
                 "mutation_user",
@@ -99,9 +101,12 @@ class MutationRateLimiter:
             ),
             key=str(user_id),
             mode=self._settings.mutation_user_limit_mode,
+            correlation_id=correlation_id,
         )
 
-    def check_library(self, library_id: UUID) -> None:
+    def check_library(
+        self, library_id: UUID, *, correlation_id: str | None = None
+    ) -> None:
         self._rate_limiter.apply(
             RateLimitPolicy(
                 "mutation_library",
@@ -110,4 +115,5 @@ class MutationRateLimiter:
             ),
             key=str(library_id),
             mode=self._settings.mutation_library_limit_mode,
+            correlation_id=correlation_id,
         )

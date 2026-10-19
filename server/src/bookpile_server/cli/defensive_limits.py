@@ -170,13 +170,16 @@ def rehearse_costly_limits(
 
 
 def _exercise_mutation(
-    check: Callable[[UUID], None], threshold: int, mode: str
+    check: Callable[..., None],
+    threshold: int,
+    mode: str,
+    correlation_id: str,
 ) -> int:
     identity = uuid4()
     blocked = 0
     for _index in range(threshold + 1):
         try:
-            check(identity)
+            check(identity, correlation_id=correlation_id)
         except RateLimitExceededError:
             blocked += 1
     expected = 1 if mode == "enforce" else 0
@@ -215,6 +218,7 @@ def rehearse_mutation_limits(
         ),
         settings,
     )
+    run_id = str(uuid4())
     previous_event_id = session.scalar(select(func.max(SecurityEvent.id))) or 0
     scenarios = (
         (
@@ -232,7 +236,7 @@ def rehearse_mutation_limits(
     )
     results = []
     for scope, threshold, mode, check in scenarios:
-        blocked = _exercise_mutation(check, threshold, mode)
+        blocked = _exercise_mutation(check, threshold, mode, run_id)
         expected_event = (
             "rate_limit_blocked" if mode == "enforce" else "rate_limit_observed"
         )
@@ -244,6 +248,7 @@ def rehearse_mutation_limits(
                     SecurityEvent.details["scope"].as_string() == scope,
                     SecurityEvent.details["deployment_revision"].as_string()
                     == settings.deployment_revision,
+                    SecurityEvent.details["correlation_id"].as_string() == run_id,
                 )
             )
         )
@@ -265,7 +270,7 @@ def rehearse_mutation_limits(
     return {
         "environment": settings.environment,
         "deployment_revision": settings.deployment_revision,
-        "rehearsal_id": str(uuid4()),
+        "rehearsal_id": run_id,
         "synthetic_only": True,
         "operations": results,
     }
@@ -310,6 +315,7 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
                 "scope": scope,
                 "mode": event.details.get("mode"),
                 "deployment_revision": event.details.get("deployment_revision"),
+                "correlation_id": event.details.get("correlation_id"),
             }
         )
     lease_rows = session.execute(

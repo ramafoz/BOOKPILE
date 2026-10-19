@@ -71,6 +71,7 @@ class RateLimiter:
         mode: RateLimitMode,
         ip_address: str | None = None,
         record_ip: bool = False,
+        correlation_id: str | None = None,
         now: datetime | None = None,
     ) -> RateLimitDecision:
         if mode == "off":
@@ -102,6 +103,7 @@ class RateLimiter:
                     mode=mode,
                     ip_address=ip_address,
                     record_ip=record_ip,
+                    correlation_id=correlation_id,
                 )
             self._repository.commit()
         except SQLAlchemyError as exc:
@@ -124,6 +126,7 @@ class RateLimiter:
         mode: RateLimitMode,
         ip_address: str | None,
         record_ip: bool,
+        correlation_id: str | None,
     ) -> None:
         if record_ip:
             self._repository.add_blocked_event(
@@ -140,6 +143,7 @@ class RateLimiter:
             mode=mode,
             deployment_revision=self._deployment_revision,
             ip_address=None,
+            correlation_id=correlation_id,
         )
 
     @staticmethod
