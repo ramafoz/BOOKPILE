@@ -305,7 +305,9 @@ Subsequent progress:
    Owner workflow behind one client IP produced separate user buckets and one
    shared library bucket, all represented by 64-character HMAC keys. Both
    policies are active in `enforce`; normal use and the 435-object deep check
-   remained healthy. This closes D4-M.
+   remained healthy. The user and library evidence is accepted. D4-M remains
+   open until one correlated rehearsal also proves that both users' requests
+   consume the same `general_api_ip` bucket and records the resulting decision.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous
