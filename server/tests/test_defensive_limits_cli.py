@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 
 from bookpile_server.cli.defensive_limits import (
     COSTLY_SCOPES,
+    MUTATION_REHEARSAL_CONFIRMATION,
     REHEARSAL_CONFIRMATION,
     costly_limit_status,
     rehearse_costly_limits,
+    rehearse_mutation_limits,
 )
 from bookpile_server.config import Settings
-from bookpile_server.models import RateLimitBucket, SecurityEvent
+from bookpile_server.models import Library, RateLimitBucket, SecurityEvent, User
 
 
 def settings(mode: str, *, environment: str = "staging") -> Settings:
@@ -192,3 +194,105 @@ def test_status_includes_mutation_limit_configuration(session: Session) -> None:
         "mutation_library",
         "mutation_user",
     ]
+
+
+@pytest.mark.parametrize(
+    ("user_mode", "library_mode", "event_types", "blocked"),
+    (
+        ("observe", "observe", {"rate_limit_observed"}, [0, 0]),
+        ("enforce", "enforce", {"rate_limit_blocked"}, [1, 1]),
+        (
+            "observe",
+            "enforce",
+            {"rate_limit_observed", "rate_limit_blocked"},
+            [0, 1],
+        ),
+    ),
+)
+def test_mutation_rehearsal_uses_only_synthetic_keys_and_verifies_evidence(
+    session: Session,
+    user_mode: str,
+    library_mode: str,
+    event_types: set[str],
+    blocked: list[int],
+) -> None:
+    selected = settings("observe").model_copy(
+        update={
+            "mutation_user_limit_mode": user_mode,
+            "mutation_library_limit_mode": library_mode,
+            "mutation_attempts_per_user_per_15_minutes": 2,
+            "mutation_attempts_per_library_per_15_minutes": 3,
+        }
+    )
+
+    result = rehearse_mutation_limits(
+        session,
+        selected,
+        confirmation=MUTATION_REHEARSAL_CONFIRMATION,
+    )
+
+    assert result["synthetic_only"] is True
+    assert [item["scope"] for item in result["operations"]] == [
+        "mutation_user",
+        "mutation_library",
+    ]
+    assert [item["attempts"] for item in result["operations"]] == [3, 4]
+    assert [item["blocked_decisions"] for item in result["operations"]] == blocked
+    assert {item["event_type"] for item in result["operations"]} == event_types
+    assert {
+        event.event_type for event in session.scalars(select(SecurityEvent))
+    } == event_types
+    stored_buckets = list(session.scalars(select(RateLimitBucket)))
+    assert {bucket.scope for bucket in stored_buckets} == {
+        "mutation_user",
+        "mutation_library",
+    }
+    assert all(len(bucket.key_hash) == 64 for bucket in stored_buckets)
+    assert list(session.scalars(select(User))) == []
+    assert list(session.scalars(select(Library))) == []
+
+
+@pytest.mark.parametrize(
+    "selected",
+    (
+        settings("observe").model_copy(
+            update={
+                "mutation_user_limit_mode": "off",
+                "mutation_library_limit_mode": "observe",
+            }
+        ),
+        settings("observe").model_copy(
+            update={
+                "environment": "production",
+                "mutation_user_limit_mode": "observe",
+                "mutation_library_limit_mode": "observe",
+            }
+        ),
+    ),
+)
+def test_mutation_rehearsal_refuses_unsafe_environment_or_mode(
+    session: Session, selected: Settings
+) -> None:
+    with pytest.raises(RuntimeError):
+        rehearse_mutation_limits(
+            session,
+            selected,
+            confirmation=MUTATION_REHEARSAL_CONFIRMATION,
+        )
+
+    assert list(session.scalars(select(RateLimitBucket))) == []
+
+
+def test_mutation_rehearsal_requires_explicit_confirmation(
+    session: Session,
+) -> None:
+    selected = settings("observe").model_copy(
+        update={
+            "mutation_user_limit_mode": "observe",
+            "mutation_library_limit_mode": "observe",
+        }
+    )
+    with pytest.raises(RuntimeError, match="--confirm"):
+        rehearse_mutation_limits(session, selected, confirmation="no")
+
+    assert list(session.scalars(select(RateLimitBucket))) == []

@@ -12,6 +12,7 @@ from ..database import SessionFactory
 from ..models import OperationLease, RateLimitBucket, SecurityEvent
 from ..repositories.rate_limits import RateLimitRepository
 from ..services.costly_operation_limits import CostlyOperationLimiter
+from ..services.mutation_limits import MutationRateLimiter
 from ..services.rate_limits import RateLimitExceededError, RateLimiter
 
 
@@ -26,6 +27,7 @@ COSTLY_SCOPES = (
 MUTATION_SCOPES = ("mutation_user", "mutation_library")
 STATUS_SCOPES = (*COSTLY_SCOPES, *MUTATION_SCOPES, "general_api_ip")
 REHEARSAL_CONFIRMATION = "STAGING-LIMIT-REHEARSAL"
+MUTATION_REHEARSAL_CONFIRMATION = "STAGING-MUTATION-LIMIT-REHEARSAL"
 
 
 @dataclass(frozen=True)
@@ -167,6 +169,108 @@ def rehearse_costly_limits(
     }
 
 
+def _exercise_mutation(
+    check: Callable[[UUID], None], threshold: int, mode: str
+) -> int:
+    identity = uuid4()
+    blocked = 0
+    for _index in range(threshold + 1):
+        try:
+            check(identity)
+        except RateLimitExceededError:
+            blocked += 1
+    expected = 1 if mode == "enforce" else 0
+    if blocked != expected:
+        raise RuntimeError(
+            f"Unexpected blocked decision count: expected {expected}, found {blocked}."
+        )
+    return blocked
+
+
+def rehearse_mutation_limits(
+    session: Session, settings: Settings, *, confirmation: str
+) -> dict[str, object]:
+    if settings.environment != "staging":
+        raise RuntimeError("The mutation-limit rehearsal is restricted to staging.")
+    modes = {
+        "mutation_user": settings.mutation_user_limit_mode,
+        "mutation_library": settings.mutation_library_limit_mode,
+    }
+    if any(mode not in {"observe", "enforce"} for mode in modes.values()):
+        raise RuntimeError(
+            "The mutation-limit rehearsal requires both policies in observe or "
+            "enforce mode."
+        )
+    if confirmation != MUTATION_REHEARSAL_CONFIRMATION:
+        raise RuntimeError(
+            "Pass --confirm "
+            f"{MUTATION_REHEARSAL_CONFIRMATION} to create synthetic evidence."
+        )
+
+    limiter = MutationRateLimiter(
+        RateLimiter(
+            RateLimitRepository(session),
+            settings.rate_limit_key_secret,
+            settings.deployment_revision,
+        ),
+        settings,
+    )
+    previous_event_id = session.scalar(select(func.max(SecurityEvent.id))) or 0
+    scenarios = (
+        (
+            "mutation_user",
+            settings.mutation_attempts_per_user_per_15_minutes,
+            settings.mutation_user_limit_mode,
+            limiter.check_user,
+        ),
+        (
+            "mutation_library",
+            settings.mutation_attempts_per_library_per_15_minutes,
+            settings.mutation_library_limit_mode,
+            limiter.check_library,
+        ),
+    )
+    results = []
+    for scope, threshold, mode, check in scenarios:
+        blocked = _exercise_mutation(check, threshold, mode)
+        expected_event = (
+            "rate_limit_blocked" if mode == "enforce" else "rate_limit_observed"
+        )
+        matching_events = list(
+            session.scalars(
+                select(SecurityEvent).where(
+                    SecurityEvent.id > previous_event_id,
+                    SecurityEvent.event_type == expected_event,
+                    SecurityEvent.details["scope"].as_string() == scope,
+                    SecurityEvent.details["deployment_revision"].as_string()
+                    == settings.deployment_revision,
+                )
+            )
+        )
+        if len(matching_events) != 1:
+            raise RuntimeError(
+                f"Expected one {expected_event} event for {scope}, "
+                f"found {len(matching_events)}."
+            )
+        results.append(
+            {
+                "scope": scope,
+                "mode": mode,
+                "attempts": threshold + 1,
+                "blocked_decisions": blocked,
+                "event_type": expected_event,
+            }
+        )
+
+    return {
+        "environment": settings.environment,
+        "deployment_revision": settings.deployment_revision,
+        "rehearsal_id": str(uuid4()),
+        "synthetic_only": True,
+        "operations": results,
+    }
+
+
 def costly_limit_status(session: Session, settings: Settings) -> dict[str, object]:
     bucket_rows = session.execute(
         select(
@@ -291,13 +395,19 @@ def main() -> int:
     subparsers.add_parser("status")
     rehearsal = subparsers.add_parser("rehearse")
     rehearsal.add_argument("--confirm", required=True)
+    mutation_rehearsal = subparsers.add_parser("rehearse-mutations")
+    mutation_rehearsal.add_argument("--confirm", required=True)
     args = parser.parse_args()
     settings = get_settings()
     with SessionFactory() as session:
         if args.command == "status":
             payload = costly_limit_status(session, settings)
-        else:
+        elif args.command == "rehearse":
             payload = rehearse_costly_limits(
+                session, settings, confirmation=args.confirm
+            )
+        else:
+            payload = rehearse_mutation_limits(
                 session, settings, confirmation=args.confirm
             )
     print(json.dumps(payload, sort_keys=True))
