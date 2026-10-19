@@ -99,19 +99,24 @@ generic message and `Retry-After`.
 | Bibliographic lookup | 180/hour | Authenticated user |
 | Cover upload | 30/hour by default | Authenticated user |
 | Profile-image upload | 30/hour by default | Authenticated user |
+| General API traffic | 600/minute | Validated client IP |
+| Import preflight/consolidation | 6/hour user; 12/hour library | Authenticated user and authorized library |
+| Portable export | 6/hour user; 12/hour library plus one active lease each | Authenticated user and authorized library |
 
-Rate buckets older than two days are removed by maintenance. No current limit
-covers general reads/writes, malformed requests, unknown routes, health checks,
-imports, exports, repeated downloads or request concurrency.
+Rate buckets older than two days are removed by maintenance. General API,
+import and export controls are enforced in staging. Mutation ceilings are
+implemented with independent, default-off switches pending their staging
+observe/enforce acceptance. Health checks and repeated ordinary static
+downloads remain outside D4; D6 covers their edge policy.
 
 ## 5. Cost and resource controls
 
 | Operation | Existing bound | Residual risk |
 | --- | --- | --- |
 | Any request body through Caddy | 110 MiB maximum | Global rather than route-specific; repeated large bodies have no rate limit. |
-| ZIP import | 100 MiB archive, 10,000 entries, 500 MiB expanded, 100 MiB per entry, 200:1 compression ratio | CPU, disk and database work is synchronous and not rate-limited per user/library. |
+| ZIP import | 100 MiB archive, 10,000 entries, 500 MiB expanded, 100 MiB per entry, 200:1 ratio; user/library frequency and consolidation leases | Synchronous CPU, disk and database capacity still requires monitoring. |
 | Cover/profile image | 12 MiB input, 40 MP, normalized output dimensions/quality | Decode cost exists before rejection; per-user upload limit helps. |
-| Portable export | Authenticated Owner authorization and temporary-file cleanup | No frequency/concurrency limit; large libraries can repeatedly consume CPU, object reads and disk. |
+| Portable export | Authenticated Owner authorization, user/library frequency, response-lifetime leases and temporary-file cleanup | Large permitted exports still require capacity monitoring. |
 | Bibliographic lookup | Owner-only and 180/hour/user | External providers can still be pressured by multiple accounts. |
 | `/health/live` | Cheap process response | Public and unlimited, appropriate for availability checks. |
 | `/health/ready` | Database query plus private-object readiness call | Public and unlimited; exposes dependency names and can generate downstream work. |
@@ -282,6 +287,19 @@ Subsequent progress:
    and database pools, synchronizes their requests to the same key and requires
    one normal response plus one generic `429`. The deep check accounted for all
    435 private objects. This closes D4-G.
+   The sixth slice adds default-off authenticated-mutation and authorized-
+   library-mutation policies at `240/15 minutes` and `600/15 minutes`. They use
+   independent mode switches and the existing PostgreSQL/HMAC bucket schema.
+   A matched-route dependency authenticates before counting, reuses that
+   context in the endpoint, and uses an explicit route registry to exclude
+   read-only POST operations. It consumes a library bucket only after the
+   route's required member or Owner role succeeds, so missing, inaccessible or
+   role-forbidden library identifiers do not spend a victim's allowance.
+   Focused tests cover generic 429/503
+   responses, privacy, independent user keys behind one client, a shared
+   library key across co-Owners and switch isolation. The PostgreSQL gate uses
+   independent processes, middleware/dependency stacks and pools for the user
+   and library races. Staging observation and enforcement remain open.
 5. **D6 implementation:** dry-run scanner detection before enabling narrow
    10-minute bans. General volume remains alert-only for seven clean observation
    days and may then receive the ADR's high-threshold temporary ban; ambiguous

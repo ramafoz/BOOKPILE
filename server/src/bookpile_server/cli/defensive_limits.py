@@ -23,7 +23,8 @@ COSTLY_SCOPES = (
     "portable_export_user",
     "portable_export_library",
 )
-STATUS_SCOPES = (*COSTLY_SCOPES, "general_api_ip")
+MUTATION_SCOPES = ("mutation_user", "mutation_library")
+STATUS_SCOPES = (*COSTLY_SCOPES, *MUTATION_SCOPES, "general_api_ip")
 REHEARSAL_CONFIRMATION = "STAGING-LIMIT-REHEARSAL"
 
 
@@ -241,10 +242,18 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
         "environment": settings.environment,
         "mode": settings.defensive_limit_mode,
         "general_api_mode": settings.general_api_limit_mode,
+        "mutation_user_mode": settings.mutation_user_limit_mode,
+        "mutation_library_mode": settings.mutation_library_limit_mode,
         "deployment_revision": settings.deployment_revision,
         "thresholds": {
             "general_api_ip_per_minute": (
                 settings.general_api_attempts_per_ip_per_minute
+            ),
+            "mutation_user_per_15_minutes": (
+                settings.mutation_attempts_per_user_per_15_minutes
+            ),
+            "mutation_library_per_15_minutes": (
+                settings.mutation_attempts_per_library_per_15_minutes
             ),
             "import_user_per_hour": settings.import_attempts_per_user_per_hour,
             "import_library_per_hour": settings.import_attempts_per_library_per_hour,

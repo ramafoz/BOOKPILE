@@ -1,8 +1,10 @@
 from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..database import get_session
@@ -27,7 +29,17 @@ from ..services.account_invitations import AccountInvitationService
 from ..services.account_deletion import AccountDeletionService
 from ..services.account_actions import AccountActionService
 from ..services.rate_limits import RateLimiter
+from ..services.rate_limits import (
+    RateLimitDecisionUnavailableError,
+    RateLimitExceededError,
+)
 from ..services.costly_operation_limits import CostlyOperationLimiter
+from ..services.mutation_limits import (
+    LIBRARY_MUTATION_ROUTES,
+    MEMBER_LIBRARY_MUTATION_ROUTES,
+    MUTATION_ROUTES,
+    MutationRateLimiter,
+)
 from ..services.costly_operation_leases import CostlyOperationLeaseService
 from ..services.operation_leases import OperationLeaseManager
 from ..config import get_settings
@@ -309,6 +321,9 @@ CostlyOperationLeaseServiceDependency = Annotated[
 def get_current_auth(
     request: Request, service: AuthServiceDependency
 ) -> AuthContext:
+    existing = getattr(request.state, "bookpile_auth_context", None)
+    if isinstance(existing, AuthContext):
+        return existing
     settings = get_settings()
     try:
         return service.authenticate(
@@ -322,6 +337,78 @@ def get_current_auth(
 
 
 CurrentAuthDependency = Annotated[AuthContext, Depends(get_current_auth)]
+
+
+def apply_mutation_limits(request: Request, session: SessionDependency) -> None:
+    """Count authenticated mutations without turning IDs into an oracle."""
+    route_name = getattr(request.scope.get("route"), "name", None)
+    if route_name not in MUTATION_ROUTES:
+        return
+
+    settings = get_settings()
+    if (
+        settings.mutation_user_limit_mode == "off"
+        and settings.mutation_library_limit_mode == "off"
+    ):
+        return
+
+    try:
+        context = AuthService(AuthRepository(session)).authenticate(
+            request.cookies.get(settings.session_cookie_name)
+        )
+    except InvalidSessionError:
+        return
+    except SQLAlchemyError as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
+    try:
+        request.state.bookpile_auth_context = context
+        limiter = MutationRateLimiter(
+            RateLimiter(
+                RateLimitRepository(session),
+                settings.rate_limit_key_secret,
+                settings.deployment_revision,
+            ),
+            settings,
+        )
+        limiter.check_user(context.user_id)
+        if (
+            settings.mutation_library_limit_mode == "off"
+            or route_name not in LIBRARY_MUTATION_ROUTES
+        ):
+            return
+        raw_library_id = request.path_params.get("library_id")
+        if raw_library_id is None:
+            return
+        try:
+            library_id = UUID(str(raw_library_id))
+        except ValueError:
+            return
+        membership = LibraryRepository(session).find_membership(
+            library_id=library_id,
+            user_id=context.user_id,
+        )
+        authorized = membership is not None and (
+            route_name in MEMBER_LIBRARY_MUTATION_ROUTES
+            or membership.role == "OWNER"
+        )
+        if authorized:
+            limiter.check_library(library_id)
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except (RateLimitDecisionUnavailableError, SQLAlchemyError) as exc:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
 
 
 def require_csrf(
