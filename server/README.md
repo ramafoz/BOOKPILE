@@ -296,6 +296,12 @@ Authenticated mutation and authorized-library mutation ceilings use separate
 thresholds are respectively 240 and 600 attempts per 15 minutes. They reuse
 the shared PostgreSQL/HMAC buckets and can be rolled back independently without
 disabling authentication, general-IP or costly-operation controls.
+On staging only, cross both mutation thresholds with synthetic UUID keys and
+verify the resulting observe/enforce evidence with
+`bookpile-defensive-limits rehearse-mutations` and
+`--confirm STAGING-MUTATION-LIMIT-REHEARSAL`. The command refuses production,
+either policy being off, or a missing confirmation, and never calls a domain
+service.
 Hosted environments must also set `BOOKPILE_SERVER_TRUSTED_PROXY_CIDRS` to the
 exact private Compose network through which Caddy reaches the API. BOOKPILE
 accepts Caddy's sanitized client address only when the immediate peer belongs

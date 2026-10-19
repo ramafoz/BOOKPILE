@@ -72,6 +72,7 @@ class RateLimitRepository:
         mode: str | None,
         deployment_revision: str | None,
         ip_address: str | None,
+        correlation_id: str | None = None,
     ) -> None:
         self._session.add(
             SecurityEvent(
@@ -85,6 +86,11 @@ class RateLimitRepository:
                         if deployment_revision is not None
                         else {}
                     ),
+                    **(
+                        {"correlation_id": correlation_id}
+                        if correlation_id is not None
+                        else {}
+                    ),
                 },
             )
         )
@@ -96,6 +102,7 @@ class RateLimitRepository:
             mode=None,
             deployment_revision=None,
             ip_address=ip_address,
+            correlation_id=None,
         )
 
     def commit(self) -> None:
