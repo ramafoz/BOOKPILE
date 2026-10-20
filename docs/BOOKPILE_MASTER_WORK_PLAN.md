@@ -393,12 +393,42 @@ This entire section is a **production blocker**.
 
 ### I1 — Staging host maintenance
 
-- [ ] Apply pending Ubuntu security updates in a documented maintenance window,
+- [x] Apply pending Ubuntu security updates in a documented maintenance window,
   perform the required reboot and verify SSH, firewall, Docker, Compose,
   systemd timers, API/web/worker health, external monitors and deep maintenance.
-- [ ] Record effective unattended-security-update and controlled-reboot policy.
-- [ ] Confirm only ports 22, 80 and 443 are public and record IPv4/IPv6 state
+- [x] Record effective unattended-security-update and controlled-reboot policy.
+- [x] Confirm only ports 22, 80 and 443 are public and record IPv4/IPv6 state
   after the reboot.
+
+Evidence: the 2026-10-20 UTC maintenance window began from a clean checkout and
+healthy revision `f306f30363358363d17d561268b548c2b908a8ff`. Verified backup
+`bd4cabcb-edac-47a0-ab2c-c64fdbc7e595` contained all 436 artefacts, and the
+pre-update deep check accounted for all 435 private objects. The host installed
+35 package updates with zero removals or held packages, including Docker,
+containerd, AppArmor, certificates and networking components, then rebooted at
+19:14 UTC into Ubuntu 24.04.5 and kernel `6.8.0-147-generic`. Docker 29.9.1,
+containerd 2.4.2 and Compose 5.6.0 recovered the database, API, email worker and
+web service automatically. No package, boot-journal or systemd failure remained;
+all six BOOKPILE timers were scheduled. Public live/readiness, Healthchecks and
+the Sentry uptime monitor recovered. Sentry recorded one privacy-redacted email-
+worker database connection error while Docker restarted at 19:10 UTC and no
+later recurrence; it is accepted as a bounded maintenance interruption. The
+post-reboot deep check again accounted for 435/435 objects with zero mismatch,
+absence or orphan.
+
+`unattended-upgrades` is enabled and active. APT refreshes package lists daily
+and installs the configured Ubuntu base/security origins; `noble-updates`,
+distribution upgrades and host reboots are not automatic. Required reboots are
+performed manually in
+an announced window only after a fresh verified backup, package simulation and
+healthy pre-check, followed by the full I1 post-check recorded here.
+
+The host retained IPv4 `31.70.142.191`, no global IPv6 address and no public
+`AAAA` record. Host listeners and an independent workstation probe agreed that
+TCP 22, 80 and 443 were reachable while 5432 and 8100 were closed/filtered; no
+other public listener was present. Effective SSH policy remained public-key
+authentication enabled with password and keyboard-interactive authentication
+disabled.
 
 ### I2 — Reproducible production host
 
@@ -617,20 +647,18 @@ implementation task in this section.
 This ordering does not duplicate task status; completion is recorded only in
 the sections above.
 
-1. **Immediate:** perform I1 staging security updates/reboot in a separately
-   announced maintenance window.
-2. **Application limits:** implement D4-S and D4-O in small reviewed PRs. D4-G
-   and D4-M are accepted and active in staging.
-3. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
-4. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
+1. **Immediate application limits:** implement D4-S and D4-O in small
+   reviewed PRs; D4-G and D4-M are accepted and active in staging.
+2. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
+3. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
    accumulates; authorization defects pre-empt all feature work.
-5. **Administration:** implement the `SYSTEM_ADMIN` domain, strong
+4. **Administration:** implement the `SYSTEM_ADMIN` domain, strong
    authentication, immutable audit and restricted console.
-6. **Production platform:** reproduce the production host, implement immutable
+5. **Production platform:** reproduce the production host, implement immutable
    image promotion and prove environment/data separation.
-7. **Readiness:** complete capacity, dependencies, policies/legal text and final
+6. **Readiness:** complete capacity, dependencies, policies/legal text and final
    cross-browser/accessibility acceptance.
-8. **Opening:** complete Phase 9G and record explicit `GO` or `NO-GO`.
+7. **Opening:** complete Phase 9G and record explicit `GO` or `NO-GO`.
 
 ## 15. Legacy-roadmap disposition
 
