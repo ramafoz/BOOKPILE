@@ -203,6 +203,35 @@ provider MFA, unattended OS security updates with controlled reboot
 notification, and separate staging and production hosts/secrets. Recheck the
 IPv6 firewall if a public IPv6 address is ever assigned.
 
+### Staging host maintenance acceptance — 2026-10-20
+
+The controlled UTC maintenance window installed 35 pending Ubuntu/Docker
+updates with no removals or held packages and rebooted staging from kernel
+`6.8.0-139-generic` into Ubuntu 24.04.5 kernel `6.8.0-147-generic`. A fresh
+verified backup (`bd4cabcb-edac-47a0-ab2c-c64fdbc7e595`) preceded the update.
+Docker 29.9.1, containerd 2.4.2 and Compose 5.6.0 recovered all application
+services automatically. Package audit, boot errors and failed systemd units
+were empty; all six BOOKPILE timers survived. Public health, Healthchecks,
+Sentry uptime and a 435-object deep reconciliation passed after reboot.
+
+One redacted Sentry `OperationalError` from the email worker occurred at 19:10
+UTC while Docker restarted and PostgreSQL was temporarily unavailable. It had
+one event, no post-reboot recurrence and healthy worker/outbox checks, so it is
+recorded as expected bounded maintenance impact rather than an application
+defect.
+
+The effective unattended policy refreshes package lists and applies the
+configured Ubuntu base/security origins daily. `noble-updates`, automatic
+distribution upgrades and automatic reboots remain disabled. A required reboot
+is instead announced and performed manually only after a fresh verified backup,
+simulated package plan, healthy pre-check and confirmation of console/SSH
+recovery access; repeat the I1 post-reboot checks before closing the window.
+
+Post-reboot listener and independent workstation evidence confirmed only TCP
+22, 80 and 443 reachable. TCP 5432 and 8100 were closed/filtered, no global
+IPv6 address was assigned, and key-only SSH remained effective. Public IPv6
+must remain disabled until its firewall acceptance is completed.
+
 Authentication limits are atomic PostgreSQL counters, so API workers share
 them. Stock Caddy has no distributed rate-limit module; do not silently replace
 this with per-process edge counters. Additional volumetric protection may be
