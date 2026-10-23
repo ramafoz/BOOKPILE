@@ -235,6 +235,23 @@ def test_mutation_limits_reject_unsafe_thresholds(
         Settings(**{field: attempts})
 
 
+@pytest.mark.parametrize(
+    "field",
+    (
+        "bibliographic_lookup_attempts_per_user_per_hour",
+        "bibliographic_lookup_attempts_per_ip_per_hour",
+        "bibliographic_lookup_attempts_per_library_per_hour",
+        "cover_upload_attempts_per_hour",
+        "cover_upload_attempts_per_library_per_hour",
+        "rearrangement_attempts_per_user_per_minute",
+        "rearrangement_attempts_per_library_per_minute",
+    ),
+)
+def test_specific_operation_limits_reject_zero_thresholds(field: str) -> None:
+    with pytest.raises(ValueError):
+        Settings(**{field: 0})
+
+
 def test_database_failure_is_explicit_and_rolls_back() -> None:
     repository = UnavailableRateLimitRepository()
     limiter = RateLimiter(repository, "test-secret")  # type: ignore[arg-type]

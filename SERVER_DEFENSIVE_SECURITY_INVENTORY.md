@@ -96,8 +96,8 @@ generic message and `Retry-After`.
 | Verification/reset confirmation | 30/15 minutes | Client IP |
 | Verification/reset confirmation | 10/15 minutes | Token |
 | Deleted-account restoration | 60/15 minutes | Client IP (shared login policy) |
-| Bibliographic lookup | 180/hour | Authenticated user |
-| Cover upload | 30/hour by default | Authenticated user |
+| Bibliographic lookup | 180/hour user; configurable 300/hour IP and 360/hour library | Authenticated Owner, validated client IP and authorized library |
+| Cover upload | 30/hour user; configurable 120/hour library | Authenticated Owner and authorized library |
 | Profile-image upload | 30/hour by default | Authenticated user |
 | General API traffic | 600/minute | Validated client IP |
 | Import preflight/consolidation | 6/hour user; 12/hour library | Authenticated user and authorized library |
@@ -117,7 +117,7 @@ downloads remain outside D4; D6 covers their edge policy.
 | ZIP import | 100 MiB archive, 10,000 entries, 500 MiB expanded, 100 MiB per entry, 200:1 ratio; user/library frequency and consolidation leases | Synchronous CPU, disk and database capacity still requires monitoring. |
 | Cover/profile image | 12 MiB input, 40 MP, normalized output dimensions/quality | Decode cost exists before rejection; per-user upload limit helps. |
 | Portable export | Authenticated Owner authorization, user/library frequency, response-lifetime leases and temporary-file cleanup | Large permitted exports still require capacity monitoring. |
-| Bibliographic lookup | Owner-only and 180/hour/user | External providers can still be pressured by multiple accounts. |
+| Bibliographic lookup | Owner-only; 180/hour/user plus independently switchable 300/hour/IP and 360/hour/library controls | New shared controls remain off until the staging rehearsal is accepted. |
 | `/health/live` | Cheap process response | Public and unlimited, appropriate for availability checks. |
 | `/health/ready` | Database query plus private-object readiness call | Public and unlimited; exposes dependency names and can generate downstream work. |
 

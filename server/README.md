@@ -302,6 +302,16 @@ verify the resulting observe/enforce evidence with
 `--confirm STAGING-MUTATION-LIMIT-REHEARSAL`. The command refuses production,
 either policy being off, or a missing confirmation, and never calls a domain
 service.
+Bibliographic lookups add independently switchable 300/hour/client-IP and
+360/hour/library controls alongside the always-enforced 180/hour/user policy.
+Cover uploads add 120/hour/library alongside 30/hour/user. Rearrangement
+preview/apply adds 120/minute/user and 240/minute/library with a separate mode
+that must remain `observe` until normal interaction stays below 25% of both
+thresholds. All new modes default to `off`.
+On staging, `bookpile-defensive-limits rehearse-specific --confirm
+STAGING-SPECIFIC-LIMIT-REHEARSAL` crosses only synthetic HMAC-keyed buckets,
+correlates exactly one event per policy and never calls a provider or domain
+service. `bookpile-defensive-limits status` reports all modes and thresholds.
 Hosted environments must also set `BOOKPILE_SERVER_TRUSTED_PROXY_CIDRS` to the
 exact private Compose network through which Caddy reaches the API. BOOKPILE
 accepts Caddy's sanitized client address only when the immediate peer belongs

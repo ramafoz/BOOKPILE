@@ -299,8 +299,8 @@ without a 429.
 
 Application rollback is configuration-first:
 
-1. set only the affected costly-operation or general-API mode from `enforce`
-   to `observe` (preferred) or `off`;
+1. set only the affected costly-operation, general-API, mutation or specific-
+   operation mode from `enforce` to `observe` (preferred) or `off`;
 2. redeploy the same application revision;
 3. confirm live/ready and normal authentication;
 4. retain additive tables and counters for diagnosis; do not downgrade a

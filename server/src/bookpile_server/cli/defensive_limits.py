@@ -14,6 +14,7 @@ from ..repositories.rate_limits import RateLimitRepository
 from ..services.costly_operation_limits import CostlyOperationLimiter
 from ..services.mutation_limits import MutationRateLimiter
 from ..services.rate_limits import RateLimitExceededError, RateLimiter
+from ..services.specific_operation_limits import SpecificOperationRateLimiter
 
 
 COSTLY_SCOPES = (
@@ -25,9 +26,24 @@ COSTLY_SCOPES = (
     "portable_export_library",
 )
 MUTATION_SCOPES = ("mutation_user", "mutation_library")
-STATUS_SCOPES = (*COSTLY_SCOPES, *MUTATION_SCOPES, "general_api_ip")
+SPECIFIC_OPERATION_SCOPES = (
+    "bibliographic_lookup",
+    "bibliographic_lookup_ip",
+    "bibliographic_lookup_library",
+    "cover_upload",
+    "cover_upload_library",
+    "rearrangement_user",
+    "rearrangement_library",
+)
+STATUS_SCOPES = (
+    *COSTLY_SCOPES,
+    *MUTATION_SCOPES,
+    *SPECIFIC_OPERATION_SCOPES,
+    "general_api_ip",
+)
 REHEARSAL_CONFIRMATION = "STAGING-LIMIT-REHEARSAL"
 MUTATION_REHEARSAL_CONFIRMATION = "STAGING-MUTATION-LIMIT-REHEARSAL"
+SPECIFIC_REHEARSAL_CONFIRMATION = "STAGING-SPECIFIC-LIMIT-REHEARSAL"
 
 
 @dataclass(frozen=True)
@@ -276,6 +292,127 @@ def rehearse_mutation_limits(
     }
 
 
+def rehearse_specific_operation_limits(
+    session: Session, settings: Settings, *, confirmation: str
+) -> dict[str, object]:
+    if settings.environment != "staging":
+        raise RuntimeError(
+            "The specific-operation rehearsal is restricted to staging."
+        )
+    modes = {
+        "bibliographic_lookup_ip": settings.bibliographic_lookup_limit_mode,
+        "bibliographic_lookup_library": settings.bibliographic_lookup_limit_mode,
+        "cover_upload_library": settings.cover_upload_library_limit_mode,
+        "rearrangement_user": settings.rearrangement_limit_mode,
+        "rearrangement_library": settings.rearrangement_limit_mode,
+    }
+    if any(mode not in {"observe", "enforce"} for mode in modes.values()):
+        raise RuntimeError(
+            "The specific-operation rehearsal requires every new policy in "
+            "observe or enforce mode."
+        )
+    if confirmation != SPECIFIC_REHEARSAL_CONFIRMATION:
+        raise RuntimeError(
+            "Pass --confirm "
+            f"{SPECIFIC_REHEARSAL_CONFIRMATION} to create synthetic evidence."
+        )
+
+    limiter = SpecificOperationRateLimiter(
+        RateLimiter(
+            RateLimitRepository(session),
+            settings.rate_limit_key_secret,
+            settings.deployment_revision,
+        ),
+        settings,
+    )
+    run_id = str(uuid4())
+    previous_event_id = session.scalar(select(func.max(SecurityEvent.id))) or 0
+    scenarios = (
+        (
+            "bibliographic_lookup_ip",
+            settings.bibliographic_lookup_attempts_per_ip_per_hour,
+            settings.bibliographic_lookup_limit_mode,
+            limiter.check_bibliographic_ip,
+        ),
+        (
+            "bibliographic_lookup_library",
+            settings.bibliographic_lookup_attempts_per_library_per_hour,
+            settings.bibliographic_lookup_limit_mode,
+            limiter.check_bibliographic_library,
+        ),
+        (
+            "cover_upload_library",
+            settings.cover_upload_attempts_per_library_per_hour,
+            settings.cover_upload_library_limit_mode,
+            limiter.check_cover_library,
+        ),
+        (
+            "rearrangement_user",
+            settings.rearrangement_attempts_per_user_per_minute,
+            settings.rearrangement_limit_mode,
+            limiter.check_rearrangement_user,
+        ),
+        (
+            "rearrangement_library",
+            settings.rearrangement_attempts_per_library_per_minute,
+            settings.rearrangement_limit_mode,
+            limiter.check_rearrangement_library,
+        ),
+    )
+    results = []
+    for scope, threshold, mode, check in scenarios:
+        identity = str(uuid4()) if scope.endswith("_ip") else uuid4()
+        blocked = 0
+        for _index in range(threshold + 1):
+            try:
+                check(identity, correlation_id=run_id)
+            except RateLimitExceededError:
+                blocked += 1
+        expected_blocked = 1 if mode == "enforce" else 0
+        if blocked != expected_blocked:
+            raise RuntimeError(
+                f"Unexpected blocked decision count for {scope}: expected "
+                f"{expected_blocked}, found {blocked}."
+            )
+        expected_event = (
+            "rate_limit_blocked" if mode == "enforce" else "rate_limit_observed"
+        )
+        matching_events = list(
+            session.scalars(
+                select(SecurityEvent).where(
+                    SecurityEvent.id > previous_event_id,
+                    SecurityEvent.event_type == expected_event,
+                    SecurityEvent.details["scope"].as_string() == scope,
+                    SecurityEvent.details["deployment_revision"].as_string()
+                    == settings.deployment_revision,
+                    SecurityEvent.details["correlation_id"].as_string() == run_id,
+                )
+            )
+        )
+        if len(matching_events) != 1:
+            raise RuntimeError(
+                f"Expected one {expected_event} event for {scope}, "
+                f"found {len(matching_events)}."
+            )
+        results.append(
+            {
+                "scope": scope,
+                "mode": mode,
+                "attempts": threshold + 1,
+                "blocked_decisions": blocked,
+                "event_type": expected_event,
+            }
+        )
+
+    return {
+        "environment": settings.environment,
+        "deployment_revision": settings.deployment_revision,
+        "rehearsal_id": run_id,
+        "synthetic_only": True,
+        "operations": results,
+    }
+
+
 def costly_limit_status(session: Session, settings: Settings) -> dict[str, object]:
     bucket_rows = session.execute(
         select(
@@ -354,6 +491,9 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
         "general_api_mode": settings.general_api_limit_mode,
         "mutation_user_mode": settings.mutation_user_limit_mode,
         "mutation_library_mode": settings.mutation_library_limit_mode,
+        "bibliographic_lookup_mode": settings.bibliographic_lookup_limit_mode,
+        "cover_upload_library_mode": settings.cover_upload_library_limit_mode,
+        "rearrangement_mode": settings.rearrangement_limit_mode,
         "deployment_revision": settings.deployment_revision,
         "thresholds": {
             "general_api_ip_per_minute": (
@@ -364,6 +504,25 @@ def costly_limit_status(session: Session, settings: Settings) -> dict[str, objec
             ),
             "mutation_library_per_15_minutes": (
                 settings.mutation_attempts_per_library_per_15_minutes
+            ),
+            "bibliographic_lookup_user_per_hour": (
+                settings.bibliographic_lookup_attempts_per_user_per_hour
+            ),
+            "bibliographic_lookup_ip_per_hour": (
+                settings.bibliographic_lookup_attempts_per_ip_per_hour
+            ),
+            "bibliographic_lookup_library_per_hour": (
+                settings.bibliographic_lookup_attempts_per_library_per_hour
+            ),
+            "cover_upload_user_per_hour": settings.cover_upload_attempts_per_hour,
+            "cover_upload_library_per_hour": (
+                settings.cover_upload_attempts_per_library_per_hour
+            ),
+            "rearrangement_user_per_minute": (
+                settings.rearrangement_attempts_per_user_per_minute
+            ),
+            "rearrangement_library_per_minute": (
+                settings.rearrangement_attempts_per_library_per_minute
             ),
             "import_user_per_hour": settings.import_attempts_per_user_per_hour,
             "import_library_per_hour": settings.import_attempts_per_library_per_hour,
@@ -403,6 +562,8 @@ def main() -> int:
     rehearsal.add_argument("--confirm", required=True)
     mutation_rehearsal = subparsers.add_parser("rehearse-mutations")
     mutation_rehearsal.add_argument("--confirm", required=True)
+    specific_rehearsal = subparsers.add_parser("rehearse-specific")
+    specific_rehearsal.add_argument("--confirm", required=True)
     args = parser.parse_args()
     settings = get_settings()
     with SessionFactory() as session:
@@ -412,8 +573,12 @@ def main() -> int:
             payload = rehearse_costly_limits(
                 session, settings, confirmation=args.confirm
             )
-        else:
+        elif args.command == "rehearse-mutations":
             payload = rehearse_mutation_limits(
+                session, settings, confirmation=args.confirm
+            )
+        else:
+            payload = rehearse_specific_operation_limits(
                 session, settings, confirmation=args.confirm
             )
     print(json.dumps(payload, sort_keys=True))

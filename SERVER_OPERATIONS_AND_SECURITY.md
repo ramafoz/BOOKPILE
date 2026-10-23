@@ -274,6 +274,29 @@ remain independent. Move this policy to `enforce` only after a bounded public-
 path burst produces one revision-labelled observation event and normal
 navigation remains healthy.
 
+Specific interactive-operation controls have independent rollout switches:
+`BOOKPILE_SERVER_BIBLIOGRAPHIC_LOOKUP_LIMIT_MODE`,
+`BOOKPILE_SERVER_COVER_UPLOAD_LIBRARY_LIMIT_MODE` and
+`BOOKPILE_SERVER_REARRANGEMENT_LIMIT_MODE`. Deploy them as `off`, move all
+three to `observe` for the first staging rehearsal, and run:
+
+```sh
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml exec -T api \
+  bookpile-defensive-limits rehearse-specific \
+  --confirm STAGING-SPECIFIC-LIMIT-REHEARSAL
+```
+
+The command uses fresh synthetic keys, never calls an external bibliographic
+provider and never writes catalogue, object or physical-library data. Retain
+its correlation ID, revision and five observed events. Bibliographic IP/library
+and cover-library controls may then move to `enforce` and must each produce one
+correlated blocked event in a second rehearsal. Keep rearrangement in `observe`
+until automated normal preview/apply interaction remains below 30/user/minute
+and 60/library/minute (25% of its thresholds). Roll back only the affected mode
+to `observe` or `off`, recreate the API, and verify live/ready plus the relevant
+normal workflow; do not delete shared counters.
+
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
 mandatory. Registry-backed vulnerability scans require explicit authorization
