@@ -191,18 +191,36 @@ for the two accounts. D4-M is accepted.
 
 ### D4-S — Specific operation ceilings
 
-- [ ] Add the authorized-library bibliographic lookup ceiling of `360/hour`
+- [x] Add the authorized-library bibliographic lookup ceiling of `360/hour`
   alongside the existing client-IP and user controls.
-- [ ] Add the authorized-library cover-upload ceiling of `120/hour` alongside
+- [x] Add the authorized-library cover-upload ceiling of `120/hour` alongside
   the existing `30/hour/user` control.
-- [ ] Add rearrangement preview/apply observation at `120/minute/user` and
+- [x] Add rearrangement preview/apply observation at `120/minute/user` and
   `240/minute/library`; enforce only after automated normal interaction remains
   below 25% of both thresholds.
-- [ ] Prove that rejected lookups, uploads and rearrangements leave no database
+- [x] Prove that rejected lookups, uploads and rearrangements leave no database
   or object residue and return only generic policy responses.
 
 Evidence: focused tests, staging status/events, one accepted normal workflow for
-each operation and one bounded blocking rehearsal.
+each operation and one bounded blocking rehearsal. Revision
+`11ceb788b548fd76062df1638014e0171224376e` uses the shared PostgreSQL/HMAC
+bucket infrastructure and independent `off/observe/enforce` switches; no
+migration was required. Focused tests prove authorization precedes charging,
+blocked provider calls and rearrangements cannot mutate state, blocked cover
+uploads leave neither metadata nor private objects, and decision failures
+return only generic `429` or fail-closed `503` responses. Observe rehearsal
+`1186b064-5f1b-4bf7-aeae-d966bfbef3c6` emitted exactly one correlated
+`rate_limit_observed` event for each new scope at 301 IP lookups, 361 library
+lookups, 121 library cover uploads, 121 user rearrangements and 241 library
+rearrangements. Normal staging use recorded one user, IP and library ISBN
+lookup; four user and four library cover-upload attempts; and two user plus
+three library rearrangement attempts. The rearrangement counts were below 25%
+of both thresholds and no normal operation returned `429` or `503`. All three
+policies were then changed to `enforce`. Blocking rehearsal
+`85f1877d-e092-4413-b4ab-ff99660d4ecc` produced exactly one correlated
+`rate_limit_blocked` decision for every new scope. The final deep check
+accounted for all 440 private objects with zero missing, mismatched or orphaned
+objects. D4-S is accepted.
 
 ### D4-O — Abandoned private-object recovery
 
@@ -647,8 +665,8 @@ implementation task in this section.
 This ordering does not duplicate task status; completion is recorded only in
 the sections above.
 
-1. **Immediate application limits:** implement D4-S and D4-O in small
-   reviewed PRs; D4-G and D4-M are accepted and active in staging.
+1. **Immediate private-object recovery:** implement D4-O in a small reviewed
+   PR; D4-G, D4-M and D4-S are accepted and active in staging.
 2. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
 3. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
    accumulates; authorization defects pre-empt all feature work.
