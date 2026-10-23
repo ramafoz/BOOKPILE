@@ -9,9 +9,12 @@ from bookpile_server.cli.defensive_limits import (
     COSTLY_SCOPES,
     MUTATION_REHEARSAL_CONFIRMATION,
     REHEARSAL_CONFIRMATION,
+    SPECIFIC_OPERATION_SCOPES,
+    SPECIFIC_REHEARSAL_CONFIRMATION,
     costly_limit_status,
     rehearse_costly_limits,
     rehearse_mutation_limits,
+    rehearse_specific_operation_limits,
 )
 from bookpile_server.config import Settings
 from bookpile_server.models import Library, RateLimitBucket, SecurityEvent, User
@@ -350,5 +353,108 @@ def test_mutation_rehearsal_requires_explicit_confirmation(
     )
     with pytest.raises(RuntimeError, match="--confirm"):
         rehearse_mutation_limits(session, selected, confirmation="no")
+
+    assert list(session.scalars(select(RateLimitBucket))) == []
+
+
+def test_specific_rehearsal_supports_mixed_rollout_modes_and_correlates_events(
+    session: Session,
+) -> None:
+    selected = settings("observe").model_copy(
+        update={
+            "bibliographic_lookup_limit_mode": "enforce",
+            "cover_upload_library_limit_mode": "enforce",
+            "rearrangement_limit_mode": "observe",
+            "bibliographic_lookup_attempts_per_ip_per_hour": 2,
+            "bibliographic_lookup_attempts_per_library_per_hour": 3,
+            "cover_upload_attempts_per_library_per_hour": 2,
+            "rearrangement_attempts_per_user_per_minute": 2,
+            "rearrangement_attempts_per_library_per_minute": 3,
+        }
+    )
+
+    result = rehearse_specific_operation_limits(
+        session,
+        selected,
+        confirmation=SPECIFIC_REHEARSAL_CONFIRMATION,
+    )
+
+    assert result["synthetic_only"] is True
+    assert [item["scope"] for item in result["operations"]] == [
+        "bibliographic_lookup_ip",
+        "bibliographic_lookup_library",
+        "cover_upload_library",
+        "rearrangement_user",
+        "rearrangement_library",
+    ]
+    assert [item["blocked_decisions"] for item in result["operations"]] == [
+        1,
+        1,
+        1,
+        0,
+        0,
+    ]
+    events = list(session.scalars(select(SecurityEvent)))
+    assert len(events) == 5
+    assert {event.details.get("correlation_id") for event in events} == {
+        result["rehearsal_id"]
+    }
+    status = costly_limit_status(session, selected)
+    assert status["bibliographic_lookup_mode"] == "enforce"
+    assert status["cover_upload_library_mode"] == "enforce"
+    assert status["rearrangement_mode"] == "observe"
+    assert {item["scope"] for item in status["buckets"]} == (
+        set(SPECIFIC_OPERATION_SCOPES)
+        - {"bibliographic_lookup", "cover_upload"}
+    )
+
+
+@pytest.mark.parametrize(
+    "selected",
+    (
+        settings("observe").model_copy(
+            update={
+                "bibliographic_lookup_limit_mode": "off",
+                "cover_upload_library_limit_mode": "observe",
+                "rearrangement_limit_mode": "observe",
+            }
+        ),
+        settings("observe", environment="production").model_copy(
+            update={
+                "bibliographic_lookup_limit_mode": "observe",
+                "cover_upload_library_limit_mode": "observe",
+                "rearrangement_limit_mode": "observe",
+            }
+        ),
+    ),
+)
+def test_specific_rehearsal_refuses_unsafe_environment_or_mode(
+    session: Session, selected: Settings
+) -> None:
+    with pytest.raises(RuntimeError):
+        rehearse_specific_operation_limits(
+            session,
+            selected,
+            confirmation=SPECIFIC_REHEARSAL_CONFIRMATION,
+        )
+
+    assert list(session.scalars(select(RateLimitBucket))) == []
+
+
+def test_specific_rehearsal_requires_explicit_confirmation(
+    session: Session,
+) -> None:
+    selected = settings("observe").model_copy(
+        update={
+            "bibliographic_lookup_limit_mode": "observe",
+            "cover_upload_library_limit_mode": "observe",
+            "rearrangement_limit_mode": "observe",
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="--confirm"):
+        rehearse_specific_operation_limits(
+            session, selected, confirmation="no"
+        )
 
     assert list(session.scalars(select(RateLimitBucket))) == []

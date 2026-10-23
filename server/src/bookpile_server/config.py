@@ -85,6 +85,31 @@ class Settings(BaseSettings):
     mutation_attempts_per_library_per_15_minutes: int = Field(
         default=600, ge=60, le=20_000
     )
+    bibliographic_lookup_limit_mode: Literal["off", "observe", "enforce"] = (
+        "off"
+    )
+    bibliographic_lookup_attempts_per_user_per_hour: int = Field(
+        default=180, ge=1, le=10_000
+    )
+    bibliographic_lookup_attempts_per_ip_per_hour: int = Field(
+        default=300, ge=1, le=10_000
+    )
+    bibliographic_lookup_attempts_per_library_per_hour: int = Field(
+        default=360, ge=1, le=20_000
+    )
+    cover_upload_library_limit_mode: Literal["off", "observe", "enforce"] = (
+        "off"
+    )
+    cover_upload_attempts_per_library_per_hour: int = Field(
+        default=120, ge=1, le=10_000
+    )
+    rearrangement_limit_mode: Literal["off", "observe", "enforce"] = "off"
+    rearrangement_attempts_per_user_per_minute: int = Field(
+        default=120, ge=1, le=10_000
+    )
+    rearrangement_attempts_per_library_per_minute: int = Field(
+        default=240, ge=1, le=20_000
+    )
     import_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)
     import_attempts_per_library_per_hour: int = Field(default=12, ge=1, le=200)
     export_attempts_per_user_per_hour: int = Field(default=6, ge=1, le=100)
@@ -101,7 +126,7 @@ class Settings(BaseSettings):
     cover_max_width: int = 900
     cover_max_height: int = 1400
     cover_webp_quality: int = 82
-    cover_upload_attempts_per_hour: int = 30
+    cover_upload_attempts_per_hour: int = Field(default=30, ge=1, le=10_000)
     private_object_backend: Literal["filesystem", "s3"] = "filesystem"
     private_object_s3_endpoint_url: str | None = None
     private_object_s3_region: str | None = None

@@ -40,6 +40,7 @@ from ..services.mutation_limits import (
     MUTATION_ROUTES,
     MutationRateLimiter,
 )
+from ..services.specific_operation_limits import SpecificOperationRateLimiter
 from ..services.costly_operation_leases import CostlyOperationLeaseService
 from ..services.operation_leases import OperationLeaseManager
 from ..config import get_settings
@@ -281,6 +282,17 @@ def get_rate_limiter(session: SessionDependency) -> RateLimiter:
 
 
 RateLimiterDependency = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
+def get_specific_operation_limiter(
+    rate_limiter: RateLimiterDependency,
+) -> SpecificOperationRateLimiter:
+    return SpecificOperationRateLimiter(rate_limiter, get_settings())
+
+
+SpecificOperationRateLimiterDependency = Annotated[
+    SpecificOperationRateLimiter, Depends(get_specific_operation_limiter)
+]
 
 
 def get_costly_operation_limiter(

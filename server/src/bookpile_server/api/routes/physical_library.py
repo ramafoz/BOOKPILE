@@ -33,11 +33,16 @@ from ...services.physical_library import (
     PhysicalLibraryNotFoundError,
     PhysicalLibraryValidationError,
 )
+from ...services.rate_limits import (
+    RateLimitDecisionUnavailableError,
+    RateLimitExceededError,
+)
 from ..dependencies import (
     CsrfDependency,
     CurrentAuthDependency,
     LibraryAccessServiceDependency,
     PhysicalLibraryServiceDependency,
+    SpecificOperationRateLimiterDependency,
 )
 
 
@@ -213,11 +218,25 @@ def preview_rearrangement(
     payload: RearrangementRequest,
     service: PhysicalLibraryServiceDependency,
     access_service: LibraryAccessServiceDependency,
+    limiter: SpecificOperationRateLimiterDependency,
     context: CurrentAuthDependency,
 ) -> RearrangementResultResponse:
     try:
         access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        limiter.check_rearrangement_user(context.user_id)
+        limiter.check_rearrangement_library(library_id)
         return service.preview_rearrangement(library_id=library_id, payload=payload)
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many rearrangement requests. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
     except (
         LibraryNotFoundError,
         LibraryOwnerRequiredError,
@@ -234,16 +253,30 @@ def apply_rearrangement(
     payload: RearrangementApplyRequest,
     service: PhysicalLibraryServiceDependency,
     access_service: LibraryAccessServiceDependency,
+    limiter: SpecificOperationRateLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
 ) -> RearrangementResultResponse:
     try:
         access_service.require_owner(library_id=library_id, user_id=context.user_id)
+        limiter.check_rearrangement_user(context.user_id)
+        limiter.check_rearrangement_library(library_id)
         return service.apply_rearrangement(
             library_id=library_id,
             actor_user_id=context.user_id,
             payload=payload,
         )
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many rearrangement requests. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
     except (
         LibraryNotFoundError,
         LibraryOwnerRequiredError,

@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from datetime import date, timedelta
+from datetime import date
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile, status
 
@@ -30,7 +30,10 @@ from ...services.catalogue import (
 from ...cover_images import InvalidCoverImage, process_cover_image
 from ...config import get_settings
 from ...services.covers import CoverNotFoundError, CoverStorageError
-from ...services.rate_limits import RateLimitExceededError, RateLimitPolicy
+from ...services.rate_limits import (
+    RateLimitDecisionUnavailableError,
+    RateLimitExceededError,
+)
 from ...services.library_access import (
     LibraryNotFoundError,
     LibraryOwnerRequiredError,
@@ -55,8 +58,8 @@ from ..dependencies import (
     LibraryAccessServiceDependency,
     LoanServiceDependency,
     PhysicalLibraryServiceDependency,
-    RateLimiterDependency,
     ReadingServiceDependency,
+    SpecificOperationRateLimiterDependency,
 )
 
 
@@ -334,29 +337,32 @@ def get_isbn_lookup(
     request: Request,
     service: CatalogueServiceDependency,
     access_service: LibraryAccessServiceDependency,
-    limiter: RateLimiterDependency,
+    limiter: SpecificOperationRateLimiterDependency,
     context: CurrentAuthDependency,
     isbn: str = Query(min_length=1, max_length=40),
 ) -> ISBNLookupResponse:
     try:
         access_service.require_owner(library_id=library_id, user_id=context.user_id)
-        try:
-            limiter.enforce(
-                RateLimitPolicy("bibliographic_lookup", 180, timedelta(hours=1)),
-                key=str(context.user_id),
-                ip_address=request.client.host if request.client else None,
-            )
-        except RateLimitExceededError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many bibliographic lookups. Try again later.",
-                headers={"Retry-After": str(exc.retry_after)},
-            ) from exc
+        limiter.check_bibliographic_user(context.user_id)
+        if request.client is not None:
+            limiter.check_bibliographic_ip(request.client.host)
+        limiter.check_bibliographic_library(library_id)
         normalized = normalize_isbn(isbn)
         matches = _isbn_matches(service, library_id, normalized)
         candidates = lookup_isbn(normalized)
     except (LibraryNotFoundError, LibraryOwnerRequiredError) as exc:
         raise catalogue_error(exc) from exc
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many bibliographic lookups. Try again later.",
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
+        ) from exc
     except InvalidISBN as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except BibliographicProvidersUnavailable as exc:
@@ -651,10 +657,9 @@ def get_book_cover(
 async def put_book_cover(
     library_id: UUID,
     book_id: UUID,
-    request: Request,
     cover_service: CoverServiceDependency,
     access_service: LibraryAccessServiceDependency,
-    limiter: RateLimiterDependency,
+    limiter: SpecificOperationRateLimiterDependency,
     context: CurrentAuthDependency,
     _csrf: CsrfDependency,
     cover: UploadFile = File(...),
@@ -662,11 +667,8 @@ async def put_book_cover(
     settings = get_settings()
     try:
         access_service.require_owner(library_id=library_id, user_id=context.user_id)
-        limiter.enforce(
-            RateLimitPolicy("cover_upload", settings.cover_upload_attempts_per_hour, timedelta(hours=1)),
-            key=str(context.user_id),
-            ip_address=request.client.host if request.client else None,
-        )
+        limiter.check_cover_user(context.user_id)
+        limiter.check_cover_library(library_id)
         content = await cover.read(settings.cover_max_upload_bytes + 1)
         processed = process_cover_image(content, settings)
         saved = cover_service.replace(
@@ -686,6 +688,11 @@ async def put_book_cover(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many cover uploads. Please try again later.",
             headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
+    except RateLimitDecisionUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request limiting is temporarily unavailable.",
         ) from exc
     except (LibraryNotFoundError, LibraryOwnerRequiredError, CatalogueNotFoundError, InvalidCoverImage, CoverStorageError, CatalogueConflictError) as exc:
         raise cover_error(exc) from exc
