@@ -234,7 +234,7 @@ objects. D4-S is accepted.
   pass deep reconciliation.
 - [x] Keep the accepted 24-hour/25-object cleanup in persistent `enforce` mode
   under the hourly systemd timer and record a successful scheduled-path run.
-- [ ] Install the distinct external hourly-maintenance dead-man switch, prove a
+- [x] Install the distinct external hourly-maintenance dead-man switch, prove a
   success ping and operator notification test, and retain daily deep
   reconciliation as the non-zero orphan-backlog alert.
 - [x] Document and prove the independent disable switch: setting only
@@ -252,8 +252,13 @@ rejected during its one-hour acceptance grace, later became the sole candidate,
 and was the sole deletion under a one-object cap. Deep reconciliation returned
 440 expected, 440 stored, zero missing, mismatched or orphaned, and healthy.
 Persistent `enforce` then completed through the hourly systemd service with
-zero candidates or removals; the timer remained scheduled for minute 11. Only
-external dead-man-switch acceptance remains open above.
+zero candidates or removals; the timer remained scheduled for minute 11. The
+distinct `BOOKPILE staging - mantenimiento horario` UTC cron check uses a
+30-minute grace. At 2026-10-24 10:45:51 UTC the complete systemd path recorded
+both maintenance and protected `ExecStartPost` ping as `0/SUCCESS`; Healthchecks
+turned green and the operator mailbox received its notification test. Daily
+deep reconciliation remains the independent non-zero backlog alert. D4-O is
+accepted and active in staging.
 
 ### D5 — Aggregate detection and alerting
 
@@ -682,16 +687,15 @@ implementation task in this section.
 This ordering does not duplicate task status; completion is recorded only in
 the sections above.
 
-1. **Immediate private-object recovery:** finish D4-O external dead-man-switch
-   acceptance; D4-G, D4-M and D4-S are accepted and active in staging.
-2. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
-3. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
+1. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness;
+   D4-G, D4-M, D4-S and D4-O are accepted and active in staging.
+2. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
    accumulates; authorization defects pre-empt all feature work.
-4. **Administration:** implement the `SYSTEM_ADMIN` domain, strong
+3. **Administration:** implement the `SYSTEM_ADMIN` domain, strong
    authentication, immutable audit and restricted console.
-5. **Production platform:** reproduce the production host, implement immutable
+4. **Production platform:** reproduce the production host, implement immutable
    image promotion and prove environment/data separation.
-6. **Readiness:** complete capacity, dependencies, policies/legal text and final
+5. **Readiness:** complete capacity, dependencies, policies/legal text and final
    cross-browser/accessibility acceptance.
 7. **Opening:** complete Phase 9G and record explicit `GO` or `NO-GO`.
 
