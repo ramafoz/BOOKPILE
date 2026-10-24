@@ -224,19 +224,24 @@ objects. D4-S is accepted.
 
 ### D4-O — Abandoned private-object recovery
 
-- [ ] Implement a dry-run command that lists only private objects absent from
+- [x] Implement a dry-run command that lists only private objects absent from
   committed metadata, older than a configured grace period and not protected
   by an active import/export lease or in-flight job.
-- [ ] Make deletion opt-in, bounded per run, exact-key based and auditable. A
+- [x] Make deletion opt-in, bounded per run, exact-key based and auditable. A
   database or lease decision failure must stop deletion.
 - [ ] Run dry-run against staging, inject one disposable orphan, prove detection
-  without touching 435 expected objects, delete only the disposable orphan and
+  without touching any expected object, delete only the disposable orphan and
   pass deep reconciliation.
 - [ ] Schedule the accepted bounded cleanup and alert on failure or a non-zero
   backlog; document the independent disable switch.
 
 Evidence: tests for race/failure/grace-period cases and the staging injection,
-cleanup and deep-check transcript.
+cleanup and deep-check transcript. The implementation defaults to `off`, uses
+a 24-hour grace and a 25-object batch limit, fails closed on unknown object age
+or unavailable coordination, revalidates every candidate immediately before
+exact-key deletion under PostgreSQL write-excluding decision locks, and records
+only keyed object HMACs. The staging injection, deletion and scheduling
+acceptance remain open above.
 
 ### D5 — Aggregate detection and alerting
 

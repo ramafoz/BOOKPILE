@@ -18,14 +18,26 @@ def main() -> int:
     storage = get_private_object_storage()
     with SessionFactory() as session:
         if args.command == "run":
+            settings = get_settings()
             payload = run_maintenance(
                 session,
                 storage,
-                get_settings().import_staging_root,
-                get_settings().export_staging_root,
+                settings.import_staging_root,
+                settings.export_staging_root,
                 export_staging_ttl=timedelta(
-                    hours=get_settings().export_staging_ttl_hours
+                    hours=settings.export_staging_ttl_hours
                 ),
+                private_object_orphan_cleanup_mode=(
+                    settings.private_object_orphan_cleanup_mode
+                ),
+                private_object_orphan_grace=timedelta(
+                    hours=settings.private_object_orphan_grace_hours
+                ),
+                private_object_orphan_max_deletions=(
+                    settings.private_object_orphan_max_deletions
+                ),
+                private_object_fingerprint_secret=settings.rate_limit_key_secret,
+                deployment_revision=settings.deployment_revision,
             ).payload()
             exit_code = 0
         else:

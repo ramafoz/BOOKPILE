@@ -139,6 +139,11 @@ class Settings(BaseSettings):
     private_object_s3_read_timeout_seconds: int = Field(default=10, ge=1, le=120)
     private_object_s3_max_attempts: int = Field(default=3, ge=1, le=10)
     private_object_s3_max_connections: int = Field(default=10, ge=1, le=100)
+    private_object_orphan_cleanup_mode: Literal["off", "observe", "enforce"] = (
+        "off"
+    )
+    private_object_orphan_grace_hours: int = Field(default=24, ge=1, le=720)
+    private_object_orphan_max_deletions: int = Field(default=25, ge=1, le=500)
     operational_backup_staging_root: Path = SERVER_DIRECTORY.parent / ".bookpile-runtime" / "operational-backups"
     operational_backup_encryption_secret: SecretStr = SecretStr(DEVELOPMENT_BACKUP_SECRET)
     operational_backup_encryption_key_id: str = "development"

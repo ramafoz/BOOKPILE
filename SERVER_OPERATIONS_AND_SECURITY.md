@@ -18,6 +18,62 @@ material 30 days; security events 180 days. Library audit history is not
 globally pruned because it belongs to each active library and requires a
 separate product retention decision.
 
+### Abandoned private-object recovery
+
+Private-object cleanup is independent from normal deletion cleanup and defaults
+to `off`. Its three modes are:
+
+- `off`: scheduled maintenance does not inventory or delete abandoned objects;
+- `observe`: hourly maintenance reports eligible candidates but never deletes;
+- `enforce`: hourly maintenance deletes at most the configured batch limit.
+
+An object is eligible only when no cover/profile metadata references its exact
+key, its provider `LastModified` is at least the configured grace age, and no
+active import/export lease or `READY`/`IMPORTING` import job exists. Unknown
+ages fail closed. Apply mode repeats the database, active-work, age, size,
+checksum and modification-time checks immediately before each exact-key delete,
+then verifies absence. PostgreSQL holds the metadata, lease and import-job
+tables against concurrent writes across the final checks and external delete.
+A failed database, lease or storage decision stops the run. Authorization and
+completion events retain only a keyed HMAC, byte count and deployment revision;
+commands never print raw object keys.
+
+The defaults are a 24-hour grace and at most 25 deletions per run. Inspect a
+read-only plan regardless of the scheduled mode:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml --profile operations run --rm maintenance \
+  bookpile-private-objects recover-orphans
+```
+
+Manual apply requires both `BOOKPILE_SERVER_PRIVATE_OBJECT_ORPHAN_CLEANUP_MODE`
+set to `enforce` and an explicit confirmation:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml --profile operations run --rm maintenance \
+  bookpile-private-objects recover-orphans --apply \
+  --confirm DELETE-ABANDONED-PRIVATE-OBJECTS
+```
+
+For the controlled staging acceptance only, create one 32-byte disposable
+orphan with an audited, staging-restricted command. It returns only the HMAC
+needed to correlate the later dry-run and deletion. Wait until the configured
+grace has elapsed before expecting it to become eligible:
+
+```bash
+docker compose --env-file server/.env.staging \
+  -f server/compose.production.yaml --profile operations run --rm maintenance \
+  bookpile-private-objects inject-orphan-rehearsal \
+  --confirm STAGING-ORPHAN-REHEARSAL
+```
+
+Rollback is immediate: set the independent mode to `off`; subsequent one-shot
+maintenance containers will not run orphan recovery. The daily deep check
+remains the non-zero-backlog alert and must return exact inventory after an
+accepted cleanup. Never reduce the production grace to accelerate a rehearsal.
+
 ### Defensive HTTP observation
 
 Caddy writes a minimized access log to `/data/access.log` in its private

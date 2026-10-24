@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, Protocol
@@ -15,6 +16,7 @@ class StoredObjectInfo:
     object_key: str
     byte_size: int
     sha256: str | None
+    last_modified: datetime | None = None
 
 
 class CoverStorage(Protocol):
@@ -73,7 +75,12 @@ class FilesystemCoverStorage:
         if not path.is_file():
             return None
         content = path.read_bytes()
-        return StoredObjectInfo(object_key, len(content), sha256(content).hexdigest())
+        return StoredObjectInfo(
+            object_key,
+            len(content),
+            sha256(content).hexdigest(),
+            datetime.fromtimestamp(path.stat().st_mtime, UTC),
+        )
 
     def iter_objects(self) -> Iterator[StoredObjectInfo]:
         if not self._root.exists():
@@ -83,7 +90,12 @@ class FilesystemCoverStorage:
                 continue
             object_key = path.relative_to(self._root).as_posix()
             content = path.read_bytes()
-            yield StoredObjectInfo(object_key, len(content), sha256(content).hexdigest())
+            yield StoredObjectInfo(
+                object_key,
+                len(content),
+                sha256(content).hexdigest(),
+                datetime.fromtimestamp(path.stat().st_mtime, UTC),
+            )
 
 
 class S3PrivateObjectStorage:
@@ -230,6 +242,7 @@ class S3PrivateObjectStorage:
             object_key=_validate_object_key(object_key),
             byte_size=int(response["ContentLength"]),
             sha256=response.get("Metadata", {}).get(self.checksum_metadata_key),
+            last_modified=response.get("LastModified"),
         )
 
     def iter_objects(self) -> Iterator[StoredObjectInfo]:
@@ -250,6 +263,7 @@ class S3PrivateObjectStorage:
                             logical_key,
                             len(content),
                             sha256(content).hexdigest(),
+                            stored.last_modified or item.get("LastModified"),
                         )
         except OSError:
             raise
