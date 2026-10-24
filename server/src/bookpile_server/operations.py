@@ -22,6 +22,7 @@ from .models import (
     UserSession,
 )
 from .private_object_operations import audit_private_objects, expected_private_objects
+from .private_object_recovery import recover_abandoned_private_objects
 from .services.library_deletion_cleanup import (
     finalize_expired_account_deletions,
     finalize_expired_library_deletions,
@@ -47,6 +48,9 @@ class MaintenanceResult:
     removed_outbox_messages: int = 0
     removed_security_events: int = 0
     removed_export_files: int = 0
+    private_object_orphan_candidates: int = 0
+    removed_private_object_orphans: int = 0
+    protected_private_object_orphans: int = 0
 
     def payload(self) -> dict[str, int]:
         return asdict(self)
@@ -77,6 +81,11 @@ def run_maintenance(
     export_staging_root: Path,
     *,
     export_staging_ttl: timedelta = timedelta(hours=24),
+    private_object_orphan_cleanup_mode: str = "off",
+    private_object_orphan_grace: timedelta = timedelta(hours=24),
+    private_object_orphan_max_deletions: int = 25,
+    private_object_fingerprint_secret: str = "",
+    deployment_revision: str = "unknown",
     now: datetime | None = None,
 ) -> MaintenanceResult:
     moment = now or datetime.now(UTC)
@@ -189,6 +198,25 @@ def run_maintenance(
         )
     ).rowcount
     session.commit()
+
+    orphan_candidates = 0
+    removed_orphans = 0
+    protected_orphans = 0
+    if private_object_orphan_cleanup_mode not in {"off", "observe", "enforce"}:
+        raise ValueError("Invalid private-object orphan cleanup mode")
+    if private_object_orphan_cleanup_mode != "off":
+        recovery = recover_abandoned_private_objects(
+            session,
+            storage,
+            key_secret=private_object_fingerprint_secret,
+            deployment_revision=deployment_revision,
+            grace=private_object_orphan_grace,
+            max_deletions=private_object_orphan_max_deletions,
+            apply=private_object_orphan_cleanup_mode == "enforce",
+        )
+        orphan_candidates = recovery.candidate_count
+        removed_orphans = recovery.deleted_count
+        protected_orphans = recovery.protected_count
     return MaintenanceResult(
         finalized_libraries=finalized_libraries,
         finalized_accounts=finalized_accounts,
@@ -202,6 +230,9 @@ def run_maintenance(
         removed_outbox_messages=removed_outbox_messages or 0,
         removed_security_events=removed_security_events or 0,
         removed_export_files=removed_export_files,
+        private_object_orphan_candidates=orphan_candidates,
+        removed_private_object_orphans=removed_orphans,
+        protected_private_object_orphans=protected_orphans,
     )
 
 

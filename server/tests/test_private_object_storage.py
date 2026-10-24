@@ -1,5 +1,6 @@
 from io import BytesIO
 from hashlib import sha256
+from datetime import UTC, datetime
 
 import pytest
 from botocore.exceptions import ClientError
@@ -28,7 +29,11 @@ class FakePaginator:
         assert Bucket == self.client.bucket
         yield {
             "Contents": [
-                {"Key": key, "Size": len(value[0])}
+                {
+                    "Key": key,
+                    "Size": len(value[0]),
+                    "LastModified": self.client.last_modified,
+                }
                 for key, value in sorted(self.client.objects.items())
                 if key.startswith(Prefix)
             ]
@@ -41,6 +46,7 @@ class FakeS3Client:
         self.objects: dict[str, tuple[bytes, dict[str, str]]] = {}
         self.corrupt_writes = corrupt_writes
         self.ready = True
+        self.last_modified = datetime(2026, 1, 1, tzinfo=UTC)
 
     def put_object(self, *, Bucket, Key, Body, ContentLength, ContentType, Metadata):
         assert Bucket == self.bucket
@@ -54,7 +60,11 @@ class FakeS3Client:
         if Key not in self.objects:
             raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
         content, metadata = self.objects[Key]
-        return {"ContentLength": len(content), "Metadata": metadata}
+        return {
+            "ContentLength": len(content),
+            "Metadata": metadata,
+            "LastModified": self.last_modified,
+        }
 
     def get_object(self, *, Bucket, Key):
         assert Bucket == self.bucket

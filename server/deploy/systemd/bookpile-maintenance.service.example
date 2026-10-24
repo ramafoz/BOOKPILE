@@ -1,5 +1,5 @@
 [Unit]
-Description=BOOKPILE expired-data maintenance
+Description=BOOKPILE lifecycle and private-object maintenance
 Requires=docker.service
 After=docker.service network-online.target
 

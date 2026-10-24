@@ -258,3 +258,43 @@ def test_maintenance_removes_only_expired_top_level_export_zips(
     assert current_zip.exists()
     assert unrelated.exists()
     assert nested_zip.exists()
+
+
+def test_scheduled_orphan_recovery_observes_then_deletes_with_independent_mode(
+    session, tmp_path
+) -> None:
+    storage_root = tmp_path / "objects"
+    storage = FilesystemCoverStorage(storage_root)
+    object_key = "covers/scheduled-orphan.webp"
+    storage.put(object_key, b"orphan")
+    old_timestamp = (datetime.now(UTC) - timedelta(hours=48)).timestamp()
+    object_path = storage_root / object_key
+    os.utime(object_path, (old_timestamp, old_timestamp))
+
+    observed = run_maintenance(
+        session,
+        storage,
+        tmp_path / "imports",
+        tmp_path / "exports",
+        private_object_orphan_cleanup_mode="observe",
+        private_object_fingerprint_secret="scheduled-recovery-secret",
+        deployment_revision="git-observe",
+    )
+
+    assert observed.private_object_orphan_candidates == 1
+    assert observed.removed_private_object_orphans == 0
+    assert storage.stat(object_key) is not None
+
+    enforced = run_maintenance(
+        session,
+        storage,
+        tmp_path / "imports",
+        tmp_path / "exports",
+        private_object_orphan_cleanup_mode="enforce",
+        private_object_fingerprint_secret="scheduled-recovery-secret",
+        deployment_revision="git-enforce",
+    )
+
+    assert enforced.private_object_orphan_candidates == 1
+    assert enforced.removed_private_object_orphans == 1
+    assert storage.stat(object_key) is None
