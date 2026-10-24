@@ -229,19 +229,31 @@ objects. D4-S is accepted.
   by an active import/export lease or in-flight job.
 - [x] Make deletion opt-in, bounded per run, exact-key based and auditable. A
   database or lease decision failure must stop deletion.
-- [ ] Run dry-run against staging, inject one disposable orphan, prove detection
+- [x] Run dry-run against staging, inject one disposable orphan, prove detection
   without touching any expected object, delete only the disposable orphan and
   pass deep reconciliation.
-- [ ] Schedule the accepted bounded cleanup and alert on failure or a non-zero
-  backlog; document the independent disable switch.
+- [x] Keep the accepted 24-hour/25-object cleanup in persistent `enforce` mode
+  under the hourly systemd timer and record a successful scheduled-path run.
+- [ ] Install the distinct external hourly-maintenance dead-man switch, prove a
+  success ping and operator notification test, and retain daily deep
+  reconciliation as the non-zero orphan-backlog alert.
+- [x] Document and prove the independent disable switch: setting only
+  `BOOKPILE_SERVER_PRIVATE_OBJECT_ORPHAN_CLEANUP_MODE=off` stops orphan recovery
+  without disabling unrelated maintenance.
 
 Evidence: tests for race/failure/grace-period cases and the staging injection,
 cleanup and deep-check transcript. The implementation defaults to `off`, uses
 a 24-hour grace and a 25-object batch limit, fails closed on unknown object age
 or unavailable coordination, revalidates every candidate immediately before
 exact-key deletion under PostgreSQL write-excluding decision locks, and records
-only keyed object HMACs. The staging injection, deletion and scheduling
-acceptance remain open above.
+only keyed object HMACs. Staging dry-run first reconciled 440 expected and 440
+stored objects. Rehearsal object HMAC `e3b45afb8d66...f6a2ce77` was detected but
+rejected during its one-hour acceptance grace, later became the sole candidate,
+and was the sole deletion under a one-object cap. Deep reconciliation returned
+440 expected, 440 stored, zero missing, mismatched or orphaned, and healthy.
+Persistent `enforce` then completed through the hourly systemd service with
+zero candidates or removals; the timer remained scheduled for minute 11. Only
+external dead-man-switch acceptance remains open above.
 
 ### D5 — Aggregate detection and alerting
 
@@ -670,8 +682,8 @@ implementation task in this section.
 This ordering does not duplicate task status; completion is recorded only in
 the sections above.
 
-1. **Immediate private-object recovery:** implement D4-O in a small reviewed
-   PR; D4-G, D4-M and D4-S are accepted and active in staging.
+1. **Immediate private-object recovery:** finish D4-O external dead-man-switch
+   acceptance; D4-G, D4-M and D4-S are accepted and active in staging.
 2. **Evidence and edge:** complete D3-L, then D5, D6 and the full D7 harness.
 3. **Authorization:** execute Owner/Viewer A1-A10 while defensive edge evidence
    accumulates; authorization defects pre-empt all feature work.

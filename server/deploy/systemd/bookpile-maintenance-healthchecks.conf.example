@@ -1,0 +1,4 @@
+[Service]
+# Send success only after lifecycle and private-object maintenance exits zero.
+# A failed ping must not reclassify successful BOOKPILE maintenance as failed.
+ExecStartPost=-/usr/bin/curl -q --config /etc/bookpile/healthchecks-maintenance.curl

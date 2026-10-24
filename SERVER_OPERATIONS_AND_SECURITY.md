@@ -131,6 +131,29 @@ the protected curl configuration, then with a real oneshot; prove an external
 email notification using a disposable check or Healthchecks' notification test
 without corrupting a real backup. This is not website-uptime monitoring.
 
+### External hourly-maintenance dead-man switch (staging)
+
+The external check `BOOKPILE staging - mantenimiento horario` follows the
+staging `*-*-* *:11:00` systemd timer in UTC. Configure it as an hourly cron
+check with 30 minutes of grace. A run taking longer than that is itself
+operationally abnormal even though systemd retains a one-hour hard timeout.
+Keep its distinct bearer URL only in
+`/etc/bookpile/healthchecks-maintenance.curl`, root-owned and mode `600`.
+Reproducible examples are
+`server/deploy/healthchecks-maintenance.curl.example` and
+`server/deploy/systemd/bookpile-maintenance-healthchecks.conf.example`.
+Install the latter as
+`/etc/systemd/system/bookpile-maintenance.service.d/10-healthchecks.conf`.
+
+The drop-in sends success only after the complete maintenance command exits
+zero. A cleanup coordination failure, object-provider failure, stopped timer
+or lost host therefore produces no ping and becomes externally visible before
+the next hourly run can mask it. `ExecStartPost=-` keeps a Healthchecks outage
+from changing an otherwise successful maintenance result. Validate the unit
+with `systemd-analyze verify`, exercise a successful oneshot, and prove the
+operator email route with Healthchecks' notification test; never manufacture
+a failure against live private objects.
+
 ### External lightweight-operations dead-man switch (staging)
 
 The external check `BOOKPILE staging - operaciones` follows the staging
