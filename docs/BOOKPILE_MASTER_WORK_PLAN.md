@@ -96,7 +96,7 @@ otherwise.
 
 ### D3-L — Log retention and safe investigation
 
-- [ ] Define one retention table covering Caddy edge events, application
+- [x] Define one retention table covering Caddy edge events, application
   request events, security events, journald, Sentry and immutable admin audit.
   The table records fields retained, purpose, exact duration, deletion method,
   access role and legal-policy reference.
@@ -116,6 +116,13 @@ otherwise.
 
 Evidence: committed retention table and runbook; staging rotation transcript;
 redaction tests; one audited raw-evidence access rehearsal.
+
+Retention-table evidence: commit `62a68f9` adds the binding field, purpose,
+duration, deletion, role and legal-policy matrix. The same commit prepares but
+does not claim staging acceptance of Caddy time rotation, bounded journald or
+redaction rehearsals; those checkboxes remain open until their deployed
+transcripts are recorded. The console half of raw-evidence acceptance remains
+dependent on A3/A4.
 
 ### D4-G — General API IP ceiling
 
