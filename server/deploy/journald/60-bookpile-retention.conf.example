@@ -1,0 +1,10 @@
+[Journal]
+# D3-L host policy. The lower bound wins when either age or capacity is reached.
+Storage=persistent
+Compress=yes
+Seal=yes
+SystemMaxUse=512M
+SystemKeepFree=1G
+SystemMaxFileSize=64M
+MaxRetentionSec=14day
+MaxFileSec=1day

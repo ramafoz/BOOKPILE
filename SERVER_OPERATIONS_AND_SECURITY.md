@@ -76,22 +76,84 @@ accepted cleanup. Never reduce the production grace to accelerate a rehearsal.
 
 ### Defensive HTTP observation
 
-Caddy writes a minimized access log to `/data/access.log` in its private
+Caddy 2.11.7 writes a minimized access log to `/data/access.log` in its private
 persistent volume. It records client address, method, status, duration and
 size, but deletes request and response headers and the complete URI including
 its query string. Browser requests retain their original path; API and health
 paths are reduced to `/api/*` and `/health*` so edge-generated 413/502 responses
 remain visible without retaining private identifiers. Known scanner probes are
-labelled `scanner_probe`. The file rolls at 10 MiB, keeps at most 14 rolled
-files and removes rolled files after 14 days. Caddy 2.10.2 does not support
-time-triggered rolling, so strict expiry of a low-traffic active file remains
-a production prerequisite.
+labelled `scanner_probe`. The active file rolls every day at 00:00 UTC or at
+10 MiB, whichever occurs first. Caddy keeps at most 14 rolled files and removes
+rolls older than 14 days, so low traffic cannot keep the active file alive
+beyond the temporal boundary. Before the first 2.11 deployment, the staging
+deployment runs the bounded `migrate-caddy-access-log-rolls` command against
+the existing `caddy-data` volume. It renames only exact Caddy 2.10 Lumberjack
+rolls from `access-<timestamp>.log[.gz]` to the reason-suffixed form parsed by
+2.11 Timberjack, refuses to overwrite a target and refuses more than 100
+matches. The command is idempotent; once renamed, Timberjack applies the same
+age and count expiry instead of leaving legacy rolls outside retention.
 
 API request events contain route templates rather than raw identifiers, a
 keyed client pseudonym rather than the raw IP, and no bodies, queries, cookies
-or authorization material. Core service stdout/stderr uses Docker's `local`
-driver with five 10 MiB files per service. Access to either source requires
-host Docker authority; do not export these logs into tickets or routine chat.
+or authorization material. Core service stdout/stderr uses Docker's `journald`
+driver. The committed host policy limits the persistent journal to 14 days,
+512 MiB and at least 1 GiB free space. Access to either source requires host
+authority; do not export these logs into tickets or routine chat. The complete
+field, purpose, deletion and access contract is
+`docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md`.
+
+PostgreSQL writes only terse operational errors: failing SQL statements,
+parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
+constraint failure cannot place an email address or catalogue value in the
+host journal. Do not relax those settings for routine diagnosis.
+
+Install the journald policy before recreating services on a host:
+
+```bash
+sudo install -o root -g root -m 0644 \
+  server/deploy/journald/60-bookpile-retention.conf.example \
+  /etc/systemd/journald.conf.d/60-bookpile-retention.conf
+sudo systemd-analyze cat-config systemd/journald.conf
+sudo journalctl --disk-usage
+sudo systemctl restart systemd-journald.service
+sudo journalctl --rotate
+sudo journalctl --vacuum-time=14d --vacuum-size=512M
+sudo journalctl --disk-usage
+```
+
+Record the effective `Storage`, `SystemMaxUse`, `SystemKeepFree`,
+`SystemMaxFileSize`, `MaxRetentionSec` and `MaxFileSec` values before and after
+the controlled restart. A journal restart does not restart BOOKPILE containers,
+but public health and `bookpile-maintenance check --deep` must pass afterwards.
+
+After deploying the accepted Caddy image, exercise its real temporal writer in
+an isolated, networkless disposable container:
+
+```bash
+BOOKPILE_CADDY_IMAGE="$(docker inspect \
+  --format '{{.Config.Image}}' bookpile-production-web-1)" \
+  sh server/scripts/rehearse-caddy-log-retention.sh
+```
+
+The command must return `caddy_time_rotation`, `legacy_roll_migration`,
+`old_fixture_absent` and `new_fixture_readable` as `true`. The fixture includes
+expired and current files in both the old Lumberjack and new Timberjack naming
+formats. Its container explicitly uses the host operator's UID/GID so the
+non-root deployed image can read and write the mode-0700 temporary directory.
+It never opens a host port or touches the live access-log volume. Retain the
+JSON result and deployed image digest with the D3-L staging evidence.
+
+Exercise PostgreSQL's retained-error boundary in a second disposable container:
+
+```bash
+BOOKPILE_POSTGRES_IMAGE="$(docker inspect \
+  --format '{{.Config.Image}}' bookpile-production-db-1)" \
+  sh server/scripts/rehearse-postgresql-log-redaction.sh
+```
+
+It must retain the synthetic constraint error while returning
+`private_value_absent` and `statement_absent` as `true`. The fixture uses its
+own temporary database container and never connects to BOOKPILE data.
 
 Inspect recent scanner evidence on the host without copying the full file:
 

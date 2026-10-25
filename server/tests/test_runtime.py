@@ -59,10 +59,42 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert compose.count("logging: *container-logging") == 4
 
 
+def test_long_lived_container_logs_use_the_bounded_host_journal() -> None:
+    server_root = Path(__file__).resolve().parents[1]
+    compose = (server_root / "compose.production.yaml").read_text()
+    journal_policy = (
+        server_root
+        / "deploy"
+        / "journald"
+        / "60-bookpile-retention.conf.example"
+    ).read_text()
+
+    assert "driver: journald" in compose
+    assert 'tag: "bookpile/{{.Name}}"' in compose
+    assert "driver: local" not in compose
+    assert "MaxRetentionSec=14day" in journal_policy
+    assert "SystemMaxUse=512M" in journal_policy
+    assert "SystemKeepFree=1G" in journal_policy
+    assert "MaxFileSec=1day" in journal_policy
+
+
+def test_postgresql_journal_output_excludes_statements_parameters_and_detail() -> None:
+    compose = (
+        Path(__file__).resolve().parents[1] / "compose.production.yaml"
+    ).read_text()
+
+    assert "log_error_verbosity=terse" in compose
+    assert "log_min_error_statement=panic" in compose
+    assert "log_statement=none" in compose
+    assert "log_parameter_max_length=0" in compose
+    assert "log_parameter_max_length_on_error=0" in compose
+
+
 def test_caddy_access_log_is_minimized_rotated_and_coarsens_api_traffic() -> None:
     caddyfile = (Path(__file__).resolve().parents[1] / "docker" / "Caddyfile").read_text()
 
     assert "roll_size 10mb" in caddyfile
+    assert "roll_at 00:00" in caddyfile
     assert "roll_keep_for 336h" in caddyfile
     assert "request>uri delete" in caddyfile
     assert "request>headers delete" in caddyfile
@@ -71,6 +103,16 @@ def test_caddy_access_log_is_minimized_rotated_and_coarsens_api_traffic() -> Non
     assert "log_append @health_traffic request_path /health*" in caddyfile
     assert "log_append @browser_traffic request_path {orig_path}" in caddyfile
     assert "log_skip" not in caddyfile
+
+
+def test_web_runtime_supports_time_based_access_log_rotation() -> None:
+    dockerfile = (
+        Path(__file__).resolve().parents[1] / "docker" / "web.Dockerfile"
+    ).read_text()
+
+    assert "FROM caddy:2.11.7-alpine AS runtime" in dockerfile
+    assert "migrate-caddy-access-log-rolls.sh" in dockerfile
+    assert "/usr/local/bin/migrate-caddy-access-log-rolls" in dockerfile
 
 
 def test_caddy_scanner_probe_matcher_is_narrow_and_explicit() -> None:
@@ -190,6 +232,44 @@ def test_request_log_uses_route_template_and_omits_query(client, caplog) -> None
     assert "testclient" not in record.message
     assert "secret" not in record.message
     assert "must-not-appear" not in record.message
+
+
+def test_request_log_never_retains_credentials_tokens_bodies_or_catalogue_data(
+    client, caplog
+) -> None:
+    forbidden = (
+        "session-cookie-secret",
+        "bearer-secret",
+        "csrf-secret",
+        "reset-token-secret",
+        "invite-token-secret",
+        "reader@example.test",
+        "private-object/covers/secret.jpg",
+        "Private catalogue title",
+    )
+    with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+        response = client.post(
+            "/api/v1/auth/login?invite_token=invite-token-secret",
+            headers={
+                "Authorization": "Bearer bearer-secret",
+                "X-CSRF-Token": "csrf-secret",
+                "Cookie": "bookpile_session=session-cookie-secret",
+                "X-Reset-Token": "reset-token-secret",
+            },
+            json={
+                "identifier": "reader@example.test",
+                "password": "Private catalogue title",
+                "object_key": "private-object/covers/secret.jpg",
+            },
+        )
+
+    assert response.status_code in {401, 422}
+    messages = "\n".join(
+        record.message for record in caplog.records if record.name == "bookpile.requests"
+    )
+    assert messages
+    for value in forbidden:
+        assert value not in messages
 
 
 def test_request_log_classifies_unmatched_and_validation_statuses(

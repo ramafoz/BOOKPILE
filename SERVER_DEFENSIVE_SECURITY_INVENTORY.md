@@ -161,10 +161,9 @@ details. Maintenance currently retains these events for 180 days.
 
 ### Missing or undecided
 
-- Caddy 2.10.2 rotates by size but cannot rotate on a time interval. Its active
-  file can therefore exceed 14 days during very low traffic even though rolled
-  files have a 14-day policy. Exact temporal expiry requires a compatible
-  Caddy upgrade or separately managed rotation before production.
+- Caddy 2.11.7 is configured to rotate at 00:00 UTC or 10 MiB, whichever comes
+  first, and to delete rolls beyond 14 files or 14 days. Staging still must
+  retain the disposable old/new fixture transcript before D3-L is accepted.
 - Sparse, purpose-specific `security_events` retain raw IP for 180 days. The
   privacy policy must distinguish those security records from the short-lived
   edge log and justify or shorten that period before production.
@@ -210,7 +209,9 @@ D1 closed on 2026-10-14 with the following evidence:
   Caddy backend address;
 - ordinary and forged-header login probes showing the shared Caddy address;
 - scanner-path probes showing the SPA 200/API 404 distinction;
-- current journald disk usage, with retention policy deliberately left to D3.
+- current journald disk usage. D3-L now commits a 14-day/512-MiB host policy;
+  its effective staging configuration and controlled-restart evidence remain
+  to be captured.
 
 Response-shape/timing comparisons for 401, 403, inaccessible-resource 404,
 422 and 429 remain part of the Owner/Viewer and abuse-test work. The purpose

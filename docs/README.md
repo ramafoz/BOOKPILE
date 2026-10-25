@@ -7,6 +7,9 @@ Documentation has one status authority:
 
 Other documentation has a narrower role:
 
+- [`LOG_RETENTION_AND_INVESTIGATION_POLICY.md`](LOG_RETENTION_AND_INVESTIGATION_POLICY.md)
+  is the binding hosted-log field, expiry and access contract. Completion and
+  staging evidence remain exclusively in the master plan.
 - `docs/adr/` records accepted architectural decisions. An ADR may define how a
   task must be implemented, but task status lives only in the master plan.
 - `docs/specifications/` contains active normative product/domain contracts.

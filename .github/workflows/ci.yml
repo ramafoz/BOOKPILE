@@ -14,9 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Check shell syntax
-        run: bash -n server/deploy/deploy-staging.sh server/deploy/tests/test-deploy-staging.sh
+        run: >-
+          bash -n
+          server/deploy/deploy-staging.sh
+          server/deploy/tests/test-deploy-staging.sh
+          server/deploy/tests/test-caddy-log-migration.sh
+          server/scripts/migrate-caddy-access-log-rolls.sh
+          server/scripts/rehearse-caddy-log-retention.sh
       - name: Exercise success and rollback paths
-        run: bash server/deploy/tests/test-deploy-staging.sh
+        run: |
+          bash server/deploy/tests/test-deploy-staging.sh
+          bash server/deploy/tests/test-caddy-log-migration.sh
 
   python-tests:
     name: Python tests (Local and Server)
