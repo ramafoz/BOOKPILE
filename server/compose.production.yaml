@@ -8,15 +8,31 @@ x-api-environment: &api-environment
     BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
 
 x-container-logging: &container-logging
-  driver: local
+  # Long-lived service output is retained by the host journal under the
+  # committed BOOKPILE time-and-disk limits.
+  driver: journald
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "bookpile/{{.Name}}"
+    labels: "com.docker.compose.project,com.docker.compose.service"
 
 services:
   db:
     image: postgres:17.6-alpine3.22
     restart: unless-stopped
+    # Keep operational database failures useful without retaining SQL text,
+    # bind values, constraint DETAIL, catalogue content or account identifiers.
+    command:
+      - postgres
+      - -c
+      - log_error_verbosity=terse
+      - -c
+      - log_min_error_statement=panic
+      - -c
+      - log_statement=none
+      - -c
+      - log_parameter_max_length=0
+      - -c
+      - log_parameter_max_length_on_error=0
     environment:
       POSTGRES_DB: bookpile
       POSTGRES_USER: bookpile

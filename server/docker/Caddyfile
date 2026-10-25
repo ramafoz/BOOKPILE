@@ -14,6 +14,9 @@
 		output file /data/access.log {
 			mode 0600
 			roll_size 10mb
+			# Caddy 2.11 time-rolls even when traffic is too low to reach 10 MiB.
+			# UTC is the default because roll_local_time is deliberately omitted.
+			roll_at 00:00
 			roll_keep 14
 			roll_keep_for 336h
 		}
