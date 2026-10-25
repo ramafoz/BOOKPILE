@@ -119,6 +119,8 @@ grep -qx "BOOKPILE_BACKUP_IMAGE=bookpile-backup:git-${short_revision}" \
   "${successful_fixture}/server/.env.staging"
 grep -q "backup create" "${successful_log}"
 grep -q "run --rm migrate" "${successful_log}"
+grep -q "run --rm --no-deps --entrypoint /usr/local/bin/migrate-caddy-access-log-rolls web" \
+  "${successful_log}"
 grep -q "bookpile-maintenance check --deep" "${successful_log}"
 grep -q '^previous_revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa$' \
   "${successful_fixture}/.bookpile-runtime/deployments/staging-current"

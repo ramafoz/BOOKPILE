@@ -85,7 +85,13 @@ remain visible without retaining private identifiers. Known scanner probes are
 labelled `scanner_probe`. The active file rolls every day at 00:00 UTC or at
 10 MiB, whichever occurs first. Caddy keeps at most 14 rolled files and removes
 rolls older than 14 days, so low traffic cannot keep the active file alive
-beyond the temporal boundary.
+beyond the temporal boundary. Before the first 2.11 deployment, the staging
+deployment runs the bounded `migrate-caddy-access-log-rolls` command against
+the existing `caddy-data` volume. It renames only exact Caddy 2.10 Lumberjack
+rolls from `access-<timestamp>.log[.gz]` to the reason-suffixed form parsed by
+2.11 Timberjack, refuses to overwrite a target and refuses more than 100
+matches. The command is idempotent; once renamed, Timberjack applies the same
+age and count expiry instead of leaving legacy rolls outside retention.
 
 API request events contain route templates rather than raw identifiers, a
 keyed client pseudonym rather than the raw IP, and no bodies, queries, cookies
@@ -129,10 +135,13 @@ BOOKPILE_CADDY_IMAGE="$(docker inspect \
   sh server/scripts/rehearse-caddy-log-retention.sh
 ```
 
-The command must return `caddy_time_rotation`, `old_fixture_absent` and
-`new_fixture_readable` as `true`. It never opens a host port or touches the live
-access-log volume. Retain the JSON result and deployed image digest with the
-D3-L staging evidence.
+The command must return `caddy_time_rotation`, `legacy_roll_migration`,
+`old_fixture_absent` and `new_fixture_readable` as `true`. The fixture includes
+expired and current files in both the old Lumberjack and new Timberjack naming
+formats. Its container explicitly uses the host operator's UID/GID so the
+non-root deployed image can read and write the mode-0700 temporary directory.
+It never opens a host port or touches the live access-log volume. Retain the
+JSON result and deployed image digest with the D3-L staging evidence.
 
 Exercise PostgreSQL's retained-error boundary in a second disposable container:
 

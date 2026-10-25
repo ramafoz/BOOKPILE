@@ -296,6 +296,10 @@ echo "Validating the release configuration..."
 echo "Running explicit database migrations..."
 "${compose[@]}" run --rm migrate
 
+echo "Migrating legacy Caddy access-log rolls..."
+"${compose[@]}" run --rm --no-deps \
+  --entrypoint /usr/local/bin/migrate-caddy-access-log-rolls web
+
 echo "Recreating application services..."
 "${compose[@]}" up -d --no-deps --force-recreate api email-worker web
 

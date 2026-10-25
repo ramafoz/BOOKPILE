@@ -12,6 +12,8 @@ RUN addgroup -S -g 10001 bookpile \
     && adduser -S -D -H -u 10001 -G bookpile bookpile \
     && chown -R bookpile:bookpile /config /data
 COPY server/docker/Caddyfile /etc/caddy/Caddyfile
+COPY --chmod=0555 server/scripts/migrate-caddy-access-log-rolls.sh \
+    /usr/local/bin/migrate-caddy-access-log-rolls
 COPY --from=builder --chown=bookpile:bookpile /build/dist/server /srv
 
 USER bookpile
