@@ -100,12 +100,12 @@ otherwise.
   request events, security events, journald, Sentry and immutable admin audit.
   The table records fields retained, purpose, exact duration, deletion method,
   access role and legal-policy reference.
-- [ ] Configure strict time-based expiry for the active Caddy log. Prove with a
+- [x] Configure strict time-based expiry for the active Caddy log. Prove with a
   disposable dated fixture that records older than the configured duration are
   absent after rotation while newer records remain readable.
-- [ ] Bound journald by both time and disk use; capture `journalctl --disk-usage`
+- [x] Bound journald by both time and disk use; capture `journalctl --disk-usage`
   and effective configuration before and after a controlled service restart.
-- [ ] Verify that no retained event contains cookies, authorization headers,
+- [x] Verify that no retained event contains cookies, authorization headers,
   CSRF values, reset/invitation tokens, request bodies, email content, object
   keys or catalogue data.
 - [ ] Document and test the host-only procedure for access to raw log files.
@@ -118,11 +118,26 @@ Evidence: committed retention table and runbook; staging rotation transcript;
 redaction tests; one audited raw-evidence access rehearsal.
 
 Retention-table evidence: commit `62a68f9` adds the binding field, purpose,
-duration, deletion, role and legal-policy matrix. The same commit prepares but
-does not claim staging acceptance of Caddy time rotation, bounded journald or
-redaction rehearsals; those checkboxes remain open until their deployed
-transcripts are recorded. The console half of raw-evidence acceptance remains
-dependent on A3/A4.
+duration, deletion, role and legal-policy matrix. Staging revision
+`a40add206581940bf3b386d4e2ae7a41a040873a` installed the host policy with
+`MaxRetentionSec=14day`, `SystemMaxUse=512M`, `SystemKeepFree=1G`,
+`SystemMaxFileSize=64M` and `MaxFileSec=1day`; controlled restart, rotation and
+vacuum reduced journal use from 575.7 MiB to 188.0 MiB. All four long-lived
+containers then reported the `journald` driver. The isolated deployed-image
+Caddy rehearsal returned time rotation, legacy-roll migration, retained-new
+fixture and expired-old-fixture results as true. The isolated PostgreSQL
+rehearsal retained the error class while proving the synthetic private value
+and SQL statement absent. Automated request-log fixtures cover cookies,
+authorization and CSRF headers, reset/invitation tokens, bodies, email content,
+object keys and catalogue values. The first staging query exposed that the
+minimized Python logger had no production output handler; acceptance remained
+open until corrective revision
+`af10471343da73687cf7e4fd9b1139cd634f93d8` emitted real `http_request` rows
+through journald with route templates, keyed 16-hex client pseudonyms and no
+raw address, query, header, body or private catalogue content. The final deep
+check reconciled 440 expected and stored private objects with zero missing,
+mismatched or orphaned objects. The remaining raw-evidence checkbox stays open:
+its console half depends on A3/A4 and cannot be accepted by host evidence alone.
 
 ### D4-G — General API IP ceiling
 
