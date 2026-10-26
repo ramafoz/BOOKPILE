@@ -174,6 +174,30 @@ It must retain the synthetic constraint error while returning
 `private_value_absent` and `statement_absent` as `true`. The fixture uses its
 own temporary database container and never connects to BOOKPILE data.
 
+### Staging D3-L acceptance — 2026-10-26
+
+Revision `a40add206581940bf3b386d4e2ae7a41a040873a` installed the effective
+journald policy at 14 days, 512 MiB, 1 GiB free, 64 MiB per file and one day
+per file. Controlled restart, rotation and vacuum reduced journal use from
+575.7 MiB to 188.0 MiB; database, API, email worker and web all reported the
+`journald` logging driver. The deployed-image Caddy rehearsal returned
+`caddy_time_rotation`, `legacy_roll_migration`, `new_fixture_readable` and
+`old_fixture_absent` as true. The PostgreSQL rehearsal returned
+`postgres_error_retained`, `private_value_absent` and `statement_absent` as
+true. Deep reconciliation remained healthy at 440 expected and 440 stored
+private objects.
+
+The first live journal query correctly failed acceptance because no
+`http_request` row was emitted: the minimized logger had no process output
+handler. Revision `af10471343da73687cf7e4fd9b1139cd634f93d8` corrected that
+gap and a fresh public probe produced real `/health/live` and `/health/ready`
+events with route templates, status, duration, revision and keyed 16-hex client
+pseudonyms. The retained rows contained no raw address, query, header, body or
+private catalogue value. Together with the exhaustive synthetic-secret tests,
+this accepts Caddy expiry, bounded journald and retained-event redaction. It
+does not accept raw-evidence access or the future console-mediated IP reveal;
+that separate gate remains open pending immutable admin audit and A3/A4.
+
 Inspect recent scanner evidence on the host without copying the full file:
 
 ```bash
