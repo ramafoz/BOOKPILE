@@ -38,6 +38,22 @@ from .proxy_headers import TrustedProxyHeadersMiddleware
 request_logger = logging.getLogger("bookpile.requests")
 error_logger = logging.getLogger("bookpile.errors")
 
+# Uvicorn deliberately runs without its access logger and does not attach a
+# handler to unrelated application logger names. Give the privacy-minimized
+# BOOKPILE request events their own stderr path so Docker's journald driver
+# receives them in hosted deployments. Keep propagation enabled for test and
+# operator-provided handlers; Uvicorn's default root logger has no handler, so
+# production writes exactly once.
+if not any(
+    getattr(handler, "_bookpile_request_handler", False)
+    for handler in request_logger.handlers
+):
+    request_handler = logging.StreamHandler()
+    request_handler.setFormatter(logging.Formatter("%(message)s"))
+    setattr(request_handler, "_bookpile_request_handler", True)
+    request_logger.addHandler(request_handler)
+request_logger.setLevel(logging.INFO)
+
 
 def _request_client_key(client_ip: str | None, secret: str) -> str | None:
     if not client_ip:
