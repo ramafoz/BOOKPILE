@@ -126,6 +126,25 @@ Record the effective `Storage`, `SystemMaxUse`, `SystemKeepFree`,
 the controlled restart. A journal restart does not restart BOOKPILE containers,
 but public health and `bookpile-maintenance check --deep` must pass afterwards.
 
+After recreating the long-lived containers, prove the minimized application
+request logger is connected to the host journal rather than merely configured
+in Python. Generate one controlled route without private identifiers and query
+only its normalized event class:
+
+```bash
+curl --fail --silent --show-error \
+  https://staging.bookpile.gal/health/live >/dev/null
+sudo journalctl --since "2 minutes ago" \
+  -t 'bookpile/bookpile-production-api-1' -o cat \
+  | grep -F '"event":"http_request"' \
+  | tail -n 5
+```
+
+At least one row must contain the route template `/health/live`, a keyed
+`client_key` and the deployed revision. It must not contain a raw address,
+query, header or body. An empty result fails D3-L acceptance even when the
+Python redaction tests pass.
+
 After deploying the accepted Caddy image, exercise its real temporal writer in
 an isolated, networkless disposable container:
 

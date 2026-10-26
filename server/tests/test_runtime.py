@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -76,6 +78,25 @@ def test_long_lived_container_logs_use_the_bounded_host_journal() -> None:
     assert "SystemMaxUse=512M" in journal_policy
     assert "SystemKeepFree=1G" in journal_policy
     assert "MaxFileSec=1day" in journal_policy
+
+
+def test_request_logger_emits_minimized_events_to_process_stderr() -> None:
+    marker = '{"event":"http_request","route":"/fixture"}'
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from bookpile_server.main import request_logger; "
+                f"request_logger.info({marker!r})"
+            ),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert marker in result.stderr.splitlines()
 
 
 def test_postgresql_journal_output_excludes_statements_parameters_and_detail() -> None:
