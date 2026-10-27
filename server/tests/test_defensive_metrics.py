@@ -298,3 +298,62 @@ def test_host_collector_fails_closed_on_invalid_source(tmp_path: Path) -> None:
     assert malformed_edge.returncode == 1
     assert malformed_edge.stdout == ""
     assert "SourceValidationError" in malformed_edge.stderr
+
+
+def test_host_collector_rejects_missing_but_allows_quiet_caddy_log(
+    tmp_path: Path,
+) -> None:
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "deploy"
+        / "collect-defensive-metrics.py"
+    )
+    api_fixture = tmp_path / "api.jsonl"
+    database_fixture = tmp_path / "database.json"
+    edge_root = tmp_path / "caddy-data"
+    edge_root.mkdir()
+    api_fixture.write_text(
+        json.dumps(
+            {
+                "event": "http_request",
+                "route": "/health/live",
+                "status": 200,
+                "client_key": "1" * 16,
+                "deployment_revision": REVISION,
+            }
+        ),
+        encoding="utf-8",
+    )
+    database_fixture.write_text(
+        json.dumps(
+            {
+                "groups": [],
+                "metric": "lease_conflicts",
+                "total": 0,
+                "window_seconds": 900,
+            }
+        ),
+        encoding="utf-8",
+    )
+    command = [
+        sys.executable,
+        str(script),
+        "--api-fixture",
+        str(api_fixture),
+        "--edge-root",
+        str(edge_root),
+        "--database-fixture",
+        str(database_fixture),
+    ]
+
+    missing = subprocess.run(command, capture_output=True, text=True)
+    assert missing.returncode == 1
+    assert missing.stdout == ""
+    assert "SourceValidationError" in missing.stderr
+
+    (edge_root / "access.log").write_text("", encoding="utf-8")
+    quiet = subprocess.run(command, check=True, capture_output=True, text=True)
+    metrics = json.loads(quiet.stdout)["metrics"]
+
+    assert metrics["scanner_probes"]["total"] == 0
+    assert metrics["temporary_bans"]["total"] == 0

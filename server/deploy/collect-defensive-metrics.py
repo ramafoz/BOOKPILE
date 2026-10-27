@@ -252,22 +252,39 @@ def _api_lines(args: argparse.Namespace) -> Iterable[str]:
 def _edge_lines(args: argparse.Namespace) -> Iterable[str]:
     if args.edge_fixture:
         return Path(args.edge_fixture).read_text(encoding="utf-8").splitlines()
-    mount_json = _run(["docker", "inspect", args.web_container])
-    containers = json.loads(mount_json)
-    mounts = containers[0].get("Mounts", []) if containers else []
-    data_mount = next(
-        (item.get("Source") for item in mounts if item.get("Destination") == "/data"),
-        None,
-    )
-    if not isinstance(data_mount, str):
-        raise RuntimeError("Could not resolve the web container /data mount")
+    data_mount = args.edge_root
+    if data_mount is None:
+        mount_json = _run(["docker", "inspect", args.web_container])
+        containers = json.loads(mount_json)
+        mounts = containers[0].get("Mounts", []) if containers else []
+        data_mount = next(
+            (
+                item.get("Source")
+                for item in mounts
+                if item.get("Destination") == "/data"
+            ),
+            None,
+        )
+        if not isinstance(data_mount, str):
+            raise RuntimeError("Could not resolve the web container /data mount")
+    data_root = Path(data_mount)
+    active_log = data_root / "access.log"
+    if active_log.is_symlink() or not active_log.is_file():
+        raise SourceValidationError("Caddy access log is missing")
+    try:
+        with active_log.open("rb") as stream:
+            stream.read(0)
+    except OSError as exc:
+        raise SourceValidationError("Caddy access log is unreadable") from exc
     cutoff_timestamp = (
         datetime.now(UTC) - timedelta(minutes=args.window_minutes)
     ).timestamp()
     paths = sorted(
         path
-        for path in Path(data_mount).glob("access*.log*")
-        if path.stat().st_mtime >= cutoff_timestamp
+        for path in data_root.glob("access*.log*")
+        if not path.is_symlink()
+        and path.is_file()
+        and path.stat().st_mtime >= cutoff_timestamp
     )
     return (line for path in paths for line in _read_lines(path))
 
@@ -283,6 +300,7 @@ def main() -> int:
     parser.add_argument("--web-container", default="bookpile-production-web-1")
     parser.add_argument("--api-fixture")
     parser.add_argument("--edge-fixture")
+    parser.add_argument("--edge-root")
     parser.add_argument("--database-fixture")
     args = parser.parse_args()
     if args.window_minutes < 1 or args.window_minutes > 1440:
