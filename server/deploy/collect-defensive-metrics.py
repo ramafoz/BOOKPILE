@@ -101,7 +101,7 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
         if status >= 500:
             counters["http_5xx"][key] += 1
         if status == 422:
-            validations[key][client_key] += 1
+            validations[(route, client_key)][revision] += 1
 
     if request_events == 0:
         raise SourceValidationError("No minimized API request events in window")
@@ -114,29 +114,28 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
         }
         for name, counter in counters.items()
     }
-    repeated_groups = []
-    repeated_total = 0
-    for (scope, revision), clients in sorted(validations.items()):
-        repeated_clients = sum(
-            count >= VALIDATION_REPEAT_COUNT for count in clients.values()
-        )
-        if repeated_clients:
-            repeated_events = sum(
-                count for count in clients.values() if count >= VALIDATION_REPEAT_COUNT
-            )
-            repeated_total += repeated_events
-            repeated_groups.append(
-                {
-                    "count": repeated_events,
-                    "repeated_clients": repeated_clients,
-                    "revision": revision,
-                    "scope": scope,
-                }
-            )
+    repeated_counts: Counter[tuple[str, str]] = Counter()
+    repeated_clients_by_group: Counter[tuple[str, str]] = Counter()
+    for (scope, _client_key), revisions in validations.items():
+        if sum(revisions.values()) < VALIDATION_REPEAT_COUNT:
+            continue
+        for revision, count in revisions.items():
+            group = (scope, revision)
+            repeated_counts[group] += count
+            repeated_clients_by_group[group] += 1
+    repeated_groups = [
+        {
+            "count": count,
+            "repeated_clients": repeated_clients_by_group[(scope, revision)],
+            "revision": revision,
+            "scope": scope,
+        }
+        for (scope, revision), count in sorted(repeated_counts.items())
+    ]
     metrics["repeated_validation_failures"] = {
         "groups": repeated_groups,
         "policy": "five_422_per_client_in_window",
-        "total": repeated_total,
+        "total": sum(repeated_counts.values()),
     }
     return metrics
 

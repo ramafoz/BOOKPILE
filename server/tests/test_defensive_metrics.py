@@ -11,6 +11,7 @@ from bookpile_server.models import SecurityEvent
 
 
 REVISION = "a" * 40
+SECOND_REVISION = "b" * 40
 
 
 def test_metric_collector_has_a_bounded_systemd_schedule() -> None:
@@ -97,9 +98,29 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
             (429, "1" * 16),
             (503, "1" * 16),
             (500, "2" * 16),
-            *((422, "3" * 16) for _ in range(5)),
         )
     ]
+    api_events.extend(
+        {
+            "event": "http_request",
+            "route": "/api/v1/books/{book_id}",
+            "status": 422,
+            "client_key": "3" * 16,
+            "deployment_revision": revision,
+            "private": "secret-title",
+        }
+        for revision in (REVISION,) * 3 + (SECOND_REVISION,) * 3
+    )
+    api_events.extend(
+        {
+            "event": "http_request",
+            "route": "/api/v1/books/{book_id}",
+            "status": 422,
+            "client_key": "4" * 16,
+            "deployment_revision": revision,
+        }
+        for revision in (REVISION,) * 2 + (SECOND_REVISION,) * 2
+    )
     api_fixture.write_text(
         "\n".join(json.dumps(event) for event in api_events), encoding="utf-8"
     )
@@ -172,7 +193,22 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
     assert payload["metrics"]["http_429"]["total"] == 1
     assert payload["metrics"]["http_503"]["total"] == 1
     assert payload["metrics"]["http_5xx"]["total"] == 2
-    assert payload["metrics"]["repeated_validation_failures"]["total"] == 5
+    validation_metric = payload["metrics"]["repeated_validation_failures"]
+    assert validation_metric["total"] == 6
+    assert validation_metric["groups"] == [
+        {
+            "count": 3,
+            "repeated_clients": 1,
+            "revision": REVISION,
+            "scope": "/api/v1/books/{book_id}",
+        },
+        {
+            "count": 3,
+            "repeated_clients": 1,
+            "revision": SECOND_REVISION,
+            "scope": "/api/v1/books/{book_id}",
+        },
+    ]
     assert payload["metrics"]["scanner_probes"]["total"] == 1
     assert payload["metrics"]["temporary_bans"]["total"] == 1
     assert payload["metrics"]["lease_conflicts"]["total"] == 2
@@ -180,6 +216,7 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
     for forbidden in (
         "1" * 16,
         "3" * 16,
+        "4" * 16,
         "192.0.2.9",
         "secret-title",
         "remote_ip",
