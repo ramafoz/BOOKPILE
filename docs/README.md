@@ -10,6 +10,8 @@ Other documentation has a narrower role:
 - [`LOG_RETENTION_AND_INVESTIGATION_POLICY.md`](LOG_RETENTION_AND_INVESTIGATION_POLICY.md)
   is the binding hosted-log field, expiry and access contract. Completion and
   staging evidence remain exclusively in the master plan.
+- [`DEFENSIVE_METRIC_CATALOGUE.md`](DEFENSIVE_METRIC_CATALOGUE.md) is the
+  binding privacy-safe D5 metric field, source and counting contract.
 - `docs/adr/` records accepted architectural decisions. An ADR may define how a
   task must be implemented, but task status lives only in the master plan.
 - `docs/specifications/` contains active normative product/domain contracts.

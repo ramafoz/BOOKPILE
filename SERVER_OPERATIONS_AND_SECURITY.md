@@ -207,8 +207,9 @@ docker compose --env-file server/.env.staging \
 ```
 
 Example systemd units and timers live in `server/deploy/systemd`: backup daily,
-maintenance hourly, lightweight checks every 15 minutes, backup freshness every
-15 minutes and full private-object reconciliation daily.
+maintenance hourly, lightweight checks every 15 minutes, defensive metric
+collection every 15 minutes, backup freshness every 15 minutes and full
+private-object reconciliation daily.
 
 Install copies without the `.example` suffix, correct `WorkingDirectory`, run
 `systemctl daemon-reload`, enable the timers, and connect unit failure to the
@@ -309,6 +310,44 @@ install `bookpile-host-capacity-healthchecks.conf.example` as the capacity
 service's `10-healthchecks.conf` drop-in. Disk includes Docker layers/build
 cache because Docker is stored on the root filesystem. Zero swap is reported
 as evidence but is not itself unhealthy; decide swap separately from alerting.
+
+### Privacy-safe defensive metrics
+
+Install the D5 host collector and its 15-minute systemd schedule:
+
+```bash
+sudo install -o root -g root -m 0755 \
+  server/deploy/collect-defensive-metrics.py \
+  /usr/local/sbin/bookpile-defensive-metrics
+sudo install -o root -g root -m 0644 \
+  server/deploy/systemd/bookpile-defensive-metrics.service.example \
+  /etc/systemd/system/bookpile-defensive-metrics.service
+sudo install -o root -g root -m 0644 \
+  server/deploy/systemd/bookpile-defensive-metrics.timer.example \
+  /etc/systemd/system/bookpile-defensive-metrics.timer
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  bookpile-defensive-metrics.service bookpile-defensive-metrics.timer
+sudo systemctl enable --now bookpile-defensive-metrics.timer
+sudo systemctl start bookpile-defensive-metrics.service
+sudo systemctl status bookpile-defensive-metrics.service --no-pager -l
+```
+
+The root-owned collector reads the minimized API journal, the Caddy `/data`
+volume and an application-generated aggregate of recent lease events. It emits
+one aggregate-only JSON record and exits non-zero if any source cannot be read
+or validated. Inspect only that normalized output:
+
+```bash
+sudo journalctl -u bookpile-defensive-metrics.service \
+  --since "20 minutes ago" -o cat --no-pager | tail -n 5
+```
+
+Confirm all seven names in `docs/DEFENSIVE_METRIC_CATALOGUE.md` are present,
+including zero-valued families. Reject the rehearsal if output contains an IP,
+`client_key`, request URL/query, identifier or private value. This collector is
+the metric source only; do not connect it to paging until the separate D5
+warning/critical thresholds and recovery behaviour have been accepted.
 
 ### External server error reporting
 

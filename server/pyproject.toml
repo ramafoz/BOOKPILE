@@ -38,6 +38,7 @@ bookpile-maintenance = "bookpile_server.cli.maintenance:main"
 bookpile-account-invitations = "bookpile_server.cli.account_invitations:main"
 bookpile-error-reporting = "bookpile_server.cli.error_reporting:main"
 bookpile-defensive-limits = "bookpile_server.cli.defensive_limits:main"
+bookpile-defensive-metrics = "bookpile_server.cli.defensive_metrics:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

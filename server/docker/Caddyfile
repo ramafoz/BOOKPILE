@@ -44,6 +44,8 @@
 	@scanner_probe path_regexp scanner_probe (?i)^/(?:\.env(?:[./].*)?|\.git(?:/.*)?|wp-admin(?:/.*)?|wp-login\.php|phpmyadmin(?:/.*)?)$
 	handle @scanner_probe {
 		log_append event_class scanner_probe
+		log_append policy_scope scanner_probe
+		log_append deployment_revision {$BOOKPILE_DEPLOYMENT_REVISION}
 		respond 404
 	}
 

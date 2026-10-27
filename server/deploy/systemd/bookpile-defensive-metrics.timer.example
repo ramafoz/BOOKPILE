@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect BOOKPILE defensive metrics every 15 minutes
+
+[Timer]
+OnCalendar=*:4/15
+Persistent=true
+RandomizedDelaySec=0
+Unit=bookpile-defensive-metrics.service
+
+[Install]
+WantedBy=timers.target
