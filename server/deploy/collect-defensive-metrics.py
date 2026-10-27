@@ -18,17 +18,32 @@ from typing import Iterable
 SAFE_ROUTE = re.compile(r"^(?:/[-A-Za-z0-9_{}./:*]+|unmatched)$")
 SAFE_SCOPE = re.compile(r"^[a-z0-9_:-]{1,80}$")
 SAFE_REVISION = re.compile(r"^[a-f0-9]{7,64}$")
+SAFE_CLIENT_KEY = re.compile(r"^[a-f0-9]{16}$")
 VALIDATION_REPEAT_COUNT = 5
 
 
-def _json_lines(lines: Iterable[str]) -> Iterable[dict[str, object]]:
+class SourceValidationError(RuntimeError):
+    pass
+
+
+def _json_lines(
+    lines: Iterable[str], *, source: str, allow_unstructured: bool = False
+) -> Iterable[dict[str, object]]:
     for line in lines:
-        try:
-            value = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
+        stripped = line.strip()
+        if not stripped:
             continue
-        if isinstance(value, dict):
-            yield value
+        if not stripped.startswith("{"):
+            if allow_unstructured:
+                continue
+            raise SourceValidationError(f"Invalid {source} record")
+        try:
+            value = json.loads(stripped)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise SourceValidationError(f"Malformed {source} JSON record") from exc
+        if not isinstance(value, dict):
+            raise SourceValidationError(f"Invalid {source} JSON record")
+        yield value
 
 
 def _safe_route(value: object) -> str | None:
@@ -57,14 +72,27 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
         "http_5xx": Counter(),
     }
     validations: defaultdict[tuple[str, str], Counter[str]] = defaultdict(Counter)
-    for event in _json_lines(lines):
+    request_events = 0
+    for event in _json_lines(
+        lines, source="API journal", allow_unstructured=True
+    ):
         if event.get("event") != "http_request":
             continue
+        request_events += 1
         route = _safe_route(event.get("route"))
         revision = _safe_revision(event.get("deployment_revision"))
         status = event.get("status")
-        if route is None or revision is None or not isinstance(status, int):
-            continue
+        client_key = event.get("client_key")
+        if (
+            route is None
+            or revision is None
+            or not isinstance(status, int)
+            or status < 100
+            or status > 599
+            or not isinstance(client_key, str)
+            or SAFE_CLIENT_KEY.fullmatch(client_key) is None
+        ):
+            raise SourceValidationError("Invalid minimized API request event")
         key = (route, revision)
         if status == 429:
             counters["http_429"][key] += 1
@@ -72,9 +100,11 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
             counters["http_503"][key] += 1
         if status >= 500:
             counters["http_5xx"][key] += 1
-        client_key = event.get("client_key")
-        if status == 422 and isinstance(client_key, str):
+        if status == 422:
             validations[key][client_key] += 1
+
+    if request_events == 0:
+        raise SourceValidationError("No minimized API request events in window")
 
     metrics = {
         name: {
@@ -115,10 +145,10 @@ def aggregate_edge(
     lines: Iterable[str], *, cutoff: datetime
 ) -> dict[str, dict[str, object]]:
     counters = {"scanner_probes": Counter(), "temporary_bans": Counter()}
-    for event in _json_lines(lines):
+    for event in _json_lines(lines, source="Caddy edge log"):
         timestamp = event.get("ts")
         if not isinstance(timestamp, (int, float)):
-            continue
+            raise SourceValidationError("Caddy edge event has no timestamp")
         if datetime.fromtimestamp(timestamp, UTC) < cutoff:
             continue
         event_class = event.get("event_class")
@@ -127,11 +157,14 @@ def aggregate_edge(
             "temporary_ban": "temporary_bans",
         }.get(event_class)
         revision = _safe_revision(event.get("deployment_revision"))
-        if metric is None or revision is None:
+        if metric is None:
             continue
         scope = event.get("policy_scope")
-        if scope not in {"scanner_probe", "edge_temporary_ban"}:
-            continue
+        if (
+            revision is None
+            or scope not in {"scanner_probe", "edge_temporary_ban"}
+        ):
+            raise SourceValidationError("Invalid defensive Caddy edge event")
         counters[metric][(scope, revision)] += 1
     return {
         name: {
@@ -174,11 +207,11 @@ def _database_metrics(args: argparse.Namespace) -> dict[str, object]:
 
 def _safe_database_groups(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
-        return []
+        raise SourceValidationError("Database metric groups are missing")
     result = []
     for group in value:
         if not isinstance(group, dict):
-            continue
+            raise SourceValidationError("Invalid database metric group")
         count = group.get("count")
         scope = group.get("scope")
         revision = _safe_revision(group.get("revision"))
@@ -192,7 +225,7 @@ def _safe_database_groups(value: object) -> list[dict[str, object]]:
             or event_type
             not in {"operation_lease_blocked", "operation_lease_observed"}
         ):
-            continue
+            raise SourceValidationError("Unsafe database metric group")
         result.append(
             {
                 "count": count,
@@ -258,6 +291,14 @@ def main() -> int:
 
     generated_at = datetime.now(UTC)
     database = _database_metrics(args)
+    if (
+        not isinstance(database, dict)
+        or database.get("metric") != "lease_conflicts"
+        or not isinstance(database.get("total"), int)
+        or not isinstance(database.get("window_seconds"), int)
+        or database.get("window_seconds") != args.window_minutes * 60
+    ):
+        raise SourceValidationError("Invalid database metric response")
     metrics = aggregate_api(_api_lines(args))
     metrics.update(
         aggregate_edge(
@@ -266,10 +307,13 @@ def main() -> int:
         )
     )
     database_groups = _safe_database_groups(database.get("groups"))
+    database_total = sum(group["count"] for group in database_groups)
+    if database_total != database["total"]:
+        raise SourceValidationError("Inconsistent database metric total")
     metrics["lease_conflicts"] = {
         "groups": database_groups,
         "policy": "operation_lease",
-        "total": sum(group["count"] for group in database_groups),
+        "total": database_total,
     }
     payload = {
         "generated_at": generated_at.isoformat(),
