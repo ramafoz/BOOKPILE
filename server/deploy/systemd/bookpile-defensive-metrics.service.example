@@ -1,0 +1,16 @@
+[Unit]
+Description=BOOKPILE privacy-safe defensive metric collection
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/bookpileadmin/b
+ExecStart=/usr/local/sbin/bookpile-defensive-metrics --window-minutes 15
+TimeoutStartSec=2m
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict

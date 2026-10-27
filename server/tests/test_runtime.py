@@ -59,6 +59,11 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert compose.count("networks: [backend, egress]") == 4
     assert "backend:\n    internal: true" in compose
     assert compose.count("logging: *container-logging") == 4
+    assert (
+        "BOOKPILE_DEPLOYMENT_REVISION: "
+        "${BOOKPILE_SERVER_DEPLOYMENT_REVISION:?Set "
+        "BOOKPILE_SERVER_DEPLOYMENT_REVISION}"
+    ) in compose
 
 
 def test_long_lived_container_logs_use_the_bounded_host_journal() -> None:
@@ -165,6 +170,9 @@ def test_caddy_scanner_probe_matcher_is_narrow_and_explicit() -> None:
         "/assets/wp-admin.svg",
     ):
         assert not re.fullmatch(pattern, application_path)
+
+    assert "log_append policy_scope scanner_probe" in caddyfile
+    assert "log_append deployment_revision {$BOOKPILE_DEPLOYMENT_REVISION}" in caddyfile
 
 
 def test_api_runtime_leaves_forwarded_headers_to_bookpile_middleware() -> None:
