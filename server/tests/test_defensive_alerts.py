@@ -185,6 +185,9 @@ def test_missing_notification_config_fails_closed(tmp_path: Path) -> None:
 
     assert completed.returncode == 1
     assert "AlertValidationError" in completed.stderr
+    persisted = json.loads(completed.stdout)
+    assert persisted["privacy"] == "aggregate_only"
+    assert set(persisted["metrics"]) == set(THRESHOLDS)
 
 
 def test_invalid_or_non_aggregate_input_fails_closed(tmp_path: Path) -> None:

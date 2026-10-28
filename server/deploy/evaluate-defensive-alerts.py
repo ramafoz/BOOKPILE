@@ -250,6 +250,7 @@ def main() -> int:
     payload = _read_payload()
     severity, active = _evaluate(payload)
     signals = []
+    print(json.dumps(payload, sort_keys=True, separators=(",", ":")), flush=True)
 
     def notify(channel: str, signal: str) -> None:
         _notify(
@@ -273,7 +274,6 @@ def main() -> int:
     else:
         notify("warning", "success")
         notify("critical", "success")
-    print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
     print(
         json.dumps(
             {
