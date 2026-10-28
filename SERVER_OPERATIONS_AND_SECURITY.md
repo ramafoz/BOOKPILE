@@ -345,9 +345,40 @@ sudo journalctl -u bookpile-defensive-metrics.service \
 
 Confirm all seven names in `docs/DEFENSIVE_METRIC_CATALOGUE.md` are present,
 including zero-valued families. Reject the rehearsal if output contains an IP,
-`client_key`, request URL/query, identifier or private value. This collector is
-the metric source only; do not connect it to paging until the separate D5
-warning/critical thresholds and recovery behaviour have been accepted.
+`client_key`, request URL/query, identifier or private value.
+
+The binding warning/critical table and response ownership are in
+`docs/DEFENSIVE_METRIC_CATALOGUE.md`. Configure two Healthchecks checks named
+`BOOKPILE staging - D5 warning` and `BOOKPILE staging - D5 critical`, both with
+cron `4,19,34,49 * * * *`, UTC, ten minutes of grace and the verified
+operator-email integration. This mirrors the systemd schedule and also alerts
+when collection itself stops. Healthchecks deduplicates repeated failure pings
+because email is emitted on status transition, not on every ping.
+
+Install the evaluator beside the collector:
+
+```bash
+sudo install -o root -g root -m 0755 \
+  server/deploy/evaluate-defensive-alerts.py \
+  /usr/local/sbin/bookpile-defensive-alerts
+```
+
+For each check, copy the matching `warning` or `critical` open/recovery curl
+examples from `server/deploy/`, replace only the UUID, and install the resulting
+four files in `/etc/bookpile` with owner `root:root` and mode `600`. The open
+configuration uses the check's `/fail` URL; recovery uses the same UUID without
+`/fail`. Never paste these bearer URLs into source, logs or chat.
+
+Reinstall `bookpile-defensive-metrics.service.example`, run `daemon-reload` and
+verify the unit. Its pipeline now records the normalized metric document and a
+second aggregate alert-evaluation document. A notification failure fails the
+oneshot; the missed scheduled ping then remains externally visible.
+
+Before acceptance, use disposable fixture totals to prove exactly one warning,
+one critical alert, no duplicate mail on a second identical evaluation and
+recovery of both channels. Confirm the warning and critical email receipts and
+their recovery receipts contain only aggregate metric names and counts. Restore
+healthy state and remove all fixture input afterward.
 
 ### Staging D5 metric-source acceptance — 2026-10-28
 

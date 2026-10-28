@@ -19,7 +19,9 @@ def test_metric_collector_has_a_bounded_systemd_schedule() -> None:
     service = (systemd / "bookpile-defensive-metrics.service.example").read_text()
     timer = (systemd / "bookpile-defensive-metrics.timer.example").read_text()
 
-    assert "ExecStart=/usr/local/sbin/bookpile-defensive-metrics" in service
+    assert "/usr/local/sbin/bookpile-defensive-metrics" in service
+    assert "/usr/local/sbin/bookpile-defensive-alerts" in service
+    assert "pipefail" in service
     assert "--window-minutes 15" in service
     assert "TimeoutStartSec=2m" in service
     assert "OnCalendar=*:4/15" in timer
