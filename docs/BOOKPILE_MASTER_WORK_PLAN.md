@@ -289,7 +289,7 @@ accepted and active in staging.
   policy/scope/revision but never by raw identity or request content.
 - [x] Define exact warning and critical thresholds, alert destination, grouping
   window, recovery notification and owner for every metric.
-- [ ] Trigger one disposable warning and one disposable critical alert in
+- [x] Trigger one disposable warning and one disposable critical alert in
   staging; prove delivery, deduplication and recovery without exposing private
   data.
 - [ ] Expose the same sanitized aggregates in the `SYSTEM_ADMIN` console.
@@ -309,9 +309,20 @@ five and absence of client keys, raw addresses, authorization/cookie/query
 fields and user, library or object identifiers. Deep reconciliation remained
 healthy at 438 expected and 438 stored objects with zero missing, mismatched or
 orphaned objects. A zero `temporary_bans` total records that D6 has not enabled
-that policy; it does not claim an active ban. Thresholds, external alerting and
-the administrator-console view remain explicitly open in the next three D5
-tasks.
+that policy; it does not claim an active ban.
+
+Staging alert acceptance on 2026-10-29 deployed revision
+`b7d46d577c387e237151d1a06792369be2e56e2d`. The scheduled collector and
+evaluator completed with `0/SUCCESS`, emitted all seven aggregate families and
+reported healthy success signals to both dedicated Healthchecks channels. A
+disposable warning was delivered exactly once; repeating the same warning
+produced no second email. A disposable critical alert was likewise delivered
+exactly once and produced no duplicate when repeated. Warning and critical
+recovery notifications were received, and both checks were green after the
+fixture returned to healthy. Inspection found none of the prohibited private
+fields, deep reconciliation remained healthy and normal authenticated catalogue
+use passed. The synthetic fixture changed no application or security data. The
+future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
 
 ### D6 — Edge defence before Python
 
