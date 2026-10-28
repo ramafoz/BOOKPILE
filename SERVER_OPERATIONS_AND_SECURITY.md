@@ -349,6 +349,26 @@ including zero-valued families. Reject the rehearsal if output contains an IP,
 the metric source only; do not connect it to paging until the separate D5
 warning/critical thresholds and recovery behaviour have been accepted.
 
+### Staging D5 metric-source acceptance — 2026-10-28
+
+Revision `3aa18f68be231be8530a1a81bad8c9c1202338ad` installed the root-owned
+collector and its `*:4/15` timer after verified backup
+`df837c4d-3eeb-43c7-9872-5e3b659ef4af`. Unit verification was silent and both
+manual collections completed with `0/SUCCESS`. The initial output contained
+all seven aggregate metric families with zero totals. A single controlled
+`/.env` request returned `404`; the following collection contained one
+`scanner_probes` event attributed to fixed scope `scanner_probe` and the exact
+deployed revision.
+
+An independent parser accepted the exact metric-name set, the 15-minute window,
+the five-failure validation threshold and `privacy=aggregate_only`, and rejected
+the presence of client keys, raw addresses, authorization/cookie/query fields
+or user/library/object identifiers. Deep reconciliation remained healthy at
+438 expected and 438 stored objects. This accepts the D5 metric source only.
+Warning/critical thresholds, notification delivery/deduplication/recovery and
+the future administrator view remain unaccepted. `temporary_bans=0` is the
+expected pre-D6 state, not evidence of an enabled edge ban.
+
 ### External server error reporting
 
 BOOKPILE uses a separate Sentry project in the EU region for unexpected API

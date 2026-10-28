@@ -284,7 +284,7 @@ accepted and active in staging.
 
 ### D5 — Aggregate detection and alerting
 
-- [ ] Produce aggregate metrics for `429`, `503`, lease conflicts, scanner
+- [x] Produce aggregate metrics for `429`, `503`, lease conflicts, scanner
   probes, temporary bans, repeated validation failures and `5xx`, labelled by
   policy/scope/revision but never by raw identity or request content.
 - [ ] Define exact warning and critical thresholds, alert destination, grouping
@@ -295,6 +295,23 @@ accepted and active in staging.
 - [ ] Expose the same sanitized aggregates in the `SYSTEM_ADMIN` console.
 
 Evidence: metric catalogue, alert configuration and alert/recovery receipts.
+
+Staging metric-source acceptance on 2026-10-28 deployed revision
+`3aa18f68be231be8530a1a81bad8c9c1202338ad` after verified backup
+`df837c4d-3eeb-43c7-9872-5e3b659ef4af`. The root-owned 15-minute systemd
+collector passed unit verification and two manual runs with `0/SUCCESS`; its
+timer remained scheduled. The first run emitted all seven required metric
+families with aggregate-only empty totals. One controlled `/.env` probe then
+returned `404` and the next run emitted exactly one `scanner_probes` event with
+fixed scope `scanner_probe` and the deployed revision. An independent parser
+confirmed the exact seven-name set, 15-minute window, validation threshold of
+five and absence of client keys, raw addresses, authorization/cookie/query
+fields and user, library or object identifiers. Deep reconciliation remained
+healthy at 438 expected and 438 stored objects with zero missing, mismatched or
+orphaned objects. A zero `temporary_bans` total records that D6 has not enabled
+that policy; it does not claim an active ban. Thresholds, external alerting and
+the administrator-console view remain explicitly open in the next three D5
+tasks.
 
 ### D6 — Edge defence before Python
 
