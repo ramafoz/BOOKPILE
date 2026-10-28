@@ -287,7 +287,7 @@ accepted and active in staging.
 - [x] Produce aggregate metrics for `429`, `503`, lease conflicts, scanner
   probes, temporary bans, repeated validation failures and `5xx`, labelled by
   policy/scope/revision but never by raw identity or request content.
-- [ ] Define exact warning and critical thresholds, alert destination, grouping
+- [x] Define exact warning and critical thresholds, alert destination, grouping
   window, recovery notification and owner for every metric.
 - [ ] Trigger one disposable warning and one disposable critical alert in
   staging; prove delivery, deduplication and recovery without exposing private

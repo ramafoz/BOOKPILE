@@ -1,0 +1,10 @@
+# Dedicated Healthchecks warning check failure URL. Root-owned, mode 600.
+url = "https://hc-ping.com/replace-warning-uuid/fail"
+request = "POST"
+data-binary = "@-"
+proto = "=https"
+connect-timeout = 5
+max-time = 10
+silent
+show-error
+fail

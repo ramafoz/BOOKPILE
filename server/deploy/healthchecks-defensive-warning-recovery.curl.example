@@ -1,0 +1,10 @@
+# Same warning check UUID without /fail. Root-owned, mode 600.
+url = "https://hc-ping.com/replace-warning-uuid"
+request = "POST"
+data-binary = "@-"
+proto = "=https"
+connect-timeout = 5
+max-time = 10
+silent
+show-error
+fail
