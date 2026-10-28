@@ -395,10 +395,26 @@ An independent parser accepted the exact metric-name set, the 15-minute window,
 the five-failure validation threshold and `privacy=aggregate_only`, and rejected
 the presence of client keys, raw addresses, authorization/cookie/query fields
 or user/library/object identifiers. Deep reconciliation remained healthy at
-438 expected and 438 stored objects. This accepts the D5 metric source only.
-Warning/critical thresholds, notification delivery/deduplication/recovery and
-the future administrator view remain unaccepted. `temporary_bans=0` is the
+438 expected and 438 stored objects. This accepts the D5 metric source only;
+the alert layer is accepted separately below. `temporary_bans=0` is the
 expected pre-D6 state, not evidence of an enabled edge ban.
+
+### Staging D5 alert acceptance — 2026-10-29
+
+Revision `b7d46d577c387e237151d1a06792369be2e56e2d` installed the fail-closed
+evaluator and two scheduled Healthchecks channels. A healthy manual collection
+completed with `0/SUCCESS`, retained the seven-family metric document in
+journald and sent success to warning and critical. The disposable aggregate
+fixture then proved one warning email, no duplicate after an identical warning,
+one critical email, no duplicate after an identical critical and receipt of
+both recovery notifications. Both external checks were green at the end.
+
+The privacy inspection found no client key, address, authorization, cookie,
+query, user, library or object field. Deep reconciliation remained healthy and
+the operator confirmed normal authenticated catalogue use. The fixture used
+only aggregate evaluator input and created no application rows, security events
+or traffic. This accepts D5 alert delivery, provider-level deduplication and
+recovery in staging; the future `SYSTEM_ADMIN` presentation remains separate.
 
 ### External server error reporting
 
