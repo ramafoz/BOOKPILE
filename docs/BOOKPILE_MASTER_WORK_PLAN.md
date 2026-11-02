@@ -326,7 +326,7 @@ future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
 
 ### D6 — Edge defence before Python
 
-- [ ] Make Caddy emit mutually exclusive fixed labels `health_class=live`,
+- [x] Make Caddy emit mutually exclusive fixed labels `health_class=live`,
   `health_class=ready` and `health_class=other`, deleting original URI and query
   data; prove one fixture cannot match two classes.
 - [ ] Rehearse the public health policies independently in dry-run: more than
@@ -340,7 +340,7 @@ future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
   expiration, restart persistence and monitor recovery. A `REJECT` decision
   must name the compensating control, retained alert and explicit owner
   approval; silence or an unbounded public endpoint is not a decision.
-- [ ] Expose only Caddy's minimized security-event log through a dedicated host
+- [x] Expose only Caddy's minimized security-event log through a dedicated host
   directory readable by the host defence service and inaccessible to the web
   application.
 - [ ] Install a persistent Fail2ban/nftables BOOKPILE policy with a persistent
@@ -361,6 +361,23 @@ future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
 
 Evidence: configuration, distinct health fixtures and decisions, dry-run counts,
 ban/unban/restart transcript and health-monitor continuity.
+
+**D6 lote 1 staging evidence — 2026-11-02.** Revision
+`31b8d665c61b0c06d4a4e5eed1487da4e1548b3a` emitted five schema-validated
+events from public staging traffic: two `live`, two `ready` and one `other`.
+The three controlled requests carried unique query markers; none survived in
+the dedicated log, and all five events carried the deployed revision. The
+deployed-image rehearsal returned `caddy_config_valid`,
+`classes_mutually_exclusive`, `internal_probe_bypasses_caddy`,
+`private_request_fields_absent` and `unexpected_labels_rejected` as true.
+The host file was owned by UID/GID `10001:10001` with mode `0600`; only the web
+container mounted `/var/log/bookpile`, while the API mounted no defensive-log
+path and its Docker healthcheck continued to call
+`http://127.0.0.1:8100/health/ready` directly. All Healthchecks remained green,
+deep reconciliation reported 438 expected and 438 stored private objects with
+no mismatch, missing or orphaned object, and normal authenticated web use
+passed. No Fail2ban jail, nftables rule or automatic prohibition was installed
+or enabled by this acceptance.
 
 ### D7 — Defensive regression harness
 
