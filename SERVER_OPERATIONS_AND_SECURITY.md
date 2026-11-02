@@ -102,6 +102,52 @@ authority; do not export these logs into tickets or routine chat. The complete
 field, purpose, deletion and access contract is
 `docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md`.
 
+### D6 dedicated defensive event log
+
+Caddy writes a second, fail-closed event stream to
+`/var/log/bookpile/defensive-events.log`. It contains only Caddy's unavoidable
+log metadata, the effective client IP needed for a future host firewall
+decision, the deployed revision, one of the fixed `live`, `ready` or `other`
+health classes and the fixed `observed` decision. It contains no URI, query,
+port, method, status, duration, size, header, cookie, body, authenticated user
+or application identifier. The exact schema is enforced by
+`server/deploy/validate-caddy-defensive-log.py`; an unknown field, class,
+decision, logger, revision or malformed IPv4/IPv6 address fails validation.
+
+The host directory is deliberately not a Docker volume and is not mounted into
+the API or any browser-served path. Before the first deployment containing D6,
+create it once with the runtime Caddy UID/GID and no group/other access:
+
+```bash
+sudo install -d -o 10001 -g 10001 -m 0700 /var/log/bookpile
+sudo stat -c '%u:%g %a %n' /var/log/bookpile
+```
+
+The expected result is `10001:10001 700 /var/log/bookpile`. Root may read it
+for the future host defence service; the ordinary operator account must not be
+granted direct read access. Caddy rolls the file daily or at 10 MiB and keeps
+at most 14 rolls for no more than 14 days, matching the edge evidence policy.
+
+Rehearse the deployed image without opening a host port or touching live logs:
+
+```bash
+BOOKPILE_CADDY_IMAGE="$(docker inspect \
+  --format '{{.Config.Image}}' bookpile-production-web-1)" \
+  sh server/scripts/rehearse-caddy-health-classification.sh
+```
+
+The result must report `caddy_config_valid`, `classes_mutually_exclusive`,
+`internal_probe_bypasses_caddy`, `private_request_fields_absent` and
+`unexpected_labels_rejected` as `true`. The fixture sends exact live and ready
+paths plus ordinary traffic with secret query markers; each must produce one
+and only one class and none of those markers may survive. This rehearsal does
+not install, simulate or enable any ban.
+
+Docker's internal readiness check continues to call
+`http://127.0.0.1:8100/health/ready` inside the API container. It therefore
+does not traverse Caddy, does not enter the public D6 log and cannot be blocked
+by a future public health policy.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

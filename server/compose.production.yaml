@@ -171,6 +171,14 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+      # Root creates this host directory as UID/GID 10001 with mode 0700.
+      # Only the non-root Caddy writer and root-run future D6 host service can
+      # access it; neither the API nor the browser-served /srv tree mounts it.
+      - type: bind
+        source: /var/log/bookpile
+        target: /var/log/bookpile
+        bind:
+          create_host_path: false
     networks: [edge, backend]
     logging: *container-logging
 
