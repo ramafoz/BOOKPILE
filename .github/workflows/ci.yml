@@ -21,6 +21,7 @@ jobs:
           server/deploy/tests/test-caddy-log-migration.sh
           server/scripts/migrate-caddy-access-log-rolls.sh
           server/scripts/rehearse-caddy-log-retention.sh
+          server/scripts/rehearse-caddy-health-classification.sh
       - name: Exercise success and rollback paths
         run: |
           bash server/deploy/tests/test-deploy-staging.sh
@@ -133,9 +134,14 @@ jobs:
           context: .
           file: server/docker/web.Dockerfile
           push: false
+          load: true
           tags: bookpile-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+      - name: Rehearse D6 health classification and private log schema
+        run: >-
+          BOOKPILE_CADDY_IMAGE=bookpile-web:ci
+          sh server/scripts/rehearse-caddy-health-classification.sh
       - name: Build operational backup image
         uses: docker/build-push-action@v7
         with:

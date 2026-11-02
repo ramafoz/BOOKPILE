@@ -10,7 +10,7 @@
 
 	# Keep short-lived edge evidence without retaining headers, cookies or query
 	# strings. API and health traffic has its own normalized application log.
-	log {
+	log access_log {
 		output file /data/access.log {
 			mode 0600
 			roll_size 10mb
@@ -24,9 +24,59 @@
 			request>uri delete
 			request>headers delete
 			resp_headers delete
+			health_class delete
+			defensive_decision delete
+			client_ip delete
 			wrap json
 		}
+		no_hostname
 	}
+
+	# D6 consumes a separate, deliberately tiny event stream. The named logger
+	# is not associated with a hostname: every request opts into both logs
+	# explicitly below, so a configuration edit cannot silently duplicate or
+	# omit one class. Caddy's fundamental ts/level/logger/msg fields cannot be
+	# filtered; every other built-in request/response field is deleted.
+	log d6_defensive {
+		output file /var/log/bookpile/defensive-events.log {
+			mode 0600
+			roll_size 10mb
+			roll_at 00:00
+			roll_keep 14
+			roll_keep_for 336h
+		}
+		format filter {
+			request delete
+			bytes_read delete
+			user_id delete
+			duration delete
+			size delete
+			status delete
+			resp_headers delete
+			request_path delete
+			event_class delete
+			policy_scope delete
+			wrap json
+		}
+		no_hostname
+	}
+
+	# Map the path once to one value. Unlike three independent matchers, this
+	# table cannot assign one request to two health classes. Query parameters
+	# are not part of http.request.uri.path and are never copied to either log.
+	map {http.request.uri.path} {bookpile_health_class} {
+		/health/live live
+		/health/ready ready
+		default other
+	}
+	log_name access_log d6_defensive
+	log_append deployment_revision {$BOOKPILE_DEPLOYMENT_REVISION}
+	log_append health_class {bookpile_health_class}
+	log_append defensive_decision observed
+	# D6 must eventually count and temporarily block a validated network
+	# address. Keep only Caddy's effective client IP: never retain the remote
+	# port, forwarding headers, authenticated identity or request identifier.
+	log_append client_ip {client_ip}
 	# Preserve edge-only 413/502 evidence while avoiding raw API identifiers.
 	@api_traffic path /api/*
 	log_append @api_traffic request_path /api/*
