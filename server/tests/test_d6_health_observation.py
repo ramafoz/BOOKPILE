@@ -205,13 +205,14 @@ def test_rotation_during_source_read_requires_repeating_the_phase(
     module = _module()
     active = tmp_path / "defensive-events.log"
     rolled = tmp_path / "defensive-events-old.log.gz"
+    new_roll = tmp_path / "defensive-events-mid-read.log"
     active.write_text(_event("live") + "\n", encoding="utf-8")
     with gzip.open(rolled, "wt", encoding="utf-8") as stream:
         stream.write(_event("live") + "\n")
     original_open = module["gzip"].open
 
     def rotate_while_opening(*args, **kwargs):
-        active.unlink()
+        active.rename(new_roll)
         active.write_text(_event("ready") + "\n", encoding="utf-8")
         return original_open(*args, **kwargs)
 
