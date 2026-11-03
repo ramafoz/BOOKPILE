@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import ipaddress
 import json
 import runpy
@@ -115,19 +116,51 @@ def _parse_time(value: str) -> datetime:
     return parsed
 
 
+def _discover_sources(requested: Iterable[Path]) -> list[Path]:
+    sources: set[Path] = set()
+    for path in requested:
+        if path.is_symlink() or not path.is_file():
+            raise HealthObservationError("defensive log is missing or unsafe")
+        candidates = [path]
+        if path.name == "defensive-events.log":
+            candidates = list(path.parent.glob("defensive-events*.log*"))
+        for candidate in candidates:
+            if candidate.is_symlink() or not candidate.is_file():
+                raise HealthObservationError("defensive log roll is unsafe")
+            sources.add(candidate)
+    return sorted(sources)
+
+
+def _source_identities(paths: Iterable[Path]) -> set[tuple[Path, int, int]]:
+    return {
+        (path, path.stat().st_dev, path.stat().st_ino)
+        for path in paths
+    }
+
+
+def _read_sources(requested: Iterable[Path]) -> Iterable[str]:
+    requested = list(requested)
+    before = _discover_sources(requested)
+    before_identities = _source_identities(before)
+    for path in before:
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt", encoding="utf-8") as stream:
+            yield from stream
+    after = _discover_sources(requested)
+    if before_identities != _source_identities(after):
+        raise HealthObservationError(
+            "defensive logs rotated during evaluation; repeat the phase"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("logs", nargs="+", type=Path)
     parser.add_argument("--now", type=_parse_time, default=datetime.now(UTC))
     args = parser.parse_args()
 
-    lines: list[str] = []
     try:
-        for path in args.logs:
-            if path.is_symlink() or not path.is_file():
-                raise HealthObservationError("defensive log is missing or unsafe")
-            lines.extend(path.read_text(encoding="utf-8").splitlines())
-        result = evaluate(lines, now=args.now)
+        result = evaluate(_read_sources(args.logs), now=args.now)
     except (OSError, HealthObservationError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, sort_keys=True, separators=(",", ":")), flush=True)

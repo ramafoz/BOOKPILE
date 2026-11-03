@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import runpy
 from datetime import UTC, datetime
@@ -162,3 +163,62 @@ def test_internal_ready_probe_bypasses_the_public_caddy_policy() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
 
     assert "http://127.0.0.1:8100/health/ready" in compose
+
+
+def test_active_source_includes_compressed_rolls_without_double_counting(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    active = tmp_path / "defensive-events.log"
+    rolled = tmp_path / "defensive-events-2026-11-03T20-00-00Z-rotation.log.gz"
+    active.write_text(_event("ready") + "\n", encoding="utf-8")
+    with gzip.open(rolled, "wt", encoding="utf-8") as stream:
+        stream.write("\n".join([_event("ready")] * 30) + "\n")
+
+    lines = module["_read_sources"]([active, active])
+    result = module["evaluate"](lines, now=NOW)
+
+    assert result["policies"]["ready"] == {
+        "attempts": 31,
+        "crossing_clients": 1,
+        "decision": "would_temporarily_ban",
+        "deployment_revisions": [REVISION],
+        "max_attempts_per_client": 31,
+        "threshold": 30,
+    }
+
+
+def test_malformed_compressed_roll_fails_closed(tmp_path: Path) -> None:
+    module = _module()
+    active = tmp_path / "defensive-events.log"
+    rolled = tmp_path / "defensive-events-broken.log.gz"
+    active.write_text(_event("live") + "\n", encoding="utf-8")
+    rolled.write_text("not gzip", encoding="utf-8")
+
+    with pytest.raises(OSError):
+        list(module["_read_sources"]([active]))
+
+
+def test_rotation_during_source_read_requires_repeating_the_phase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    active = tmp_path / "defensive-events.log"
+    rolled = tmp_path / "defensive-events-old.log.gz"
+    active.write_text(_event("live") + "\n", encoding="utf-8")
+    with gzip.open(rolled, "wt", encoding="utf-8") as stream:
+        stream.write(_event("live") + "\n")
+    original_open = module["gzip"].open
+
+    def rotate_while_opening(*args, **kwargs):
+        active.unlink()
+        active.write_text(_event("ready") + "\n", encoding="utf-8")
+        return original_open(*args, **kwargs)
+
+    monkeypatch.setattr(module["gzip"], "open", rotate_while_opening)
+
+    with pytest.raises(
+        module["HealthObservationError"],
+        match="rotated during evaluation",
+    ):
+        list(module["_read_sources"]([active]))

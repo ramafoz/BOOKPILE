@@ -203,7 +203,11 @@ sudo /usr/local/libexec/bookpile/evaluate-d6-health-observation.py \
   /var/log/bookpile/defensive-events.log
 ```
 
-The first aggregate output must attribute a crossing only to `live`; the second
+The evaluator automatically reads the active defensive log together with every
+matching plain or gzip-compressed roll. It deduplicates repeated path arguments
+and aborts the phase if the file set or active inode changes while it reads, so
+a midnight/size rotation can neither discard nor double-count evidence. The
+first aggregate output must attribute a crossing only to `live`; the second
 only to `ready`. A failed/missing/malformed defensive log aborts collection.
 External monitors use their own client address and remain independent, but all
 configured monitors must stay green throughout the rehearsal. Confirm normal
