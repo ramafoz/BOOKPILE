@@ -3,7 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 import runpy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -44,7 +44,11 @@ def _event(
 
 
 def _evaluate(lines: list[str]) -> dict[str, object]:
-    return _module()["evaluate"](lines, now=NOW)  # type: ignore[index,operator]
+    return _module()["evaluate"](  # type: ignore[index,operator]
+        lines,
+        now=NOW,
+        current_time=lambda: NOW,
+    )
 
 
 def test_exact_thresholds_allow_and_other_is_never_counted() -> None:
@@ -146,7 +150,21 @@ def test_malformed_and_future_events_fail_closed() -> None:
         module["evaluate"](
             [_event("live", seconds_ago=-2)],
             now=NOW,
+            current_time=lambda: NOW,
         )
+
+
+def test_events_appended_after_fixed_cutoff_are_ignored_not_future() -> None:
+    module = _module()
+    result = module["evaluate"](
+        [_event("other", seconds_ago=-1.2)],
+        now=NOW,
+        current_time=lambda: NOW + timedelta(seconds=1.2),
+    )
+
+    assert result["ignored_other_events"] == 0
+    assert result["policies"]["live"]["attempts"] == 0
+    assert result["policies"]["ready"]["attempts"] == 0
 
 
 def test_real_image_rehearsal_is_dry_run_and_uses_independent_boundaries() -> None:
@@ -176,7 +194,11 @@ def test_active_source_includes_compressed_rolls_without_double_counting(
         stream.write("\n".join([_event("ready")] * 30) + "\n")
 
     lines = module["_read_sources"]([active, active])
-    result = module["evaluate"](lines, now=NOW)
+    result = module["evaluate"](
+        lines,
+        now=NOW,
+        current_time=lambda: NOW,
+    )
 
     assert result["policies"]["ready"] == {
         "attempts": 31,

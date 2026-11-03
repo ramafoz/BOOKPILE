@@ -207,6 +207,8 @@ The evaluator automatically reads the active defensive log together with every
 matching plain or gzip-compressed roll. It deduplicates repeated path arguments
 and aborts the phase if the file set or active inode changes while it reads, so
 a midnight/size rotation can neither discard nor double-count evidence. The
+counting cutoff stays fixed; ordinary events appended while retained rolls are
+being read are validated against the live wall clock and left for the next run.
 first aggregate output must attribute a crossing only to `live`; the second
 only to `ready`. A failed/missing/malformed defensive log aborts collection.
 External monitors use their own client address and remain independent, but all

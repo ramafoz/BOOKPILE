@@ -11,7 +11,7 @@ import runpy
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 WINDOW_SECONDS = 60
@@ -43,7 +43,10 @@ def _parse_lines(lines: Iterable[str]) -> Iterable[dict[str, object]]:
 
 
 def evaluate(
-    lines: Iterable[str], *, now: datetime
+    lines: Iterable[str],
+    *,
+    now: datetime,
+    current_time: Callable[[], datetime] | None = None,
 ) -> dict[str, object]:
     if now.tzinfo is None:
         raise HealthObservationError("evaluation time must include a timezone")
@@ -55,10 +58,14 @@ def evaluate(
     }
     revisions: dict[tuple[str, str], set[str]] = defaultdict(set)
     ignored_other = 0
+    current_time = current_time or (lambda: datetime.now(UTC))
 
     for event in _parse_lines(lines):
         timestamp = float(event["ts"])
-        if timestamp > now_timestamp + 1:
+        wall_time = current_time()
+        if wall_time.tzinfo is None:
+            raise HealthObservationError("current time must include a timezone")
+        if timestamp > wall_time.astimezone(UTC).timestamp() + 1:
             raise HealthObservationError("defensive event is from the future")
         if not cutoff < timestamp <= now_timestamp:
             continue
