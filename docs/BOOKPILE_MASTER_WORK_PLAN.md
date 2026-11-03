@@ -329,7 +329,7 @@ future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
 - [x] Make Caddy emit mutually exclusive fixed labels `health_class=live`,
   `health_class=ready` and `health_class=other`, deleting original URI and query
   data; prove one fixture cannot match two classes.
-- [ ] Rehearse the public health policies independently in dry-run: more than
+- [x] Rehearse the public health policies independently in dry-run: more than
   `120 /health/live` requests from one validated client IP in 60 seconds and
   more than `30 /health/ready` requests in 60 seconds must produce separate,
   correctly attributed decisions. Neither rehearsal may count the other health
@@ -378,6 +378,24 @@ deep reconciliation reported 438 expected and 438 stored private objects with
 no mismatch, missing or orphaned object, and normal authenticated web use
 passed. No Fail2ban jail, nftables rule or automatic prohibition was installed
 or enabled by this acceptance.
+
+**D6 lote 2 dry-run staging evidence — 2026-11-03.** Revision
+`c99668550dd17fdf0ca7ac880b32418c4388c381` passed the deployed-image fixture
+with independent classes, exact-threshold allowance, internal-probe bypass and
+absence of raw client addresses. Public staging then exercised two isolated
+60-second windows from one client. Window one recorded 121 `live` and 30
+`ready` attempts: only `live` produced `would_temporarily_ban`. Window two
+recorded 120 `live` and 31 `ready` attempts: only `ready` produced
+`would_temporarily_ban`. Both decisions were attributed to the deployed
+revision, all requests retained their normal response, and Healthchecks stayed
+green. Deep reconciliation remained healthy with 433 expected and 433 stored
+private objects and zero missing, mismatched or orphaned objects; normal login,
+catalogue and mutation use passed afterward. The evidence supports `ENABLE` as
+the candidate decision for both 10-minute public-health policies. The formal
+decision checkbox remains open until the separately reviewed host policy proves
+real ban, expiration, restart persistence, emergency disable and monitor
+recovery. No firewall rule or automatic prohibition was enabled by this
+dry-run acceptance.
 
 ### D7 — Defensive regression harness
 
