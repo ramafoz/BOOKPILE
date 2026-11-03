@@ -148,6 +148,76 @@ Docker's internal readiness check continues to call
 does not traverse Caddy, does not enter the public D6 log and cannot be blocked
 by a future public health policy.
 
+### D6 public-health policy dry-run
+
+The first D6 policy gate observes the dedicated event log and makes no firewall
+change. It uses a fixed 60-second window per canonical client address. Exact
+threshold values remain allowed; request 121 for `live` or request 31 for
+`ready` produces only the aggregate decision `would_temporarily_ban`. The
+evaluator never emits the address used to reach that decision.
+
+Exercise both independent boundaries against the same Caddy image that is
+deployed on the host:
+
+```bash
+BOOKPILE_CADDY_IMAGE="$(
+  docker inspect --format '{{.Config.Image}}' bookpile-production-web-1
+)" sh server/scripts/rehearse-d6-health-policy-dry-run.sh
+```
+
+The result must report `classes_independent`, `dry_run_only`,
+`exact_thresholds_allow`, `internal_probe_bypasses_caddy` and
+`raw_client_addresses_absent` as true. The fixture sends 121 `live` plus 30
+`ready` requests in its first isolated window, then 120 `live` plus 31 `ready`
+requests in its second. One class must produce `would_temporarily_ban` while
+the other remains `allow` in each case. No Fail2ban, nftables or iptables
+command exists in this rehearsal.
+
+After deploying the accepted evaluator, perform the equivalent public staging
+rehearsal from one operator client. Wait at least 61 seconds before each phase
+and do not issue other health requests from that client during the phase:
+
+```bash
+sudo install -d -o root -g root -m 0755 /usr/local/libexec/bookpile
+sudo install -o root -g root -m 0755 \
+  server/deploy/validate-caddy-defensive-log.py \
+  /usr/local/libexec/bookpile/validate-caddy-defensive-log.py
+sudo install -o root -g root -m 0755 \
+  server/deploy/evaluate-d6-health-observation.py \
+  /usr/local/libexec/bookpile/evaluate-d6-health-observation.py
+
+sleep 61
+seq 1 121 | xargs -P 10 -I{} \
+  curl --silent --output /dev/null https://staging.bookpile.gal/health/live
+seq 1 30 | xargs -P 10 -I{} \
+  curl --silent --output /dev/null https://staging.bookpile.gal/health/ready
+sudo /usr/local/libexec/bookpile/evaluate-d6-health-observation.py \
+  /var/log/bookpile/defensive-events.log
+
+sleep 61
+seq 1 120 | xargs -P 10 -I{} \
+  curl --silent --output /dev/null https://staging.bookpile.gal/health/live
+seq 1 31 | xargs -P 10 -I{} \
+  curl --silent --output /dev/null https://staging.bookpile.gal/health/ready
+sudo /usr/local/libexec/bookpile/evaluate-d6-health-observation.py \
+  /var/log/bookpile/defensive-events.log
+```
+
+The evaluator automatically reads the active defensive log together with every
+matching plain or gzip-compressed roll. It deduplicates repeated path arguments
+and aborts the phase if the file set or active inode changes while it reads, so
+a midnight/size rotation can neither discard nor double-count evidence. The
+counting cutoff stays fixed; ordinary events appended while retained rolls are
+being read are validated against the live wall clock and left for the next run.
+first aggregate output must attribute a crossing only to `live`; the second
+only to `ready`. A failed/missing/malformed defensive log aborts collection.
+External monitors use their own client address and remain independent, but all
+configured monitors must stay green throughout the rehearsal. Confirm normal
+authenticated use and the deep maintenance check afterward. These results
+complete only the dry-run gate: an `ENABLE` decision and any real temporary ban
+require a separate reviewed host change, expiry/restart evidence and explicit
+operator authorization.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the
