@@ -296,10 +296,13 @@ configuration must be owned by the official Fail2ban package, whose installed
 files must pass `dpkg --verify`. Ownership is checked by literal equality
 against the package's complete `dpkg-query -L` manifest, never by a pattern
 search; wildcard characters in an extra filename cannot impersonate a package
-file. Any extra configuration is rejected as a whole instead of trying to
-approximate Fail2ban's section parser. It waits up to 30 seconds for the server
-socket both after startup and reload. A mismatch or timeout disables the
-service again; arbitrary pre-existing Fail2ban policy is never adopted.
+file. The same provenance check covers global `fail2ban.d` configuration, and
+component `<name>.d` drop-in directories for BOOKPILE actions and filters are
+forbidden entirely. Any extra configuration is rejected as a whole instead of
+trying to approximate Fail2ban's section parser. It waits up to 30 seconds for
+the server socket both after startup and reload. A mismatch or timeout
+disables the service again; arbitrary pre-existing Fail2ban policy is never
+adopted.
 
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a

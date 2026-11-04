@@ -168,8 +168,19 @@ assert_no_unreviewed_overrides() {
     }
   done < <(find "$CONFIG_ROOT" \( -type f -o -type l \) -name '*.local' -print0)
 
+  for file in \
+    "$CONFIG_ROOT/action.d/bookpile-observe.d" \
+    "$CONFIG_ROOT/filter.d/bookpile-health-live.d" \
+    "$CONFIG_ROOT/filter.d/bookpile-health-ready.d"; do
+    [[ ! -e "$file" && ! -L "$file" ]] || {
+      echo "Unreviewed BOOKPILE component drop-in directory: $file" >&2
+      exit 1
+    }
+  done
+
   while IFS= read -r -d '' file; do
-    [[ "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
+    [[ "$file" == "$CONFIG_ROOT/fail2ban.d/bookpile.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" ]] && continue
     package_owned='false'
@@ -184,6 +195,8 @@ assert_no_unreviewed_overrides() {
       exit 1
     fi
   done < <(
+    find "$CONFIG_ROOT/fail2ban.d" -maxdepth 1 \( -type f -o -type l \) \
+      \( -name '*.conf' -o -name '*.local' \) -print0
     find "$CONFIG_ROOT" -maxdepth 1 \( -type f -o -type l \) \
       \( -name 'jail.conf' -o -name 'jail.local' \) -print0
     find "$CONFIG_ROOT/jail.d" -maxdepth 1 \( -type f -o -type l \) \

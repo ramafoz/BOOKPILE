@@ -71,6 +71,11 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "action.d/bookpile-observe.local" in installer
     assert "filter.d/bookpile-health-live.local" in installer
     assert "filter.d/bookpile-health-ready.local" in installer
+    assert "action.d/bookpile-observe.d" in installer
+    assert "filter.d/bookpile-health-live.d" in installer
+    assert "filter.d/bookpile-health-ready.d" in installer
+    assert "Unreviewed BOOKPILE component drop-in directory" in installer
+    assert 'find "$CONFIG_ROOT/fail2ban.d"' in installer
     assert "wait_for_server" in installer
     assert "seq 1 30" in installer
 
