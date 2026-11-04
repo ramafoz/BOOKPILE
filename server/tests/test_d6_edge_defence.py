@@ -30,6 +30,8 @@ def test_observation_is_explicit_and_cannot_mutate_firewall() -> None:
 
 def test_fail2ban_database_is_persistent() -> None:
     config = read("fail2ban/fail2ban.d/bookpile.local")
+    assert "loglevel = ERROR" in config
+    assert "loglevel = NOTICE" not in config
     assert "dbfile = /var/lib/fail2ban/fail2ban.sqlite3" in config
     assert "dbfile = none" not in config.lower()
     assert "dbfile = :memory:" not in config.lower()

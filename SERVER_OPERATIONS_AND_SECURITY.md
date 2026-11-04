@@ -227,8 +227,10 @@ allowed. The jails read only the minimized defensive log, keep their state in
 `/var/lib/fail2ban/fail2ban.sqlite3`, and write aggregate
 `would_temporarily_ban`/`observation_expired` notices to the host journal. The
 observation action contains neither a client address nor any nftables or
-iptables command. Its ten-minute `bantime` is therefore an observation-state
-expiry, not a real network ban.
+iptables command. Fail2ban itself runs at `ERROR` log level so its ordinary
+address-bearing `Ban`/`Unban` NOTICE messages cannot enter journald; genuine
+daemon errors remain visible. Its ten-minute `bantime` is therefore an
+observation-state expiry, not a real network ban.
 
 Installation is intentionally outside application deployment. On staging,
 first verify there is no globally scoped IPv6 address, then install only after
