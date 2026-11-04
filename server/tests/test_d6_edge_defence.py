@@ -61,7 +61,10 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "root:root 644" in installer
     assert "assert_no_unreviewed_overrides" in installer
     assert "Unreviewed Fail2ban .local override" in installer
-    assert "Unreviewed BOOKPILE jail override" in installer
+    assert "dpkg --verify fail2ban" in installer
+    assert "Unreviewed non-package jail configuration" in installer
+    assert "dpkg-query -S --" in installer
+    assert "bookpile-health-live-observe|bookpile-health-ready-observe" not in installer
     assert "action.d/bookpile-observe.local" in installer
     assert "filter.d/bookpile-health-live.local" in installer
     assert "filter.d/bookpile-health-ready.local" in installer

@@ -137,12 +137,20 @@ assert_managed_files_match() {
 
 assert_no_unreviewed_overrides() {
   local file
+  local package_verification
   local -a allowed_local_files=(
     "$CONFIG_ROOT/fail2ban.d/bookpile.local"
     "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local"
     "$CONFIG_ROOT/jail.d/bookpile-observe.local"
   )
   local allowed allowed_file
+
+  package_verification="$(dpkg --verify fail2ban || true)"
+  [[ -z "$package_verification" ]] || {
+    echo 'The packaged Fail2ban configuration has been modified:' >&2
+    printf '%s\n' "$package_verification" >&2
+    exit 1
+  }
 
   while IFS= read -r -d '' file; do
     allowed='false'
@@ -160,9 +168,10 @@ assert_no_unreviewed_overrides() {
 
   while IFS= read -r -d '' file; do
     [[ "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" ]] && continue
-    if grep -Eq '^\[(bookpile-health-live-observe|bookpile-health-ready-observe)\][[:space:]]*$' "$file"; then
-      echo "Unreviewed BOOKPILE jail override: $file" >&2
+    if ! dpkg-query -S -- "$file" 2>/dev/null | grep -Eq '^fail2ban(:[^:]+)?: '; then
+      echo "Unreviewed non-package jail configuration: $file" >&2
       exit 1
     fi
   done < <(
