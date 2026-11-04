@@ -81,7 +81,7 @@ case "$mode" in
     install -o root -g root -m 0644 "$source_root/fail2ban/action.d/bookpile-observe.conf" "$CONFIG_ROOT/action.d/bookpile-observe.conf"
     install -o root -g root -m 0644 "$source_root/fail2ban/jail.d/bookpile-health.conf" "$CONFIG_ROOT/jail.d/bookpile-health.conf"
     install -o root -g root -m 0644 "$source_root/fail2ban/jail.d/bookpile-observe.local" "$CONFIG_ROOT/jail.d/bookpile-observe.local"
-    "$source_root/fail2ban/tests/test-health-filters.sh"
+    bash "$source_root/fail2ban/tests/test-health-filters.sh"
     fail2ban-client -t
     systemctl enable --now fail2ban.service
     fail2ban-client reload

@@ -236,11 +236,11 @@ reviewing the script and supplying its exact confirmation:
 
 ```bash
 ip -6 -brief address show scope global
-sudo server/deploy/install-bookpile-edge-defence.sh \
+sudo bash server/deploy/install-bookpile-edge-defence.sh \
   --install-observe \
   --confirm STAGING-D6-OBSERVE-INSTALL
 
-sudo server/deploy/install-bookpile-edge-defence.sh --check
+sudo bash server/deploy/install-bookpile-edge-defence.sh --check
 sudo fail2ban-client status bookpile-health-live-observe
 sudo fail2ban-client status bookpile-health-ready-observe
 sudo journalctl -t bookpile-d6-observe --since '30 minutes ago' --no-pager
@@ -258,7 +258,7 @@ removes their enable override; it preserves configuration, journal evidence
 and the persistent Fail2ban database:
 
 ```bash
-sudo server/deploy/install-bookpile-edge-defence.sh --disable-observe
+sudo bash server/deploy/install-bookpile-edge-defence.sh --disable-observe
 curl --fail --show-error https://staging.bookpile.gal/health/live
 curl --fail --show-error https://staging.bookpile.gal/health/ready
 sudo ss -lntp | grep -E ':(22|80|443) '
