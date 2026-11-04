@@ -1,0 +1,2 @@
+{"level":"info","ts":1793739129.127478,"logger":"http.log.access.d6_defensive","msg":"handled request","deployment_revision":"0123456789abcdef0123456789abcdef01234567","health_class":"live","defensive_decision":"observed","client_ip":"192.0.2.10"}
+{"level":"info","ts":1793739131.276050,"logger":"http.log.access.d6_defensive","msg":"handled request","deployment_revision":"0123456789abcdef0123456789abcdef01234567","health_class":"ready","defensive_decision":"observed","client_ip":"2001:db8::10"}

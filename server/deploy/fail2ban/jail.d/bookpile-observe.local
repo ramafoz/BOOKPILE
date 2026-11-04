@@ -1,0 +1,5 @@
+[bookpile-health-live-observe]
+enabled = true
+
+[bookpile-health-ready-observe]
+enabled = true
