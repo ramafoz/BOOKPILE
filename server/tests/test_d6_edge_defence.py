@@ -54,7 +54,11 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert installer.count("nft -j --stateless list ruleset") == 2
     assert "nft -j list ruleset" not in installer
     assert "cleanup_failed_installation" in installer
-    assert installer.index("apt-get install") < installer.index("firewall_before=")
+    assert "--resume-observe" in installer
+    assert "assert_managed_files_match" in installer
+    assert "cmp --silent" in installer
+    assert "wait_for_server" in installer
+    assert "seq 1 30" in installer
 
 
 def test_deployment_does_not_activate_d6() -> None:

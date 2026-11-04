@@ -280,6 +280,20 @@ Reinstallation always requires the explicit confirmation again. Neither
 changes this host defence. Real nftables enforcement remains a later,
 separately reviewed and explicitly authorized change.
 
+If a first installation is safely rolled back because the Fail2ban socket did
+not become ready in time, resume only with the reviewed recovery mode:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-defence.sh \
+  --resume-observe \
+  --confirm STAGING-D6-OBSERVE-INSTALL
+```
+
+Resume refuses an active service and compares every managed host file byte for
+byte with the repository before doing anything. It waits up to 30 seconds for
+the server socket both after startup and reload. A mismatch or timeout disables
+the service again; arbitrary pre-existing Fail2ban policy is never adopted.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

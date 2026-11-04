@@ -8,7 +8,7 @@ readonly LOG_PATH='/var/log/bookpile/defensive-events.log'
 readonly CONFIG_ROOT='/etc/fail2ban'
 
 usage() {
-  echo "Usage: $0 --check | --install-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
+  echo "Usage: $0 --check | --install-observe --confirm ${CONFIRMATION} | --resume-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
   exit 2
 }
 
@@ -22,9 +22,9 @@ if [[ "${1:-}" == '--confirm' ]]; then
   shift 2 || true
 fi
 [[ $# -eq 0 ]] || usage
-[[ "$mode" == '--check' || "$mode" == '--install-observe' || "$mode" == '--disable-observe' ]] || usage
+[[ "$mode" == '--check' || "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--disable-observe' ]] || usage
 
-if [[ "$mode" == '--install-observe' && "$confirmation" != "$CONFIRMATION" ]]; then
+if [[ ( "$mode" == '--install-observe' || "$mode" == '--resume-observe' ) && "$confirmation" != "$CONFIRMATION" ]]; then
   echo "Installation requires --confirm ${CONFIRMATION}." >&2
   exit 2
 fi
@@ -42,6 +42,15 @@ trap cleanup_failed_installation EXIT
 
 source_root="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 validator="$source_root/validate-caddy-defensive-log.py"
+readonly -a MANAGED_FILES=(
+  'fail2ban/fail2ban.d/bookpile.local:fail2ban.d/bookpile.local'
+  'fail2ban/filter.d/bookpile-health-live.conf:filter.d/bookpile-health-live.conf'
+  'fail2ban/filter.d/bookpile-health-ready.conf:filter.d/bookpile-health-ready.conf'
+  'fail2ban/action.d/bookpile-observe.conf:action.d/bookpile-observe.conf'
+  'fail2ban/jail.d/bookpile-disable-packaged.local:jail.d/bookpile-disable-packaged.local'
+  'fail2ban/jail.d/bookpile-health.conf:jail.d/bookpile-health.conf'
+  'fail2ban/jail.d/bookpile-observe.local:jail.d/bookpile-observe.local'
+)
 
 check_host() {
   source /etc/os-release
@@ -91,6 +100,68 @@ check_log() {
   python3 "$validator" "$LOG_PATH" >/dev/null
 }
 
+install_managed_files() {
+  local pair source_relative destination_relative
+  for pair in "${MANAGED_FILES[@]}"; do
+    source_relative="${pair%%:*}"
+    destination_relative="${pair#*:}"
+    install -o root -g root -m 0644 \
+      "$source_root/$source_relative" \
+      "$CONFIG_ROOT/$destination_relative"
+  done
+}
+
+assert_managed_files_match() {
+  local pair source_relative destination_relative
+  for pair in "${MANAGED_FILES[@]}"; do
+    source_relative="${pair%%:*}"
+    destination_relative="${pair#*:}"
+    cmp --silent \
+      "$source_root/$source_relative" \
+      "$CONFIG_ROOT/$destination_relative" || {
+      echo "Installed Fail2ban policy differs from the reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  done
+}
+
+wait_for_server() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if fail2ban-client ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo 'Fail2ban did not become ready within 30 seconds.' >&2
+  journalctl -u fail2ban.service --since '2 minutes ago' --no-pager -l >&2 || true
+  return 1
+}
+
+activate_observation() {
+  local firewall_before firewall_after
+  firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+  bash "$source_root/fail2ban/tests/test-health-filters.sh"
+  fail2ban-client -t
+  assert_only_approved_jails
+  systemctl unmask --runtime fail2ban.service
+  installation_started='true'
+  systemctl enable --now fail2ban.service
+  wait_for_server
+  fail2ban-client reload
+  wait_for_server
+  fail2ban-client status "$LIVE_JAIL" >/dev/null
+  fail2ban-client status "$READY_JAIL" >/dev/null
+  assert_no_firewall_policy
+  firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+  [[ "$firewall_before" == "$firewall_after" ]] || {
+    echo 'Firewall rules changed during observation-only installation.' >&2
+    exit 1
+  }
+  installation_accepted='true'
+  status_json
+}
+
 status_json() {
   local live='inactive' ready='inactive' persistent='false'
   fail2ban-client status "$LIVE_JAIL" >/dev/null 2>&1 && live='active'
@@ -112,31 +183,22 @@ case "$mode" in
     systemctl mask --runtime fail2ban.service
     apt-get update
     apt-get install -y --no-install-recommends fail2ban nftables
-    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
-    install -o root -g root -m 0644 "$source_root/fail2ban/fail2ban.d/bookpile.local" "$CONFIG_ROOT/fail2ban.d/bookpile.local"
-    install -o root -g root -m 0644 "$source_root/fail2ban/filter.d/bookpile-health-live.conf" "$CONFIG_ROOT/filter.d/bookpile-health-live.conf"
-    install -o root -g root -m 0644 "$source_root/fail2ban/filter.d/bookpile-health-ready.conf" "$CONFIG_ROOT/filter.d/bookpile-health-ready.conf"
-    install -o root -g root -m 0644 "$source_root/fail2ban/action.d/bookpile-observe.conf" "$CONFIG_ROOT/action.d/bookpile-observe.conf"
-    install -o root -g root -m 0644 "$source_root/fail2ban/jail.d/bookpile-disable-packaged.local" "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local"
-    install -o root -g root -m 0644 "$source_root/fail2ban/jail.d/bookpile-health.conf" "$CONFIG_ROOT/jail.d/bookpile-health.conf"
-    install -o root -g root -m 0644 "$source_root/fail2ban/jail.d/bookpile-observe.local" "$CONFIG_ROOT/jail.d/bookpile-observe.local"
-    bash "$source_root/fail2ban/tests/test-health-filters.sh"
-    fail2ban-client -t
-    assert_only_approved_jails
-    systemctl unmask --runtime fail2ban.service
-    installation_started='true'
-    systemctl enable --now fail2ban.service
-    fail2ban-client reload
-    fail2ban-client status "$LIVE_JAIL" >/dev/null
-    fail2ban-client status "$READY_JAIL" >/dev/null
-    assert_no_firewall_policy
-    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
-    [[ "$firewall_before" == "$firewall_after" ]] || {
-      echo 'Firewall rules changed during observation-only installation.' >&2
+    install_managed_files
+    activate_observation
+    ;;
+  --resume-observe)
+    check_host
+    check_log
+    dpkg-query -W -f='${db:Status-Status}' fail2ban 2>/dev/null | grep -q '^installed$' || {
+      echo 'Fail2ban is not installed; use --install-observe.' >&2
       exit 1
     }
-    installation_accepted='true'
-    status_json
+    systemctl is-active --quiet fail2ban.service && {
+      echo 'Fail2ban is already active; use --check instead of resuming.' >&2
+      exit 1
+    }
+    assert_managed_files_match
+    activate_observation
     ;;
   --disable-observe)
     if command -v fail2ban-client >/dev/null 2>&1; then
