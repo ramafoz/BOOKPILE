@@ -113,13 +113,71 @@ install_managed_files() {
 
 assert_managed_files_match() {
   local pair source_relative destination_relative
+  local destination
   for pair in "${MANAGED_FILES[@]}"; do
     source_relative="${pair%%:*}"
     destination_relative="${pair#*:}"
+    destination="$CONFIG_ROOT/$destination_relative"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Installed Fail2ban policy is missing, non-regular, or a symlink: $destination_relative" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == 'root:root 644' ]] || {
+      echo "Installed Fail2ban policy has unsafe ownership or mode: $destination_relative" >&2
+      exit 1
+    }
     cmp --silent \
       "$source_root/$source_relative" \
-      "$CONFIG_ROOT/$destination_relative" || {
+      "$destination" || {
       echo "Installed Fail2ban policy differs from the reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  done
+}
+
+assert_no_unreviewed_overrides() {
+  local file
+  local -a allowed_local_files=(
+    "$CONFIG_ROOT/fail2ban.d/bookpile.local"
+    "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local"
+    "$CONFIG_ROOT/jail.d/bookpile-observe.local"
+  )
+  local allowed allowed_file
+
+  while IFS= read -r -d '' file; do
+    allowed='false'
+    for allowed_file in "${allowed_local_files[@]}"; do
+      if [[ "$file" == "$allowed_file" ]]; then
+        allowed='true'
+        break
+      fi
+    done
+    [[ "$allowed" == 'true' ]] || {
+      echo "Unreviewed Fail2ban .local override: $file" >&2
+      exit 1
+    }
+  done < <(find "$CONFIG_ROOT" \( -type f -o -type l \) -name '*.local' -print0)
+
+  while IFS= read -r -d '' file; do
+    [[ "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" ]] && continue
+    if grep -Eq '^\[(bookpile-health-live-observe|bookpile-health-ready-observe)\][[:space:]]*$' "$file"; then
+      echo "Unreviewed BOOKPILE jail override: $file" >&2
+      exit 1
+    fi
+  done < <(
+    find "$CONFIG_ROOT" -maxdepth 1 \( -type f -o -type l \) \
+      \( -name 'jail.conf' -o -name 'jail.local' \) -print0
+    find "$CONFIG_ROOT/jail.d" -maxdepth 1 \( -type f -o -type l \) \
+      \( -name '*.conf' -o -name '*.local' \) -print0
+  )
+
+  for file in \
+    "$CONFIG_ROOT/action.d/bookpile-observe.local" \
+    "$CONFIG_ROOT/filter.d/bookpile-health-live.local" \
+    "$CONFIG_ROOT/filter.d/bookpile-health-ready.local"; do
+    [[ ! -e "$file" && ! -L "$file" ]] || {
+      echo "Unreviewed BOOKPILE component override: $file" >&2
       exit 1
     }
   done
@@ -143,6 +201,7 @@ activate_observation() {
   firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
   bash "$source_root/fail2ban/tests/test-health-filters.sh"
   fail2ban-client -t
+  assert_no_unreviewed_overrides
   assert_only_approved_jails
   systemctl unmask --runtime fail2ban.service
   installation_started='true'

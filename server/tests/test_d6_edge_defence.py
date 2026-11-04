@@ -57,6 +57,14 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "--resume-observe" in installer
     assert "assert_managed_files_match" in installer
     assert "cmp --silent" in installer
+    assert "non-regular, or a symlink" in installer
+    assert "root:root 644" in installer
+    assert "assert_no_unreviewed_overrides" in installer
+    assert "Unreviewed Fail2ban .local override" in installer
+    assert "Unreviewed BOOKPILE jail override" in installer
+    assert "action.d/bookpile-observe.local" in installer
+    assert "filter.d/bookpile-health-live.local" in installer
+    assert "filter.d/bookpile-health-ready.local" in installer
     assert "wait_for_server" in installer
     assert "seq 1 30" in installer
 
