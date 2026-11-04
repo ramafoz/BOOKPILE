@@ -17,6 +17,8 @@ jobs:
         run: >-
           bash -n
           server/deploy/deploy-staging.sh
+          server/deploy/install-bookpile-edge-defence.sh
+          server/deploy/fail2ban/tests/test-health-filters.sh
           server/deploy/tests/test-deploy-staging.sh
           server/deploy/tests/test-caddy-log-migration.sh
           server/scripts/migrate-caddy-access-log-rolls.sh
@@ -27,6 +29,11 @@ jobs:
         run: |
           bash server/deploy/tests/test-deploy-staging.sh
           bash server/deploy/tests/test-caddy-log-migration.sh
+      - name: Validate D6 Fail2ban filters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fail2ban
+          bash server/deploy/fail2ban/tests/test-health-filters.sh
 
   python-tests:
     name: Python tests (Local and Server)

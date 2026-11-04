@@ -218,6 +218,57 @@ complete only the dry-run gate: an `ENABLE` decision and any real temporary ban
 require a separate reviewed host change, expiry/restart evidence and explicit
 operator authorization.
 
+### D6 persistent host observation foundation
+
+The reviewed host foundation runs two independent Fail2ban observation jails:
+`bookpile-health-live-observe` at attempt 121 in 60 seconds and
+`bookpile-health-ready-observe` at attempt 31. Exact accepted thresholds remain
+allowed. The jails read only the minimized defensive log, keep their state in
+`/var/lib/fail2ban/fail2ban.sqlite3`, and write aggregate
+`would_temporarily_ban`/`observation_expired` notices to the host journal. The
+observation action contains neither a client address nor any nftables or
+iptables command. Its ten-minute `bantime` is therefore an observation-state
+expiry, not a real network ban.
+
+Installation is intentionally outside application deployment. On staging,
+first verify there is no globally scoped IPv6 address, then install only after
+reviewing the script and supplying its exact confirmation:
+
+```bash
+ip -6 -brief address show scope global
+sudo server/deploy/install-bookpile-edge-defence.sh \
+  --install-observe \
+  --confirm STAGING-D6-OBSERVE-INSTALL
+
+sudo server/deploy/install-bookpile-edge-defence.sh --check
+sudo fail2ban-client status bookpile-health-live-observe
+sudo fail2ban-client status bookpile-health-ready-observe
+sudo journalctl -t bookpile-d6-observe --since '30 minutes ago' --no-pager
+sudo nft list table inet bookpile
+```
+
+The final `nft` command must fail with “No such file or directory” in this
+phase: observation must not create a firewall table. The installer also aborts
+on an unsupported OS, missing/malformed defensive log or global IPv6 address.
+Public IPv6 remains disabled until equivalent rules are implemented and
+proved.
+
+The independent fail-open rollback stops only these observation jails and
+removes their enable override; it preserves configuration, journal evidence
+and the persistent Fail2ban database:
+
+```bash
+sudo server/deploy/install-bookpile-edge-defence.sh --disable-observe
+curl --fail --show-error https://staging.bookpile.gal/health/live
+curl --fail --show-error https://staging.bookpile.gal/health/ready
+sudo ss -lntp | grep -E ':(22|80|443) '
+```
+
+Reinstallation always requires the explicit confirmation again. Neither
+`deploy-staging.sh` nor a normal application rollout enables, disables or
+changes this host defence. Real nftables enforcement remains a later,
+separately reviewed and explicitly authorized change.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

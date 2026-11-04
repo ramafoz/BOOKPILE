@@ -397,6 +397,17 @@ real ban, expiration, restart persistence, emergency disable and monitor
 recovery. No firewall rule or automatic prohibition was enabled by this
 dry-run acceptance.
 
+**D6 host-observation implementation contract.** The next acceptance stage
+installs separate `live` and `ready` Fail2ban observation jails, backed by the
+persistent host database and an independent disable procedure. Their action
+may emit only an aggregate `would_temporarily_ban` lifecycle event and must not
+invoke nftables/iptables or disclose the client address. Installation must be
+manual, confirmed, fail closed on malformed evidence or globally scoped IPv6,
+and remain absent from ordinary application deployment. This paragraph records
+the implementation contract only; neither the persistent-policy checkbox nor
+either formal `ENABLE` decision is complete until staging installation and the
+required real-enforcement evidence are recorded.
+
 ### D7 — Defensive regression harness
 
 - [ ] Automate normal navigation, API burst, scanner paths, forged forwarding
