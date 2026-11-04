@@ -136,8 +136,9 @@ assert_managed_files_match() {
 }
 
 assert_no_unreviewed_overrides() {
-  local file
+  local file package_file package_owned
   local package_verification
+  local -a package_files=()
   local -a allowed_local_files=(
     "$CONFIG_ROOT/fail2ban.d/bookpile.local"
     "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local"
@@ -151,6 +152,7 @@ assert_no_unreviewed_overrides() {
     printf '%s\n' "$package_verification" >&2
     exit 1
   }
+  mapfile -t package_files < <(dpkg-query -L fail2ban)
 
   while IFS= read -r -d '' file; do
     allowed='false'
@@ -170,7 +172,14 @@ assert_no_unreviewed_overrides() {
     [[ "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" ]] && continue
-    if ! dpkg-query -S -- "$file" 2>/dev/null | grep -Eq '^fail2ban(:[^:]+)?: '; then
+    package_owned='false'
+    for package_file in "${package_files[@]}"; do
+      if [[ "$file" == "$package_file" ]]; then
+        package_owned='true'
+        break
+      fi
+    done
+    if [[ "$package_owned" != 'true' ]]; then
       echo "Unreviewed non-package jail configuration: $file" >&2
       exit 1
     fi

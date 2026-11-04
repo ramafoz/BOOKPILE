@@ -63,7 +63,10 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "Unreviewed Fail2ban .local override" in installer
     assert "dpkg --verify fail2ban" in installer
     assert "Unreviewed non-package jail configuration" in installer
-    assert "dpkg-query -S --" in installer
+    assert "dpkg-query -L fail2ban" in installer
+    assert "local -a package_files=()" in installer
+    assert '[[ "$file" == "$package_file" ]]' in installer
+    assert "dpkg-query -S" not in installer
     assert "bookpile-health-live-observe|bookpile-health-ready-observe" not in installer
     assert "action.d/bookpile-observe.local" in installer
     assert "filter.d/bookpile-health-live.local" in installer

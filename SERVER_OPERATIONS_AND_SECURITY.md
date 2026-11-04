@@ -293,11 +293,13 @@ Resume refuses an active service and compares every managed host file byte for
 byte with the repository before doing anything. It also rejects every
 unreviewed `.local` file and component override. Every remaining jail
 configuration must be owned by the official Fail2ban package, whose installed
-files must pass `dpkg --verify`; any extra configuration file is rejected as a
-whole instead of trying to approximate Fail2ban's section parser. It waits up
-to 30 seconds for the server socket both after startup and reload. A mismatch
-or timeout disables the service again; arbitrary pre-existing Fail2ban policy
-is never adopted.
+files must pass `dpkg --verify`. Ownership is checked by literal equality
+against the package's complete `dpkg-query -L` manifest, never by a pattern
+search; wildcard characters in an extra filename cannot impersonate a package
+file. Any extra configuration is rejected as a whole instead of trying to
+approximate Fail2ban's section parser. It waits up to 30 seconds for the server
+socket both after startup and reload. A mismatch or timeout disables the
+service again; arbitrary pre-existing Fail2ban policy is never adopted.
 
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
