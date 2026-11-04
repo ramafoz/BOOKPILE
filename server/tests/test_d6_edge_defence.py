@@ -76,6 +76,10 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "filter.d/bookpile-health-ready.d" in installer
     assert "Unreviewed BOOKPILE component drop-in directory" in installer
     assert 'find "$CONFIG_ROOT/fail2ban.d"' in installer
+    assert "configuration directory is missing, non-directory, or a symlink" in installer
+    assert "root:root 755" in installer
+    assert 'find "$CONFIG_ROOT" -type l -print -quit' in installer
+    assert "Symlink is forbidden in the Fail2ban configuration tree" in installer
     assert "wait_for_server" in installer
     assert "seq 1 30" in installer
 

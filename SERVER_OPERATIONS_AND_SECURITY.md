@@ -298,11 +298,13 @@ against the package's complete `dpkg-query -L` manifest, never by a pattern
 search; wildcard characters in an extra filename cannot impersonate a package
 file. The same provenance check covers global `fail2ban.d` configuration, and
 component `<name>.d` drop-in directories for BOOKPILE actions and filters are
-forbidden entirely. Any extra configuration is rejected as a whole instead of
-trying to approximate Fail2ban's section parser. It waits up to 30 seconds for
-the server socket both after startup and reload. A mismatch or timeout
-disables the service again; arbitrary pre-existing Fail2ban policy is never
-adopted.
+forbidden entirely. The configuration root and its action/filter/jail/global
+subdirectories must be real `root:root 0755` directories, and every symlink in
+the configuration tree is rejected rather than followed. Any extra
+configuration is rejected as a whole instead of trying to approximate
+Fail2ban's section parser. It waits up to 30 seconds for the server socket both
+after startup and reload. A mismatch or timeout disables the service again;
+arbitrary pre-existing Fail2ban policy is never adopted.
 
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a

@@ -136,7 +136,7 @@ assert_managed_files_match() {
 }
 
 assert_no_unreviewed_overrides() {
-  local file package_file package_owned
+  local directory file package_file package_owned
   local package_verification
   local -a package_files=()
   local -a allowed_local_files=(
@@ -145,6 +145,27 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/jail.d/bookpile-observe.local"
   )
   local allowed allowed_file
+
+  for directory in \
+    "$CONFIG_ROOT" \
+    "$CONFIG_ROOT/action.d" \
+    "$CONFIG_ROOT/fail2ban.d" \
+    "$CONFIG_ROOT/filter.d" \
+    "$CONFIG_ROOT/jail.d"; do
+    [[ -d "$directory" && ! -L "$directory" ]] || {
+      echo "Fail2ban configuration directory is missing, non-directory, or a symlink: $directory" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$directory")" == 'root:root 755' ]] || {
+      echo "Fail2ban configuration directory has unsafe ownership or mode: $directory" >&2
+      exit 1
+    }
+  done
+  file="$(find "$CONFIG_ROOT" -type l -print -quit)"
+  [[ -z "$file" ]] || {
+    echo "Symlink is forbidden in the Fail2ban configuration tree: $file" >&2
+    exit 1
+  }
 
   package_verification="$(dpkg --verify fail2ban || true)"
   [[ -z "$package_verification" ]] || {
