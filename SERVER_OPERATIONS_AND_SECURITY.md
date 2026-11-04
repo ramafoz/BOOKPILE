@@ -280,6 +280,32 @@ Reinstallation always requires the explicit confirmation again. Neither
 changes this host defence. Real nftables enforcement remains a later,
 separately reviewed and explicitly authorized change.
 
+If a first installation is safely rolled back because the Fail2ban socket did
+not become ready in time, resume only with the reviewed recovery mode:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-defence.sh \
+  --resume-observe \
+  --confirm STAGING-D6-OBSERVE-INSTALL
+```
+
+Resume refuses an active service and compares every managed host file byte for
+byte with the repository before doing anything. It also rejects every
+unreviewed `.local` file and component override. Every remaining jail
+configuration must be owned by the official Fail2ban package, whose installed
+files must pass `dpkg --verify`. Ownership is checked by literal equality
+against the package's complete `dpkg-query -L` manifest, never by a pattern
+search; wildcard characters in an extra filename cannot impersonate a package
+file. The same provenance check covers global `fail2ban.d` configuration, and
+component `<name>.d` drop-in directories for BOOKPILE actions and filters are
+forbidden entirely. The configuration root and its action/filter/jail/global
+subdirectories must be real `root:root 0755` directories, and every symlink in
+the configuration tree is rejected rather than followed. Any extra
+configuration is rejected as a whole instead of trying to approximate
+Fail2ban's section parser. It waits up to 30 seconds for the server socket both
+after startup and reload. A mismatch or timeout disables the service again;
+arbitrary pre-existing Fail2ban policy is never adopted.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

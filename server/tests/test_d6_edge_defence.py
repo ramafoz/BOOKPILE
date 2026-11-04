@@ -54,7 +54,34 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert installer.count("nft -j --stateless list ruleset") == 2
     assert "nft -j list ruleset" not in installer
     assert "cleanup_failed_installation" in installer
-    assert installer.index("apt-get install") < installer.index("firewall_before=")
+    assert "--resume-observe" in installer
+    assert "assert_managed_files_match" in installer
+    assert "cmp --silent" in installer
+    assert "non-regular, or a symlink" in installer
+    assert "root:root 644" in installer
+    assert "assert_no_unreviewed_overrides" in installer
+    assert "Unreviewed Fail2ban .local override" in installer
+    assert "dpkg --verify fail2ban" in installer
+    assert "Unreviewed non-package jail configuration" in installer
+    assert "dpkg-query -L fail2ban" in installer
+    assert "local -a package_files=()" in installer
+    assert '[[ "$file" == "$package_file" ]]' in installer
+    assert "dpkg-query -S" not in installer
+    assert "bookpile-health-live-observe|bookpile-health-ready-observe" not in installer
+    assert "action.d/bookpile-observe.local" in installer
+    assert "filter.d/bookpile-health-live.local" in installer
+    assert "filter.d/bookpile-health-ready.local" in installer
+    assert "action.d/bookpile-observe.d" in installer
+    assert "filter.d/bookpile-health-live.d" in installer
+    assert "filter.d/bookpile-health-ready.d" in installer
+    assert "Unreviewed BOOKPILE component drop-in directory" in installer
+    assert 'find "$CONFIG_ROOT/fail2ban.d"' in installer
+    assert "configuration directory is missing, non-directory, or a symlink" in installer
+    assert "root:root 755" in installer
+    assert 'find "$CONFIG_ROOT" -type l -print -quit' in installer
+    assert "Symlink is forbidden in the Fail2ban configuration tree" in installer
+    assert "wait_for_server" in installer
+    assert "seq 1 30" in installer
 
 
 def test_deployment_does_not_activate_d6() -> None:
