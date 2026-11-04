@@ -32,6 +32,7 @@ fi
 
 cleanup_failed_installation() {
   local rc=$?
+  local cleanup_ok='true'
   trap - EXIT
   if [[ "$installation_started" == 'true' && "$installation_accepted" != 'true' ]]; then
     if [[ "$mode" == '--enable-observe' ]]; then
@@ -41,7 +42,19 @@ cleanup_failed_installation() {
         exit "$rc"
       fi
     elif [[ "$mode" == '--disable-observe' ]]; then
-      rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local"
+      systemctl disable --now fail2ban.service >/dev/null 2>&1 || cleanup_ok='false'
+      if [[ -d "$CONFIG_ROOT" && ! -L "$CONFIG_ROOT" && \
+            -d "$CONFIG_ROOT/jail.d" && ! -L "$CONFIG_ROOT/jail.d" ]]; then
+        rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local" || cleanup_ok='false'
+      else
+        cleanup_ok='false'
+      fi
+      if [[ "$cleanup_ok" == 'true' ]]; then
+        echo 'Disable acceptance checks failed; emergency fail-open cleanup stopped Fail2ban and removed the observation enable override.' >&2
+      else
+        echo 'Disable acceptance checks failed and emergency cleanup could not fully verify the disabled state; inspect the stopped service and configuration before restarting Fail2ban.' >&2
+      fi
+      exit "$rc"
     fi
     systemctl disable --now fail2ban.service >/dev/null 2>&1 || true
   fi
@@ -436,6 +449,9 @@ case "$mode" in
     status_json
     ;;
   --disable-observe)
+    # Arm emergency fail-open cleanup before any health or provenance check.
+    # A failed acceptance check must return non-zero but still stop observation.
+    installation_started='true'
     check_host
     check_log
     systemctl is-active --quiet fail2ban.service || {
@@ -446,7 +462,6 @@ case "$mode" in
     assert_no_unreviewed_overrides
     assert_only_approved_jails
     firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
-    installation_started='true'
     fail2ban-client stop "$LIVE_JAIL"
     fail2ban-client stop "$READY_JAIL"
     rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local"

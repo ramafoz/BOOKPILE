@@ -294,6 +294,15 @@ curl --fail --show-error https://staging.bookpile.gal/health/ready
 sudo ss -lntp | grep -E ':(22|80|443) '
 ```
 
+Emergency shutdown is armed before host, log or policy validation. If a
+missing/malformed log, global IPv6, configuration drift or another acceptance
+check fails, the command still stops and disables Fail2ban and removes the
+enable override when the configuration directories are safe real directories.
+It deliberately returns non-zero and reports that emergency cleanup was used;
+this means “fail-open shutdown attempted,” not “all acceptance checks passed.”
+If the configuration directory itself is unsafe or shutdown cannot be
+verified, the error explicitly requires host inspection before any restart.
+
 Re-enabling after that clean disable is a distinct, confirmed operation. It
 accepts only the exact reviewed files, zero configured jails, zero active jails
 when the service is already running, no unreviewed override and an unchanged

@@ -73,6 +73,14 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "Firewall rules changed while disabling observation" in installer
     assert "Firewall rules changed while upgrading observation" in installer
     assert "bookpile-observe-v1.conf" in installer
+    disable_block = installer.split("  --disable-observe)", 1)[1].split(
+        "  --check)", 1
+    )[0]
+    assert disable_block.index("installation_started='true'") < disable_block.index(
+        "check_host"
+    )
+    assert "emergency fail-open cleanup stopped Fail2ban" in installer
+    assert "emergency cleanup could not fully verify" in installer
     assert "assert_managed_files_match" in installer
     assert "cmp --silent" in installer
     assert "non-regular, or a symlink" in installer
