@@ -51,7 +51,8 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "Fail2ban is already installed" in installer
     assert "systemctl mask --runtime fail2ban.service" in installer
     assert "assert_only_approved_jails" in installer
-    assert "nft -j list ruleset" in installer
+    assert installer.count("nft -j --stateless list ruleset") == 2
+    assert "nft -j list ruleset" not in installer
     assert "cleanup_failed_installation" in installer
     assert installer.index("apt-get install") < installer.index("firewall_before=")
 

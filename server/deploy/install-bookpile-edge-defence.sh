@@ -112,7 +112,7 @@ case "$mode" in
     systemctl mask --runtime fail2ban.service
     apt-get update
     apt-get install -y --no-install-recommends fail2ban nftables
-    firewall_before="$(nft -j list ruleset | sha256sum | cut -d' ' -f1)"
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
     install -o root -g root -m 0644 "$source_root/fail2ban/fail2ban.d/bookpile.local" "$CONFIG_ROOT/fail2ban.d/bookpile.local"
     install -o root -g root -m 0644 "$source_root/fail2ban/filter.d/bookpile-health-live.conf" "$CONFIG_ROOT/filter.d/bookpile-health-live.conf"
     install -o root -g root -m 0644 "$source_root/fail2ban/filter.d/bookpile-health-ready.conf" "$CONFIG_ROOT/filter.d/bookpile-health-ready.conf"
@@ -130,7 +130,7 @@ case "$mode" in
     fail2ban-client status "$LIVE_JAIL" >/dev/null
     fail2ban-client status "$READY_JAIL" >/dev/null
     assert_no_firewall_policy
-    firewall_after="$(nft -j list ruleset | sha256sum | cut -d' ' -f1)"
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
     [[ "$firewall_before" == "$firewall_after" ]] || {
       echo 'Firewall rules changed during observation-only installation.' >&2
       exit 1
