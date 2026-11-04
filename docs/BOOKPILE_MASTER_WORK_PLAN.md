@@ -400,10 +400,14 @@ dry-run acceptance.
 **D6 host-observation implementation contract.** The next acceptance stage
 installs separate `live` and `ready` Fail2ban observation jails, backed by the
 persistent host database and an independent disable procedure. Their action
-may emit only an aggregate `would_temporarily_ban` lifecycle event and must not
-invoke nftables/iptables or disclose the client address. Installation must be
+may emit only aggregate `would_temporarily_ban` and neutral
+`observation_released` lifecycle events and must not invoke nftables/iptables
+or disclose the client address. A release may result from expiry or from a
+jail/service stop and therefore is not evidence of natural expiry. Installation must be
 manual, confirmed, fail closed on malformed evidence or globally scoped IPv6,
-and remain absent from ordinary application deployment. This paragraph records
+and remain absent from ordinary application deployment. Disable and re-enable
+must be independent, confirmed where enabling, prove the exact jail set and
+leave the stateless firewall policy unchanged. This paragraph records
 the implementation contract only; neither the persistent-policy checkbox nor
 either formal `ENABLE` decision is complete until staging installation and the
 required real-enforcement evidence are recorded.

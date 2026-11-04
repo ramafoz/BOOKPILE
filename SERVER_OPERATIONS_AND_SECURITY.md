@@ -225,7 +225,10 @@ The reviewed host foundation runs two independent Fail2ban observation jails:
 `bookpile-health-ready-observe` at attempt 31. Exact accepted thresholds remain
 allowed. The jails read only the minimized defensive log, keep their state in
 `/var/lib/fail2ban/fail2ban.sqlite3`, and write aggregate
-`would_temporarily_ban`/`observation_expired` notices to the host journal. The
+`would_temporarily_ban`/`observation_released` notices to the host journal. A
+release means only that Fail2ban stopped tracking the observation, either
+because its ten-minute lifetime elapsed or because the jail/service stopped;
+it must not be interpreted as proof of natural expiry. The
 observation action contains neither a client address nor any nftables or
 iptables command. Fail2ban itself runs at `ERROR` log level so its ordinary
 address-bearing `Ban`/`Unban` NOTICE messages cannot enter journald; genuine
@@ -264,9 +267,25 @@ startup. Volatile packet counters are excluded, while rules and actions remain
 covered. Any extra jail or firewall mutation aborts acceptance. SSH remains
 outside D6.
 
-The independent fail-open rollback stops only these observation jails and
+An already accepted v1 observation host must migrate the action semantics with
+the confirmed upgrade mode before using the disable/re-enable lifecycle below:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-defence.sh \
+  --upgrade-observe \
+  --confirm STAGING-D6-OBSERVE-INSTALL
+```
+
+Upgrade accepts only either the current reviewed action or the exact archived
+v1 action, while every other managed file must already match. It verifies the
+configured and running jail sets before and after reload and proves that the
+stateless firewall policy did not change. Arbitrary historical content is not
+treated as a migration source.
+
+The independent fail-open switch stops only these observation jails and
 removes their enable override; it preserves configuration, journal evidence
-and the persistent Fail2ban database:
+and the persistent Fail2ban database. It also proves that no jail remains
+enabled and that the stateless firewall policy is byte-for-byte unchanged:
 
 ```bash
 sudo bash server/deploy/install-bookpile-edge-defence.sh --disable-observe
@@ -275,7 +294,21 @@ curl --fail --show-error https://staging.bookpile.gal/health/ready
 sudo ss -lntp | grep -E ':(22|80|443) '
 ```
 
-Reinstallation always requires the explicit confirmation again. Neither
+Re-enabling after that clean disable is a distinct, confirmed operation. It
+accepts only the exact reviewed files, zero configured jails, zero active jails
+when the service is already running, no unreviewed override and an unchanged
+firewall policy. It may also recover from an earlier failed re-enable that
+safely stopped the service:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-defence.sh \
+  --enable-observe \
+  --confirm STAGING-D6-OBSERVE-INSTALL
+sudo bash server/deploy/install-bookpile-edge-defence.sh --check
+```
+
+`--resume-observe` is not an alias for this operation: it is reserved for a
+failed first installation that left the service inactive. Neither
 `deploy-staging.sh` nor a normal application rollout enables, disables or
 changes this host defence. Real nftables enforcement remains a later,
 separately reviewed and explicitly authorized change.
