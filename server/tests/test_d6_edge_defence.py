@@ -22,10 +22,16 @@ def test_health_jails_are_separate_disabled_and_exact() -> None:
 
 def test_observation_is_explicit_and_cannot_mutate_firewall() -> None:
     action = read("fail2ban/action.d/bookpile-observe.conf").lower()
+    legacy_action = read("fail2ban/migrations/bookpile-observe-v1.conf").lower()
     override = read("fail2ban/jail.d/bookpile-observe.local")
     assert override.count("enabled = true") == 2
     for forbidden in ("<ip>", "<matches>", "nft", "iptables", "firewall"):
         assert forbidden not in action
+    assert "event=would_temporarily_ban" in action
+    assert "event=observation_released" in action
+    assert "observation_expired" not in action
+    assert "event=observation_expired" in legacy_action
+    assert legacy_action.replace("observation_expired", "observation_released") == action
 
     packaged = read("fail2ban/jail.d/bookpile-disable-packaged.local")
     assert "[sshd]" in packaged
@@ -51,10 +57,30 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "Fail2ban is already installed" in installer
     assert "systemctl mask --runtime fail2ban.service" in installer
     assert "assert_only_approved_jails" in installer
-    assert installer.count("nft -j --stateless list ruleset") == 2
+    assert installer.count("nft -j --stateless list ruleset") == 8
     assert "nft -j list ruleset" not in installer
     assert "cleanup_failed_installation" in installer
     assert "--resume-observe" in installer
+    assert "--upgrade-observe" in installer
+    assert "--enable-observe" in installer
+    assert "assert_no_enabled_jails" in installer
+    assert "assert_runtime_jail_count 2" in installer
+    assert "assert_runtime_jail_count 0" in installer
+    assert "fail2ban-client reload >/dev/null 2>&1" in installer
+    assert "systemctl enable --now fail2ban.service" in installer
+    assert "Expected no enabled jails" in installer
+    assert "Firewall rules changed while enabling observation" in installer
+    assert "Firewall rules changed while disabling observation" in installer
+    assert "Firewall rules changed while upgrading observation" in installer
+    assert "bookpile-observe-v1.conf" in installer
+    disable_block = installer.split("  --disable-observe)", 1)[1].split(
+        "  --check)", 1
+    )[0]
+    assert disable_block.index("installation_started='true'") < disable_block.index(
+        "check_host"
+    )
+    assert "emergency fail-open cleanup stopped Fail2ban" in installer
+    assert "emergency cleanup could not fully verify" in installer
     assert "assert_managed_files_match" in installer
     assert "cmp --silent" in installer
     assert "non-regular, or a symlink" in installer

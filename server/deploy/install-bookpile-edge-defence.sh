@@ -8,7 +8,7 @@ readonly LOG_PATH='/var/log/bookpile/defensive-events.log'
 readonly CONFIG_ROOT='/etc/fail2ban'
 
 usage() {
-  echo "Usage: $0 --check | --install-observe --confirm ${CONFIRMATION} | --resume-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
+  echo "Usage: $0 --check | --install-observe --confirm ${CONFIRMATION} | --resume-observe --confirm ${CONFIRMATION} | --upgrade-observe --confirm ${CONFIRMATION} | --enable-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
   exit 2
 }
 
@@ -22,9 +22,9 @@ if [[ "${1:-}" == '--confirm' ]]; then
   shift 2 || true
 fi
 [[ $# -eq 0 ]] || usage
-[[ "$mode" == '--check' || "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--disable-observe' ]] || usage
+[[ "$mode" == '--check' || "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--upgrade-observe' || "$mode" == '--enable-observe' || "$mode" == '--disable-observe' ]] || usage
 
-if [[ ( "$mode" == '--install-observe' || "$mode" == '--resume-observe' ) && "$confirmation" != "$CONFIRMATION" ]]; then
+if [[ ( "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--upgrade-observe' || "$mode" == '--enable-observe' ) && "$confirmation" != "$CONFIRMATION" ]]; then
   echo "Installation requires --confirm ${CONFIRMATION}." >&2
   exit 2
 fi
@@ -32,8 +32,30 @@ fi
 
 cleanup_failed_installation() {
   local rc=$?
+  local cleanup_ok='true'
   trap - EXIT
   if [[ "$installation_started" == 'true' && "$installation_accepted" != 'true' ]]; then
+    if [[ "$mode" == '--enable-observe' ]]; then
+      rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local"
+      if systemctl is-active --quiet fail2ban.service && \
+         fail2ban-client reload >/dev/null 2>&1; then
+        exit "$rc"
+      fi
+    elif [[ "$mode" == '--disable-observe' ]]; then
+      systemctl disable --now fail2ban.service >/dev/null 2>&1 || cleanup_ok='false'
+      if [[ -d "$CONFIG_ROOT" && ! -L "$CONFIG_ROOT" && \
+            -d "$CONFIG_ROOT/jail.d" && ! -L "$CONFIG_ROOT/jail.d" ]]; then
+        rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local" || cleanup_ok='false'
+      else
+        cleanup_ok='false'
+      fi
+      if [[ "$cleanup_ok" == 'true' ]]; then
+        echo 'Disable acceptance checks failed; emergency fail-open cleanup stopped Fail2ban and removed the observation enable override.' >&2
+      else
+        echo 'Disable acceptance checks failed and emergency cleanup could not fully verify the disabled state; inspect the stopped service and configuration before restarting Fail2ban.' >&2
+      fi
+      exit "$rc"
+    fi
     systemctl disable --now fail2ban.service >/dev/null 2>&1 || true
   fi
   exit "$rc"
@@ -92,6 +114,29 @@ assert_only_approved_jails() {
   done
 }
 
+assert_no_enabled_jails() {
+  local -a jails=()
+  mapfile -t jails < <(
+    fail2ban-client -d 2>/dev/null |
+      sed -n "s/^\['add', '\([^']*\)',.*$/\1/p" |
+      sort -u
+  )
+  [[ ${#jails[@]} -eq 0 ]] || {
+    printf 'Expected no enabled jails; found: %s\n' "${jails[*]}" >&2
+    exit 1
+  }
+}
+
+assert_runtime_jail_count() {
+  local expected="$1"
+  local actual
+  actual="$({ fail2ban-client status || true; } | sed -n 's/^[^:]*Number of jail:[[:space:]]*//p')"
+  [[ "$actual" == "$expected" ]] || {
+    printf 'Expected %s active jails; found: %s\n' "$expected" "${actual:-(unknown)}" >&2
+    exit 1
+  }
+}
+
 check_log() {
   [[ -f "$LOG_PATH" && ! -L "$LOG_PATH" && -r "$LOG_PATH" ]] || {
     echo "Missing, unreadable, or unsafe defensive log: $LOG_PATH" >&2
@@ -112,12 +157,19 @@ install_managed_files() {
 }
 
 assert_managed_files_match() {
+  local allow_missing_enable="${1:-false}"
+  local allow_legacy_action="${2:-false}"
   local pair source_relative destination_relative
   local destination
   for pair in "${MANAGED_FILES[@]}"; do
     source_relative="${pair%%:*}"
     destination_relative="${pair#*:}"
     destination="$CONFIG_ROOT/$destination_relative"
+    if [[ "$allow_missing_enable" == 'true' && \
+          "$destination_relative" == 'jail.d/bookpile-observe.local' && \
+          ! -e "$destination" && ! -L "$destination" ]]; then
+      continue
+    fi
     [[ -f "$destination" && ! -L "$destination" ]] || {
       echo "Installed Fail2ban policy is missing, non-regular, or a symlink: $destination_relative" >&2
       exit 1
@@ -126,12 +178,17 @@ assert_managed_files_match() {
       echo "Installed Fail2ban policy has unsafe ownership or mode: $destination_relative" >&2
       exit 1
     }
-    cmp --silent \
-      "$source_root/$source_relative" \
-      "$destination" || {
+    if ! cmp --silent "$source_root/$source_relative" "$destination"; then
+      if [[ "$allow_legacy_action" == 'true' && \
+            "$destination_relative" == 'action.d/bookpile-observe.conf' ]] && \
+         cmp --silent \
+           "$source_root/fail2ban/migrations/bookpile-observe-v1.conf" \
+           "$destination"; then
+        continue
+      fi
       echo "Installed Fail2ban policy differs from the reviewed source: $destination_relative" >&2
       exit 1
-    }
+    fi
   done
 }
 
@@ -261,6 +318,7 @@ activate_observation() {
   wait_for_server
   fail2ban-client reload
   wait_for_server
+  assert_runtime_jail_count 2
   fail2ban-client status "$LIVE_JAIL" >/dev/null
   fail2ban-client status "$READY_JAIL" >/dev/null
   assert_no_firewall_policy
@@ -311,13 +369,115 @@ case "$mode" in
     assert_managed_files_match
     activate_observation
     ;;
-  --disable-observe)
-    if command -v fail2ban-client >/dev/null 2>&1; then
-      fail2ban-client stop "$LIVE_JAIL" >/dev/null 2>&1 || true
-      fail2ban-client stop "$READY_JAIL" >/dev/null 2>&1 || true
+  --upgrade-observe)
+    check_host
+    check_log
+    dpkg-query -W -f='${db:Status-Status}' fail2ban 2>/dev/null | grep -q '^installed$' || {
+      echo 'Fail2ban is not installed; use --install-observe.' >&2
+      exit 1
+    }
+    systemctl is-active --quiet fail2ban.service || {
+      echo 'Fail2ban must be active before upgrading observation policy.' >&2
+      exit 1
+    }
+    assert_managed_files_match false true
+    assert_no_unreviewed_overrides
+    fail2ban-client -t
+    assert_only_approved_jails
+    assert_runtime_jail_count 2
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    installation_started='true'
+    install -o root -g root -m 0644 \
+      "$source_root/fail2ban/action.d/bookpile-observe.conf" \
+      "$CONFIG_ROOT/action.d/bookpile-observe.conf"
+    fail2ban-client -t
+    assert_managed_files_match
+    assert_no_unreviewed_overrides
+    assert_only_approved_jails
+    fail2ban-client reload
+    wait_for_server
+    assert_runtime_jail_count 2
+    fail2ban-client status "$LIVE_JAIL" >/dev/null
+    fail2ban-client status "$READY_JAIL" >/dev/null
+    assert_no_firewall_policy
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    [[ "$firewall_before" == "$firewall_after" ]] || {
+      echo 'Firewall rules changed while upgrading observation.' >&2
+      exit 1
+    }
+    installation_accepted='true'
+    status_json
+    ;;
+  --enable-observe)
+    check_host
+    check_log
+    dpkg-query -W -f='${db:Status-Status}' fail2ban 2>/dev/null | grep -q '^installed$' || {
+      echo 'Fail2ban is not installed; use --install-observe.' >&2
+      exit 1
+    }
+    assert_managed_files_match true
+    assert_no_unreviewed_overrides
+    fail2ban-client -t
+    assert_no_enabled_jails
+    if systemctl is-active --quiet fail2ban.service; then
+      assert_runtime_jail_count 0
     fi
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    installation_started='true'
+    install -o root -g root -m 0644 \
+      "$source_root/fail2ban/jail.d/bookpile-observe.local" \
+      "$CONFIG_ROOT/jail.d/bookpile-observe.local"
+    fail2ban-client -t
+    assert_no_unreviewed_overrides
+    assert_only_approved_jails
+    if systemctl is-active --quiet fail2ban.service; then
+      fail2ban-client reload
+    else
+      systemctl enable --now fail2ban.service
+    fi
+    wait_for_server
+    assert_runtime_jail_count 2
+    fail2ban-client status "$LIVE_JAIL" >/dev/null
+    fail2ban-client status "$READY_JAIL" >/dev/null
+    assert_no_firewall_policy
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    [[ "$firewall_before" == "$firewall_after" ]] || {
+      echo 'Firewall rules changed while enabling observation.' >&2
+      exit 1
+    }
+    installation_accepted='true'
+    status_json
+    ;;
+  --disable-observe)
+    # Arm emergency fail-open cleanup before any health or provenance check.
+    # A failed acceptance check must return non-zero but still stop observation.
+    installation_started='true'
+    check_host
+    check_log
+    systemctl is-active --quiet fail2ban.service || {
+      echo 'Fail2ban must be active before disabling observation.' >&2
+      exit 1
+    }
+    assert_managed_files_match
+    assert_no_unreviewed_overrides
+    assert_only_approved_jails
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    fail2ban-client stop "$LIVE_JAIL"
+    fail2ban-client stop "$READY_JAIL"
     rm -f "$CONFIG_ROOT/jail.d/bookpile-observe.local"
-    systemctl is-active --quiet fail2ban.service && fail2ban-client reload || true
+    fail2ban-client -t
+    assert_no_unreviewed_overrides
+    assert_no_enabled_jails
+    fail2ban-client reload
+    wait_for_server
+    assert_runtime_jail_count 0
+    assert_no_firewall_policy
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    [[ "$firewall_before" == "$firewall_after" ]] || {
+      echo 'Firewall rules changed while disabling observation.' >&2
+      exit 1
+    }
+    installation_accepted='true'
     status_json
     ;;
   --check)
