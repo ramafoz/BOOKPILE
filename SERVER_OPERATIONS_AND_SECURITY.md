@@ -255,6 +255,13 @@ on an unsupported OS, missing/malformed defensive log or global IPv6 address.
 Public IPv6 remains disabled until equivalent rules are implemented and
 proved.
 
+On a host where Fail2ban is already installed, the installer aborts rather
+than overwrite an existing authorized policy. On a fresh host it masks the
+service while installing the package, explicitly disables the distribution's
+packaged SSH jail, proves that exactly the two BOOKPILE observation jails are
+enabled, and compares the complete nftables ruleset before and after startup.
+Any extra jail or firewall mutation aborts acceptance. SSH remains outside D6.
+
 The independent fail-open rollback stops only these observation jails and
 removes their enable override; it preserves configuration, journal evidence
 and the persistent Fail2ban database:

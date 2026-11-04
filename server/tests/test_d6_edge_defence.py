@@ -27,6 +27,10 @@ def test_observation_is_explicit_and_cannot_mutate_firewall() -> None:
     for forbidden in ("<ip>", "<matches>", "nft", "iptables", "firewall"):
         assert forbidden not in action
 
+    packaged = read("fail2ban/jail.d/bookpile-disable-packaged.local")
+    assert "[sshd]" in packaged
+    assert "enabled = false" in packaged
+
 
 def test_fail2ban_database_is_persistent() -> None:
     config = read("fail2ban/fail2ban.d/bookpile.local")
@@ -44,6 +48,12 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "validate-caddy-defensive-log.py" in installer
     assert "firewall_mutated\":false" in installer
     assert "nft list table inet bookpile" in installer
+    assert "Fail2ban is already installed" in installer
+    assert "systemctl mask --runtime fail2ban.service" in installer
+    assert "assert_only_approved_jails" in installer
+    assert "nft -j list ruleset" in installer
+    assert "cleanup_failed_installation" in installer
+    assert installer.index("apt-get install") < installer.index("firewall_before=")
 
 
 def test_deployment_does_not_activate_d6() -> None:
