@@ -322,6 +322,24 @@ failed first installation that left the service inactive. Neither
 changes this host defence. Real nftables enforcement remains a later,
 separately reviewed and explicitly authorized change.
 
+Staging accepted this lifecycle on 2026-11-04 at repository revision
+`4a4fd244036f70bccd1c92df64eb543a90467875`. The exact v1 action migrated
+successfully; normal disable produced zero jails and re-enable restored exactly
+the two approved jails. A controlled action-file drift then made disable return
+status `1`, while its already-armed emergency cleanup still stopped and
+disabled Fail2ban and removed the enable override. Restoring the reviewed file
+and running confirmed re-enable recovered from the inactive service. The
+`inet bookpile` nftables table remained absent, both public health endpoints
+remained healthy and the application continued on revision
+`c99668550dd17fdf0ca7ac880b32418c4388c381`.
+
+This was a host-policy deployment, not an application deployment: the
+repository was updated and reviewed files were installed under
+`/etc/fail2ban`, but no application image, database migration or application
+data changed. Consequently `deploy-staging.sh` and its pre-deployment
+database/private-object backup were intentionally not run. A host-policy
+change that also mutates application state must use the normal backup gate.
+
 If a first installation is safely rolled back because the Fail2ban socket did
 not become ready in time, resume only with the reviewed recovery mode:
 
