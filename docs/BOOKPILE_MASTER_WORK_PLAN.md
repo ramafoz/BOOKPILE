@@ -292,7 +292,7 @@ accepted and active in staging.
 - [x] Trigger one disposable warning and one disposable critical alert in
   staging; prove delivery, deduplication and recovery without exposing private
   data.
-- [ ] Label every `/health/ready` `503` with exactly one bounded dependency
+- [x] Label every `/health/ready` `503` with exactly one bounded dependency
   scope: `readiness_database`, `readiness_private_objects` or
   `readiness_database_private_objects`. Version the new request-log contract;
   reject missing labels from that version plus unexpected or out-of-context
@@ -342,6 +342,22 @@ that exactly one of `database` or `private_objects` was unavailable, but the
 accepted log schema could not distinguish which. This real incident creates
 the bounded diagnostic task above; S3 delay/retry is a plausible inference,
 not a recorded cause.
+
+Staging readiness-diagnostic acceptance on 2026-11-05 deployed revision
+`6b6a85a4637de7e10aec1706b70bdc1f37eb33b3` after verified backup
+`a153e9d6-db32-497f-9706-586bdf839395`. The updated application emitted
+request-log schema v2 and an ephemeral container using the deployed image
+exercised database-only, private-object-only and combined synthetic readiness
+failures independently. The installed host collector produced exactly
+`readiness_database`, `readiness_private_objects` and
+`readiness_database_private_objects`, each once and attributed to the deployed
+revision. An independent assertion found no client key, request ID, failure
+label, exception text, endpoint or credential in collector output. The
+rehearsal disconnected no real dependency, sent no synthetic alert, changed no
+application data and removed all temporary files. Public live/readiness, deep
+reconciliation at 433 expected and 433 stored objects, and normal authenticated
+catalogue use all passed afterward. The remaining D5 task is the future
+`SYSTEM_ADMIN` aggregate view.
 
 ### D6 — Edge defence before Python
 

@@ -696,6 +696,26 @@ does not fail. It rejects a missing label from schema v2 and every unknown
 schema version. This compatibility scope is evidence from the previous image,
 not an allowed output for a new request.
 
+### Staging readiness-diagnostic acceptance — 2026-11-05
+
+Revision `6b6a85a4637de7e10aec1706b70bdc1f37eb33b3` was deployed after verified
+backup `a153e9d6-db32-497f-9706-586bdf839395`. The root-owned collector was
+reinstalled from that revision, its unit verification was silent and a normal
+manual collection completed with `0/SUCCESS`, healthy warning/critical signals
+and the 15-minute timer active.
+
+An ephemeral container using the deployed API image injected database-only,
+private-object-only and combined dependency failures without disconnecting the
+real services. Each returned a synthetic readiness `503` carrying schema v2 and
+only its bounded `failed_check` value. The installed collector evaluated the
+three events separately and emitted exactly `readiness_database`,
+`readiness_private_objects` and `readiness_database_private_objects`, all on the
+deployed revision. Output inspection rejected client/request identifiers,
+failure labels, exception text, endpoints and credentials. The rehearsal did
+not invoke the alert evaluator, create application data or retain its temporary
+files. Public liveness/readiness, a 433/433 deep private-object reconciliation
+and normal authenticated use passed afterward.
+
 ### External server error reporting
 
 BOOKPILE uses a separate Sentry project in the EU region for unexpected API
