@@ -20,7 +20,7 @@ exception text or arbitrary database event detail.
 | Metric | Source | Meaning |
 | --- | --- | --- |
 | `http_429` | API request journal | Responses rejected by an application request limit. |
-| `http_503` | API request journal | Requests for which BOOKPILE could not make a required safe decision or reach a required dependency. |
+| `http_503` | API request journal | Requests for which BOOKPILE could not make a required safe decision or reach a required dependency. Readiness failures use one fixed dependency scope. |
 | `http_5xx` | API request journal | All server-error responses, including the `503` subset. |
 | `lease_conflicts` | PostgreSQL `security_events` | Observed or enforced conflicting costly-operation leases, grouped by event type and lease scope. |
 | `scanner_probes` | Caddy minimized access log | Requests matched by the narrow, fixed scanner-probe policy. |
@@ -28,7 +28,18 @@ exception text or arbitrary database event detail.
 | `repeated_validation_failures` | API request journal | `422` responses from a keyed client reaching at least five failures on one route template in the window. Output contains only event and repeated-client totals, never the key. |
 
 `503` is intentionally also counted in `5xx`; these are two views of the same
-event, not additive totals. Scanner and future ban events carry their deployed
+event, not additive totals. A `/health/ready` `503` must carry exactly one
+`failed_check` value: `database`, `private_objects` or
+`database_private_objects`. The collector converts it respectively to the
+bounded `http_503` scopes `readiness_database`, `readiness_private_objects` or
+`readiness_database_private_objects`; the general `http_5xx` view remains
+grouped by route. The field is forbidden on every other route or status, and
+no exception text, S3 endpoint, database detail or credential is retained.
+Request-log schema v2 makes that label mandatory. During a rolling deployment,
+an unversioned historical readiness `503` may be represented only as
+`readiness_legacy_unknown`; schema v2 or any unknown schema version can never
+use that compatibility scope.
+Scanner and future ban events carry their deployed
 revision at event creation so a collection window spanning a deployment cannot
 misattribute old evidence to the new image.
 

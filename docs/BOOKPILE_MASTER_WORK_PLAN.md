@@ -292,6 +292,14 @@ accepted and active in staging.
 - [x] Trigger one disposable warning and one disposable critical alert in
   staging; prove delivery, deduplication and recovery without exposing private
   data.
+- [ ] Label every `/health/ready` `503` with exactly one bounded dependency
+  scope: `readiness_database`, `readiness_private_objects` or
+  `readiness_database_private_objects`. Version the new request-log contract;
+  reject missing labels from that version plus unexpected or out-of-context
+  labels, while accepting unversioned evidence from the previous image only as
+  `readiness_legacy_unknown`. Never retain exception text, endpoint or
+  credentials. Deploy and prove each synthetic failure independently before
+  acceptance.
 - [ ] Expose the same sanitized aggregates in the `SYSTEM_ADMIN` console.
 
 Evidence: metric catalogue, alert configuration and alert/recovery receipts.
@@ -322,7 +330,18 @@ recovery notifications were received, and both checks were green after the
 fixture returned to healthy. Inspection found none of the prohibited private
 fields, deep reconciliation remained healthy and normal authenticated catalogue
 use passed. The synthetic fixture changed no application or security data. The
-future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
+remaining D5 work is the bounded readiness diagnostic above and the future
+`SYSTEM_ADMIN` aggregate view.
+
+On 2026-11-04 the warning channel detected one `/health/ready` `503` in a
+15-minute window and recovered on the next evaluation. The request lasted
+23.126 seconds while readiness requests from the same pseudonymous monitor
+succeeded immediately before, during and after it; PostgreSQL, Docker and the
+host journal recorded no corresponding warning. The 140-byte response proves
+that exactly one of `database` or `private_objects` was unavailable, but the
+accepted log schema could not distinguish which. This real incident creates
+the bounded diagnostic task above; S3 delay/retry is a plausible inference,
+not a recorded cause.
 
 ### D6 — Edge defence before Python
 

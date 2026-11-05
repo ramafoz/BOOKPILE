@@ -680,6 +680,22 @@ only aggregate evaluator input and created no application rows, security events
 or traffic. This accepts D5 alert delivery, provider-level deduplication and
 recovery in staging; the future `SYSTEM_ADMIN` presentation remains separate.
 
+Readiness `503` diagnostics are deliberately bounded. The minimized
+`http_request` event may add `failed_check` only for `/health/ready` status
+`503`, with value `database`, `private_objects` or
+`database_private_objects`. The host collector maps that value to the matching
+`readiness_*` aggregate scope and rejects a missing, unknown or out-of-context
+label. Operators may use the scope to identify the failed dependency, but must
+not add exception messages, database details, storage endpoints or credentials
+to the request journal.
+
+The request log identifies the new contract as `schema_version=2`. The host
+collector accepts an unversioned historical readiness `503` only as
+`readiness_legacy_unknown` so a 15-minute collection window spanning deployment
+does not fail. It rejects a missing label from schema v2 and every unknown
+schema version. This compatibility scope is evidence from the previous image,
+not an allowed output for a new request.
+
 ### External server error reporting
 
 BOOKPILE uses a separate Sentry project in the EU region for unexpected API
