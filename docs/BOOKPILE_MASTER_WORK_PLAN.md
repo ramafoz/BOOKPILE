@@ -343,6 +343,11 @@ future `SYSTEM_ADMIN` aggregate view is the only remaining D5 task.
 - [x] Expose only Caddy's minimized security-event log through a dedicated host
   directory readable by the host defence service and inaccessible to the web
   application.
+- [x] Install the persistent observation-only Fail2ban foundation with separate
+  `live` and `ready` jails, a persistent database, aggregate privacy-safe
+  lifecycle events and independently verified disable/re-enable procedures.
+  Prove that normal and emergency disable paths leave no active observation
+  jail and never create or alter a BOOKPILE firewall policy.
 - [ ] Install a persistent Fail2ban/nftables BOOKPILE policy with a persistent
   database and an independent enable/disable procedure.
 - [ ] Run scanner detection in dry-run for at least 24 hours. A controlled 60
@@ -397,8 +402,8 @@ real ban, expiration, restart persistence, emergency disable and monitor
 recovery. No firewall rule or automatic prohibition was enabled by this
 dry-run acceptance.
 
-**D6 host-observation implementation contract.** The next acceptance stage
-installs separate `live` and `ready` Fail2ban observation jails, backed by the
+**D6 host-observation accepted foundation.** This acceptance stage installs
+separate `live` and `ready` Fail2ban observation jails, backed by the
 persistent host database and an independent disable procedure. Their action
 may emit only aggregate `would_temporarily_ban` and neutral
 `observation_released` lifecycle events and must not invoke nftables/iptables
@@ -408,9 +413,29 @@ manual, confirmed, fail closed on malformed evidence or globally scoped IPv6,
 and remain absent from ordinary application deployment. Disable and re-enable
 must be independent, confirmed where enabling, prove the exact jail set and
 leave the stateless firewall policy unchanged. This paragraph records
-the implementation contract only; neither the persistent-policy checkbox nor
-either formal `ENABLE` decision is complete until staging installation and the
-required real-enforcement evidence are recorded.
+the accepted observation foundation only; neither the persistent enforcement
+policy checkbox nor either formal `ENABLE` decision is complete until the
+separately reviewed real-enforcement evidence is recorded.
+
+**D6 host-observation staging evidence — 2026-11-04.** Repository revision
+`4a4fd244036f70bccd1c92df64eb543a90467875` migrated the installed v1 action
+only after matching its exact archived content. Upgrade and `--check` retained
+exactly the two approved observation jails, the persistent Fail2ban database
+and an unchanged stateless nftables policy. A normal disable left zero jails;
+re-enable restored exactly `bookpile-health-live-observe` and
+`bookpile-health-ready-observe`. No `inet bookpile` table existed at any stage.
+
+The emergency path was then exercised by deliberately drifting the installed
+action file. `--disable-observe` rejected the mismatch with exit status `1`,
+but its pre-armed fail-open cleanup still stopped and disabled Fail2ban and
+removed the observation enable override. After restoring the exact reviewed
+file, confirmed re-enable recovered from the inactive service, both jails were
+active and `--check` passed. Public `live` and `ready` remained healthy on
+application revision `c99668550dd17fdf0ca7ac880b32418c4388c381`; no
+application image, migration or application data was changed. The host-only
+acceptance therefore required no new database/private-object backup. This
+evidence closes only the observation-foundation task above: all public-health
+traffic continued to receive its normal response and no real ban was enabled.
 
 ### D7 — Defensive regression harness
 
