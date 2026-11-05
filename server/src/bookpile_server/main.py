@@ -191,8 +191,9 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
                 if content_length and content_length.isdecimal()
                 else None
             )
-            request_logger.info(json.dumps({
+            request_event: dict[str, object] = {
                 "event": "http_request",
+                "schema_version": 2,
                 "request_id": request_id,
                 "method": request.method,
                 "route": route_path,
@@ -205,7 +206,13 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
                 ),
                 "duration_ms": round((perf_counter() - started) * 1000, 2),
                 "deployment_revision": settings.deployment_revision,
-            }, separators=(",", ":")))
+            }
+            readiness_failed_check = getattr(
+                request.state, "readiness_failed_check", None
+            )
+            if readiness_failed_check is not None:
+                request_event["failed_check"] = readiness_failed_check
+            request_logger.info(json.dumps(request_event, separators=(",", ":")))
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -242,20 +249,26 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
 
     @app.get("/health/ready", include_in_schema=False)
     def readiness(
+        request: Request,
         session: SessionDependency,
         object_storage: PrivateObjectStorageDependency,
     ):
         checks: dict[str, str] = {}
+        failed_checks: list[str] = []
         try:
             session.execute(text("SELECT 1"))
             checks["database"] = "ready"
         except Exception:
             checks["database"] = "unavailable"
+            failed_checks.append("database")
         try:
             object_storage.check_ready()
             checks["private_objects"] = "ready"
         except Exception:
             checks["private_objects"] = "unavailable"
+            failed_checks.append("private_objects")
+        if failed_checks:
+            request.state.readiness_failed_check = "_".join(failed_checks)
         ready = all(value == "ready" for value in checks.values())
         return JSONResponse(
             status_code=200 if ready else 503,

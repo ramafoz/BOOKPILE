@@ -20,6 +20,11 @@ SAFE_SCOPE = re.compile(r"^[a-z0-9_:-]{1,80}$")
 SAFE_REVISION = re.compile(r"^[a-f0-9]{7,64}$")
 SAFE_CLIENT_KEY = re.compile(r"^[a-f0-9]{16}$")
 VALIDATION_REPEAT_COUNT = 5
+READINESS_FAILED_CHECKS = {
+    "database",
+    "private_objects",
+    "database_private_objects",
+}
 
 
 class SourceValidationError(RuntimeError):
@@ -82,6 +87,7 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
         route = _safe_route(event.get("route"))
         revision = _safe_revision(event.get("deployment_revision"))
         status = event.get("status")
+        schema_version = event.get("schema_version")
         client_key = event.get("client_key")
         if (
             route is None
@@ -93,11 +99,34 @@ def aggregate_api(lines: Iterable[str]) -> dict[str, dict[str, object]]:
             or SAFE_CLIENT_KEY.fullmatch(client_key) is None
         ):
             raise SourceValidationError("Invalid minimized API request event")
+        if schema_version not in {None, 2}:
+            raise SourceValidationError("Unsupported API request schema")
         key = (route, revision)
         if status == 429:
             counters["http_429"][key] += 1
         if status == 503:
-            counters["http_503"][key] += 1
+            failed_check = event.get("failed_check")
+            if route == "/health/ready":
+                if failed_check in READINESS_FAILED_CHECKS:
+                    readiness_scope = str(failed_check)
+                elif schema_version is None and failed_check is None:
+                    readiness_scope = "legacy_unknown"
+                else:
+                    raise SourceValidationError(
+                        "Readiness 503 has no safe failed-check label"
+                    )
+                http_503_key = (f"readiness_{readiness_scope}", revision)
+            else:
+                if failed_check is not None:
+                    raise SourceValidationError(
+                        "Non-readiness request has a failed-check label"
+                    )
+                http_503_key = key
+            counters["http_503"][http_503_key] += 1
+        elif event.get("failed_check") is not None:
+            raise SourceValidationError(
+                "Non-503 request has a failed-check label"
+            )
         if status >= 500:
             counters["http_5xx"][key] += 1
         if status == 422:

@@ -26,13 +26,16 @@ class UnavailableDatabase:
         raise OSError("not connected")
 
 
-def test_readiness_reports_dependencies_without_exposing_exceptions(client) -> None:
+def test_readiness_reports_dependencies_without_exposing_exceptions(
+    client, caplog
+) -> None:
     app = client.app
     original_session = app.dependency_overrides[get_session]
     app.dependency_overrides[get_session] = lambda: UnavailableDatabase()
     app.dependency_overrides[get_private_object_storage] = lambda: UnavailableObjects()
     try:
-        response = client.get("/health/ready")
+        with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+            response = client.get("/health/ready")
     finally:
         app.dependency_overrides[get_session] = original_session
         app.dependency_overrides.pop(get_private_object_storage, None)
@@ -45,6 +48,59 @@ def test_readiness_reports_dependencies_without_exposing_exceptions(client) -> N
     }
     assert "not mounted" not in response.text
     assert "not connected" not in response.text
+    record = next(
+        record
+        for record in caplog.records
+        if record.name == "bookpile.requests"
+        and json.loads(record.message).get("route") == "/health/ready"
+    )
+    payload = json.loads(record.message)
+    assert payload["schema_version"] == 2
+    assert payload["failed_check"] == "database_private_objects"
+    assert "not mounted" not in record.message
+    assert "not connected" not in record.message
+
+
+@pytest.mark.parametrize(
+    ("database_unavailable", "objects_unavailable", "expected"),
+    (
+        (True, False, "database"),
+        (False, True, "private_objects"),
+    ),
+)
+def test_readiness_log_identifies_only_the_failed_dependency(
+    client,
+    caplog,
+    database_unavailable,
+    objects_unavailable,
+    expected,
+) -> None:
+    app = client.app
+    original_session = app.dependency_overrides[get_session]
+    if database_unavailable:
+        app.dependency_overrides[get_session] = lambda: UnavailableDatabase()
+    if objects_unavailable:
+        app.dependency_overrides[get_private_object_storage] = (
+            lambda: UnavailableObjects()
+        )
+    try:
+        with caplog.at_level(logging.INFO, logger="bookpile.requests"):
+            response = client.get("/health/ready")
+    finally:
+        app.dependency_overrides[get_session] = original_session
+        app.dependency_overrides.pop(get_private_object_storage, None)
+
+    assert response.status_code == 503
+    payloads = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "bookpile.requests"
+    ]
+    payload = next(item for item in payloads if item.get("route") == "/health/ready")
+    assert payload["schema_version"] == 2
+    assert payload["failed_check"] == expected
+    assert "not connected" not in json.dumps(payload)
+    assert "not mounted" not in json.dumps(payload)
 
 
 def test_untrusted_host_is_rejected(client) -> None:
@@ -252,6 +308,7 @@ def test_request_log_uses_route_template_and_omits_query(client, caplog) -> None
 
     record = next(record for record in caplog.records if record.name == "bookpile.requests")
     payload = json.loads(record.message)
+    assert payload["schema_version"] == 2
     assert payload["route"] == "/health/live"
     assert payload["request_id"] == response.headers["x-request-id"]
     assert payload["status"] == 200

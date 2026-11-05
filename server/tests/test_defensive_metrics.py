@@ -102,6 +102,18 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
             (500, "2" * 16),
         )
     ]
+    api_events.append(
+        {
+            "event": "http_request",
+            "schema_version": 2,
+            "route": "/health/ready",
+            "status": 503,
+            "client_key": "5" * 16,
+            "deployment_revision": REVISION,
+            "failed_check": "private_objects",
+            "private": "S3 endpoint and exception must not escape",
+        }
+    )
     api_events.extend(
         {
             "event": "http_request",
@@ -193,8 +205,23 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
     payload = json.loads(completed.stdout)
 
     assert payload["metrics"]["http_429"]["total"] == 1
-    assert payload["metrics"]["http_503"]["total"] == 1
-    assert payload["metrics"]["http_5xx"]["total"] == 2
+    assert payload["metrics"]["http_503"] == {
+        "groups": [
+            {
+                "count": 1,
+                "revision": REVISION,
+                "scope": "/api/v1/books/{book_id}",
+            },
+            {
+                "count": 1,
+                "revision": REVISION,
+                "scope": "readiness_private_objects",
+            },
+        ],
+        "policy": "application_http",
+        "total": 2,
+    }
+    assert payload["metrics"]["http_5xx"]["total"] == 3
     validation_metric = payload["metrics"]["repeated_validation_failures"]
     assert validation_metric["total"] == 6
     assert validation_metric["groups"] == [
@@ -219,8 +246,10 @@ def test_host_collector_aggregates_without_emitting_identity_or_content(
         "1" * 16,
         "3" * 16,
         "4" * 16,
+        "5" * 16,
         "192.0.2.9",
         "secret-title",
+        "S3 endpoint and exception must not escape",
         "remote_ip",
     ):
         assert forbidden not in serialized
@@ -300,6 +329,89 @@ def test_host_collector_fails_closed_on_invalid_source(tmp_path: Path) -> None:
     assert malformed_edge.returncode == 1
     assert malformed_edge.stdout == ""
     assert "SourceValidationError" in malformed_edge.stderr
+
+    edge_fixture.write_text("", encoding="utf-8")
+    api_fixture.write_text(
+        json.dumps(
+            {
+                "event": "http_request",
+                "schema_version": 2,
+                "route": "/health/ready",
+                "status": 503,
+                "client_key": "a" * 16,
+                "deployment_revision": REVISION,
+            }
+        ),
+        encoding="utf-8",
+    )
+    missing_readiness_label = subprocess.run(
+        command, capture_output=True, text=True
+    )
+    assert missing_readiness_label.returncode == 1
+    assert missing_readiness_label.stdout == ""
+    assert "SourceValidationError" in missing_readiness_label.stderr
+
+    invalid_label_events = (
+        {
+            "event": "http_request",
+            "schema_version": 2,
+            "route": "/health/ready",
+            "status": 503,
+            "client_key": "a" * 16,
+            "deployment_revision": REVISION,
+            "failed_check": "storage_endpoint_secret",
+        },
+        {
+            "event": "http_request",
+            "schema_version": 2,
+            "route": "/api/v1/books",
+            "status": 503,
+            "client_key": "a" * 16,
+            "deployment_revision": REVISION,
+            "failed_check": "database",
+        },
+        {
+            "event": "http_request",
+            "schema_version": 3,
+            "route": "/health/live",
+            "status": 200,
+            "client_key": "a" * 16,
+            "deployment_revision": REVISION,
+        },
+        {
+            "event": "http_request",
+            "schema_version": 2,
+            "route": "/health/ready",
+            "status": 200,
+            "client_key": "a" * 16,
+            "deployment_revision": REVISION,
+            "failed_check": "database",
+        },
+    )
+    for invalid_event in invalid_label_events:
+        api_fixture.write_text(json.dumps(invalid_event), encoding="utf-8")
+        invalid_label = subprocess.run(command, capture_output=True, text=True)
+        assert invalid_label.returncode == 1
+        assert invalid_label.stdout == ""
+        assert "SourceValidationError" in invalid_label.stderr
+
+    legacy_event = {
+        "event": "http_request",
+        "route": "/health/ready",
+        "status": 503,
+        "client_key": "a" * 16,
+        "deployment_revision": REVISION,
+    }
+    api_fixture.write_text(json.dumps(legacy_event), encoding="utf-8")
+    legacy = subprocess.run(command, check=True, capture_output=True, text=True)
+    legacy_metric = json.loads(legacy.stdout)["metrics"]["http_503"]
+    assert legacy_metric["groups"] == [
+        {
+            "count": 1,
+            "revision": REVISION,
+            "scope": "readiness_legacy_unknown",
+        }
+    ]
 
 
 def test_host_collector_rejects_missing_but_allows_quiet_caddy_log(
