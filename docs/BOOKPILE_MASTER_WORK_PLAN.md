@@ -574,8 +574,21 @@ directly; hiding a UI control is not evidence.
   followed immediately by an exact database, private-object and audit snapshot
   comparison, and responses expose no storage key, uploader ID, digest or
   authentication material.
-- [ ] A3: Audit personal readings, perspective selection, shared custody,
+- [x] A3: Audit personal readings, perspective selection, shared custody,
   statistics and loans; prove borrower/private notes never reach Viewers.
+  `test_reading_loan_authorization_audit.py` now exercises two Owners plus
+  `CATALOG_ONLY` and `CATALOG_AND_MAP` Viewers in one shared-library scenario.
+  It proves that Owners can only mutate their own reading perspective, a
+  concurrent active reader blocks a second Owner without partial state, and
+  both Viewer scopes can select an Owner perspective and read its overview,
+  Goodreads link and statistics without gaining write authority. Loans retain
+  their deliberately shared Owner custody while every Viewer projection omits
+  the borrower and private notes from per-book, overview and statistics
+  responses. Each rejected Viewer mutation is followed immediately by exact
+  membership-perspective, reading-session, personal-record, loan and audit-row
+  snapshot comparison. Audit details are also checked against both private
+  loan markers. Focused reading/loan coverage passes 8 tests and the complete
+  server suite passes 467 tests with one environment-dependent skip.
 - [ ] A4: Audit bookcases, shelves, containers, map projections, physical
   positions and rearrangement preview/apply.
 - [ ] A5: Audit library invitations, membership listing, map-scope changes,
