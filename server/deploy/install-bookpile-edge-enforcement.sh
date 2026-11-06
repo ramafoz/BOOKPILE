@@ -65,6 +65,16 @@ wait_for_server() {
   return 1
 }
 
+wait_for_policy() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    /usr/local/sbin/bookpile-edge-firewall check >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  echo 'BOOKPILE nftables policy did not become ready within 30 seconds.' >&2
+  return 1
+}
+
 assert_no_global_ipv6() {
   if ip -6 -o addr show scope global 2>/dev/null | grep -q .; then
     echo 'Public/global IPv6 is present; equivalent IPv6 enforcement must be reviewed first.' >&2
@@ -360,7 +370,7 @@ case "$mode" in
     assert_optional_switches
     bash "$observation_installer" --provenance-check >/dev/null
     assert_jails
-    /usr/local/sbin/bookpile-edge-firewall check
+    wait_for_policy
     new_switch=''
     trap - EXIT
     policy_status

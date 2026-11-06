@@ -335,6 +335,8 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "Enforcement switch differs from reviewed source" in installer
     assert "cleanup_failed_enable" in installer
     assert "cleanup_failed_disable" in installer
+    assert "wait_for_policy" in installer
+    assert "BOOKPILE nftables policy did not become ready within 30 seconds" in installer
     assert "emergency_disable_all" in installer
     assert 'assert_switch "$policy"' in installer
     assert 'assert_jails' in installer
@@ -343,6 +345,13 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "ssh_port_matched\":false" in installer
     assert "install-bookpile-edge-defence.sh" in installer
     assert "deploy-staging.sh" not in installer
+
+    enable_block = installer.split("  --enable-live|--enable-ready)", 1)[1].split(
+        "\n    ;;", 1
+    )[0]
+    assert enable_block.index("wait_for_server") < enable_block.index(
+        "wait_for_policy"
+    )
 
     disable_function = installer.split("disable_policy() {", 1)[1].split(
         '\n}\n\ncase "$mode"', 1
