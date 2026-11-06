@@ -548,10 +548,19 @@ Evidence: CI job plus staging report with every scenario passing.
 This entire section is a **production blocker**. Every test calls the API
 directly; hiding a UI control is not evidence.
 
-- [ ] A1: Create two synthetic Owners, two Viewers with different scopes and
+- [x] A1: Create two synthetic Owners, two Viewers with different scopes and
   two unrelated libraries. Attempt cross-library reads and writes using valid
   foreign UUIDs for every resource family; require generic denial and no state
   change.
+
+  Evidence: `test_authorization_cross_library_matrix.py` creates the required
+  two-library/four-actor topology and executes 84 direct API attempts across
+  library deletion and membership, catalogue, private cover, reading, loan,
+  physical hierarchy and placement, invitation, import-job and portable-export
+  boundaries. Reads and Owner mutations receive resource-safe `404` responses;
+  Viewer mutations may instead receive a role-safe `403`. Responses contain no
+  foreign identifiers or private values, and full before/after snapshots prove
+  that no protected state or audit row changes.
 - [ ] A2: Audit catalogue CRUD, contributors, metadata options and private
   covers for Owner, catalogue-only Viewer and catalogue-and-map Viewer.
 - [ ] A3: Audit personal readings, perspective selection, shared custody,
