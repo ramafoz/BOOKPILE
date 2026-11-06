@@ -420,6 +420,56 @@ when the last policy is disabled, the dedicated table is deleted. No generic
 firewall table, packaged SSH jail, application image, database object or
 application deployment script is modified by this layer.
 
+### D6 public-health enforcement acceptance (staging, 2026-11-06)
+
+Repository revision `28db0b01c4b212116729dd6f6bad75a49df5d9e2` was installed
+as host policy while the running application remained at revision
+`6b6a85a4637de7e10aec1706b70bdc1f37eb33b3`. This was not an application
+deployment and did not change the database or private-object store. The
+dormant installation first proved `firewall=absent`, `live=observe`,
+`ready=observe` and `ssh_port_matched=false`.
+
+The two policies were then accepted independently from a controlled external
+IPv4 client. A clean 60-second window of 121 public `/health/live` requests
+produced one real `health_live` temporary ban; `ready` remained observation
+only. A separate clean window of 31 public `/health/ready` requests produced
+one real `health_ready` temporary ban; `live` remained observation only. The
+request after each crossing timed out, while the existing SSH session and
+direct VPS requests to both health endpoints continued to work. Each ban
+survived `systemctl restart fail2ban.service`, remained effective from the
+external client, expired after ten minutes and restored HTTP `200`. The host
+journal contained only aggregate policy names and lifecycle events, not the
+client address.
+
+The emergency path was tested during a fresh real `ready` ban. Running
+`--disable-all` immediately restored both observation jails, deleted
+`table inet bookpile` and restored the blocked external request to HTTP `200`
+without waiting for expiry. Final confirmed activation produced exactly these
+two jails:
+
+```text
+bookpile-health-live-enforce
+bookpile-health-ready-enforce
+```
+
+`--check` reported `firewall=active`, `live=enforce`, `ready=enforce` and
+`ssh_port_matched=false`; the firewall validator passed, both public health
+endpoints remained healthy, Healthchecks stayed green, normal authenticated
+web use passed and deep maintenance reported 433 expected and 433 stored
+private objects with no discrepancy. The formal staging decisions are
+therefore `ENABLE` for both public-health policies with a ten-minute ban.
+
+The independent emergency recovery remains:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-all
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check-disabled
+```
+
+Acceptance requires both observation jails, no `inet bookpile` table and
+continued public health. Re-enable only with the documented confirmation token
+after resolving the reason for emergency disable.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

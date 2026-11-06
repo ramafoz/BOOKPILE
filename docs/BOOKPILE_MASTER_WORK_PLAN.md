@@ -369,7 +369,7 @@ catalogue use all passed afterward. The remaining D5 task is the future
   more than `30 /health/ready` requests in 60 seconds must produce separate,
   correctly attributed decisions. Neither rehearsal may count the other health
   class, and the internal Docker liveness probe must bypass the public policy.
-- [ ] For each public health policy, record an explicit `ENABLE` or `REJECT`
+- [x] For each public health policy, record an explicit `ENABLE` or `REJECT`
   decision after validating normal external-monitor frequency and failure
   behaviour. An `ENABLE` decision must prove its configured temporary ban,
   expiration, restart persistence and monitor recovery. A `REJECT` decision
@@ -383,7 +383,7 @@ catalogue use all passed afterward. The remaining D5 task is the future
   lifecycle events and independently verified disable/re-enable procedures.
   Prove that normal and emergency disable paths leave no active observation
   jail and never create or alter a BOOKPILE firewall policy.
-- [ ] Install a persistent Fail2ban/nftables BOOKPILE policy with a persistent
+- [x] Install a persistent Fail2ban/nftables BOOKPILE policy with a persistent
   database and an independent enable/disable procedure.
 - [ ] Run scanner detection in dry-run for at least 24 hours. A controlled 60
   scanner probes/minute fixture must be detected with the validated client IP
@@ -485,6 +485,35 @@ application image, migration or application data was changed. The host-only
 acceptance therefore required no new database/private-object backup. This
 evidence closes only the observation-foundation task above: all public-health
 traffic continued to receive its normal response and no real ban was enabled.
+
+**D6 public-health enforcement accepted — 2026-11-06.** Repository revision
+`28db0b01c4b212116729dd6f6bad75a49df5d9e2` installed the reviewed host policy
+without deploying an application image; the running application remained at
+revision `6b6a85a4637de7e10aec1706b70bdc1f37eb33b3`. Dormant installation left
+both policies in observation and no `inet bookpile` table. Staging then tested
+each policy independently from one controlled external IPv4 client. At 121
+`live` requests in one 60-second window, only `bookpile-health-live-enforce`
+applied a real temporary ban; at 31 `ready` requests in an independent window,
+only `bookpile-health-ready-enforce` did so. In both cases the next external
+request timed out, SSH remained available, the other health policy was not
+triggered, and direct VPS requests to both public health endpoints remained
+healthy.
+
+Each ten-minute ban survived a Fail2ban restart through its persistent
+database, then expired automatically and restored an external HTTP `200`.
+The privacy-safe journal recorded only the bounded policy lifecycle, including
+`temporary_ban` and `temporary_ban_released`, without a client address. A
+second controlled `ready` ban was removed immediately with `--disable-all`:
+both observation jails returned, the dedicated nftables table disappeared and
+the previously blocked external request immediately returned `200`. Final
+activation left exactly `bookpile-health-live-enforce` and
+`bookpile-health-ready-enforce`, `firewall=active`, `ssh_port_matched=false`
+and both endpoints healthy. Healthchecks remained green throughout, normal
+authenticated web use passed, and deep reconciliation reported 433 expected
+and 433 stored private objects with no missing, mismatched or orphaned object.
+The recorded decisions are therefore **`ENABLE` for `/health/live`** and
+**`ENABLE` for `/health/ready`**, each with a ten-minute temporary ban and the
+independently proven `--disable-all` fail-open procedure.
 
 ### D7 — Defensive regression harness
 
