@@ -41,7 +41,11 @@ jobs:
           sudo unshare --net bash -c '
             nft --file server/deploy/nftables/bookpile-health-enforcement.nft
             nft -j --stateless list table inet bookpile |
-              python3 server/deploy/validate-bookpile-nftables.py
+              tee /tmp/bookpile-nftables.json |
+              python3 server/deploy/validate-bookpile-nftables.py || {
+                cat /tmp/bookpile-nftables.json
+                exit 1
+              }
           '
 
   python-tests:
