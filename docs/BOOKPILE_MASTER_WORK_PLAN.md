@@ -602,9 +602,22 @@ directly; hiding a UI control is not evidence.
   and audit-row snapshot comparison. Focused physical-library coverage passes
   11 tests and the complete server suite passes 468 tests with one
   environment-dependent skip.
-- [ ] A5: Audit library invitations, membership listing, map-scope changes,
+- [x] A5: Audit library invitations, membership listing, map-scope changes,
   promotion, downgrade, removal and final-Owner protection, including stale and
-  concurrent requests.
+  concurrent requests. `test_membership_authorization_audit.py` now exercises
+  two Owners, both Viewer scopes and an invited non-member through the complete
+  management lifecycle. Viewers receive only the catalogue-safe member summary
+  and every attempted invitation or membership mutation is generically denied
+  with exact library, membership, invitation and audit snapshots left
+  unchanged. Owners are proven able to change scope, promote, downgrade,
+  remove and revoke; a revoked invitation remains unusable, a removed Owner's
+  still-authenticated session immediately loses authority, and the final Owner
+  cannot remove itself. The PostgreSQL integration gate additionally launches
+  reciprocal Owner removals in independent concurrent sessions and requires
+  exactly one success, one safe rejection and exactly one surviving Owner.
+  Focused API coverage passes 8 tests and the complete local server suite passes
+  469 tests with only the environment-dependent PostgreSQL gate skipped; that
+  concurrency assertion remains subject to the required CI PostgreSQL run.
 - [ ] A6: Audit Local ZIP preflight/consolidation and Server export/import,
   including cross-library job IDs, source identity mapping and failed-import
   residue.

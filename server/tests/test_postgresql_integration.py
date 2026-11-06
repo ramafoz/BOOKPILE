@@ -55,28 +55,32 @@ from bookpile_server.models import (
     VisualOutsideArea,
     VisualShelfLayout,
 )
-from bookpile_server.repositories.books import BookRepository
-from bookpile_server.repositories.readings import ReadingRepository
-from bookpile_server.repositories.loans import LoanRepository
-from bookpile_server.repositories.storage import StorageRepository
+from bookpile_server.repositories.account_actions import AccountActionRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
 )
-from bookpile_server.repositories.account_actions import AccountActionRepository
+from bookpile_server.repositories.books import BookRepository
+from bookpile_server.repositories.libraries import LibraryRepository
+from bookpile_server.repositories.loans import LoanRepository
+from bookpile_server.repositories.operation_leases import OperationLeaseRepository
+from bookpile_server.repositories.readings import ReadingRepository
+from bookpile_server.repositories.storage import StorageRepository
+from bookpile_server.security.passwords import hash_password
 from bookpile_server.services.account_invitations import (
     AccountInvitationError,
     AccountInvitationService,
 )
-from bookpile_server.repositories.operation_leases import OperationLeaseRepository
+from bookpile_server.services.auth import hash_session_secret
+from bookpile_server.services.libraries import FinalOwnerError, LibraryService
+from bookpile_server.services.library_access import LibraryNotFoundError
+from bookpile_server.services.loans import LoanConflictError, LoanService
 from bookpile_server.services.operation_leases import (
     LeaseRequest,
     OperationLeaseManager,
     OperationLeaseUnavailableError,
     RenewableOperationLeaseGuard,
 )
-from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
-from bookpile_server.services.loans import LoanConflictError, LoanService
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_accounting import calculate_library_logical_bytes
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
@@ -623,6 +627,89 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             )
             session.query(Loan).filter(Loan.book_id == loan_race_book.id).delete()
             session.delete(loan_race_book)
+            session.commit()
+
+            membership_password = "valid concurrent membership password"
+            membership_password_hash = hash_password(membership_password)
+            membership_users = [
+                User(
+                    email=f"membership-race-{number}@example.test",
+                    username=f"membership_race_{number}",
+                    password_hash=membership_password_hash,
+                    state="active",
+                    email_verified_at=now,
+                )
+                for number in (1, 2)
+            ]
+            membership_library = Library(
+                name="Concurrent membership library",
+                slug=f"concurrent-membership-{uuid4().hex}",
+            )
+            session.add_all([membership_library, *membership_users])
+            session.flush()
+            session.add_all(
+                [
+                    AccountStorageEntitlement(user_id=member.id)
+                    for member in membership_users
+                ]
+                + [
+                    LibraryMembership(
+                        library_id=membership_library.id,
+                        user_id=member.id,
+                        role="OWNER",
+                        selected_reading_user_id=member.id,
+                    )
+                    for member in membership_users
+                ]
+            )
+            session.commit()
+            membership_library_id = membership_library.id
+            membership_user_ids = [member.id for member in membership_users]
+
+            def remove_other_owner_concurrently(number: int) -> bool:
+                actor_id = membership_user_ids[number]
+                target_id = membership_user_ids[1 - number]
+                try:
+                    with Session(engine, expire_on_commit=False) as concurrent_session:
+                        LibraryService(
+                            LibraryRepository(concurrent_session)
+                        ).change_member(
+                            library_id=membership_library_id,
+                            actor_user_id=actor_id,
+                            target_user_id=target_id,
+                            action="REMOVE",
+                            viewer_scope=None,
+                            current_password=membership_password,
+                            acknowledge_equal_owner_power=False,
+                        )
+                except (FinalOwnerError, LibraryNotFoundError):
+                    return False
+                return True
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                membership_results = list(
+                    executor.map(remove_other_owner_concurrently, (0, 1))
+                )
+            assert sorted(membership_results) == [False, True]
+            session.expire_all()
+            remaining_members = list(
+                session.scalars(
+                    select(LibraryMembership).where(
+                        LibraryMembership.library_id == membership_library_id
+                    )
+                )
+            )
+            assert len(remaining_members) == 1
+            assert remaining_members[0].role == "OWNER"
+            session.query(LibraryAuditEvent).filter(
+                LibraryAuditEvent.library_id == membership_library_id
+            ).delete(synchronize_session=False)
+            session.query(LibraryMembership).filter(
+                LibraryMembership.library_id == membership_library_id
+            ).delete(synchronize_session=False)
+            session.delete(membership_library)
+            for member in membership_users:
+                session.delete(member)
             session.commit()
 
             books = BookRepository(session).list_for_library(first.id)
