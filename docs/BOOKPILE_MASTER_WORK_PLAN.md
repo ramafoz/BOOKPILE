@@ -559,8 +559,9 @@ directly; hiding a UI control is not evidence.
   physical hierarchy and placement, invitation, import-job and portable-export
   boundaries. Reads and Owner mutations receive resource-safe `404` responses;
   Viewer mutations may instead receive a role-safe `403`. Responses contain no
-  foreign identifiers or private values, and full before/after snapshots prove
-  that no protected state or audit row changes.
+  foreign identifiers or private values. Both libraries contain retrievable
+  private-cover metadata and stored bytes, and full before/after snapshots prove
+  that neither those objects nor any other protected state or audit row changes.
 - [ ] A2: Audit catalogue CRUD, contributors, metadata options and private
   covers for Owner, catalogue-only Viewer and catalogue-and-map Viewer.
 - [ ] A3: Audit personal readings, perspective selection, shared custody,

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -9,8 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bookpile_server.config import get_settings
+from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.models import (
     Book,
+    BookCover,
     Bookcase,
     Container,
     Library,
@@ -47,6 +50,8 @@ class LibraryResources:
     owner: User
     viewer: User
     book: Book
+    cover: BookCover
+    cover_content: bytes
     reading: ReadingSession
     loan: Loan
     bookcase: Bookcase
@@ -60,6 +65,7 @@ class LibraryResources:
 class AuthorizationWorld:
     actors: tuple[Actor, ...]
     resources: dict[UUID, LibraryResources]
+    storage: FilesystemCoverStorage
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ def _session(session: Session, user: User) -> str:
 
 def _library_resources(
     session: Session,
+    storage: FilesystemCoverStorage,
     *,
     label: str,
     viewer_scope: str,
@@ -160,6 +167,20 @@ def _library_resources(
     )
     session.add(book)
     session.flush()
+    cover_content = f"private A1 cover bytes for library {label}".encode()
+    cover_key = f"covers/a1-{label}-{uuid4().hex}.webp"
+    storage.put(cover_key, cover_content)
+    cover = BookCover(
+        library_id=library.id,
+        book_id=book.id,
+        object_key=cover_key,
+        media_type="image/webp",
+        byte_size=len(cover_content),
+        width_px=1,
+        height_px=1,
+        sha256=sha256(cover_content).hexdigest(),
+        uploaded_by_user_id=owner.id,
+    )
     reading = ReadingSession(
         library_id=library.id,
         book_id=book.id,
@@ -210,7 +231,7 @@ def _library_resources(
         capacity_available=True,
         expires_at=datetime.now(UTC) + timedelta(days=1),
     )
-    session.add_all([reading, loan, invitation, import_job])
+    session.add_all([cover, reading, loan, invitation, import_job])
     session.flush()
 
     return (
@@ -219,6 +240,8 @@ def _library_resources(
             owner=owner,
             viewer=viewer,
             book=book,
+            cover=cover,
+            cover_content=cover_content,
             reading=reading,
             loan=loan,
             bookcase=bookcase,
@@ -233,14 +256,17 @@ def _library_resources(
 
 
 @pytest.fixture
-def authorization_world(session: Session) -> AuthorizationWorld:
+def authorization_world(session: Session, tmp_path) -> AuthorizationWorld:
+    storage = FilesystemCoverStorage(tmp_path / "private-objects")
     resources_a, owner_session_a, viewer_session_a = _library_resources(
         session,
+        storage,
         label="a",
         viewer_scope="CATALOG_ONLY",
     )
     resources_b, owner_session_b, viewer_session_b = _library_resources(
         session,
+        storage,
         label="b",
         viewer_scope="CATALOG_AND_MAP",
     )
@@ -280,6 +306,7 @@ def authorization_world(session: Session) -> AuthorizationWorld:
             resources_a.library.id: resources_a,
             resources_b.library.id: resources_b,
         },
+        storage=storage,
     )
 
 
@@ -387,7 +414,10 @@ def _requests(actor: Actor, foreign: LibraryResources) -> tuple[ForeignRequest, 
     )
 
 
-def _snapshot(session: Session) -> dict[str, tuple[tuple[Any, ...], ...]]:
+def _snapshot(
+    session: Session,
+    storage: FilesystemCoverStorage,
+) -> dict[str, tuple[tuple[Any, ...], ...]]:
     def rows(model: type[Any], *columns: Any) -> tuple[tuple[Any, ...], ...]:
         values = session.execute(select(*columns).select_from(model)).all()
         return tuple(sorted((tuple(value) for value in values), key=repr))
@@ -416,6 +446,20 @@ def _snapshot(session: Session) -> dict[str, tuple[tuple[Any, ...], ...]]:
             Book.author,
             Book.container_id,
             Book.position,
+        ),
+        "covers": rows(
+            BookCover,
+            BookCover.id,
+            BookCover.library_id,
+            BookCover.book_id,
+            BookCover.object_key,
+            BookCover.byte_size,
+            BookCover.sha256,
+            BookCover.uploaded_by_user_id,
+        ),
+        "cover_objects": tuple(
+            (item.object_key, storage.read(item.object_key))
+            for item in storage.iter_objects()
         ),
         "readings": rows(
             ReadingSession,
@@ -477,7 +521,21 @@ def test_valid_foreign_uuids_are_generically_denied_without_state_change(
     session: Session,
     authorization_world: AuthorizationWorld,
 ) -> None:
-    initial = _snapshot(session)
+    for resources in authorization_world.resources.values():
+        owner = next(
+            actor
+            for actor in authorization_world.actors
+            if actor.user.id == resources.owner.id
+        )
+        _authenticate(client, owner)
+        response = client.get(
+            f"/api/v1/libraries/{resources.library.id}/catalogue/"
+            f"{resources.book.id}/cover"
+        )
+        assert response.status_code == 200
+        assert response.content == resources.cover_content
+
+    initial = _snapshot(session, authorization_world.storage)
     exercised: set[tuple[str, str]] = set()
 
     for actor in authorization_world.actors:
@@ -517,7 +575,7 @@ def test_valid_foreign_uuids_are_generically_denied_without_state_change(
                 marker and marker in response_text for marker in private_markers
             ), (actor.user.username, request.family, response_text)
             session.expire_all()
-            assert _snapshot(session) == initial, (
+            assert _snapshot(session, authorization_world.storage) == initial, (
                 actor.user.username,
                 request.family,
                 request.method,
