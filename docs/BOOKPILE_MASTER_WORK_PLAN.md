@@ -618,9 +618,20 @@ directly; hiding a UI control is not evidence.
   Focused API coverage passes 8 tests and the complete local server suite passes
   469 tests with only the environment-dependent PostgreSQL gate skipped; that
   concurrency assertion remains subject to the required CI PostgreSQL run.
-- [ ] A6: Audit Local ZIP preflight/consolidation and Server export/import,
+- [x] A6: Audit Local ZIP preflight/consolidation and Server export/import,
   including cross-library job IDs, source identity mapping and failed-import
-  residue.
+  residue. `test_import_export_authorization_audit.py` creates a valid Local ZIP
+  job and portable export, then proves that both Viewer scope and an unrelated
+  Owner receive generic denial for preflight, job lookup, cancellation, both
+  consolidation variants and export. A valid job UUID paired with the foreign
+  library remains unusable, and the original Owner's already-authenticated
+  session loses every operation immediately after membership removal. Every
+  rejection is followed by an exact database and staging/export byte snapshot.
+  The Server ZIP round-trip additionally rejects an identity mapping to a
+  non-Owner and an omitted personal-data mapping without adding books,
+  readings or objects or changing the ready job; only an explicit mapping to a
+  destination Owner succeeds. Focused coverage passes 2 tests and the complete
+  local server suite passes 470 tests with one environment-dependent skip.
 - [ ] A7: Audit library and account deletion, 48-hour recovery, expired tokens,
   session revocation and final cleanup.
 - [ ] A8: Audit profiles, discoverability, quota projections and every

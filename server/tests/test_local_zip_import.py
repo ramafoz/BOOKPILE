@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from PIL import Image
 import pytest
+from sqlalchemy import select
 
 from bookpile_server.imports.local_zip import (
     LocalArchiveLimits,
@@ -38,7 +39,11 @@ from bookpile_server.models import (
 from bookpile_server.cover_storage import FilesystemCoverStorage
 from bookpile_server.repositories.imports import LocalImportRepository
 from bookpile_server.services.auth import hash_session_secret
-from bookpile_server.services.local_imports import LocalImportService, LocalImportStateConflict
+from bookpile_server.services.local_imports import (
+    LocalImportReadingOwnerInvalid,
+    LocalImportService,
+    LocalImportStateConflict,
+)
 from bookpile_server.repositories.storage import StorageRepository
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
@@ -749,22 +754,62 @@ def test_server_export_round_trip_requires_explicit_identity_mapping(
     session, tmp_path: Path
 ) -> None:
     owner = User(
-        email="roundtrip@example.test", username="roundtrip_owner",
-        password_hash="unused", state="active", email_verified_at=datetime.now(UTC),
+        email="roundtrip@example.test",
+        username="roundtrip_owner",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
     )
-    source_library = Library(name="Portable source", slug="portable-source", created_by_user_id=owner.id)
-    destination = Library(name="Portable destination", slug="portable-destination", created_by_user_id=owner.id)
-    session.add_all([owner, source_library, destination, ContributorRole(code="AUTHOR", label="Author", sort_order=1)])
+    outsider = User(
+        email="roundtrip-outsider@example.test",
+        username="roundtrip_outsider",
+        password_hash="unused",
+        state="active",
+        email_verified_at=datetime.now(UTC),
+    )
+    source_library = Library(
+        name="Portable source",
+        slug="portable-source",
+        created_by_user_id=owner.id,
+    )
+    destination = Library(
+        name="Portable destination",
+        slug="portable-destination",
+        created_by_user_id=owner.id,
+    )
+    session.add_all(
+        [
+            owner,
+            outsider,
+            source_library,
+            destination,
+            ContributorRole(code="AUTHOR", label="Author", sort_order=1),
+        ]
+    )
     session.flush()
-    session.add_all([
-        AccountStorageEntitlement(user_id=owner.id),
-        LibraryMembership(library_id=source_library.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
-        LibraryMembership(library_id=destination.id, user_id=owner.id, role="OWNER", selected_reading_user_id=owner.id),
-    ])
+    session.add_all(
+        [
+            AccountStorageEntitlement(user_id=owner.id),
+            LibraryMembership(
+                library_id=source_library.id,
+                user_id=owner.id,
+                role="OWNER",
+                selected_reading_user_id=owner.id,
+            ),
+            LibraryMembership(
+                library_id=destination.id,
+                user_id=owner.id,
+                role="OWNER",
+                selected_reading_user_id=owner.id,
+            ),
+        ]
+    )
     session.commit()
-    objects = FilesystemCoverStorage(tmp_path / "roundtrip-objects")
+    object_root = tmp_path / "roundtrip-objects"
+    staging_root = tmp_path / "roundtrip-staging"
+    objects = FilesystemCoverStorage(object_root)
     service = LocalImportService(
-        LocalImportRepository(session), tmp_path / "roundtrip-staging",
+        LocalImportRepository(session), staging_root,
         storage_service=StorageService(StorageRepository(session)),
         object_storage=objects, settings=get_settings(),
     )
@@ -794,11 +839,55 @@ def test_server_export_round_trip_requires_explicit_identity_mapping(
     assert job.source_kind == "SERVER"
     assert job.source_library_name == "Portable source"
     assert job.source_members[0]["reading_count"] == 1
+
+    def residue_snapshot() -> tuple[object, ...]:
+        session.expire_all()
+        destination_books = session.scalars(
+            select(Book).where(Book.library_id == destination.id)
+        ).all()
+        return (
+            tuple(book.id for book in destination_books),
+            tuple(
+                session.scalars(
+                    select(ReadingSession).where(
+                        ReadingSession.book_id.in_(
+                            [book.id for book in destination_books]
+                        )
+                    )
+                ).all()
+            ),
+            tuple(
+                sorted(
+                    (str(path.relative_to(object_root)), path.read_bytes())
+                    for path in object_root.rglob("*")
+                    if path.is_file()
+                )
+            ),
+            tuple(
+                sorted(
+                    (str(path.relative_to(staging_root)), path.read_bytes())
+                    for path in staging_root.rglob("*")
+                    if path.is_file()
+                )
+            ),
+            session.get(LibraryImportJob, job.id).state,
+        )
+
+    before_failed_mapping = residue_snapshot()
+    with pytest.raises(LocalImportReadingOwnerInvalid):
+        service.consolidate(
+            import_id=job.id, library_id=destination.id,
+            actor_user_id=owner.id, allow_repeated_archive=False,
+            member_mapping={str(owner.id): outsider.id},
+        )
+    assert residue_snapshot() == before_failed_mapping
+
     with pytest.raises(LocalImportStateConflict, match="unmapped personal"):
         service.consolidate(
             import_id=job.id, library_id=destination.id,
             actor_user_id=owner.id, allow_repeated_archive=False,
         )
+    assert residue_snapshot() == before_failed_mapping
 
     completed = service.consolidate(
         import_id=job.id, library_id=destination.id,
