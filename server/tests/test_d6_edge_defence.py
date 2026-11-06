@@ -110,6 +110,10 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "assert_optional_scanner_files_match" in installer
     assert "Installed scanner policy differs from reviewed source" in installer
     assert "Installed scanner switch differs from reviewed source" in installer
+    jail_provenance = installer.split(
+        "while IFS= read -r -d '' file; do", 2
+    )[2].split("package_owned='false'", 1)[0]
+    assert "zz-bookpile-scanner-observe.local" in jail_provenance
     assert 'find "$CONFIG_ROOT/fail2ban.d"' in installer
     assert "configuration directory is missing, non-directory, or a symlink" in installer
     assert "root:root 755" in installer

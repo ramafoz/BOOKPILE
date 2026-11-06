@@ -351,7 +351,8 @@ assert_no_unreviewed_overrides() {
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local" || \
-       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local" ]] && continue
+       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" ]] && continue
     package_owned='false'
     for package_file in "${package_files[@]}"; do
       if [[ "$file" == "$package_file" ]]; then
