@@ -226,7 +226,7 @@ def _valid_nftables_document() -> dict[str, object]:
                     "name": "health_live_ipv4",
                     "type": "ipv4_addr",
                     "flags": ["timeout"],
-                    "timeout": 600000,
+                    "timeout": 600,
                 }
             },
             {
@@ -236,7 +236,7 @@ def _valid_nftables_document() -> dict[str, object]:
                     "name": "health_ready_ipv4",
                     "type": "ipv4_addr",
                     "flags": ["timeout"],
-                    "timeout": 600000,
+                    "timeout": 600,
                 }
             },
             {

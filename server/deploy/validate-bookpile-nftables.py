@@ -132,7 +132,7 @@ def validate(payload: object) -> dict[str, object]:
             or item.get("table") != "bookpile"
             or item.get("type") != "ipv4_addr"
             or set(item.get("flags", [])) != {"timeout"}
-            or item.get("timeout") != 600000
+            or item.get("timeout") != 600
         ):
             raise PolicyValidationError("Unsafe address-set definition")
 
