@@ -632,8 +632,21 @@ directly; hiding a UI control is not evidence.
   readings or objects or changing the ready job; only an explicit mapping to a
   destination Owner succeeds. Focused coverage passes 2 tests and the complete
   local server suite passes 470 tests with one environment-dependent skip.
-- [ ] A7: Audit library and account deletion, 48-hour recovery, expired tokens,
-  session revocation and final cleanup.
+- [x] A7: Audit library and account deletion, 48-hour recovery, expired tokens,
+  session revocation and final cleanup. The central
+  `test_deletion_recovery_authorization_audit.py` scenario proves that a former
+  Viewer and an unrelated user cannot restore a deleted library even with its
+  valid deletion UUID, and that every rejected request leaves the complete
+  recovery tombstone unchanged. The original Owner is also denied after the
+  48-hour deadline. Account deletion revokes two already-established sessions
+  immediately; the genuine recovery token becomes unusable after expiry and
+  remains unconsumed. Finalization then deletes the user and private profile
+  object and removes username, email, token hash, membership snapshot and
+  object manifest from the retained tombstone. Existing positive-path tests
+  continue to prove successful library and account recovery inside the window
+  and single-use account tokens. Focused lifecycle coverage passes 20 tests;
+  the complete local server suite passes 472 tests with one
+  environment-dependent skip.
 - [ ] A8: Audit profiles, discoverability, quota projections and every
   administrative field for overexposure.
 - [ ] A9: Audit CSRF, session fixation/rotation, revoked sessions, concurrent
