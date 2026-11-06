@@ -452,6 +452,20 @@ the accepted observation foundation only; neither the persistent enforcement
 policy checkbox nor either formal `ENABLE` decision is complete until the
 separately reviewed real-enforcement evidence is recorded.
 
+**D6 real-policy implementation gate.** The reviewed implementation defines a
+dedicated `inet bookpile` table, independent `live` and `ready` IPv4 timeout
+sets, ten-minute expiry and separate Fail2ban actions and switches. It matches
+only forwarded TCP connections whose original public destination is 80/443,
+so SSH and the direct internal container healthcheck are outside its scope.
+Installation, per-policy enable/disable, complete disable, exact provenance
+validation, IPv6 rejection and fail-open cleanup are explicit and idempotent.
+Linux CI loads the actual policy in an isolated network namespace and validates
+nftables' real JSON output. This implementation is deliberately dormant:
+normal deployment does not install it, no staging firewall rule has been
+activated, the persistent-policy checkbox remains open, and neither public
+health policy has a formal `ENABLE` decision until staging proves real ban,
+expiry, restart persistence, emergency disable and monitor recovery.
+
 **D6 host-observation staging evidence — 2026-11-04.** Repository revision
 `4a4fd244036f70bccd1c92df64eb543a90467875` migrated the installed v1 action
 only after matching its exact archived content. Upgrade and `--check` retained
