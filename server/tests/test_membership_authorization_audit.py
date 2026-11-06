@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bookpile_server.config import get_settings
 from bookpile_server.models import (
     Library,
     LibraryAuditEvent,
@@ -89,6 +90,13 @@ def test_invitation_and_membership_authorization_lifecycle(
     root = f"/api/v1/libraries/{library.id}"
 
     _authenticate(client, session, first_owner)
+    settings = get_settings()
+    original_owner_session_cookie = client.cookies.get(
+        settings.session_cookie_name
+    )
+    original_owner_csrf_cookie = client.cookies.get(settings.csrf_cookie_name)
+    assert original_owner_session_cookie is not None
+    assert original_owner_csrf_cookie is not None
     members = client.get(f"{root}/members")
     assert members.status_code == 200
     assert {item["user_id"] for item in members.json()} == {
@@ -238,7 +246,12 @@ def test_invitation_and_membership_authorization_lifecycle(
     )
     assert remove_first_owner.status_code == 200
 
-    _authenticate(client, session, first_owner)
+    client.cookies.clear()
+    client.cookies.set(
+        settings.session_cookie_name,
+        original_owner_session_cookie,
+    )
+    client.cookies.set(settings.csrf_cookie_name, original_owner_csrf_cookie)
     stale_session_baseline = _snapshot(session)
     stale_owner_request = client.post(
         f"{root}/invitations",

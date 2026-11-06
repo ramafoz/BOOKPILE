@@ -649,6 +649,10 @@ def test_postgresql_migration_and_tenant_scope() -> None:
             session.flush()
             session.add_all(
                 [
+                    AccountStorageEntitlement(user_id=member.id)
+                    for member in membership_users
+                ]
+                + [
                     LibraryMembership(
                         library_id=membership_library.id,
                         user_id=member.id,
