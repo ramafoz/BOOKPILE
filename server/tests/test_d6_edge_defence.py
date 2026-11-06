@@ -329,6 +329,7 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "Installed enforcement file differs from reviewed source" in installer
     assert "Enforcement switch differs from reviewed source" in installer
     assert "cleanup_failed_enable" in installer
+    assert "cleanup_failed_disable" in installer
     assert "emergency_disable_all" in installer
     assert 'assert_switch "$policy"' in installer
     assert 'assert_jails' in installer
@@ -337,6 +338,21 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "ssh_port_matched\":false" in installer
     assert "install-bookpile-edge-defence.sh" in installer
     assert "deploy-staging.sh" not in installer
+
+    disable_function = installer.split("disable_policy() {", 1)[1].split(
+        '\n}\n\ncase "$mode"', 1
+    )[0]
+    assert disable_function.index("trap cleanup_failed_disable EXIT") < disable_function.index(
+        "assert_no_global_ipv6"
+    )
+    disable_all = installer.split("  --disable-all)", 1)[1].split("\n    ;;", 1)[0]
+    assert "trap cleanup_failed_disable EXIT" in disable_all
+    emergency = installer.split("emergency_disable_all() {", 1)[1].split(
+        "\n}\n\ncleanup_failed_disable", 1
+    )[0]
+    assert emergency.index("systemctl disable --now") < emergency.index(
+        'rm -f "$LIVE_SWITCH"'
+    )
 
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"

@@ -248,10 +248,24 @@ cleanup_failed_enable() {
 }
 
 emergency_disable_all() {
-  rm -f "$LIVE_SWITCH" "$READY_SWITCH"
   systemctl disable --now fail2ban.service >/dev/null 2>&1 || true
   nft delete table inet bookpile >/dev/null 2>&1 || true
+  if [[ -d "$CONFIG_ROOT" && ! -L "$CONFIG_ROOT" && \
+        -d "$CONFIG_ROOT/jail.d" && ! -L "$CONFIG_ROOT/jail.d" ]]; then
+    rm -f "$LIVE_SWITCH" "$READY_SWITCH"
+  else
+    echo 'Unsafe Fail2ban configuration directories; enforcement switches require manual removal.' >&2
+  fi
   echo 'Enforcement disable checks failed; emergency fail-open cleanup disabled Fail2ban and removed the BOOKPILE policy.' >&2
+}
+
+cleanup_failed_disable() {
+  local rc=$?
+  trap - EXIT
+  if [[ "${disable_completed:-false}" != 'true' ]]; then
+    emergency_disable_all
+  fi
+  exit "$rc"
 }
 
 disable_policy() {
@@ -261,7 +275,8 @@ disable_policy() {
     ready) switch="$READY_SWITCH"; jail="$READY_ENFORCE" ;;
     *) usage ;;
   esac
-  trap emergency_disable_all ERR
+  disable_completed='false'
+  trap cleanup_failed_disable EXIT
   assert_no_global_ipv6
   assert_safe_directories
   rm -f "$switch"
@@ -279,7 +294,8 @@ disable_policy() {
   assert_optional_switches
   bash "$observation_installer" --provenance-check >/dev/null
   assert_jails
-  trap - ERR
+  disable_completed='true'
+  trap - EXIT
   policy_status
 }
 
@@ -356,7 +372,8 @@ case "$mode" in
     disable_policy ready
     ;;
   --disable-all)
-    trap emergency_disable_all ERR
+    disable_completed='false'
+    trap cleanup_failed_disable EXIT
     rm -f "$LIVE_SWITCH" "$READY_SWITCH"
     fail2ban-client stop "$LIVE_ENFORCE" >/dev/null 2>&1 || true
     fail2ban-client stop "$READY_ENFORCE" >/dev/null 2>&1 || true
@@ -367,7 +384,8 @@ case "$mode" in
     preflight
     assert_jails
     assert_no_policy_table
-    trap - ERR
+    disable_completed='true'
+    trap - EXIT
     policy_status
     ;;
 esac
