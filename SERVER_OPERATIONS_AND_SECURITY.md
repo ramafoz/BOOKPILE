@@ -366,6 +366,60 @@ Fail2ban's section parser. It waits up to 30 seconds for the server socket both
 after startup and reload. A mismatch or timeout disables the service again;
 arbitrary pre-existing Fail2ban policy is never adopted.
 
+### D6 reviewed enforcement policy (disabled by default)
+
+The repository contains the next enforcement layer, but ordinary deployment
+does not install or enable it. It defines only `table inet bookpile`, with one
+`forward` base chain and two IPv4 timeout sets: one for public `live` traffic
+and one for public `ready` traffic. Each address expires after ten minutes.
+Rules match TCP traffic whose original public destination is port 80 or 443;
+they do not attach to `input` or `output`, never match SSH port 22, and cannot
+see the container's direct `127.0.0.1:8100` healthcheck.
+
+The reviewed installer is idempotent and separates four operations: install
+the dormant files, enable `live`, enable `ready`, and disable either or both.
+Each endpoint replaces only its own observation jail. Every operation checks
+the exact reviewed files, ownership, permissions, Fail2ban configuration and
+the resolved jail set. The nftables validator accepts exactly two sets, two
+drop rules and the dedicated chain; an extra rule, hook, port or set makes the
+operation fail. Global IPv6 remains a hard stop. A failed enable removes the
+new switch, and a failed disable falls open by disabling Fail2ban and deleting
+the BOOKPILE table.
+
+Installing the policy files while keeping enforcement dormant requires an
+explicit confirmation and an already accepted observation installation:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --install-disabled \
+  --confirm STAGING-D6-ENFORCEMENT-POLICY
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check-disabled
+sudo nft list table inet bookpile
+```
+
+The final command must fail because the table must not exist. Installation
+does not make an `ENABLE` decision. The following lifecycle is documented for
+the later, separately authorized staging acceptance; do not run it as part of
+the dormant installation:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-live --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-ready --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-live
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-ready
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-all
+```
+
+The enable commands are repeatable: a second invocation validates the active
+policy and succeeds without changing it. Disable is independent per endpoint;
+when the last policy is disabled, the dedicated table is deleted. No generic
+firewall table, packaged SSH jail, application image, database object or
+application deployment script is modified by this layer.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

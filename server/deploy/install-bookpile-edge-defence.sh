@@ -8,7 +8,7 @@ readonly LOG_PATH='/var/log/bookpile/defensive-events.log'
 readonly CONFIG_ROOT='/etc/fail2ban'
 
 usage() {
-  echo "Usage: $0 --check | --install-observe --confirm ${CONFIRMATION} | --resume-observe --confirm ${CONFIRMATION} | --upgrade-observe --confirm ${CONFIRMATION} | --enable-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
+  echo "Usage: $0 --check | --provenance-check | --install-observe --confirm ${CONFIRMATION} | --resume-observe --confirm ${CONFIRMATION} | --upgrade-observe --confirm ${CONFIRMATION} | --enable-observe --confirm ${CONFIRMATION} | --disable-observe" >&2
   exit 2
 }
 
@@ -22,7 +22,7 @@ if [[ "${1:-}" == '--confirm' ]]; then
   shift 2 || true
 fi
 [[ $# -eq 0 ]] || usage
-[[ "$mode" == '--check' || "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--upgrade-observe' || "$mode" == '--enable-observe' || "$mode" == '--disable-observe' ]] || usage
+[[ "$mode" == '--check' || "$mode" == '--provenance-check' || "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--upgrade-observe' || "$mode" == '--enable-observe' || "$mode" == '--disable-observe' ]] || usage
 
 if [[ ( "$mode" == '--install-observe' || "$mode" == '--resume-observe' || "$mode" == '--upgrade-observe' || "$mode" == '--enable-observe' ) && "$confirmation" != "$CONFIRMATION" ]]; then
   echo "Installation requires --confirm ${CONFIRMATION}." >&2
@@ -200,6 +200,8 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/fail2ban.d/bookpile.local"
     "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local"
     "$CONFIG_ROOT/jail.d/bookpile-observe.local"
+    "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local"
+    "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local"
   )
   local allowed allowed_file
 
@@ -248,6 +250,8 @@ assert_no_unreviewed_overrides() {
 
   for file in \
     "$CONFIG_ROOT/action.d/bookpile-observe.d" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-live.d" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-ready.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.d"; do
     [[ ! -e "$file" && ! -L "$file" ]] || {
@@ -259,8 +263,11 @@ assert_no_unreviewed_overrides() {
   while IFS= read -r -d '' file; do
     [[ "$file" == "$CONFIG_ROOT/fail2ban.d/bookpile.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-health-enforce.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
-       "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" ]] && continue
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local" ]] && continue
     package_owned='false'
     for package_file in "${package_files[@]}"; do
       if [[ "$file" == "$package_file" ]]; then
@@ -283,6 +290,8 @@ assert_no_unreviewed_overrides() {
 
   for file in \
     "$CONFIG_ROOT/action.d/bookpile-observe.local" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-live.local" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-ready.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.local"; do
     [[ ! -e "$file" && ! -L "$file" ]] || {
@@ -489,5 +498,14 @@ case "$mode" in
     [[ -f /var/lib/fail2ban/fail2ban.sqlite3 ]]
     assert_no_firewall_policy
     status_json
+    ;;
+  --provenance-check)
+    check_host
+    check_log
+    command -v fail2ban-client >/dev/null
+    assert_managed_files_match true
+    assert_no_unreviewed_overrides
+    fail2ban-client -t
+    printf '{"configuration_provenance":"accepted"}\n'
     ;;
 esac
