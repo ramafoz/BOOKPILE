@@ -562,8 +562,18 @@ directly; hiding a UI control is not evidence.
   foreign identifiers or private values. Both libraries contain retrievable
   private-cover metadata and stored bytes, and full before/after snapshots prove
   that neither those objects nor any other protected state or audit row changes.
-- [ ] A2: Audit catalogue CRUD, contributors, metadata options and private
+- [x] A2: Audit catalogue CRUD, contributors, metadata options and private
   covers for Owner, catalogue-only Viewer and catalogue-and-map Viewer.
+
+  Evidence: `test_catalogue_authorization_audit.py` exercises the complete
+  Owner lifecycle for catalogue records, ordered contributors, metadata-option
+  projection and private-cover upload, replacement, removal and restoration.
+  Both Viewer scopes can read the same shared catalogue, contributor metadata,
+  options and stored cover, but receive generic denial for create, update,
+  delete, bibliographic lookup and cover mutation. Every rejected operation is
+  followed immediately by an exact database, private-object and audit snapshot
+  comparison, and responses expose no storage key, uploader ID, digest or
+  authentication material.
 - [ ] A3: Audit personal readings, perspective selection, shared custody,
   statistics and loans; prove borrower/private notes never reach Viewers.
 - [ ] A4: Audit bookcases, shelves, containers, map projections, physical
