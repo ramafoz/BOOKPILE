@@ -54,8 +54,6 @@
 			status delete
 			resp_headers delete
 			request_path delete
-			event_class delete
-			policy_scope delete
 			wrap json
 		}
 		no_hostname

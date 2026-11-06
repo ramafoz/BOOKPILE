@@ -21,6 +21,7 @@ ALLOWED_FIELDS = {
     "defensive_decision",
     "client_ip",
 }
+SCANNER_FIELDS = {"event_class", "policy_scope"}
 HEALTH_CLASSES = {"live", "ready", "other"}
 REVISION = re.compile(r"[0-9a-f]{40}")
 
@@ -32,7 +33,12 @@ class DefensiveLogValidationError(ValueError):
 def validate_event(event: object) -> dict[str, object]:
     if not isinstance(event, dict):
         raise DefensiveLogValidationError("defensive event is not an object")
-    if set(event) != ALLOWED_FIELDS:
+    fields = set(event)
+    allowed_schemas = {
+        frozenset(ALLOWED_FIELDS),
+        frozenset(ALLOWED_FIELDS | SCANNER_FIELDS),
+    }
+    if frozenset(fields) not in allowed_schemas:
         raise DefensiveLogValidationError("defensive event fields are not exact")
     if not isinstance(event["ts"], (int, float)):
         raise DefensiveLogValidationError("defensive event timestamp is invalid")
@@ -56,11 +62,19 @@ def validate_event(event: object) -> dict[str, object]:
         ipaddress.ip_address(client_ip)
     except ValueError as exc:
         raise DefensiveLogValidationError("client IP is invalid") from exc
+    if fields == ALLOWED_FIELDS | SCANNER_FIELDS:
+        if event["health_class"] != "other":
+            raise DefensiveLogValidationError("scanner health class is unexpected")
+        if event["event_class"] != "scanner_probe":
+            raise DefensiveLogValidationError("scanner event class is unexpected")
+        if event["policy_scope"] != "scanner_probe":
+            raise DefensiveLogValidationError("scanner policy scope is unexpected")
     return event
 
 
-def validate_lines(lines: list[str]) -> Counter[str]:
+def validate_lines(lines: list[str]) -> tuple[Counter[str], int]:
     classes: Counter[str] = Counter()
+    scanner_probes = 0
     for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
@@ -72,7 +86,8 @@ def validate_lines(lines: list[str]) -> Counter[str]:
             ) from exc
         validated = validate_event(event)
         classes[str(validated["health_class"])] += 1
-    return classes
+        scanner_probes += validated.get("event_class") == "scanner_probe"
+    return classes, scanner_probes
 
 
 def main() -> int:
@@ -81,10 +96,18 @@ def main() -> int:
     args = parser.parse_args()
     try:
         lines = args.log.read_text(encoding="utf-8").splitlines()
-        classes = validate_lines(lines)
+        classes, scanner_probes = validate_lines(lines)
     except (OSError, DefensiveLogValidationError) as exc:
         parser.error(str(exc))
-    print(json.dumps({"health_classes": dict(sorted(classes.items()))}, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "health_classes": dict(sorted(classes.items())),
+                "scanner_probes": scanner_probes,
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 

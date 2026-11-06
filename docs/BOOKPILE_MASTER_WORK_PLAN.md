@@ -515,6 +515,21 @@ The recorded decisions are therefore **`ENABLE` for `/health/live`** and
 **`ENABLE` for `/health/ready`**, each with a ten-minute temporary ban and the
 independently proven `--disable-all` fail-open procedure.
 
+**D6 scanner-observation implementation gate.** The reviewed implementation
+reuses Caddy's existing high-confidence scanner matcher for `.env`, `.git`,
+WordPress login/administration and phpMyAdmin paths. Only the two fixed labels
+`event_class=scanner_probe` and `policy_scope=scanner_probe` are added to the
+minimized D6 event; the original path, query, headers, cookies, identity and
+request body remain absent. A separate `bookpile-scanner-observe` Fail2ban jail
+requires 60 matching events from one validated client address in 60 seconds
+and invokes only the privacy-safe observation action. Its confirmed installer
+accepts the exact reviewed files, preserves whichever `live` and `ready`
+enforcement modes are active, and compares stateless nftables policy before
+and after activation. It has no scanner firewall action and ordinary
+deployment does not enable it. The 24-hour dry-run checkbox remains open until
+the deployed-image rehearsal, controlled threshold crossing, privacy checks
+and real observation window are recorded.
+
 ### D7 — Defensive regression harness
 
 - [ ] Automate normal navigation, API burst, scanner paths, forged forwarding
