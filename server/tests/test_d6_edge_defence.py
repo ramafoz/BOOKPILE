@@ -153,6 +153,7 @@ def test_real_actions_are_separate_bounded_and_privacy_safe() -> None:
         assert f"bookpile-edge-firewall ban {policy} <ip>" in action
         assert f"bookpile-edge-firewall unban {policy} <ip>" in action
         assert f"bookpile-edge-firewall flush {policy}" in action
+        assert action.count(" && /usr/bin/logger ") == 2
         assert "event=temporary_ban " in action
         assert "event=temporary_ban_released " in action
         assert "<ip>" not in "\n".join(
