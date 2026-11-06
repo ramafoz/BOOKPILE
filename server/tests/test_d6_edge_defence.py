@@ -67,7 +67,7 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "--upgrade-observe" in installer
     assert "--enable-observe" in installer
     assert "assert_no_enabled_jails" in installer
-    assert "assert_runtime_jail_count 2" in installer
+    assert 'assert_runtime_jail_count "$(expected_observation_jail_count)"' in installer
     assert "assert_runtime_jail_count 0" in installer
     assert "fail2ban-client reload >/dev/null 2>&1" in installer
     assert "systemctl enable --now fail2ban.service" in installer
@@ -103,7 +103,17 @@ def test_installation_is_manual_confirmed_and_ipv6_fail_closed() -> None:
     assert "action.d/bookpile-observe.d" in installer
     assert "filter.d/bookpile-health-live.d" in installer
     assert "filter.d/bookpile-health-ready.d" in installer
+    assert "filter.d/bookpile-scanner-probe.d" in installer
+    assert "bookpile-scanner-observe.conf" in installer
+    assert "zz-bookpile-scanner-observe.local" in installer
     assert "Unreviewed BOOKPILE component drop-in directory" in installer
+    assert "assert_optional_scanner_files_match" in installer
+    assert "Installed scanner policy differs from reviewed source" in installer
+    assert "Installed scanner switch differs from reviewed source" in installer
+    jail_provenance = installer.split(
+        "while IFS= read -r -d '' file; do", 2
+    )[2].split("package_owned='false'", 1)[0]
+    assert "zz-bookpile-scanner-observe.local" in jail_provenance
     assert 'find "$CONFIG_ROOT/fail2ban.d"' in installer
     assert "configuration directory is missing, non-directory, or a symlink" in installer
     assert "root:root 755" in installer
@@ -163,6 +173,29 @@ def test_real_actions_are_separate_bounded_and_privacy_safe() -> None:
         ]
         assert len(logger_commands) == 2
         assert "<ip>" not in "\n".join(logger_commands)
+
+
+def test_scanner_observation_is_bounded_and_cannot_mutate_firewall() -> None:
+    jail = read("fail2ban/jail.d/bookpile-scanner-observe.conf")
+    scanner_filter = read("fail2ban/filter.d/bookpile-scanner-probe.conf")
+    switch = read("fail2ban/jail.d/zz-bookpile-scanner-observe.local")
+    action = read("fail2ban/action.d/bookpile-observe.conf").lower()
+
+    assert "[bookpile-scanner-observe]" in jail
+    assert "enabled = false" in jail
+    assert "filter = bookpile-scanner-probe" in jail
+    assert "findtime = 60" in jail
+    assert "maxretry = 60" in jail
+    assert "bantime = 600" in jail
+    assert "action = bookpile-observe" in jail
+    assert '"event_class":"scanner_probe"' in scanner_filter
+    assert '"policy_scope":"scanner_probe"' in scanner_filter
+    assert '"health_class":"other"' in scanner_filter
+    assert "<HOST>" in scanner_filter
+    assert "[bookpile-scanner-observe]" in switch
+    assert "enabled = true" in switch
+    for forbidden in ("<ip>", "nft", "iptables", "firewall"):
+        assert forbidden not in action
 
 
 def test_nftables_policy_cannot_match_ssh_or_internal_health() -> None:
@@ -320,11 +353,14 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     installer = read("install-bookpile-edge-enforcement.sh")
     assert "STAGING-D6-ENFORCEMENT-POLICY" in installer
     assert "STAGING-D6-ENFORCEMENT-ENABLE" in installer
+    assert "STAGING-D6-SCANNER-OBSERVE" in installer
     for mode in (
         "--install-disabled",
         "--check-disabled",
         "--enable-live",
         "--enable-ready",
+        "--enable-scanner-observe",
+        "--disable-scanner-observe",
         "--disable-live",
         "--disable-ready",
         "--disable-all",
@@ -334,6 +370,7 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "Installed enforcement file differs from reviewed source" in installer
     assert "Enforcement switch differs from reviewed source" in installer
     assert "cleanup_failed_enable" in installer
+    assert "cleanup_failed_scanner_enable" in installer
     assert "cleanup_failed_disable" in installer
     assert "wait_for_policy" in installer
     assert "BOOKPILE nftables policy did not become ready within 30 seconds" in installer
@@ -345,6 +382,9 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "ssh_port_matched\":false" in installer
     assert "install-bookpile-edge-defence.sh" in installer
     assert "deploy-staging.sh" not in installer
+    assert "nft -j --stateless list ruleset" in installer
+    assert "Firewall rules changed while enabling scanner observation" in installer
+    assert "bookpile-scanner-observe" in installer
 
     enable_block = installer.split("  --enable-live|--enable-ready)", 1)[1].split(
         "\n    ;;", 1
@@ -382,3 +422,5 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "zz-bookpile-ready-enforce.local" in observation_installer
     assert "bookpile-nftables-live.d" in observation_installer
     assert "bookpile-nftables-ready.d" in observation_installer
+    assert "bookpile-scanner-observe.conf" in observation_installer
+    assert "zz-bookpile-scanner-observe.local" in observation_installer

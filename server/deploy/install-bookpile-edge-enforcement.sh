@@ -3,13 +3,16 @@ set -Eeuo pipefail
 
 readonly INSTALL_CONFIRMATION='STAGING-D6-ENFORCEMENT-POLICY'
 readonly ENABLE_CONFIRMATION='STAGING-D6-ENFORCEMENT-ENABLE'
+readonly SCANNER_CONFIRMATION='STAGING-D6-SCANNER-OBSERVE'
 readonly CONFIG_ROOT='/etc/fail2ban'
 readonly LIVE_OBSERVE='bookpile-health-live-observe'
 readonly READY_OBSERVE='bookpile-health-ready-observe'
 readonly LIVE_ENFORCE='bookpile-health-live-enforce'
 readonly READY_ENFORCE='bookpile-health-ready-enforce'
+readonly SCANNER_OBSERVE='bookpile-scanner-observe'
 readonly LIVE_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local"
 readonly READY_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local"
+readonly SCANNER_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local"
 
 usage() {
   cat >&2 <<EOF
@@ -17,6 +20,8 @@ Usage: $0 --install-disabled --confirm ${INSTALL_CONFIRMATION}
        $0 --check | --check-disabled
        $0 --enable-live --confirm ${ENABLE_CONFIRMATION}
        $0 --enable-ready --confirm ${ENABLE_CONFIRMATION}
+       $0 --enable-scanner-observe --confirm ${SCANNER_CONFIRMATION}
+       $0 --disable-scanner-observe
        $0 --disable-live | --disable-ready | --disable-all
 EOF
   exit 2
@@ -31,7 +36,9 @@ if [[ "${1:-}" == '--confirm' ]]; then
 fi
 [[ $# -eq 0 ]] || usage
 case "$mode" in
-  --install-disabled|--check|--check-disabled|--enable-live|--enable-ready|--disable-live|--disable-ready|--disable-all) ;;
+  --install-disabled|--check|--check-disabled|--enable-live|--enable-ready) ;;
+  --enable-scanner-observe|--disable-scanner-observe) ;;
+  --disable-live|--disable-ready|--disable-all) ;;
   *) usage ;;
 esac
 if [[ "$mode" == '--install-disabled' && "$confirmation" != "$INSTALL_CONFIRMATION" ]]; then
@@ -40,6 +47,11 @@ if [[ "$mode" == '--install-disabled' && "$confirmation" != "$INSTALL_CONFIRMATI
 fi
 if [[ ( "$mode" == '--enable-live' || "$mode" == '--enable-ready' ) && "$confirmation" != "$ENABLE_CONFIRMATION" ]]; then
   echo "Enforcement requires --confirm ${ENABLE_CONFIRMATION}." >&2
+  exit 2
+fi
+if [[ "$mode" == '--enable-scanner-observe' && \
+      "$confirmation" != "$SCANNER_CONFIRMATION" ]]; then
+  echo "Scanner observation requires --confirm ${SCANNER_CONFIRMATION}." >&2
   exit 2
 fi
 [[ $EUID -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
@@ -53,6 +65,10 @@ readonly -a STATIC_FILES=(
   'fail2ban/action.d/bookpile-nftables-live.conf:/etc/fail2ban/action.d/bookpile-nftables-live.conf:644'
   'fail2ban/action.d/bookpile-nftables-ready.conf:/etc/fail2ban/action.d/bookpile-nftables-ready.conf:644'
   'fail2ban/jail.d/bookpile-health-enforce.conf:/etc/fail2ban/jail.d/bookpile-health-enforce.conf:644'
+)
+readonly -a SCANNER_FILES=(
+  'fail2ban/filter.d/bookpile-scanner-probe.conf:/etc/fail2ban/filter.d/bookpile-scanner-probe.conf:644'
+  'fail2ban/jail.d/bookpile-scanner-observe.conf:/etc/fail2ban/jail.d/bookpile-scanner-observe.conf:644'
 )
 
 wait_for_server() {
@@ -139,6 +155,61 @@ assert_static_files() {
   done
 }
 
+assert_scanner_files() {
+  local entry source destination mode
+  for entry in "${SCANNER_FILES[@]}"; do
+    IFS=: read -r source destination mode <<<"$entry"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Missing or unsafe scanner-observation file: $destination" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == "root:root $mode" ]] || {
+      echo "Unsafe ownership or mode on scanner-observation file: $destination" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/$source" "$destination" || {
+      echo "Installed scanner-observation file differs from reviewed source: $destination" >&2
+      exit 1
+    }
+  done
+}
+
+assert_optional_scanner_policy() {
+  local any='false' entry source destination mode
+  for entry in "${SCANNER_FILES[@]}"; do
+    IFS=: read -r source destination mode <<<"$entry"
+    [[ -e "$destination" || -L "$destination" ]] && any='true'
+  done
+  [[ -e "$SCANNER_SWITCH" || -L "$SCANNER_SWITCH" ]] && any='true'
+  if [[ "$any" == 'true' ]]; then
+    assert_scanner_files
+    if [[ -e "$SCANNER_SWITCH" || -L "$SCANNER_SWITCH" ]]; then
+      [[ -f "$SCANNER_SWITCH" && ! -L "$SCANNER_SWITCH" ]] || {
+        echo "Missing or unsafe scanner-observation switch: $SCANNER_SWITCH" >&2
+        exit 1
+      }
+      [[ "$(stat -c '%U:%G %a' "$SCANNER_SWITCH")" == 'root:root 644' ]] || {
+        echo "Unsafe scanner-observation switch ownership or mode: $SCANNER_SWITCH" >&2
+        exit 1
+      }
+      cmp --silent \
+        "$source_root/fail2ban/jail.d/zz-bookpile-scanner-observe.local" \
+        "$SCANNER_SWITCH" || {
+        echo "Scanner-observation switch differs from reviewed source: $SCANNER_SWITCH" >&2
+        exit 1
+      }
+    fi
+  fi
+}
+
+install_scanner_files() {
+  local entry source destination mode
+  for entry in "${SCANNER_FILES[@]}"; do
+    IFS=: read -r source destination mode <<<"$entry"
+    install -o root -g root -m "$mode" "$source_root/$source" "$destination"
+  done
+}
+
 assert_switch() {
   local policy="$1" switch source
   case "$policy" in
@@ -197,6 +268,9 @@ expected_jails() {
   else
     printf '%s\n' "$READY_OBSERVE"
   fi
+  if [[ -e "$SCANNER_SWITCH" || -L "$SCANNER_SWITCH" ]]; then
+    printf '%s\n' "$SCANNER_OBSERVE"
+  fi
 }
 
 assert_jails() {
@@ -223,12 +297,13 @@ assert_no_policy_table() {
 }
 
 policy_status() {
-  local live='observe' ready='observe' firewall='absent'
+  local live='observe' ready='observe' scanner='inactive' firewall='absent'
   [[ -e "$LIVE_SWITCH" ]] && live='enforce'
   [[ -e "$READY_SWITCH" ]] && ready='enforce'
+  [[ -e "$SCANNER_SWITCH" ]] && scanner='observe'
   nft list table inet bookpile >/dev/null 2>&1 && firewall='active'
-  printf '{"firewall":"%s","live":"%s","ready":"%s","ssh_port_matched":false}\n' \
-    "$firewall" "$live" "$ready"
+  printf '{"firewall":"%s","live":"%s","ready":"%s","scanner":"%s","ssh_port_matched":false}\n' \
+    "$firewall" "$live" "$ready" "$scanner"
 }
 
 preflight() {
@@ -236,6 +311,7 @@ preflight() {
   assert_safe_directories
   bash "$observation_installer" --provenance-check >/dev/null
   assert_static_files
+  assert_optional_scanner_policy
   assert_optional_switches
   systemctl is-active --quiet fail2ban.service || {
     echo 'Fail2ban must be active.' >&2
@@ -253,6 +329,17 @@ cleanup_failed_enable() {
     if [[ ! -e "$LIVE_SWITCH" && ! -e "$READY_SWITCH" ]]; then
       nft delete table inet bookpile >/dev/null 2>&1 || true
     fi
+  fi
+  exit "$rc"
+}
+
+cleanup_failed_scanner_enable() {
+  local rc=$?
+  trap - EXIT
+  rm -f "$SCANNER_SWITCH"
+  fail2ban-client stop "$SCANNER_OBSERVE" >/dev/null 2>&1 || true
+  if ! fail2ban-client reload >/dev/null 2>&1; then
+    emergency_disable_all
   fi
   exit "$rc"
 }
@@ -373,6 +460,59 @@ case "$mode" in
     wait_for_policy
     new_switch=''
     trap - EXIT
+    policy_status
+    ;;
+  --enable-scanner-observe)
+    preflight
+    if [[ -e "$SCANNER_SWITCH" || -L "$SCANNER_SWITCH" ]]; then
+      assert_optional_scanner_policy
+      assert_jails
+      fail2ban-client status "$SCANNER_OBSERVE" >/dev/null
+      policy_status
+      exit 0
+    fi
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    trap cleanup_failed_scanner_enable EXIT
+    install_scanner_files
+    install -o root -g root -m 0644 \
+      "$source_root/fail2ban/jail.d/zz-bookpile-scanner-observe.local" \
+      "$SCANNER_SWITCH"
+    bash "$source_root/fail2ban/tests/test-health-filters.sh" >/dev/null
+    fail2ban-client -t >/dev/null
+    assert_optional_scanner_policy
+    bash "$observation_installer" --provenance-check >/dev/null
+    fail2ban-client reload
+    wait_for_server
+    assert_jails
+    fail2ban-client status "$SCANNER_OBSERVE" >/dev/null
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    [[ "$firewall_before" == "$firewall_after" ]] || {
+      echo 'Firewall rules changed while enabling scanner observation.' >&2
+      exit 1
+    }
+    trap - EXIT
+    policy_status
+    ;;
+  --disable-scanner-observe)
+    preflight
+    [[ -e "$SCANNER_SWITCH" && ! -L "$SCANNER_SWITCH" ]] || {
+      echo 'Scanner observation is not enabled.' >&2
+      exit 1
+    }
+    firewall_before="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    rm -f "$SCANNER_SWITCH"
+    fail2ban-client stop "$SCANNER_OBSERVE" >/dev/null 2>&1 || true
+    fail2ban-client -t >/dev/null
+    fail2ban-client reload
+    wait_for_server
+    assert_optional_scanner_policy
+    bash "$observation_installer" --provenance-check >/dev/null
+    assert_jails
+    firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
+    [[ "$firewall_before" == "$firewall_after" ]] || {
+      emergency_disable_all
+      exit 1
+    }
     policy_status
     ;;
   --disable-live)

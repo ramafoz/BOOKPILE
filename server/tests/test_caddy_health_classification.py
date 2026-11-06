@@ -72,10 +72,10 @@ def test_defensive_log_deletes_variable_request_and_response_fields() -> None:
         "status",
         "resp_headers",
         "request_path",
-        "event_class",
-        "policy_scope",
     ):
         assert f"{field} delete" in defensive
+    assert "event_class delete" not in defensive
+    assert "policy_scope delete" not in defensive
     for forbidden in ("{uri}", "{query}", "{cookie", "{header", "request_id"):
         assert forbidden not in defensive.lower()
 
@@ -84,7 +84,7 @@ def test_validator_accepts_only_the_fixed_schema_and_values() -> None:
     validator = _validator_module()
     line = json.dumps(_event())
 
-    assert validator.validate_lines([line]) == {"live": 1}
+    assert validator.validate_lines([line]) == ({"live": 1}, 0)
     for invalid in (
         _event(health_class="unexpected"),
         _event(defensive_decision="blocked"),
@@ -92,6 +92,37 @@ def test_validator_accepts_only_the_fixed_schema_and_values() -> None:
         _event(client_ip="not-an-ip"),
         _event(uri="/health/live?secret=value"),
         _event(cookie="secret"),
+    ):
+        with pytest.raises(validator.DefensiveLogValidationError):
+            validator.validate_event(invalid)
+
+
+def test_defensive_log_accepts_only_the_fixed_scanner_labels() -> None:
+    validator = _validator_module()
+    scanner = _event(
+        health_class="other",
+        event_class="scanner_probe",
+        policy_scope="scanner_probe",
+    )
+
+    assert validator.validate_lines([json.dumps(scanner)]) == ({"other": 1}, 1)
+    for invalid in (
+        _event(health_class="other", event_class="scanner_probe"),
+        _event(
+            health_class="live",
+            event_class="scanner_probe",
+            policy_scope="scanner_probe",
+        ),
+        _event(
+            health_class="other",
+            event_class="ambiguous_probe",
+            policy_scope="scanner_probe",
+        ),
+        _event(
+            health_class="other",
+            event_class="scanner_probe",
+            policy_scope="unexpected",
+        ),
     ):
         with pytest.raises(validator.DefensiveLogValidationError):
             validator.validate_event(invalid)

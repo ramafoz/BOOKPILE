@@ -69,19 +69,22 @@ docker exec "$container" wget -qO- \
 docker exec "$container" wget -qO- \
     'http://127.0.0.1:9080/catalogue?secret=other-query-must-not-survive' \
     >/dev/null
+docker exec "$container" wget -qO- \
+    'http://127.0.0.1:9080/.env?secret=scanner-query-must-not-survive' \
+    >/dev/null 2>&1 || true
 sleep 1
 
 defensive_log="$fixture/defensive/defensive-events.log"
 test -s "$defensive_log"
 summary="$(python3 "$(dirname "$0")/../deploy/validate-caddy-defensive-log.py" \
     "$defensive_log")"
-if [ "$summary" != '{"health_classes": {"live": 1, "other": 1, "ready": 1}}' ]; then
+if [ "$summary" != '{"health_classes": {"live": 1, "other": 2, "ready": 1}, "scanner_probes": 1}' ]; then
     echo "unexpected D6 class counts: $summary" >&2
     cat "$defensive_log" >&2
     exit 1
 fi
 
-if grep -Eq 'live-query|ready-query|other-query|secret=|/health/|/catalogue|Cookie|Authorization' \
+if grep -Eq 'live-query|ready-query|other-query|scanner-query|secret=|/health/|/catalogue|/\.env|Cookie|Authorization' \
     "$defensive_log"; then
     echo "private request data survived in the defensive log" >&2
     cat "$defensive_log" >&2
@@ -106,4 +109,4 @@ if python3 "$(dirname "$0")/../deploy/validate-caddy-defensive-log.py" \
 fi
 
 printf '%s\n' \
-    '{"caddy_config_valid":true,"classes_mutually_exclusive":true,"internal_probe_bypasses_caddy":true,"private_request_fields_absent":true,"unexpected_labels_rejected":true}'
+    '{"caddy_config_valid":true,"classes_mutually_exclusive":true,"internal_probe_bypasses_caddy":true,"private_request_fields_absent":true,"scanner_label_fixed":true,"unexpected_labels_rejected":true}'

@@ -11,12 +11,24 @@ for health_class in live ready; do
       "$fixture" \
       "$root/filter.d/bookpile-health-${health_class}.conf"
   )"
-  if ! grep -Eq 'Lines: 2 lines, 0 ignored, 1 matched, 1 missed' <<<"$output"; then
+  if ! grep -Eq 'Lines: 3 lines, 0 ignored, 1 matched, 2 missed' <<<"$output"; then
     printf '%s\n' "$output" >&2
     echo "Unexpected ${health_class} filter result." >&2
     exit 1
   fi
 done
 
+scanner_output="$(
+  fail2ban-regex \
+    --usedns=no \
+    "$fixture" \
+    "$root/filter.d/bookpile-scanner-probe.conf"
+)"
+if ! grep -Eq 'Lines: 3 lines, 0 ignored, 1 matched, 2 missed' <<<"$scanner_output"; then
+  printf '%s\n' "$scanner_output" >&2
+  echo 'Unexpected scanner filter result.' >&2
+  exit 1
+fi
+
 printf '%s\n' \
-  '{"live_matches":1,"ready_matches":1,"classes_independent":true}'
+  '{"live_matches":1,"ready_matches":1,"scanner_matches":1,"classes_independent":true}'

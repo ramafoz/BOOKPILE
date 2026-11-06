@@ -470,6 +470,69 @@ Acceptance requires both observation jails, no `inet bookpile` table and
 continued public health. Re-enable only with the documented confirmation token
 after resolving the reason for emergency disable.
 
+### D6 high-confidence scanner observation
+
+Scanner observation is a separate, non-blocking policy. Caddy copies only the
+fixed `scanner_probe` event and policy labels into the minimized defensive log;
+it does not copy the matched path or query. Fail2ban groups those events by its
+validated client address and emits one aggregate
+`would_temporarily_ban policy=bookpile-scanner-observe` lifecycle event at 60
+matches in 60 seconds. The observation action never calls nftables. The
+existing D5 aggregate scanner metric remains independent and may emit an
+expected controlled warning or critical alert during the threshold rehearsal.
+
+After deploying the reviewed Caddy image, enable the scanner observation jail
+explicitly:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-scanner-observe \
+  --confirm STAGING-D6-SCANNER-OBSERVE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+sudo fail2ban-client status
+```
+
+Acceptance requires `scanner=observe`, the existing health enforcement modes
+unchanged, exactly one additional `bookpile-scanner-observe` jail and an
+unchanged stateless nftables policy. From one controlled external client, wait
+61 seconds for a clean window and issue exactly 60 high-confidence scanner
+requests in less than 60 seconds. All responses remain the normal scanner
+`404`; a subsequent request must also remain `404`. The jail must report one
+observation and the privacy-safe journal must contain exactly the fixed policy
+event without an address:
+
+```bash
+sudo fail2ban-client status bookpile-scanner-observe
+sudo journalctl \
+  -t bookpile-d6-observe \
+  --since '5 minutes ago' \
+  --no-pager -o cat
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
+Validate the live defensive file without printing it:
+
+```bash
+sudo python3 server/deploy/validate-caddy-defensive-log.py \
+  /var/log/bookpile/defensive-events.log
+```
+
+The validator must report at least 60 scanner probes and reject every variable
+request field. Begin the mandatory 24-hour observation window only after this
+rehearsal passes. During that window retain the start/end UTC timestamps,
+aggregate observation count, D5 scanner totals, false-positive assessment,
+Healthchecks continuity and normal authenticated web evidence. Do not enable a
+scanner ban before that evidence is reviewed.
+
+Scanner observation can be disabled independently without altering either
+health policy or nftables:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --disable-scanner-observe
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the
