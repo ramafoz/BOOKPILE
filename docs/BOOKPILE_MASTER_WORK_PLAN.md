@@ -589,8 +589,19 @@ directly; hiding a UI control is not evidence.
   snapshot comparison. Audit details are also checked against both private
   loan markers. Focused reading/loan coverage passes 8 tests and the complete
   server suite passes 467 tests with one environment-dependent skip.
-- [ ] A4: Audit bookcases, shelves, containers, map projections, physical
-  positions and rearrangement preview/apply.
+- [x] A4: Audit bookcases, shelves, containers, map projections, physical
+  positions and rearrangement preview/apply. The central
+  `test_physical_library_authorization_audit.py` scenario now exercises two
+  Owners plus `CATALOG_ONLY` and `CATALOG_AND_MAP` Viewers against one populated
+  physical library. It proves shared Owner custody by previewing and applying a
+  real rearrangement, proves preview is read-only, hides the map completely
+  from catalogue-only membership, and exposes a non-editable projection to the
+  map Viewer. Viewer attempts to create, update or delete furniture, move a
+  book, save visual layout, or preview/apply rearrangement all receive generic
+  denial and are followed immediately by exact book, hierarchy, visual-layout
+  and audit-row snapshot comparison. Focused physical-library coverage passes
+  11 tests and the complete server suite passes 468 tests with one
+  environment-dependent skip.
 - [ ] A5: Audit library invitations, membership listing, map-scope changes,
   promotion, downgrade, removal and final-Owner protection, including stale and
   concurrent requests.
