@@ -156,9 +156,13 @@ def test_real_actions_are_separate_bounded_and_privacy_safe() -> None:
         assert action.count(" && /usr/bin/logger ") == 2
         assert "event=temporary_ban " in action
         assert "event=temporary_ban_released " in action
-        assert "<ip>" not in "\n".join(
-            line for line in action.splitlines() if "/usr/bin/logger" in line
-        )
+        logger_commands = [
+            line.split("&&", 1)[1]
+            for line in action.splitlines()
+            if "/usr/bin/logger" in line
+        ]
+        assert len(logger_commands) == 2
+        assert "<ip>" not in "\n".join(logger_commands)
 
 
 def test_nftables_policy_cannot_match_ssh_or_internal_health() -> None:
