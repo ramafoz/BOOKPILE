@@ -385,7 +385,7 @@ catalogue use all passed afterward. The remaining D5 task is the future
   jail and never create or alter a BOOKPILE firewall policy.
 - [x] Install a persistent Fail2ban/nftables BOOKPILE policy with a persistent
   database and an independent enable/disable procedure.
-- [ ] Run scanner detection in dry-run for at least 24 hours. A controlled 60
+- [x] Run scanner detection in dry-run for at least 24 hours. A controlled 60
   scanner probes/minute fixture must be detected with the validated client IP
   and must not block traffic.
 - [ ] Enable only the 10-minute high-confidence scanner ban; prove ban,
@@ -526,9 +526,23 @@ and invokes only the privacy-safe observation action. Its confirmed installer
 accepts the exact reviewed files, preserves whichever `live` and `ready`
 enforcement modes are active, and compares stateless nftables policy before
 and after activation. It has no scanner firewall action and ordinary
-deployment does not enable it. The 24-hour dry-run checkbox remains open until
-the deployed-image rehearsal, controlled threshold crossing, privacy checks
-and real observation window are recorded.
+deployment does not enable it.
+
+**D6 scanner-observation staging acceptance.** Staging revision
+`090e059c48edfa33805586f8771d157c324f810f` detected the controlled 60-probe
+fixture, emitted one privacy-safe `would_temporarily_ban` lifecycle event and
+continued returning the expected `404` without changing nftables. The accepted
+real window ran from 2026-11-06 19:28:11 UTC through 2026-11-07 20:16:55 UTC
+(24 hours 48 minutes). Ninety-nine scheduled D5 windows recorded zero scanner
+probes and zero temporary bans; the exact-window Fail2ban lifecycle journal was
+empty, so no real client reached the 60-probe/minute threshold. `live` and
+`ready` enforcement remained active, the scanner remained observation-only,
+Healthchecks stayed green, authenticated use passed, and deep reconciliation
+reported 433 expected and 433 stored private objects with no missing,
+mismatched or orphaned object. The observation result is **ACCEPT** with zero
+false positives. It does not authorize scanner enforcement: the separate
+10-minute-ban checkbox remains open until its implementation and reversible
+staging rehearsal are reviewed.
 
 ### D7 — Defensive regression harness
 
