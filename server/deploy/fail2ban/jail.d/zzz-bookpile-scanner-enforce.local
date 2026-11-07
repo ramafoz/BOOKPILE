@@ -1,0 +1,5 @@
+[bookpile-scanner-observe]
+enabled = false
+
+[bookpile-scanner-enforce]
+enabled = true
