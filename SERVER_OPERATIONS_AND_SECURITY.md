@@ -524,6 +524,17 @@ aggregate observation count, D5 scanner totals, false-positive assessment,
 Healthchecks continuity and normal authenticated web evidence. Do not enable a
 scanner ban before that evidence is reviewed.
 
+The staging observation accepted on 2026-11-07 ran from
+2026-11-06 19:28:11 UTC through 2026-11-07 20:16:55 UTC. The controlled fixture
+had already proved one non-blocking threshold crossing. During the subsequent
+real window, 99 scheduled D5 evaluations recorded zero scanner probes and zero
+temporary bans, and the exact-window privacy-safe lifecycle journal contained
+no threshold crossing. Healthchecks remained green, authenticated use passed,
+`live` and `ready` enforcement remained active, nftables acquired no scanner
+set, and deep reconciliation remained healthy at 433 expected and 433 stored
+private objects. This accepts the observation gate with zero false positives;
+it does not enable or approve the separate scanner-ban policy.
+
 Scanner observation can be disabled independently without altering either
 health policy or nftables:
 
