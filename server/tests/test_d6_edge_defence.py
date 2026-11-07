@@ -198,16 +198,49 @@ def test_scanner_observation_is_bounded_and_cannot_mutate_firewall() -> None:
         assert forbidden not in action
 
 
+def test_scanner_enforcement_is_separate_bounded_and_disabled() -> None:
+    jail = read("fail2ban/jail.d/bookpile-scanner-enforce.conf")
+    action = read("fail2ban/action.d/bookpile-nftables-scanner.conf")
+    switch = read("fail2ban/jail.d/zzz-bookpile-scanner-enforce.local")
+    firewall = read("bookpile-edge-firewall.sh")
+
+    assert "[bookpile-scanner-enforce]" in jail
+    assert "enabled = false" in jail
+    assert "filter = bookpile-scanner-probe" in jail
+    assert "findtime = 60" in jail
+    assert "maxretry = 60" in jail
+    assert "bantime = 600" in jail
+    assert "action = bookpile-nftables-scanner" in jail
+    assert "bookpile-edge-firewall ban scanner <ip>" in action
+    assert "bookpile-edge-firewall unban scanner <ip>" in action
+    assert "bookpile-edge-firewall flush scanner" in action
+    logger_commands = [
+        line.split("&&", 1)[1]
+        for line in action.splitlines()
+        if "/usr/bin/logger" in line
+    ]
+    assert len(logger_commands) == 2
+    assert "<ip>" not in "\n".join(logger_commands)
+    assert "policy=scanner_high_confidence" in action
+    assert "[bookpile-scanner-observe]" in switch
+    assert "[bookpile-scanner-enforce]" in switch
+    assert switch.count("enabled = true") == 1
+    assert switch.count("enabled = false") == 1
+    assert "scanner) printf 'scanner_high_confidence_ipv4" in firewall
+    assert "flush <live|ready|scanner>" in firewall
+
+
 def test_nftables_policy_cannot_match_ssh_or_internal_health() -> None:
     policy = read("nftables/bookpile-health-enforcement.nft")
     assert "table inet bookpile" in policy
     assert policy.count("set health_") == 2
     assert "health_live_ipv4" in policy
     assert "health_ready_ipv4" in policy
-    assert policy.count("timeout 10m") == 2
+    assert "scanner_high_confidence_ipv4" in policy
+    assert policy.count("timeout 10m") == 3
     assert policy.count("type filter hook forward priority -10; policy accept;") == 1
-    assert policy.count("ct original proto-dst { 80, 443 }") == 2
-    assert policy.count(" drop comment ") == 2
+    assert policy.count("ct original proto-dst { 80, 443 }") == 3
+    assert policy.count(" drop comment ") == 3
     assert "22" not in policy
     assert "8100" not in policy
     assert "input" not in policy.lower()
@@ -271,6 +304,16 @@ def _valid_nftables_document() -> dict[str, object]:
                 "set": {
                     "family": "inet",
                     "table": "bookpile",
+                    "name": "scanner_high_confidence_ipv4",
+                    "type": "ipv4_addr",
+                    "flags": ["timeout"],
+                    "timeout": 600,
+                }
+            },
+            {
+                "set": {
+                    "family": "inet",
+                    "table": "bookpile",
                     "name": "health_ready_ipv4",
                     "type": "ipv4_addr",
                     "flags": ["timeout"],
@@ -290,6 +333,10 @@ def _valid_nftables_document() -> dict[str, object]:
             },
             rule("bookpile health live", "health_live_ipv4"),
             rule("bookpile health ready", "health_ready_ipv4"),
+            rule(
+                "bookpile scanner high confidence",
+                "scanner_high_confidence_ipv4",
+            ),
         ]
     }
 
@@ -307,8 +354,12 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
     assert json.loads(completed.stdout) == {
         "chain": "public_web_guard",
         "family": "inet",
-        "policy_sets": ["health_live_ipv4", "health_ready_ipv4"],
-        "rules": 2,
+        "policy_sets": [
+            "health_live_ipv4",
+            "health_ready_ipv4",
+            "scanner_high_confidence_ipv4",
+        ],
+        "rules": 3,
         "ssh_port_matched": False,
     }
 
@@ -322,7 +373,7 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
     }
     unsafe_documents.append(ssh_rule)
     input_chain = json.loads(json.dumps(valid))
-    input_chain["nftables"][3 + 1]["chain"]["hook"] = "input"
+    input_chain["nftables"][4 + 1]["chain"]["hook"] = "input"
     unsafe_documents.append(input_chain)
     extra_condition = json.loads(json.dumps(valid))
     extra_condition["nftables"][-1]["rule"]["expr"].insert(
@@ -336,6 +387,12 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
         },
     )
     unsafe_documents.append(extra_condition)
+    missing_scanner_rule = json.loads(json.dumps(valid))
+    missing_scanner_rule["nftables"].pop()
+    unsafe_documents.append(missing_scanner_rule)
+    missing_scanner_set = json.loads(json.dumps(valid))
+    del missing_scanner_set["nftables"][4]
+    unsafe_documents.append(missing_scanner_set)
 
     for document in unsafe_documents:
         rejected = subprocess.run(
@@ -354,6 +411,8 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "STAGING-D6-ENFORCEMENT-POLICY" in installer
     assert "STAGING-D6-ENFORCEMENT-ENABLE" in installer
     assert "STAGING-D6-SCANNER-OBSERVE" in installer
+    assert "STAGING-D6-SCANNER-ENFORCEMENT-POLICY" in installer
+    assert "STAGING-D6-SCANNER-ENFORCEMENT-ENABLE" in installer
     for mode in (
         "--install-disabled",
         "--check-disabled",
@@ -361,6 +420,9 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
         "--enable-ready",
         "--enable-scanner-observe",
         "--disable-scanner-observe",
+        "--install-scanner-enforcement-disabled",
+        "--enable-scanner-enforcement",
+        "--disable-scanner-enforcement",
         "--disable-live",
         "--disable-ready",
         "--disable-all",
@@ -385,6 +447,25 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "nft -j --stateless list ruleset" in installer
     assert "Firewall rules changed while enabling scanner observation" in installer
     assert "bookpile-scanner-observe" in installer
+    assert "bookpile-scanner-enforce" in installer
+    assert "scanner_high_confidence" in read(
+        "fail2ban/action.d/bookpile-nftables-scanner.conf"
+    )
+    assert "assert_legacy_static_files" in installer
+    assert "assert_compatible_static_files" in installer
+    assert "upgrade_static_files" in installer
+    assert "Legacy enforcement file has an unreviewed digest" in installer
+    assert "cleanup_failed_scanner_policy_upgrade" in installer
+    assert "Disable every enforcement policy before migrating" in installer
+    assert 'disable_policy scanner' in installer
+    assert 'rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH"' in installer
+
+    observation_installer = read("install-bookpile-edge-defence.sh")
+    assert "assert_optional_scanner_enforcement_files_match" in observation_installer
+    assert "bookpile-scanner-enforce.conf" in observation_installer
+    assert "zzz-bookpile-scanner-enforce.local" in observation_installer
+    assert "action.d/bookpile-nftables-scanner.d" in observation_installer
+    assert "action.d/bookpile-nftables-scanner.local" in observation_installer
 
     enable_block = installer.split("  --enable-live|--enable-ready)", 1)[1].split(
         "\n    ;;", 1

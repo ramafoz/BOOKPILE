@@ -11,10 +11,12 @@ from typing import Any
 EXPECTED_SETS = {
     "health_live_ipv4",
     "health_ready_ipv4",
+    "scanner_high_confidence_ipv4",
 }
 EXPECTED_COMMENTS = {
     "bookpile health live": "health_live_ipv4",
     "bookpile health ready": "health_ready_ipv4",
+    "bookpile scanner high confidence": "scanner_high_confidence_ipv4",
 }
 
 
@@ -119,7 +121,7 @@ def validate(payload: object) -> dict[str, object]:
     _reject_extra_keys(tables[0], {"family", "name", "handle"}, "table")
 
     sets = objects["set"]
-    if {item.get("name") for item in sets} != EXPECTED_SETS or len(sets) != 2:
+    if {item.get("name") for item in sets} != EXPECTED_SETS or len(sets) != 3:
         raise PolicyValidationError("Unexpected address sets")
     for item in sets:
         _reject_extra_keys(
@@ -157,7 +159,7 @@ def validate(payload: object) -> dict[str, object]:
         raise PolicyValidationError("Unsafe base chain")
 
     rules = objects["rule"]
-    if len(rules) != 2:
+    if len(rules) != 3:
         raise PolicyValidationError("Unexpected rule count")
     seen_comments: set[str] = set()
     for rule in rules:
@@ -192,7 +194,7 @@ def validate(payload: object) -> dict[str, object]:
         "chain": "public_web_guard",
         "family": "inet",
         "policy_sets": sorted(EXPECTED_SETS),
-        "rules": 2,
+        "rules": 3,
         "ssh_port_matched": False,
     }
 

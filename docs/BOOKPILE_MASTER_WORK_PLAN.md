@@ -544,6 +544,19 @@ false positives. It does not authorize scanner enforcement: the separate
 10-minute-ban checkbox remains open until its implementation and reversible
 staging rehearsal are reviewed.
 
+**D6 scanner-enforcement implementation gate.** The repository now contains a
+separate, disabled `bookpile-scanner-enforce` jail and privacy-safe nftables
+action. It uses the accepted 60-in-60 threshold, a ten-minute timeout and a
+third exact IPv4 set whose rule can match only forwarded public ports 80/443.
+The migration from the deployed two-set health policy accepts only its reviewed
+SHA-256 digests, requires every enforcement switch and the BOOKPILE table to be
+absent, rolls back partial installation, and never enables the scanner jail.
+The independent scanner switch replaces observation while active and restores
+observation when disabled; `--disable-all` remains the complete fail-open path.
+This implementation evidence does not close the scanner-ban checkbox: staging
+must still prove the real block, ten-minute release, restart persistence,
+independent disable and console recovery before recording `ENABLE` or `REJECT`.
+
 ### D7 — Defensive regression harness
 
 - [ ] Automate normal navigation, API burst, scanner paths, forged forwarding

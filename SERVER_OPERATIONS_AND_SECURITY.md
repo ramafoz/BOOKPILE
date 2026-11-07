@@ -535,6 +535,58 @@ set, and deep reconciliation remained healthy at 433 expected and 433 stored
 private objects. This accepts the observation gate with zero false positives;
 it does not enable or approve the separate scanner-ban policy.
 
+### D6 high-confidence scanner enforcement policy
+
+The reviewed scanner-enforcement policy is shipped disabled. It reuses the
+validated scanner filter, replaces the observation jail while enabled and adds
+an IPv4 address to the dedicated `scanner_high_confidence_ipv4` nftables set
+for ten minutes after 60 matches in 60 seconds. Its rule is restricted to
+forwarded public TCP ports 80 and 443; it cannot match SSH, the host-originated
+internal healthcheck or outbound traffic. Lifecycle events contain only the
+fixed `scanner_high_confidence` policy label and never the address.
+
+The scanner policy expands the exact nftables shape from two to three empty,
+bounded sets. Migrating an existing host therefore requires an explicit,
+fail-open maintenance sequence. The migration accepts only the exact reviewed
+digest of the preceding health-only policy and must run with all enforcement
+disabled and the BOOKPILE table absent:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-all
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --install-scanner-enforcement-disabled \
+  --confirm STAGING-D6-SCANNER-ENFORCEMENT-POLICY
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-live --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-ready --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
+At this point the scanner set and drop rule are present but inert because the
+set is empty and the scanner remains in observation mode. Enable enforcement
+only in a separately authorized staging rehearsal with console recovery ready:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-scanner-enforcement \
+  --confirm STAGING-D6-SCANNER-ENFORCEMENT-ENABLE
+```
+
+The independent fail-open switch removes every scanner address and returns the
+scanner to observation without changing `live` or `ready`:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --disable-scanner-enforcement
+```
+
+`--disable-all` also removes scanner enforcement, destroys the complete
+BOOKPILE nftables table and leaves the non-blocking scanner observer available
+after Fail2ban reload. Acceptance still requires an external controlled ban,
+ten-minute expiry, persistence across Fail2ban restart, independent disable,
+console recovery evidence, green Healthchecks and normal authenticated use.
+
 Scanner observation can be disabled independently without altering either
 health policy or nftables:
 
