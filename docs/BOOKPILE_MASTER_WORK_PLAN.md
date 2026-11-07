@@ -666,8 +666,26 @@ directly; hiding a UI control is not evidence.
   byte counts, plan codes and foreign identities are absent. Focused profile
   and storage coverage passes 12 tests, and the complete local server suite
   passes 475 tests with one environment-dependent PostgreSQL skip.
-- [ ] A9: Audit CSRF, session fixation/rotation, revoked sessions, concurrent
-  membership changes and requests issued after access removal.
+- [x] A9: Audit CSRF, session fixation/rotation, revoked sessions, concurrent
+  membership changes and requests issued after access removal. The central
+  `test_session_membership_authorization_audit.py` coverage inventories every
+  unsafe API route and requires each authenticated mutation to depend on CSRF;
+  the seven public account-lifecycle operations and the authenticated,
+  read-only rearrangement preview are the only explicit exceptions. A login
+  replaces attacker-selected session and CSRF cookies without storing their
+  values. Rotation revokes the old session, rejects old-session/new-CSRF and
+  old-session/old-CSRF combinations, and rejects an old CSRF token paired with
+  the new session. Revoking all sessions invalidates two independently
+  established session/CSRF pairs before either can read or mutate again. A
+  deterministic temporal interleaving authenticates an Owner request, removes
+  that Owner's membership immediately before resource authorization, and
+  proves the request receives a generic 404 without creating a book; the stale
+  session remains a valid account session but has no library access, while the
+  surviving Owner retains access. The existing PostgreSQL rehearsal continues
+  to exercise reciprocal Owner removal in independent concurrent transactions.
+  Focused authentication, membership and PostgreSQL coverage passes 12 tests
+  with only the environment-dependent PostgreSQL gate skipped locally; the
+  complete local server suite passes 479 tests with the same single skip.
 - [ ] A10: Convert every discovered defect into a regression test and publish a
   matrix containing endpoint, actor, expected result, actual result, revision
   and evidence. Zero unresolved authorization defects are permitted.
