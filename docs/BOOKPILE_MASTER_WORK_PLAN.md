@@ -388,7 +388,7 @@ catalogue use all passed afterward. The remaining D5 task is the future
 - [x] Run scanner detection in dry-run for at least 24 hours. A controlled 60
   scanner probes/minute fixture must be detected with the validated client IP
   and must not block traffic.
-- [ ] Enable only the 10-minute high-confidence scanner ban; prove ban,
+- [x] Enable only the 10-minute high-confidence scanner ban; prove ban,
   expiration, service restart persistence and emergency unban from the IONOS
   console.
 - [ ] Observe the `1,200 requests/minute/IP` edge-volume signal for seven days
@@ -540,9 +540,8 @@ empty, so no real client reached the 60-probe/minute threshold. `live` and
 Healthchecks stayed green, authenticated use passed, and deep reconciliation
 reported 433 expected and 433 stored private objects with no missing,
 mismatched or orphaned object. The observation result is **ACCEPT** with zero
-false positives. It does not authorize scanner enforcement: the separate
-10-minute-ban checkbox remains open until its implementation and reversible
-staging rehearsal are reviewed.
+false positives. Scanner enforcement remained separately gated until its
+implementation and reversible staging rehearsal were reviewed.
 
 **D6 scanner-enforcement implementation gate.** The repository now contains a
 separate, disabled `bookpile-scanner-enforce` jail and privacy-safe nftables
@@ -553,9 +552,34 @@ SHA-256 digests, requires every enforcement switch and the BOOKPILE table to be
 absent, rolls back partial installation, and never enables the scanner jail.
 The independent scanner switch replaces observation while active and restores
 observation when disabled; `--disable-all` remains the complete fail-open path.
-This implementation evidence does not close the scanner-ban checkbox: staging
-must still prove the real block, ten-minute release, restart persistence,
-independent disable and console recovery before recording `ENABLE` or `REJECT`.
+The implementation was subsequently accepted by the staging rehearsal below.
+
+**D6 scanner-enforcement staging acceptance.** At staging application revision
+`8974b9ef96be837abb89b2f1220d96c9a8d7eea4`, host-policy revision
+`9583219da40e512dac1b7f2975464e9e705800a0` migrated the reviewed two-set
+health policy to the three-set policy while every enforcement switch was
+disabled, then restored `live` and `ready` enforcement with the scanner still
+in observation. Enabling scanner enforcement at 2026-11-07 21:14:27 UTC and
+sending exactly 60 high-confidence probes in 60 seconds returned the expected
+60 `404` responses, inserted one client into the scanner set and caused its
+next public web request to time out. SSH, direct VPS health requests, the other
+policies and the application remained available.
+
+The active scanner ban survived a Fail2ban restart at 21:19:00 UTC through the
+persistent database, continued blocking the controlled external client, then
+expired after ten minutes and restored HTTP `200`. D5 emitted one aggregate
+critical scanner alert for exactly 60 probes and a recovery 15 minutes 8
+seconds later, without exposing the client address. A second controlled ban
+was removed immediately by the scanner-only fail-open switch while `live` and
+`ready` remained enforced. Re-enabling enforcement restored the still-live
+persistent ban; the same scanner-only switch was then successfully operated
+from the out-of-band IONOS console and public access recovered immediately.
+Final re-enablement reported all three jails in `enforce`, an empty scanner
+set, `ssh_port_matched=false`, healthy public endpoints, healthy deep
+reconciliation at 433 expected and 433 stored private objects, and successful
+normal authenticated use. The formal decision is therefore **`ENABLE` for the
+ten-minute high-confidence scanner ban**, with both its independent switch and
+the IONOS console as proven recovery paths.
 
 ### D7 — Defensive regression harness
 

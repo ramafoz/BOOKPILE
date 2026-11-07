@@ -583,9 +583,23 @@ sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
 
 `--disable-all` also removes scanner enforcement, destroys the complete
 BOOKPILE nftables table and leaves the non-blocking scanner observer available
-after Fail2ban reload. Acceptance still requires an external controlled ban,
+after Fail2ban reload. Acceptance requires an external controlled ban,
 ten-minute expiry, persistence across Fail2ban restart, independent disable,
 console recovery evidence, green Healthchecks and normal authenticated use.
+
+Staging accepted this policy on 2026-11-07 at application revision
+`8974b9ef96be837abb89b2f1220d96c9a8d7eea4` and host-policy revision
+`9583219da40e512dac1b7f2975464e9e705800a0`. Exactly 60 controlled probes
+returned `404` and produced one real scanner ban; the next public request timed
+out. The ban survived a Fail2ban restart, expired after ten minutes and restored
+HTTP `200`. D5 emitted one aggregate critical alert and its recovery. A second
+ban was removed first with the independent scanner switch and then, after
+re-enablement restored its persistent state, through the out-of-band IONOS
+console. Both recoveries preserved `live` and `ready` enforcement and restored
+public access immediately. Final state was all three policies in `enforce`, an
+empty scanner set, no SSH match, healthy public endpoints, healthy deep
+reconciliation at 433 expected and 433 stored objects, and successful normal
+authenticated use. The staging decision is **ENABLE**.
 
 Scanner observation can be disabled independently without altering either
 health policy or nftables:
