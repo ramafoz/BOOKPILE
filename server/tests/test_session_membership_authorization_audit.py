@@ -63,14 +63,24 @@ def _dependency_names(route: APIRoute) -> set[str]:
     return names
 
 
-def _login(client: TestClient, user: User) -> tuple[str, str]:
-    client.cookies.clear()
+def _login(
+    client: TestClient,
+    user: User,
+    *,
+    clear_existing: bool = True,
+) -> tuple[str, str]:
+    if clear_existing:
+        client.cookies.clear()
+    settings = get_settings()
     response = client.post(
         "/api/v1/auth/login",
         json={"identifier": user.username, "password": PASSWORD},
     )
     assert response.status_code == 200, response.text
-    settings = get_settings()
+    if not clear_existing:
+        sent_cookies = response.request.headers.get("cookie", "")
+        assert f"{settings.session_cookie_name}=" in sent_cookies
+        assert f"{settings.csrf_cookie_name}=" in sent_cookies
     session_token = response.cookies.get(settings.session_cookie_name)
     csrf_token = response.cookies.get(settings.csrf_cookie_name)
     assert session_token is not None
@@ -81,8 +91,18 @@ def _login(client: TestClient, user: User) -> tuple[str, str]:
 def _use_session(client: TestClient, session_token: str, csrf_token: str) -> None:
     settings = get_settings()
     client.cookies.clear()
-    client.cookies.set(settings.session_cookie_name, session_token)
-    client.cookies.set(settings.csrf_cookie_name, csrf_token)
+    client.cookies.set(
+        settings.session_cookie_name,
+        session_token,
+        domain="testserver.local",
+        path="/api/v1",
+    )
+    client.cookies.set(
+        settings.csrf_cookie_name,
+        csrf_token,
+        domain="testserver.local",
+        path="/",
+    )
 
 
 def test_every_authenticated_mutation_has_an_explicit_csrf_decision(
@@ -127,9 +147,21 @@ def test_login_rotation_rejects_fixed_mixed_and_stale_session_secrets(
     settings = get_settings()
     fixed_session = "attacker-selected-session"
     fixed_csrf = "attacker-selected-csrf"
-    _use_session(client, fixed_session, fixed_csrf)
+    client.cookies.clear()
+    client.cookies.set(
+        settings.session_cookie_name,
+        fixed_session,
+        domain="testserver.local",
+        path="/",
+    )
+    client.cookies.set(
+        settings.csrf_cookie_name,
+        fixed_csrf,
+        domain="testserver.local",
+        path="/",
+    )
 
-    old_session, old_csrf = _login(client, user)
+    old_session, old_csrf = _login(client, user, clear_existing=False)
     assert old_session != fixed_session
     assert old_csrf != fixed_csrf
     assert session.scalar(

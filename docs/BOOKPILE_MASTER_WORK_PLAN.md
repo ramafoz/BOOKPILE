@@ -673,7 +673,10 @@ directly; hiding a UI control is not evidence.
   the seven public account-lifecycle operations and the authenticated,
   read-only rearrangement preview are the only explicit exceptions. A login
   replaces attacker-selected session and CSRF cookies without storing their
-  values. Rotation revokes the old session, rejects old-session/new-CSRF and
+  values. The audit found and fixed root-path cookie shadowing: login and logout
+  now expire any stale `/` session cookie while the genuine HttpOnly session
+  remains restricted to `/api/v1`. Rotation revokes the old session, rejects
+  old-session/new-CSRF and
   old-session/old-CSRF combinations, and rejects an old CSRF token paired with
   the new session. Revoking all sessions invalidates two independently
   established session/CSRF pairs before either can read or mutate again. A

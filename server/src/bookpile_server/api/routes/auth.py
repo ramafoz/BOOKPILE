@@ -108,6 +108,16 @@ def set_auth_cookies(response: Response, result: LoginResult) -> None:
         # double-submit value before sending it in X-CSRF-Token.
         path="/",
     )
+    # Expire any legacy or attacker-planted root-path session cookie. Without
+    # this, a browser may send both `/api/v1` and `/` cookies with the same
+    # name, allowing the less-specific stale value to shadow the fresh login.
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def clear_auth_cookies(response: Response) -> None:
@@ -115,6 +125,13 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(
         key=settings.session_cookie_name,
         path="/api/v1",
+        secure=settings.session_cookie_secure,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
         secure=settings.session_cookie_secure,
         httponly=True,
         samesite="lax",
