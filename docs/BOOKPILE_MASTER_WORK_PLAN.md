@@ -647,8 +647,25 @@ directly; hiding a UI control is not evidence.
   and single-use account tokens. Focused lifecycle coverage passes 20 tests;
   the complete local server suite passes 472 tests with one
   environment-dependent skip.
-- [ ] A8: Audit profiles, discoverability, quota projections and every
-  administrative field for overexposure.
+- [x] A8: Audit profiles, discoverability, quota projections and every
+  administrative field for overexposure. The central
+  `test_profile_storage_authorization_audit.py` coverage proves the exact
+  profile projection seen by co-Owners, both Viewer scopes, a foreign Owner and
+  an unrelated authenticated user for every explicit visibility group. A real
+  stored profile image follows the same policy without exposing its object key
+  or digest; private images and inactive-account profiles return the same 404
+  shape as absent resources, and denied reads leave profile state unchanged.
+  The intentionally authenticated custom-pronoun projection remains explicit.
+  Anonymous callers cannot use account, profile or storage routes, and the
+  private account endpoint returns only the current account's documented five
+  identity fields. No global user-search endpoint exists: cross-account profile
+  discovery requires a previously known UUID and never exposes email, account
+  state, verification, session, entitlement or allocation data. Storage
+  projections are private, aggregate ratios: Owners see only libraries they
+  own, while Viewers and unrelated users receive no library allocations; raw
+  byte counts, plan codes and foreign identities are absent. Focused profile
+  and storage coverage passes 12 tests, and the complete local server suite
+  passes 475 tests with one environment-dependent PostgreSQL skip.
 - [ ] A9: Audit CSRF, session fixation/rotation, revoked sessions, concurrent
   membership changes and requests issued after access removal.
 - [ ] A10: Convert every discovered defect into a regression test and publish a
