@@ -11,9 +11,16 @@ table inet bookpile {
 		timeout 10m
 	}
 
+	set scanner_high_confidence_ipv4 {
+		type ipv4_addr
+		flags timeout
+		timeout 10m
+	}
+
 	chain public_web_guard {
 		type filter hook forward priority -10; policy accept;
 		meta l4proto tcp ct original proto-dst { 80, 443 } ip saddr @health_live_ipv4 drop comment "bookpile health live"
 		meta l4proto tcp ct original proto-dst { 80, 443 } ip saddr @health_ready_ipv4 drop comment "bookpile health ready"
+		meta l4proto tcp ct original proto-dst { 80, 443 } ip saddr @scanner_high_confidence_ipv4 drop comment "bookpile scanner high confidence"
 	}
 }

@@ -524,6 +524,83 @@ aggregate observation count, D5 scanner totals, false-positive assessment,
 Healthchecks continuity and normal authenticated web evidence. Do not enable a
 scanner ban before that evidence is reviewed.
 
+The staging observation accepted on 2026-11-07 ran from
+2026-11-06 19:28:11 UTC through 2026-11-07 20:16:55 UTC. The controlled fixture
+had already proved one non-blocking threshold crossing. During the subsequent
+real window, 99 scheduled D5 evaluations recorded zero scanner probes and zero
+temporary bans, and the exact-window privacy-safe lifecycle journal contained
+no threshold crossing. Healthchecks remained green, authenticated use passed,
+`live` and `ready` enforcement remained active, nftables acquired no scanner
+set, and deep reconciliation remained healthy at 433 expected and 433 stored
+private objects. This accepts the observation gate with zero false positives;
+it does not enable or approve the separate scanner-ban policy.
+
+### D6 high-confidence scanner enforcement policy
+
+The reviewed scanner-enforcement policy is shipped disabled. It reuses the
+validated scanner filter, replaces the observation jail while enabled and adds
+an IPv4 address to the dedicated `scanner_high_confidence_ipv4` nftables set
+for ten minutes after 60 matches in 60 seconds. Its rule is restricted to
+forwarded public TCP ports 80 and 443; it cannot match SSH, the host-originated
+internal healthcheck or outbound traffic. Lifecycle events contain only the
+fixed `scanner_high_confidence` policy label and never the address.
+
+The scanner policy expands the exact nftables shape from two to three empty,
+bounded sets. Migrating an existing host therefore requires an explicit,
+fail-open maintenance sequence. The migration accepts only the exact reviewed
+digest of the preceding health-only policy and must run with all enforcement
+disabled and the BOOKPILE table absent:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-all
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --install-scanner-enforcement-disabled \
+  --confirm STAGING-D6-SCANNER-ENFORCEMENT-POLICY
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-live --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-ready --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
+At this point the scanner set and drop rule are present but inert because the
+set is empty and the scanner remains in observation mode. Enable enforcement
+only in a separately authorized staging rehearsal with console recovery ready:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-scanner-enforcement \
+  --confirm STAGING-D6-SCANNER-ENFORCEMENT-ENABLE
+```
+
+The independent fail-open switch removes every scanner address and returns the
+scanner to observation without changing `live` or `ready`:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --disable-scanner-enforcement
+```
+
+`--disable-all` also removes scanner enforcement, destroys the complete
+BOOKPILE nftables table and leaves the non-blocking scanner observer available
+after Fail2ban reload. Acceptance requires an external controlled ban,
+ten-minute expiry, persistence across Fail2ban restart, independent disable,
+console recovery evidence, green Healthchecks and normal authenticated use.
+
+Staging accepted this policy on 2026-11-07 at application revision
+`8974b9ef96be837abb89b2f1220d96c9a8d7eea4` and host-policy revision
+`9583219da40e512dac1b7f2975464e9e705800a0`. Exactly 60 controlled probes
+returned `404` and produced one real scanner ban; the next public request timed
+out. The ban survived a Fail2ban restart, expired after ten minutes and restored
+HTTP `200`. D5 emitted one aggregate critical alert and its recovery. A second
+ban was removed first with the independent scanner switch and then, after
+re-enablement restored its persistent state, through the out-of-band IONOS
+console. Both recoveries preserved `live` and `ready` enforcement and restored
+public access immediately. Final state was all three policies in `enforce`, an
+empty scanner set, no SSH match, healthy public endpoints, healthy deep
+reconciliation at 433 expected and 433 stored objects, and successful normal
+authenticated use. The staging decision is **ENABLE**.
+
 Scanner observation can be disabled independently without altering either
 health policy or nftables:
 
