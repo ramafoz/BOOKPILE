@@ -198,6 +198,41 @@ def test_scanner_observation_is_bounded_and_cannot_mutate_firewall() -> None:
         assert forbidden not in action
 
 
+def test_edge_volume_observation_is_bounded_private_and_non_blocking() -> None:
+    jail = read("fail2ban/jail.d/bookpile-edge-volume-observe.conf")
+    volume_filter = read("fail2ban/filter.d/bookpile-edge-volume.conf")
+    switch = read(
+        "fail2ban/jail.d/zzzz-bookpile-edge-volume-observe.local"
+    )
+    action = read("fail2ban/action.d/bookpile-observe.conf").lower()
+
+    assert "[bookpile-edge-volume-observe]" in jail
+    assert "enabled = false" in jail
+    assert "filter = bookpile-edge-volume" in jail
+    assert "findtime = 60" in jail
+    assert "maxretry = 1200" in jail
+    assert "bantime = 600" in jail
+    assert "action = bookpile-observe" in jail
+    assert '"health_class":"(?:live|ready|other)"' in volume_filter
+    assert '"deployment_revision":"[0-9a-f]{40}"' in volume_filter
+    assert '"defensive_decision":"observed"' in volume_filter
+    assert '"client_ip":"<HOST>"' in volume_filter
+    assert "[bookpile-edge-volume-observe]" in switch
+    assert "enabled = true" in switch
+    for forbidden in ("<ip>", "nft", "iptables", "firewall"):
+        assert forbidden not in action
+
+    rehearsal = (
+        ROOT / "server" / "scripts" / "rehearse-edge-volume-client.py"
+    ).read_text(encoding="utf-8")
+    assert 'BASE_URL = "https://staging.bookpile.gal/"' in rehearsal
+    assert "REQUEST_COUNT = 1_200" in rehearsal
+    assert "STAGING-D6-VOLUME-OBSERVE-REHEARSAL" in rehearsal
+    assert '"privacy": "aggregate_only"' in rehearsal
+    assert "elapsed < 60" in rehearsal
+    assert "production" not in rehearsal.lower()
+
+
 def test_scanner_enforcement_is_separate_bounded_and_disabled() -> None:
     jail = read("fail2ban/jail.d/bookpile-scanner-enforce.conf")
     action = read("fail2ban/action.d/bookpile-nftables-scanner.conf")
@@ -413,6 +448,7 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "STAGING-D6-SCANNER-OBSERVE" in installer
     assert "STAGING-D6-SCANNER-ENFORCEMENT-POLICY" in installer
     assert "STAGING-D6-SCANNER-ENFORCEMENT-ENABLE" in installer
+    assert "STAGING-D6-VOLUME-OBSERVE" in installer
     for mode in (
         "--install-disabled",
         "--check-disabled",
@@ -423,6 +459,8 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
         "--install-scanner-enforcement-disabled",
         "--enable-scanner-enforcement",
         "--disable-scanner-enforcement",
+        "--enable-volume-observe",
+        "--disable-volume-observe",
         "--disable-live",
         "--disable-ready",
         "--disable-all",
@@ -433,6 +471,7 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "Enforcement switch differs from reviewed source" in installer
     assert "cleanup_failed_enable" in installer
     assert "cleanup_failed_scanner_enable" in installer
+    assert "cleanup_failed_volume_enable" in installer
     assert "cleanup_failed_disable" in installer
     assert "wait_for_policy" in installer
     assert "BOOKPILE nftables policy did not become ready within 30 seconds" in installer
@@ -446,6 +485,7 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "deploy-staging.sh" not in installer
     assert "nft -j --stateless list ruleset" in installer
     assert "Firewall rules changed while enabling scanner observation" in installer
+    assert "Firewall rules changed while enabling edge-volume observation" in installer
     assert "bookpile-scanner-observe" in installer
     assert "bookpile-scanner-enforce" in installer
     assert "scanner_high_confidence" in read(
@@ -466,6 +506,11 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "zzz-bookpile-scanner-enforce.local" in observation_installer
     assert "action.d/bookpile-nftables-scanner.d" in observation_installer
     assert "action.d/bookpile-nftables-scanner.local" in observation_installer
+    assert "assert_optional_volume_files_match" in observation_installer
+    assert "bookpile-edge-volume-observe.conf" in observation_installer
+    assert "zzzz-bookpile-edge-volume-observe.local" in observation_installer
+    assert "filter.d/bookpile-edge-volume.d" in observation_installer
+    assert "filter.d/bookpile-edge-volume.local" in observation_installer
 
     enable_block = installer.split("  --enable-live|--enable-ready)", 1)[1].split(
         "\n    ;;", 1

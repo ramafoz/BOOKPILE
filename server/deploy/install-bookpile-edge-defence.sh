@@ -4,6 +4,7 @@ set -Eeuo pipefail
 readonly LIVE_JAIL='bookpile-health-live-observe'
 readonly READY_JAIL='bookpile-health-ready-observe'
 readonly SCANNER_JAIL='bookpile-scanner-observe'
+readonly VOLUME_JAIL='bookpile-edge-volume-observe'
 readonly CONFIRMATION='STAGING-D6-OBSERVE-INSTALL'
 readonly LOG_PATH='/var/log/bookpile/defensive-events.log'
 readonly CONFIG_ROOT='/etc/fail2ban'
@@ -50,7 +51,8 @@ cleanup_failed_installation() {
             -d "$CONFIG_ROOT/jail.d" && ! -L "$CONFIG_ROOT/jail.d" ]]; then
         rm -f \
           "$CONFIG_ROOT/jail.d/bookpile-observe.local" \
-          "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" || cleanup_ok='false'
+          "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" \
+          "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" || cleanup_ok='false'
       else
         cleanup_ok='false'
       fi
@@ -108,18 +110,29 @@ assert_only_approved_jails() {
       sort -u
   )
   local expected_count=2
-  scanner_observation_enabled && expected_count=3
+  scanner_observation_enabled && ((expected_count += 1))
+  volume_observation_enabled && ((expected_count += 1))
   [[ ${#jails[@]} -eq $expected_count ]] || {
     printf 'Expected exactly %s approved jails; found: %s\n' \
       "$expected_count" "${jails[*]:-(none)}" >&2
     exit 1
   }
   for jail in "${jails[@]}"; do
-    [[ "$jail" == "$LIVE_JAIL" || "$jail" == "$READY_JAIL" || \
-       ( "$jail" == "$SCANNER_JAIL" && $expected_count -eq 3 ) ]] || {
-      echo "Unapproved enabled jail: $jail" >&2
-      exit 1
-    }
+    case "$jail" in
+      "$LIVE_JAIL"|"$READY_JAIL") ;;
+      "$SCANNER_JAIL") scanner_observation_enabled || {
+        echo "Unapproved enabled jail: $jail" >&2
+        exit 1
+      } ;;
+      "$VOLUME_JAIL") volume_observation_enabled || {
+        echo "Unapproved enabled jail: $jail" >&2
+        exit 1
+      } ;;
+      *)
+        echo "Unapproved enabled jail: $jail" >&2
+        exit 1
+        ;;
+    esac
   done
 }
 
@@ -136,8 +149,24 @@ scanner_observation_enabled() {
        ! -L "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" ]]
 }
 
+volume_policy_installed() {
+  [[ -f "$CONFIG_ROOT/filter.d/bookpile-edge-volume.conf" && \
+     ! -L "$CONFIG_ROOT/filter.d/bookpile-edge-volume.conf" && \
+     -f "$CONFIG_ROOT/jail.d/bookpile-edge-volume-observe.conf" && \
+     ! -L "$CONFIG_ROOT/jail.d/bookpile-edge-volume-observe.conf" ]]
+}
+
+volume_observation_enabled() {
+  volume_policy_installed && \
+    [[ -f "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" && \
+       ! -L "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" ]]
+}
+
 expected_observation_jail_count() {
-  scanner_observation_enabled && printf '3\n' || printf '2\n'
+  local count=2
+  scanner_observation_enabled && ((count += 1))
+  volume_observation_enabled && ((count += 1))
+  printf '%s\n' "$count"
 }
 
 assert_no_enabled_jails() {
@@ -322,6 +351,57 @@ assert_optional_scanner_enforcement_files_match() {
   fi
 }
 
+assert_optional_volume_files_match() {
+  local any='false' pair source_relative destination_relative destination
+  local -a files=(
+    'fail2ban/filter.d/bookpile-edge-volume.conf:filter.d/bookpile-edge-volume.conf'
+    'fail2ban/jail.d/bookpile-edge-volume-observe.conf:jail.d/bookpile-edge-volume-observe.conf'
+  )
+  for pair in "${files[@]}"; do
+    destination_relative="${pair#*:}"
+    destination="$CONFIG_ROOT/$destination_relative"
+    [[ -e "$destination" || -L "$destination" ]] && any='true'
+  done
+  [[ -e "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" || \
+     -L "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" ]] && any='true'
+  [[ "$any" == 'true' ]] || return 0
+
+  for pair in "${files[@]}"; do
+    source_relative="${pair%%:*}"
+    destination_relative="${pair#*:}"
+    destination="$CONFIG_ROOT/$destination_relative"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Installed edge-volume policy is missing or unsafe: $destination_relative" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == 'root:root 644' ]] || {
+      echo "Installed edge-volume policy has unsafe ownership or mode: $destination_relative" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/$source_relative" "$destination" || {
+      echo "Installed edge-volume policy differs from reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  done
+
+  destination_relative='jail.d/zzzz-bookpile-edge-volume-observe.local'
+  destination="$CONFIG_ROOT/$destination_relative"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Installed edge-volume switch is unsafe: $destination_relative" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == 'root:root 644' ]] || {
+      echo "Installed edge-volume switch has unsafe ownership or mode: $destination_relative" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/fail2ban/$destination_relative" "$destination" || {
+      echo "Installed edge-volume switch differs from reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  fi
+}
+
 assert_no_unreviewed_overrides() {
   local directory file package_file package_owned
   local package_verification
@@ -334,11 +414,13 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local"
     "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local"
     "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local"
+    "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local"
   )
   local allowed allowed_file
 
   assert_optional_scanner_files_match
   assert_optional_scanner_enforcement_files_match
+  assert_optional_volume_files_match
 
   for directory in \
     "$CONFIG_ROOT" \
@@ -390,7 +472,8 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/action.d/bookpile-nftables-scanner.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.d" \
-    "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.d"; do
+    "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.d" \
+    "$CONFIG_ROOT/filter.d/bookpile-edge-volume.d"; do
     [[ ! -e "$file" && ! -L "$file" ]] || {
       echo "Unreviewed BOOKPILE component drop-in directory: $file" >&2
       exit 1
@@ -403,12 +486,14 @@ assert_no_unreviewed_overrides() {
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-health-enforce.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-scanner-observe.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-scanner-enforce.conf" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-edge-volume-observe.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" || \
-       "$file" == "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local" ]] && continue
+       "$file" == "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local" ]] && continue
     package_owned='false'
     for package_file in "${package_files[@]}"; do
       if [[ "$file" == "$package_file" ]]; then
@@ -436,7 +521,8 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/action.d/bookpile-nftables-scanner.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.local" \
-    "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.local"; do
+    "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.local" \
+    "$CONFIG_ROOT/filter.d/bookpile-edge-volume.local"; do
     [[ ! -e "$file" && ! -L "$file" ]] || {
       echo "Unreviewed BOOKPILE component override: $file" >&2
       exit 1
@@ -474,6 +560,7 @@ activate_observation() {
   fail2ban-client status "$LIVE_JAIL" >/dev/null
   fail2ban-client status "$READY_JAIL" >/dev/null
   scanner_observation_enabled && fail2ban-client status "$SCANNER_JAIL" >/dev/null
+  volume_observation_enabled && fail2ban-client status "$VOLUME_JAIL" >/dev/null
   assert_no_firewall_policy
   firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
   [[ "$firewall_before" == "$firewall_after" ]] || {
@@ -485,13 +572,14 @@ activate_observation() {
 }
 
 status_json() {
-  local live='inactive' ready='inactive' scanner='inactive' persistent='false'
+  local live='inactive' ready='inactive' scanner='inactive' volume='inactive' persistent='false'
   fail2ban-client status "$LIVE_JAIL" >/dev/null 2>&1 && live='active'
   fail2ban-client status "$READY_JAIL" >/dev/null 2>&1 && ready='active'
   fail2ban-client status "$SCANNER_JAIL" >/dev/null 2>&1 && scanner='active'
+  fail2ban-client status "$VOLUME_JAIL" >/dev/null 2>&1 && volume='active'
   [[ -f /var/lib/fail2ban/fail2ban.sqlite3 ]] && persistent='true'
-  printf '{"firewall_mutated":false,"live_observation":"%s","persistent_database":%s,"ready_observation":"%s","scanner_observation":"%s"}\n' \
-    "$live" "$persistent" "$ready" "$scanner"
+  printf '{"firewall_mutated":false,"live_observation":"%s","persistent_database":%s,"ready_observation":"%s","scanner_observation":"%s","volume_observation":"%s"}\n' \
+    "$live" "$persistent" "$ready" "$scanner" "$volume"
 }
 
 case "$mode" in
@@ -554,6 +642,7 @@ case "$mode" in
     fail2ban-client status "$LIVE_JAIL" >/dev/null
     fail2ban-client status "$READY_JAIL" >/dev/null
     scanner_observation_enabled && fail2ban-client status "$SCANNER_JAIL" >/dev/null
+    volume_observation_enabled && fail2ban-client status "$VOLUME_JAIL" >/dev/null
     assert_no_firewall_policy
     firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
     [[ "$firewall_before" == "$firewall_after" ]] || {
@@ -600,6 +689,7 @@ case "$mode" in
     fail2ban-client status "$LIVE_JAIL" >/dev/null
     fail2ban-client status "$READY_JAIL" >/dev/null
     scanner_observation_enabled && fail2ban-client status "$SCANNER_JAIL" >/dev/null
+    volume_observation_enabled && fail2ban-client status "$VOLUME_JAIL" >/dev/null
     assert_no_firewall_policy
     firewall_after="$(nft -j --stateless list ruleset | sha256sum | cut -d' ' -f1)"
     [[ "$firewall_before" == "$firewall_after" ]] || {
@@ -626,9 +716,11 @@ case "$mode" in
     fail2ban-client stop "$LIVE_JAIL"
     fail2ban-client stop "$READY_JAIL"
     scanner_observation_enabled && fail2ban-client stop "$SCANNER_JAIL"
+    volume_observation_enabled && fail2ban-client stop "$VOLUME_JAIL"
     rm -f \
       "$CONFIG_ROOT/jail.d/bookpile-observe.local" \
-      "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local"
+      "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" \
+      "$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local"
     fail2ban-client -t
     assert_no_unreviewed_overrides
     assert_no_enabled_jails
@@ -649,6 +741,7 @@ case "$mode" in
     check_log
     command -v fail2ban-client >/dev/null
     assert_optional_scanner_files_match
+    assert_optional_volume_files_match
     fail2ban-client -t
     assert_only_approved_jails
     [[ -f /var/lib/fail2ban/fail2ban.sqlite3 ]]
