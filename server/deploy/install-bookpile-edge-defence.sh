@@ -271,6 +271,57 @@ assert_optional_scanner_files_match() {
   fi
 }
 
+assert_optional_scanner_enforcement_files_match() {
+  local any='false' pair source_relative destination_relative destination
+  local -a files=(
+    'fail2ban/action.d/bookpile-nftables-scanner.conf:action.d/bookpile-nftables-scanner.conf'
+    'fail2ban/jail.d/bookpile-scanner-enforce.conf:jail.d/bookpile-scanner-enforce.conf'
+  )
+  for pair in "${files[@]}"; do
+    destination_relative="${pair#*:}"
+    destination="$CONFIG_ROOT/$destination_relative"
+    [[ -e "$destination" || -L "$destination" ]] && any='true'
+  done
+  [[ -e "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local" || \
+     -L "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local" ]] && any='true'
+  [[ "$any" == 'true' ]] || return 0
+
+  for pair in "${files[@]}"; do
+    source_relative="${pair%%:*}"
+    destination_relative="${pair#*:}"
+    destination="$CONFIG_ROOT/$destination_relative"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Installed scanner enforcement policy is missing or unsafe: $destination_relative" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == 'root:root 644' ]] || {
+      echo "Installed scanner enforcement policy has unsafe ownership or mode: $destination_relative" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/$source_relative" "$destination" || {
+      echo "Installed scanner enforcement policy differs from reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  done
+
+  destination_relative='jail.d/zzz-bookpile-scanner-enforce.local'
+  destination="$CONFIG_ROOT/$destination_relative"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Installed scanner enforcement switch is unsafe: $destination_relative" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == 'root:root 644' ]] || {
+      echo "Installed scanner enforcement switch has unsafe ownership or mode: $destination_relative" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/fail2ban/$destination_relative" "$destination" || {
+      echo "Installed scanner enforcement switch differs from reviewed source: $destination_relative" >&2
+      exit 1
+    }
+  fi
+}
+
 assert_no_unreviewed_overrides() {
   local directory file package_file package_owned
   local package_verification
@@ -282,10 +333,12 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local"
     "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local"
     "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local"
+    "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local"
   )
   local allowed allowed_file
 
   assert_optional_scanner_files_match
+  assert_optional_scanner_enforcement_files_match
 
   for directory in \
     "$CONFIG_ROOT" \
@@ -334,6 +387,7 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/action.d/bookpile-observe.d" \
     "$CONFIG_ROOT/action.d/bookpile-nftables-live.d" \
     "$CONFIG_ROOT/action.d/bookpile-nftables-ready.d" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-scanner.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.d" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.d" \
     "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.d"; do
@@ -348,11 +402,13 @@ assert_no_unreviewed_overrides() {
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-health.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-health-enforce.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-scanner-observe.conf" || \
+       "$file" == "$CONFIG_ROOT/jail.d/bookpile-scanner-enforce.conf" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-disable-packaged.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/bookpile-observe.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local" || \
        "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local" || \
-       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" ]] && continue
+       "$file" == "$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local" || \
+       "$file" == "$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local" ]] && continue
     package_owned='false'
     for package_file in "${package_files[@]}"; do
       if [[ "$file" == "$package_file" ]]; then
@@ -377,6 +433,7 @@ assert_no_unreviewed_overrides() {
     "$CONFIG_ROOT/action.d/bookpile-observe.local" \
     "$CONFIG_ROOT/action.d/bookpile-nftables-live.local" \
     "$CONFIG_ROOT/action.d/bookpile-nftables-ready.local" \
+    "$CONFIG_ROOT/action.d/bookpile-nftables-scanner.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-live.local" \
     "$CONFIG_ROOT/filter.d/bookpile-health-ready.local" \
     "$CONFIG_ROOT/filter.d/bookpile-scanner-probe.local"; do
