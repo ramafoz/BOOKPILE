@@ -610,6 +610,67 @@ sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
 sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
 ```
 
+### D6 edge-volume observation
+
+The edge-volume policy counts every schema-valid public D6 event by Fail2ban's
+validated client address. It deliberately ignores original paths, queries,
+headers, cookies, bodies and application identities. At exactly 1,200 requests
+from one address inside 60 seconds it enters a ten-minute deduplication state
+and emits only
+`would_temporarily_ban policy=bookpile-edge-volume-observe`. Its action is the
+same observation-only action used by the accepted scanner dry-run: it never
+calls nftables and never writes the address to the operational journal. The
+internal Docker healthcheck bypasses Caddy and is not counted.
+
+Install and enable this fourth jail only through its independent confirmed
+switch. Existing `live`, `ready` and scanner enforcement must remain unchanged,
+and the stateless nftables snapshot must be identical before and after:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-volume-observe \
+  --confirm STAGING-D6-VOLUME-OBSERVE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+sudo fail2ban-client status bookpile-edge-volume-observe
+```
+
+From the external Windows checkout, run the bounded rehearsal as one command.
+It is hard-coded to the staging root, requires an exact confirmation, sends
+exactly 1,200 ordinary requests concurrently and reports only aggregate
+status counts:
+
+```powershell
+py server/scripts/rehearse-edge-volume-client.py --confirm STAGING-D6-VOLUME-OBSERVE-REHEARSAL
+```
+
+Acceptance requires 1,200 HTTP `200` responses in less than 60 seconds, one
+privacy-safe lifecycle event, a subsequent normal HTTP `200`, unchanged
+nftables, green Healthchecks, healthy deep reconciliation and normal
+authenticated use:
+
+```bash
+sudo fail2ban-client status bookpile-edge-volume-observe
+sudo journalctl -t bookpile-d6-observe --since '5 minutes ago' --no-pager -o cat
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
+Fail2ban may describe the ten-minute deduplication state as `banned` in its own
+status even though this jail has no firewall action; public traffic must remain
+available. After the rehearsal, record the UTC start of a real seven-day
+window. Retain threshold-crossing counts from the privacy-safe lifecycle
+journal, host load/capacity evidence, Healthchecks continuity, false-positive
+assessment and normal-use evidence. A real ten-minute ban may be designed only
+after that evidence produces an explicit `ENABLE` or `REJECT` decision.
+
+The observation switch is independently reversible and does not alter the
+three active enforcement policies:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --disable-volume-observe
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

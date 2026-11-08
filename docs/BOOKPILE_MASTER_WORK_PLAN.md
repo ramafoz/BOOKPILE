@@ -581,6 +581,23 @@ normal authenticated use. The formal decision is therefore **`ENABLE` for the
 ten-minute high-confidence scanner ban**, with both its independent switch and
 the IONOS console as proven recovery paths.
 
+**D6 edge-volume observation implementation gate.** The repository now ships
+a separate, disabled `bookpile-edge-volume-observe` jail. It accepts only
+schema-valid events from the minimized D6 log, groups them by Fail2ban's
+validated client address and reaches its observation state at 1,200 requests
+in 60 seconds. The ten-minute state deduplicates repeated crossings but its
+action can emit only the fixed, privacy-safe
+`would_temporarily_ban policy=bookpile-edge-volume-observe` lifecycle event; it
+has no nftables/iptables command and cannot block traffic. The confirmed,
+independent installer validates exact file provenance, expected jail set and
+an unchanged stateless firewall snapshot while preserving the active `live`,
+`ready` and scanner modes. A staging-only external generator is fixed at 1,200
+ordinary root requests, requires an explicit confirmation and returns only
+aggregate status counts. Ordinary application deployment does not install or
+enable the jail. This is an implementation gate only: the checklist item above
+remains open until the controlled rehearsal passes and a complete seven-day
+real observation window supports a recorded `ENABLE` or `REJECT` decision.
+
 ### D7 — Defensive regression harness
 
 - [ ] Automate normal navigation, API burst, scanner paths, forged forwarding

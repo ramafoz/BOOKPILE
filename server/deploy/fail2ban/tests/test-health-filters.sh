@@ -30,5 +30,17 @@ if ! grep -Eq 'Lines: 3 lines, 0 ignored, 1 matched, 2 missed' <<<"$scanner_outp
   exit 1
 fi
 
+volume_output="$(
+  fail2ban-regex \
+    --usedns=no \
+    "$fixture" \
+    "$root/filter.d/bookpile-edge-volume.conf"
+)"
+if ! grep -Eq 'Lines: 3 lines, 0 ignored, 3 matched, 0 missed' <<<"$volume_output"; then
+  printf '%s\n' "$volume_output" >&2
+  echo 'Unexpected edge-volume filter result.' >&2
+  exit 1
+fi
+
 printf '%s\n' \
-  '{"live_matches":1,"ready_matches":1,"scanner_matches":1,"classes_independent":true}'
+  '{"live_matches":1,"ready_matches":1,"scanner_matches":1,"volume_matches":3,"classes_independent":true}'
