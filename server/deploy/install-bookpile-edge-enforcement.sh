@@ -7,6 +7,8 @@ readonly SCANNER_CONFIRMATION='STAGING-D6-SCANNER-OBSERVE'
 readonly SCANNER_POLICY_CONFIRMATION='STAGING-D6-SCANNER-ENFORCEMENT-POLICY'
 readonly SCANNER_ENABLE_CONFIRMATION='STAGING-D6-SCANNER-ENFORCEMENT-ENABLE'
 readonly VOLUME_CONFIRMATION='STAGING-D6-VOLUME-OBSERVE'
+readonly VOLUME_POLICY_CONFIRMATION='STAGING-D6-VOLUME-ENFORCEMENT-POLICY'
+readonly VOLUME_ENABLE_CONFIRMATION='STAGING-D6-VOLUME-ENFORCEMENT-ENABLE'
 readonly CONFIG_ROOT='/etc/fail2ban'
 readonly LIVE_OBSERVE='bookpile-health-live-observe'
 readonly READY_OBSERVE='bookpile-health-ready-observe'
@@ -15,11 +17,13 @@ readonly READY_ENFORCE='bookpile-health-ready-enforce'
 readonly SCANNER_OBSERVE='bookpile-scanner-observe'
 readonly SCANNER_ENFORCE='bookpile-scanner-enforce'
 readonly VOLUME_OBSERVE='bookpile-edge-volume-observe'
+readonly VOLUME_ENFORCE='bookpile-edge-volume-enforce'
 readonly LIVE_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-live-enforce.local"
 readonly READY_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-ready-enforce.local"
 readonly SCANNER_SWITCH="$CONFIG_ROOT/jail.d/zz-bookpile-scanner-observe.local"
 readonly SCANNER_ENFORCE_SWITCH="$CONFIG_ROOT/jail.d/zzz-bookpile-scanner-enforce.local"
 readonly VOLUME_SWITCH="$CONFIG_ROOT/jail.d/zzzz-bookpile-edge-volume-observe.local"
+readonly VOLUME_ENFORCE_SWITCH="$CONFIG_ROOT/jail.d/zzzzz-bookpile-edge-volume-enforce.local"
 
 usage() {
   cat >&2 <<EOF
@@ -34,6 +38,9 @@ Usage: $0 --install-disabled --confirm ${INSTALL_CONFIRMATION}
        $0 --disable-scanner-enforcement
        $0 --enable-volume-observe --confirm ${VOLUME_CONFIRMATION}
        $0 --disable-volume-observe
+       $0 --install-volume-enforcement-disabled --confirm ${VOLUME_POLICY_CONFIRMATION}
+       $0 --enable-volume-enforcement --confirm ${VOLUME_ENABLE_CONFIRMATION}
+       $0 --disable-volume-enforcement
        $0 --disable-live | --disable-ready | --disable-all
 EOF
   exit 2
@@ -53,6 +60,8 @@ case "$mode" in
   --install-scanner-enforcement-disabled|--enable-scanner-enforcement) ;;
   --disable-scanner-enforcement) ;;
   --enable-volume-observe|--disable-volume-observe) ;;
+  --install-volume-enforcement-disabled|--enable-volume-enforcement) ;;
+  --disable-volume-enforcement) ;;
   --disable-live|--disable-ready|--disable-all) ;;
   *) usage ;;
 esac
@@ -84,6 +93,16 @@ if [[ "$mode" == '--enable-volume-observe' && \
   echo "Edge-volume observation requires --confirm ${VOLUME_CONFIRMATION}." >&2
   exit 2
 fi
+if [[ "$mode" == '--install-volume-enforcement-disabled' && \
+      "$confirmation" != "$VOLUME_POLICY_CONFIRMATION" ]]; then
+  echo "Edge-volume enforcement installation requires --confirm ${VOLUME_POLICY_CONFIRMATION}." >&2
+  exit 2
+fi
+if [[ "$mode" == '--enable-volume-enforcement' && \
+      "$confirmation" != "$VOLUME_ENABLE_CONFIRMATION" ]]; then
+  echo "Edge-volume enforcement requires --confirm ${VOLUME_ENABLE_CONFIRMATION}." >&2
+  exit 2
+fi
 [[ $EUID -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 
 source_root="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
@@ -95,8 +114,10 @@ readonly -a STATIC_FILES=(
   'fail2ban/action.d/bookpile-nftables-live.conf:/etc/fail2ban/action.d/bookpile-nftables-live.conf:644'
   'fail2ban/action.d/bookpile-nftables-ready.conf:/etc/fail2ban/action.d/bookpile-nftables-ready.conf:644'
   'fail2ban/action.d/bookpile-nftables-scanner.conf:/etc/fail2ban/action.d/bookpile-nftables-scanner.conf:644'
+  'fail2ban/action.d/bookpile-nftables-volume.conf:/etc/fail2ban/action.d/bookpile-nftables-volume.conf:644'
   'fail2ban/jail.d/bookpile-health-enforce.conf:/etc/fail2ban/jail.d/bookpile-health-enforce.conf:644'
   'fail2ban/jail.d/bookpile-scanner-enforce.conf:/etc/fail2ban/jail.d/bookpile-scanner-enforce.conf:644'
+  'fail2ban/jail.d/bookpile-edge-volume-enforce.conf:/etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf:644'
 )
 readonly -a SCANNER_FILES=(
   'fail2ban/filter.d/bookpile-scanner-probe.conf:/etc/fail2ban/filter.d/bookpile-scanner-probe.conf:644'
@@ -244,11 +265,73 @@ assert_legacy_static_files() {
   }
 }
 
+assert_scanner_static_files() {
+  local destination expected_hash source mode
+  local -a unchanged=(
+    'fail2ban/action.d/bookpile-nftables-live.conf:/etc/fail2ban/action.d/bookpile-nftables-live.conf:644'
+    'fail2ban/action.d/bookpile-nftables-ready.conf:/etc/fail2ban/action.d/bookpile-nftables-ready.conf:644'
+    'fail2ban/action.d/bookpile-nftables-scanner.conf:/etc/fail2ban/action.d/bookpile-nftables-scanner.conf:644'
+    'fail2ban/jail.d/bookpile-health-enforce.conf:/etc/fail2ban/jail.d/bookpile-health-enforce.conf:644'
+    'fail2ban/jail.d/bookpile-scanner-enforce.conf:/etc/fail2ban/jail.d/bookpile-scanner-enforce.conf:644'
+  )
+  local -a scanner_generation=(
+    '/usr/local/sbin/bookpile-edge-firewall:755:97463acda0434ee76922d3293927ae911c915824e3452f111fa94ecbe5c19b8e'
+    '/usr/local/libexec/bookpile/validate-bookpile-nftables:755:fd4c55d6b40eb35ad61cf6b0e2b939555adccc29af7344dc212ffb18ca7a1eb3'
+    '/usr/local/share/bookpile/bookpile-health-enforcement.nft:644:e39ecc24e1a9f9c8e765bd6f2871670106568d26d72fb3f0535cfb3cb88356a7'
+  )
+  local entry
+
+  for entry in "${unchanged[@]}"; do
+    IFS=: read -r source destination mode <<<"$entry"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Missing or unsafe scanner-generation enforcement file: $destination" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == "root:root $mode" ]] || {
+      echo "Unsafe ownership or mode on scanner-generation enforcement file: $destination" >&2
+      exit 1
+    }
+    cmp --silent "$source_root/$source" "$destination" || {
+      echo "Scanner-generation enforcement file differs from its reviewed source: $destination" >&2
+      exit 1
+    }
+  done
+  for entry in "${scanner_generation[@]}"; do
+    IFS=: read -r destination mode expected_hash <<<"$entry"
+    [[ -f "$destination" && ! -L "$destination" ]] || {
+      echo "Missing or unsafe scanner-generation enforcement file: $destination" >&2
+      exit 1
+    }
+    [[ "$(stat -c '%U:%G %a' "$destination")" == "root:root $mode" ]] || {
+      echo "Unsafe ownership or mode on scanner-generation enforcement file: $destination" >&2
+      exit 1
+    }
+    [[ "$(sha256sum "$destination" | cut -d' ' -f1)" == "$expected_hash" ]] || {
+      echo "Scanner-generation enforcement file has an unreviewed digest: $destination" >&2
+      exit 1
+    }
+  done
+  [[ ! -e /etc/fail2ban/action.d/bookpile-nftables-volume.conf && \
+     ! -L /etc/fail2ban/action.d/bookpile-nftables-volume.conf && \
+     ! -e /etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf && \
+     ! -L /etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf ]] || {
+    echo 'Scanner-generation installation contains partial edge-volume enforcement files.' >&2
+    exit 1
+  }
+}
+
 static_policy_generation() {
-  local action='/etc/fail2ban/action.d/bookpile-nftables-scanner.conf'
-  local jail='/etc/fail2ban/jail.d/bookpile-scanner-enforce.conf'
-  if [[ -e "$action" || -L "$action" || -e "$jail" || -L "$jail" ]]; then
+  local scanner_action='/etc/fail2ban/action.d/bookpile-nftables-scanner.conf'
+  local scanner_jail='/etc/fail2ban/jail.d/bookpile-scanner-enforce.conf'
+  local volume_action='/etc/fail2ban/action.d/bookpile-nftables-volume.conf'
+  local volume_jail='/etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf'
+  if [[ -e "$volume_action" || -L "$volume_action" || \
+        -e "$volume_jail" || -L "$volume_jail" ]]; then
     assert_static_files
+    printf 'volume\n'
+  elif [[ -e "$scanner_action" || -L "$scanner_action" || \
+          -e "$scanner_jail" || -L "$scanner_jail" ]]; then
+    assert_scanner_static_files
     printf 'scanner\n'
   else
     assert_legacy_static_files
@@ -392,6 +475,10 @@ assert_switch() {
       switch="$SCANNER_ENFORCE_SWITCH"
       source="$source_root/fail2ban/jail.d/zzz-bookpile-scanner-enforce.local"
       ;;
+    volume)
+      switch="$VOLUME_ENFORCE_SWITCH"
+      source="$source_root/fail2ban/jail.d/zzzzz-bookpile-edge-volume-enforce.local"
+      ;;
     *) usage ;;
   esac
   [[ -f "$switch" && ! -L "$switch" ]] || {
@@ -412,6 +499,7 @@ assert_optional_switches() {
   [[ ! -e "$LIVE_SWITCH" && ! -L "$LIVE_SWITCH" ]] || assert_switch live
   [[ ! -e "$READY_SWITCH" && ! -L "$READY_SWITCH" ]] || assert_switch ready
   [[ ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" ]] || assert_switch scanner
+  [[ ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || assert_switch volume
 }
 
 configured_jails() {
@@ -445,7 +533,9 @@ expected_jails() {
   elif [[ -e "$SCANNER_SWITCH" || -L "$SCANNER_SWITCH" ]]; then
     printf '%s\n' "$SCANNER_OBSERVE"
   fi
-  if [[ -e "$VOLUME_SWITCH" || -L "$VOLUME_SWITCH" ]]; then
+  if [[ -e "$VOLUME_ENFORCE_SWITCH" || -L "$VOLUME_ENFORCE_SWITCH" ]]; then
+    printf '%s\n' "$VOLUME_ENFORCE"
+  elif [[ -e "$VOLUME_SWITCH" || -L "$VOLUME_SWITCH" ]]; then
     printf '%s\n' "$VOLUME_OBSERVE"
   fi
 }
@@ -480,6 +570,7 @@ policy_status() {
   [[ -e "$SCANNER_SWITCH" ]] && scanner='observe'
   [[ -e "$SCANNER_ENFORCE_SWITCH" ]] && scanner='enforce'
   [[ -e "$VOLUME_SWITCH" ]] && volume='observe'
+  [[ -e "$VOLUME_ENFORCE_SWITCH" ]] && volume='enforce'
   nft list table inet bookpile >/dev/null 2>&1 && firewall='active'
   printf '{"firewall":"%s","live":"%s","ready":"%s","scanner":"%s","volume":"%s","ssh_port_matched":false}\n' \
     "$firewall" "$live" "$ready" "$scanner" "$volume"
@@ -507,7 +598,8 @@ cleanup_failed_enable() {
     rm -f "$new_switch"
     fail2ban-client reload >/dev/null 2>&1 || systemctl disable --now fail2ban.service >/dev/null 2>&1 || true
     if [[ ! -e "$LIVE_SWITCH" && ! -e "$READY_SWITCH" && \
-          ! -e "$SCANNER_ENFORCE_SWITCH" ]]; then
+          ! -e "$SCANNER_ENFORCE_SWITCH" && \
+          ! -e "$VOLUME_ENFORCE_SWITCH" ]]; then
       nft delete table inet bookpile >/dev/null 2>&1 || true
     fi
   fi
@@ -553,7 +645,45 @@ cleanup_failed_scanner_policy_upgrade() {
       /usr/local/share/bookpile/bookpile-health-enforcement.nft || rollback_ok='false'
     rm -f \
       /etc/fail2ban/action.d/bookpile-nftables-scanner.conf \
-      /etc/fail2ban/jail.d/bookpile-scanner-enforce.conf || rollback_ok='false'
+      /etc/fail2ban/jail.d/bookpile-scanner-enforce.conf \
+      /etc/fail2ban/action.d/bookpile-nftables-volume.conf \
+      /etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf || rollback_ok='false'
+    if [[ "$rollback_ok" == 'true' ]]; then
+      fail2ban-client reload >/dev/null 2>&1 || emergency_disable_all
+    else
+      emergency_disable_all
+    fi
+    find "$migration_backup" -type f -delete
+    rmdir "$migration_backup" || true
+  else
+    emergency_disable_all
+  fi
+  exit "$rc"
+}
+
+cleanup_failed_volume_policy_upgrade() {
+  local rc=$?
+  local rollback_ok='true'
+  trap - EXIT
+  if [[ -n "${migration_backup:-}" && -d "$migration_backup" && \
+        ! -L "$migration_backup" ]]; then
+    install -o root -g root -m 0755 \
+      "$migration_backup/bookpile-edge-firewall" \
+      /usr/local/sbin/bookpile-edge-firewall || rollback_ok='false'
+    install -o root -g root -m 0755 \
+      "$migration_backup/validate-bookpile-nftables" \
+      /usr/local/libexec/bookpile/validate-bookpile-nftables || rollback_ok='false'
+    install -o root -g root -m 0644 \
+      "$migration_backup/bookpile-health-enforcement.nft" \
+      /usr/local/share/bookpile/bookpile-health-enforcement.nft || rollback_ok='false'
+    rm -f \
+      /etc/fail2ban/action.d/bookpile-nftables-volume.conf \
+      /etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf || rollback_ok='false'
+    if [[ "${migration_generation:-scanner}" == 'health-v1' ]]; then
+      rm -f \
+        /etc/fail2ban/action.d/bookpile-nftables-scanner.conf \
+        /etc/fail2ban/jail.d/bookpile-scanner-enforce.conf || rollback_ok='false'
+    fi
     if [[ "$rollback_ok" == 'true' ]]; then
       fail2ban-client reload >/dev/null 2>&1 || emergency_disable_all
     else
@@ -572,7 +702,7 @@ emergency_disable_all() {
   nft delete table inet bookpile >/dev/null 2>&1 || true
   if [[ -d "$CONFIG_ROOT" && ! -L "$CONFIG_ROOT" && \
         -d "$CONFIG_ROOT/jail.d" && ! -L "$CONFIG_ROOT/jail.d" ]]; then
-    rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH"
+    rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH" "$VOLUME_ENFORCE_SWITCH"
   else
     echo 'Unsafe Fail2ban configuration directories; enforcement switches require manual removal.' >&2
   fi
@@ -594,6 +724,7 @@ disable_policy() {
     live) switch="$LIVE_SWITCH"; jail="$LIVE_ENFORCE" ;;
     ready) switch="$READY_SWITCH"; jail="$READY_ENFORCE" ;;
     scanner) switch="$SCANNER_ENFORCE_SWITCH"; jail="$SCANNER_ENFORCE" ;;
+    volume) switch="$VOLUME_ENFORCE_SWITCH"; jail="$VOLUME_ENFORCE" ;;
     *) usage ;;
   esac
   disable_completed='false'
@@ -606,7 +737,7 @@ disable_policy() {
   fail2ban-client reload
   wait_for_server
   if [[ -e "$LIVE_SWITCH" || -e "$READY_SWITCH" || \
-        -e "$SCANNER_ENFORCE_SWITCH" ]]; then
+        -e "$SCANNER_ENFORCE_SWITCH" || -e "$VOLUME_ENFORCE_SWITCH" ]]; then
     /usr/local/sbin/bookpile-edge-firewall flush "$policy"
     /usr/local/sbin/bookpile-edge-firewall check
   else
@@ -628,7 +759,8 @@ case "$mode" in
     bash "$observation_installer" --check >/dev/null
     [[ ! -e "$LIVE_SWITCH" && ! -L "$LIVE_SWITCH" && \
        ! -e "$READY_SWITCH" && ! -L "$READY_SWITCH" && \
-       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" ]] || {
+       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" && \
+       ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
       echo 'Refusing disabled installation while an enforcement switch exists.' >&2
       exit 1
     }
@@ -648,12 +780,13 @@ case "$mode" in
     generation="$(static_policy_generation)"
     [[ ! -e "$LIVE_SWITCH" && ! -L "$LIVE_SWITCH" && \
        ! -e "$READY_SWITCH" && ! -L "$READY_SWITCH" && \
-       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" ]] || {
+       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" && \
+       ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
       echo 'Disable every enforcement policy before migrating the scanner policy.' >&2
       exit 1
     }
     assert_no_policy_table
-    if [[ "$generation" == 'scanner' ]]; then
+    if [[ "$generation" == 'scanner' || "$generation" == 'volume' ]]; then
       fail2ban-client -t >/dev/null
       assert_jails
       policy_status
@@ -682,11 +815,55 @@ case "$mode" in
     trap - EXIT
     policy_status
     ;;
+  --install-volume-enforcement-disabled)
+    assert_no_global_ipv6
+    assert_safe_directories
+    bash "$observation_installer" --provenance-check >/dev/null
+    generation="$(static_policy_generation)"
+    [[ ! -e "$LIVE_SWITCH" && ! -L "$LIVE_SWITCH" && \
+       ! -e "$READY_SWITCH" && ! -L "$READY_SWITCH" && \
+       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" && \
+       ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
+      echo 'Disable every enforcement policy before migrating the edge-volume policy.' >&2
+      exit 1
+    }
+    assert_no_policy_table
+    if [[ "$generation" == 'volume' ]]; then
+      fail2ban-client -t >/dev/null
+      assert_jails
+      policy_status
+      exit 0
+    fi
+    migration_generation="$generation"
+    migration_backup="$(mktemp -d /tmp/bookpile-volume-policy.XXXXXX)"
+    chmod 0700 "$migration_backup"
+    cp -p /usr/local/sbin/bookpile-edge-firewall \
+      "$migration_backup/bookpile-edge-firewall"
+    cp -p /usr/local/libexec/bookpile/validate-bookpile-nftables \
+      "$migration_backup/validate-bookpile-nftables"
+    cp -p /usr/local/share/bookpile/bookpile-health-enforcement.nft \
+      "$migration_backup/bookpile-health-enforcement.nft"
+    trap cleanup_failed_volume_policy_upgrade EXIT
+    upgrade_static_files
+    assert_static_files
+    bash "$observation_installer" --provenance-check >/dev/null
+    fail2ban-client -t >/dev/null
+    fail2ban-client reload
+    wait_for_server
+    assert_jails
+    assert_no_policy_table
+    find "$migration_backup" -type f -delete
+    rmdir "$migration_backup"
+    migration_backup=''
+    trap - EXIT
+    policy_status
+    ;;
   --check-disabled)
     preflight
     [[ ! -e "$LIVE_SWITCH" && ! -L "$LIVE_SWITCH" && \
        ! -e "$READY_SWITCH" && ! -L "$READY_SWITCH" && \
-       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" ]] || {
+       ! -e "$SCANNER_ENFORCE_SWITCH" && ! -L "$SCANNER_ENFORCE_SWITCH" && \
+       ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
       echo 'At least one enforcement policy is enabled.' >&2
       exit 1
     }
@@ -698,7 +875,7 @@ case "$mode" in
     preflight
     assert_jails
     if [[ -e "$LIVE_SWITCH" || -e "$READY_SWITCH" || \
-          -e "$SCANNER_ENFORCE_SWITCH" ]]; then
+          -e "$SCANNER_ENFORCE_SWITCH" || -e "$VOLUME_ENFORCE_SWITCH" ]]; then
       /usr/local/sbin/bookpile-edge-firewall check
     else
       assert_no_policy_table
@@ -796,6 +973,10 @@ case "$mode" in
     ;;
   --enable-volume-observe)
     preflight
+    [[ ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
+      echo 'Disable edge-volume enforcement before enabling observation.' >&2
+      exit 1
+    }
     if [[ -e "$VOLUME_SWITCH" || -L "$VOLUME_SWITCH" ]]; then
       assert_optional_volume_policy
       assert_jails
@@ -827,6 +1008,10 @@ case "$mode" in
     ;;
   --disable-volume-observe)
     preflight
+    [[ ! -e "$VOLUME_ENFORCE_SWITCH" && ! -L "$VOLUME_ENFORCE_SWITCH" ]] || {
+      echo 'Disable edge-volume enforcement before disabling observation.' >&2
+      exit 1
+    }
     [[ -e "$VOLUME_SWITCH" && ! -L "$VOLUME_SWITCH" ]] || {
       echo 'Edge-volume observation is not enabled.' >&2
       exit 1
@@ -849,7 +1034,7 @@ case "$mode" in
     ;;
   --enable-scanner-enforcement)
     preflight
-    assert_static_files
+    assert_compatible_static_files
     [[ -e "$SCANNER_SWITCH" && ! -L "$SCANNER_SWITCH" ]] || {
       echo 'Scanner observation must remain installed before enforcement is enabled.' >&2
       exit 1
@@ -880,6 +1065,39 @@ case "$mode" in
   --disable-scanner-enforcement)
     disable_policy scanner
     ;;
+  --enable-volume-enforcement)
+    preflight
+    assert_static_files
+    [[ -e "$VOLUME_SWITCH" && ! -L "$VOLUME_SWITCH" ]] || {
+      echo 'Edge-volume observation must remain installed before enforcement is enabled.' >&2
+      exit 1
+    }
+    if [[ -e "$VOLUME_ENFORCE_SWITCH" || -L "$VOLUME_ENFORCE_SWITCH" ]]; then
+      assert_switch volume
+      assert_jails
+      /usr/local/sbin/bookpile-edge-firewall check
+      policy_status
+      exit 0
+    fi
+    new_switch="$VOLUME_ENFORCE_SWITCH"
+    trap cleanup_failed_enable EXIT
+    install -o root -g root -m 0644 \
+      "$source_root/fail2ban/jail.d/zzzzz-bookpile-edge-volume-enforce.local" \
+      "$new_switch"
+    fail2ban-client -t >/dev/null
+    fail2ban-client reload
+    wait_for_server
+    assert_optional_switches
+    bash "$observation_installer" --provenance-check >/dev/null
+    assert_jails
+    wait_for_policy
+    new_switch=''
+    trap - EXIT
+    policy_status
+    ;;
+  --disable-volume-enforcement)
+    disable_policy volume
+    ;;
   --disable-live)
     disable_policy live
     ;;
@@ -889,10 +1107,12 @@ case "$mode" in
   --disable-all)
     disable_completed='false'
     trap cleanup_failed_disable EXIT
-    rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH"
+    rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH" \
+      "$VOLUME_ENFORCE_SWITCH"
     fail2ban-client stop "$LIVE_ENFORCE" >/dev/null 2>&1 || true
     fail2ban-client stop "$READY_ENFORCE" >/dev/null 2>&1 || true
     fail2ban-client stop "$SCANNER_ENFORCE" >/dev/null 2>&1 || true
+    fail2ban-client stop "$VOLUME_ENFORCE" >/dev/null 2>&1 || true
     fail2ban-client -t >/dev/null
     fail2ban-client reload
     wait_for_server

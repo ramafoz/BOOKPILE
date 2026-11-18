@@ -12,11 +12,13 @@ EXPECTED_SETS = {
     "health_live_ipv4",
     "health_ready_ipv4",
     "scanner_high_confidence_ipv4",
+    "edge_volume_ipv4",
 }
 EXPECTED_COMMENTS = {
     "bookpile health live": "health_live_ipv4",
     "bookpile health ready": "health_ready_ipv4",
     "bookpile scanner high confidence": "scanner_high_confidence_ipv4",
+    "bookpile edge volume": "edge_volume_ipv4",
 }
 
 
@@ -121,7 +123,7 @@ def validate(payload: object) -> dict[str, object]:
     _reject_extra_keys(tables[0], {"family", "name", "handle"}, "table")
 
     sets = objects["set"]
-    if {item.get("name") for item in sets} != EXPECTED_SETS or len(sets) != 3:
+    if {item.get("name") for item in sets} != EXPECTED_SETS or len(sets) != 4:
         raise PolicyValidationError("Unexpected address sets")
     for item in sets:
         _reject_extra_keys(
@@ -159,7 +161,7 @@ def validate(payload: object) -> dict[str, object]:
         raise PolicyValidationError("Unsafe base chain")
 
     rules = objects["rule"]
-    if len(rules) != 3:
+    if len(rules) != 4:
         raise PolicyValidationError("Unexpected rule count")
     seen_comments: set[str] = set()
     for rule in rules:
@@ -194,7 +196,7 @@ def validate(payload: object) -> dict[str, object]:
         "chain": "public_web_guard",
         "family": "inet",
         "policy_sets": sorted(EXPECTED_SETS),
-        "rules": 3,
+        "rules": 4,
         "ssh_port_matched": False,
     }
 

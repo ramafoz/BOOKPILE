@@ -391,9 +391,10 @@ catalogue use all passed afterward. The remaining D5 task is the future
 - [x] Enable only the 10-minute high-confidence scanner ban; prove ban,
   expiration, service restart persistence and emergency unban from the IONOS
   console.
-- [ ] Observe the `1,200 requests/minute/IP` edge-volume signal for seven days
-  before deciding whether to enable its 10-minute ban. Record the explicit
-  enable or reject decision here.
+- [x] Observe the `1,200 requests/minute/IP` edge-volume signal for seven days
+  before deciding whether to enable its 10-minute ban. The staging decision is
+  `ENABLE`, subject to the separately reviewed, reversible activation gate
+  and real-ban rehearsal documented below.
 - [ ] Keep authentication and ambiguous API `401/404/422` signals alert-only
   until the Owner/Viewer and malformed-input baselines are complete.
 - [ ] Prove equivalent rules before enabling public IPv6. Until then, record
@@ -594,9 +595,38 @@ an unchanged stateless firewall snapshot while preserving the active `live`,
 `ready` and scanner modes. A staging-only external generator is fixed at 1,200
 ordinary root requests, requires an explicit confirmation and returns only
 aggregate status counts. Ordinary application deployment does not install or
-enable the jail. This is an implementation gate only: the checklist item above
-remains open until the controlled rehearsal passes and a complete seven-day
-real observation window supports a recorded `ENABLE` or `REJECT` decision.
+enable the jail. The controlled rehearsal and seven-day decision that close
+this observation gate are recorded immediately below.
+
+**D6 edge-volume seven-day decision — `ENABLE`.** The accepted real window ran
+from 2026-11-08 10:39:46 UTC through 2026-11-15 18:29:22 UTC. Across 703
+scheduled D5 windows, 21 contained scanner probes (295 in total, maximum 62 in
+one window), while Fail2ban recorded exactly one edge-volume threshold
+crossing and one natural release. The only crossing occurred on 2026-11-12:
+one client generated 1,512 public `other` events in 48.495 seconds, including
+61 high-confidence scanner probes. That same client triggered the accepted
+scanner ban, and both the scanner ban and edge-volume observation state
+expired after ten minutes. No ordinary client reached the volume threshold,
+the observer reported zero current bans at the end, health remained ready,
+no systemd unit failed, and the host retained 63 GiB free disk and 2.5 GiB
+available memory. The evidence therefore records **`ENABLE` for a ten-minute
+edge-volume ban in staging**, with the existing independent observer retained
+as the fail-open state. This decision does not itself activate enforcement.
+
+**D6 edge-volume enforcement implementation gate.** The reviewed repository
+policy adds a fourth exact IPv4 timeout set, `edge_volume_ipv4`, and a separate
+disabled `bookpile-edge-volume-enforce` jail. It reuses the accepted 1,200 in
+60 seconds filter and ten-minute timeout, matches only forwarded public ports
+80/443, excludes SSH and the internal Docker healthcheck, and logs only fixed
+`edge_volume` lifecycle labels. A confirmed migration accepts only the exact
+deployed scanner-generation hashes, installs the policy while every
+enforcement switch and the BOOKPILE nftables table are absent, and rolls back
+partial changes. Enabling replaces only the volume observer; disabling flushes
+only the volume set and restores observation, while `--disable-all` remains the
+complete fail-open path. Normal deployment does not activate this policy.
+Staging activation remains pending until it proves a real external ban,
+restart persistence, ten-minute expiry, independent disable/unban, green
+Healthchecks, deep reconciliation and normal authenticated use.
 
 ### D7 — Defensive regression harness
 

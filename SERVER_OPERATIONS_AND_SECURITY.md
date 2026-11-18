@@ -671,6 +671,89 @@ sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
 sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
 ```
 
+### D6 edge-volume enforcement policy
+
+The seven-day staging window ran from 2026-11-08 10:39:46 UTC through
+2026-11-15 18:29:22 UTC. One client crossed the volume threshold once: 1,512
+public requests in 48.495 seconds, including 61 high-confidence scanner
+probes. No normal client crossed it. The staging decision is `ENABLE` for the
+same ten-minute timeout, subject to the controlled acceptance below.
+
+The reviewed policy is disabled by default. It adds only the
+`edge_volume_ipv4` timeout set and its forwarded-public-80/443 rule; it cannot
+match SSH or the direct Docker healthcheck. Install it only while all four
+enforcement switches are disabled. This migration retains the volume observer
+and rolls back automatically if provenance, Fail2ban or nftables validation
+fails:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --disable-all
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --install-volume-enforcement-disabled \
+  --confirm STAGING-D6-VOLUME-ENFORCEMENT-POLICY
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-live --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-ready --confirm STAGING-D6-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-scanner-enforcement \
+  --confirm STAGING-D6-SCANNER-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+```
+
+Expected pre-activation state: `live=enforce`, `ready=enforce`,
+`scanner=enforce`, `volume=observe`, `ssh_port_matched=false`. Keep an SSH
+session open and the IONOS console ready, then enable only volume enforcement:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --enable-volume-enforcement \
+  --confirm STAGING-D6-VOLUME-ENFORCEMENT-ENABLE
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+sudo fail2ban-client status bookpile-edge-volume-enforce
+sudo nft list set inet bookpile edge_volume_ipv4
+```
+
+From a separate external PowerShell session, wait 61 seconds and run the
+bounded staging generator. Then make one request with short timeouts; the
+generator must report 1,200 HTTP `200` responses and the subsequent request
+must time out while SSH remains connected:
+
+```powershell
+Start-Sleep -Seconds 61; py .\server\scripts\rehearse-edge-volume-client.py --confirm STAGING-D6-VOLUME-OBSERVE-REHEARSAL
+curl.exe --silent --show-error --connect-timeout 5 --max-time 8 --output NUL --write-out "after volume ban -> %{http_code}`n" "https://staging.bookpile.gal/?d6_volume_enforce_after=1"
+```
+
+On the host, require exactly the volume jail to show one current ban, the
+fixed privacy-safe lifecycle event, no SSH match, and healthy requests from the
+VPS. Restart Fail2ban and prove the external request remains blocked; after 620
+seconds it must return HTTP `200` and the release event must exist:
+
+```bash
+sudo fail2ban-client status bookpile-edge-volume-enforce
+sudo journalctl -t bookpile-d6-enforce --since '15 minutes ago' --no-pager -o cat
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+sudo systemctl restart fail2ban.service
+for attempt in $(seq 1 30); do sudo fail2ban-client ping >/dev/null 2>&1 && break; sleep 1; done
+```
+
+Finally create a second controlled ban and exercise the independent fail-open
+switch. It must immediately clear the volume set and restore the observation
+jail without changing `live`, `ready` or scanner enforcement:
+
+```bash
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh \
+  --disable-volume-enforcement
+sudo bash server/deploy/install-bookpile-edge-enforcement.sh --check
+sudo fail2ban-client status
+sudo nft list set inet bookpile edge_volume_ipv4
+```
+
+Acceptance also requires green Healthchecks, healthy `live` and `ready`, deep
+reconciliation, normal authenticated use and a final re-enable with an empty
+volume set. If any acceptance fails, leave volume in `observe`; do not weaken
+the threshold or activate the jail manually.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the

@@ -1,0 +1,5 @@
+[bookpile-edge-volume-observe]
+enabled = false
+
+[bookpile-edge-volume-enforce]
+enabled = true
