@@ -1034,7 +1034,7 @@ case "$mode" in
     ;;
   --enable-scanner-enforcement)
     preflight
-    assert_static_files
+    assert_compatible_static_files
     [[ -e "$SCANNER_SWITCH" && ! -L "$SCANNER_SWITCH" ]] || {
       echo 'Scanner observation must remain installed before enforcement is enabled.' >&2
       exit 1

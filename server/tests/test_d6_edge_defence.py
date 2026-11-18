@@ -594,6 +594,15 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert enable_block.index("wait_for_server") < enable_block.index(
         "wait_for_policy"
     )
+    scanner_enable = installer.split(
+        "  --enable-scanner-enforcement)", 1
+    )[1].split("\n    ;;", 1)[0]
+    assert "assert_compatible_static_files" in scanner_enable
+    assert "assert_static_files" not in scanner_enable
+    volume_enable = installer.split(
+        "  --enable-volume-enforcement)", 1
+    )[1].split("\n    ;;", 1)[0]
+    assert "assert_static_files" in volume_enable
 
     disable_function = installer.split("disable_policy() {", 1)[1].split(
         '\n}\n\ncase "$mode"', 1
