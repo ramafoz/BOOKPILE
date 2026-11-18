@@ -645,7 +645,9 @@ cleanup_failed_scanner_policy_upgrade() {
       /usr/local/share/bookpile/bookpile-health-enforcement.nft || rollback_ok='false'
     rm -f \
       /etc/fail2ban/action.d/bookpile-nftables-scanner.conf \
-      /etc/fail2ban/jail.d/bookpile-scanner-enforce.conf || rollback_ok='false'
+      /etc/fail2ban/jail.d/bookpile-scanner-enforce.conf \
+      /etc/fail2ban/action.d/bookpile-nftables-volume.conf \
+      /etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf || rollback_ok='false'
     if [[ "$rollback_ok" == 'true' ]]; then
       fail2ban-client reload >/dev/null 2>&1 || emergency_disable_all
     else

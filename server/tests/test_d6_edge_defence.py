@@ -554,6 +554,11 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "Legacy enforcement file has an unreviewed digest" in installer
     assert "cleanup_failed_scanner_policy_upgrade" in installer
     assert "cleanup_failed_volume_policy_upgrade" in installer
+    scanner_rollback = installer.split(
+        "cleanup_failed_scanner_policy_upgrade() {", 1
+    )[1].split("\n}\n\ncleanup_failed_volume_policy_upgrade", 1)[0]
+    assert "/etc/fail2ban/action.d/bookpile-nftables-volume.conf" in scanner_rollback
+    assert "/etc/fail2ban/jail.d/bookpile-edge-volume-enforce.conf" in scanner_rollback
     for reviewed_hash in (
         "97463acda0434ee76922d3293927ae911c915824e3452f111fa94ecbe5c19b8e",
         "fd4c55d6b40eb35ad61cf6b0e2b939555adccc29af7344dc212ffb18ca7a1eb3",
