@@ -262,7 +262,40 @@ def test_scanner_enforcement_is_separate_bounded_and_disabled() -> None:
     assert switch.count("enabled = true") == 1
     assert switch.count("enabled = false") == 1
     assert "scanner) printf 'scanner_high_confidence_ipv4" in firewall
-    assert "flush <live|ready|scanner>" in firewall
+    assert "flush <live|ready|scanner|volume>" in firewall
+
+
+def test_edge_volume_enforcement_is_separate_bounded_and_disabled() -> None:
+    jail = read("fail2ban/jail.d/bookpile-edge-volume-enforce.conf")
+    action = read("fail2ban/action.d/bookpile-nftables-volume.conf")
+    switch = read(
+        "fail2ban/jail.d/zzzzz-bookpile-edge-volume-enforce.local"
+    )
+    firewall = read("bookpile-edge-firewall.sh")
+
+    assert "[bookpile-edge-volume-enforce]" in jail
+    assert "enabled = false" in jail
+    assert "filter = bookpile-edge-volume" in jail
+    assert "findtime = 60" in jail
+    assert "maxretry = 1200" in jail
+    assert "bantime = 600" in jail
+    assert "action = bookpile-nftables-volume" in jail
+    assert "bookpile-edge-firewall ban volume <ip>" in action
+    assert "bookpile-edge-firewall unban volume <ip>" in action
+    assert "bookpile-edge-firewall flush volume" in action
+    logger_commands = [
+        line.split("&&", 1)[1]
+        for line in action.splitlines()
+        if "/usr/bin/logger" in line
+    ]
+    assert len(logger_commands) == 2
+    assert "<ip>" not in "\n".join(logger_commands)
+    assert "policy=edge_volume" in action
+    assert "[bookpile-edge-volume-observe]" in switch
+    assert "[bookpile-edge-volume-enforce]" in switch
+    assert switch.count("enabled = true") == 1
+    assert switch.count("enabled = false") == 1
+    assert "volume) printf 'edge_volume_ipv4" in firewall
 
 
 def test_nftables_policy_cannot_match_ssh_or_internal_health() -> None:
@@ -272,10 +305,11 @@ def test_nftables_policy_cannot_match_ssh_or_internal_health() -> None:
     assert "health_live_ipv4" in policy
     assert "health_ready_ipv4" in policy
     assert "scanner_high_confidence_ipv4" in policy
-    assert policy.count("timeout 10m") == 3
+    assert "edge_volume_ipv4" in policy
+    assert policy.count("timeout 10m") == 4
     assert policy.count("type filter hook forward priority -10; policy accept;") == 1
-    assert policy.count("ct original proto-dst { 80, 443 }") == 3
-    assert policy.count(" drop comment ") == 3
+    assert policy.count("ct original proto-dst { 80, 443 }") == 4
+    assert policy.count(" drop comment ") == 4
     assert "22" not in policy
     assert "8100" not in policy
     assert "input" not in policy.lower()
@@ -329,6 +363,16 @@ def _valid_nftables_document() -> dict[str, object]:
                 "set": {
                     "family": "inet",
                     "table": "bookpile",
+                    "name": "edge_volume_ipv4",
+                    "type": "ipv4_addr",
+                    "flags": ["timeout"],
+                    "timeout": 600,
+                }
+            },
+            {
+                "set": {
+                    "family": "inet",
+                    "table": "bookpile",
                     "name": "health_live_ipv4",
                     "type": "ipv4_addr",
                     "flags": ["timeout"],
@@ -372,6 +416,7 @@ def _valid_nftables_document() -> dict[str, object]:
                 "bookpile scanner high confidence",
                 "scanner_high_confidence_ipv4",
             ),
+            rule("bookpile edge volume", "edge_volume_ipv4"),
         ]
     }
 
@@ -390,11 +435,12 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
         "chain": "public_web_guard",
         "family": "inet",
         "policy_sets": [
+            "edge_volume_ipv4",
             "health_live_ipv4",
             "health_ready_ipv4",
             "scanner_high_confidence_ipv4",
         ],
-        "rules": 3,
+        "rules": 4,
         "ssh_port_matched": False,
     }
 
@@ -408,7 +454,7 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
     }
     unsafe_documents.append(ssh_rule)
     input_chain = json.loads(json.dumps(valid))
-    input_chain["nftables"][4 + 1]["chain"]["hook"] = "input"
+    input_chain["nftables"][6]["chain"]["hook"] = "input"
     unsafe_documents.append(input_chain)
     extra_condition = json.loads(json.dumps(valid))
     extra_condition["nftables"][-1]["rule"]["expr"].insert(
@@ -423,11 +469,17 @@ def test_nftables_validator_accepts_only_the_reviewed_shape() -> None:
     )
     unsafe_documents.append(extra_condition)
     missing_scanner_rule = json.loads(json.dumps(valid))
-    missing_scanner_rule["nftables"].pop()
+    missing_scanner_rule["nftables"].pop(-2)
     unsafe_documents.append(missing_scanner_rule)
     missing_scanner_set = json.loads(json.dumps(valid))
-    del missing_scanner_set["nftables"][4]
+    del missing_scanner_set["nftables"][5]
     unsafe_documents.append(missing_scanner_set)
+    missing_volume_rule = json.loads(json.dumps(valid))
+    missing_volume_rule["nftables"].pop()
+    unsafe_documents.append(missing_volume_rule)
+    missing_volume_set = json.loads(json.dumps(valid))
+    del missing_volume_set["nftables"][2]
+    unsafe_documents.append(missing_volume_set)
 
     for document in unsafe_documents:
         rejected = subprocess.run(
@@ -449,6 +501,8 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "STAGING-D6-SCANNER-ENFORCEMENT-POLICY" in installer
     assert "STAGING-D6-SCANNER-ENFORCEMENT-ENABLE" in installer
     assert "STAGING-D6-VOLUME-OBSERVE" in installer
+    assert "STAGING-D6-VOLUME-ENFORCEMENT-POLICY" in installer
+    assert "STAGING-D6-VOLUME-ENFORCEMENT-ENABLE" in installer
     for mode in (
         "--install-disabled",
         "--check-disabled",
@@ -461,6 +515,9 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
         "--disable-scanner-enforcement",
         "--enable-volume-observe",
         "--disable-volume-observe",
+        "--install-volume-enforcement-disabled",
+        "--enable-volume-enforcement",
+        "--disable-volume-enforcement",
         "--disable-live",
         "--disable-ready",
         "--disable-all",
@@ -496,9 +553,17 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "upgrade_static_files" in installer
     assert "Legacy enforcement file has an unreviewed digest" in installer
     assert "cleanup_failed_scanner_policy_upgrade" in installer
+    assert "cleanup_failed_volume_policy_upgrade" in installer
+    for reviewed_hash in (
+        "97463acda0434ee76922d3293927ae911c915824e3452f111fa94ecbe5c19b8e",
+        "fd4c55d6b40eb35ad61cf6b0e2b939555adccc29af7344dc212ffb18ca7a1eb3",
+        "e39ecc24e1a9f9c8e765bd6f2871670106568d26d72fb3f0535cfb3cb88356a7",
+    ):
+        assert reviewed_hash in installer
     assert "Disable every enforcement policy before migrating" in installer
     assert 'disable_policy scanner' in installer
-    assert 'rm -f "$LIVE_SWITCH" "$READY_SWITCH" "$SCANNER_ENFORCE_SWITCH"' in installer
+    assert 'disable_policy volume' in installer
+    assert '"$VOLUME_ENFORCE_SWITCH"' in installer
 
     observation_installer = read("install-bookpile-edge-defence.sh")
     assert "assert_optional_scanner_enforcement_files_match" in observation_installer
@@ -511,6 +576,12 @@ def test_enforcement_installer_is_manual_idempotent_and_fail_open() -> None:
     assert "zzzz-bookpile-edge-volume-observe.local" in observation_installer
     assert "filter.d/bookpile-edge-volume.d" in observation_installer
     assert "filter.d/bookpile-edge-volume.local" in observation_installer
+    assert "assert_optional_volume_enforcement_files_match" in observation_installer
+    assert "bookpile-nftables-volume.conf" in observation_installer
+    assert "bookpile-edge-volume-enforce.conf" in observation_installer
+    assert "zzzzz-bookpile-edge-volume-enforce.local" in observation_installer
+    assert "action.d/bookpile-nftables-volume.d" in observation_installer
+    assert "action.d/bookpile-nftables-volume.local" in observation_installer
 
     enable_block = installer.split("  --enable-live|--enable-ready)", 1)[1].split(
         "\n    ;;", 1

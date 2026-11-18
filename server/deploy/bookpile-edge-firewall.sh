@@ -7,7 +7,7 @@ readonly POLICY_FILE='/usr/local/share/bookpile/bookpile-health-enforcement.nft'
 readonly VALIDATOR='/usr/local/libexec/bookpile/validate-bookpile-nftables'
 
 usage() {
-  echo "Usage: $0 ensure | check | destroy | flush <live|ready|scanner> | ban <live|ready|scanner> <IPv4> | unban <live|ready|scanner> <IPv4>" >&2
+  echo "Usage: $0 ensure | check | destroy | flush <live|ready|scanner|volume> | ban <live|ready|scanner|volume> <IPv4> | unban <live|ready|scanner|volume> <IPv4>" >&2
   exit 2
 }
 
@@ -22,6 +22,7 @@ set_name() {
     live) printf 'health_live_ipv4\n' ;;
     ready) printf 'health_ready_ipv4\n' ;;
     scanner) printf 'scanner_high_confidence_ipv4\n' ;;
+    volume) printf 'edge_volume_ipv4\n' ;;
     *) usage ;;
   esac
 }
