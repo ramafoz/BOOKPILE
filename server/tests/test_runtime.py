@@ -192,7 +192,7 @@ def test_web_runtime_supports_time_based_access_log_rotation() -> None:
         Path(__file__).resolve().parents[1] / "docker" / "web.Dockerfile"
     ).read_text()
 
-    assert "FROM caddy:2.11.7-alpine AS runtime" in dockerfile
+    assert "FROM caddy:2.11.8-alpine AS runtime" in dockerfile
     assert "migrate-caddy-access-log-rolls.sh" in dockerfile
     assert "/usr/local/bin/migrate-caddy-access-log-rolls" in dockerfile
 
