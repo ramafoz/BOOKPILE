@@ -624,9 +624,46 @@ enforcement switch and the BOOKPILE nftables table are absent, and rolls back
 partial changes. Enabling replaces only the volume observer; disabling flushes
 only the volume set and restores observation, while `--disable-all` remains the
 complete fail-open path. Normal deployment does not activate this policy.
-Staging activation remains pending until it proves a real external ban,
-restart persistence, ten-minute expiry, independent disable/unban, green
-Healthchecks, deep reconciliation and normal authenticated use.
+The implementation and staging activation were subsequently accepted by the
+rehearsal below.
+
+**D6 edge-volume enforcement accepted — 2026-11-19/20.** Host-policy revision
+`5faa9f0868f4bca1283e7ec0233c48940e7e37e5` migrated the deployed
+scanner-generation policy while every enforcement switch and the BOOKPILE
+nftables table were absent. It then restored `live`, `ready` and scanner
+enforcement with volume still in observation. The application remained at
+revision `8681becd72a70be69f96a781e442d06ff324434f`; no application image,
+database migration or private data changed.
+
+Volume enforcement was enabled at 2026-11-19 20:52:27 UTC. A controlled
+external client completed 1,200 ordinary requests with HTTP `200` in 57.36
+seconds; together with one preceding request, the enforcement jail recorded
+1,201 failures, inserted exactly one address into `edge_volume_ipv4` and made
+the next public request time out. The privacy-safe journal emitted only
+`temporary_ban policy=edge_volume`. Requests originating on the VPS continued
+to receive healthy `live` and `ready` responses, and SSH remained outside the
+forwarded-port rule.
+
+The active ban survived a Fail2ban restart at 2026-11-19 20:57:30 UTC through
+the persistent database and continued blocking the external client. It then
+expired after ten minutes, emptied the nftables set, emitted the fixed release
+event and restored HTTP `200`. The repeated `temporary_ban` journal entry is
+the expected replay of the same persistent ban during service restart, not a
+second client or disclosed address.
+
+A second controlled 1,200-request fixture completed in 56.0 seconds and
+produced another real ban. `--disable-volume-enforcement` immediately removed
+that address, restored `bookpile-edge-volume-observe`, left `live`, `ready` and
+scanner enforcement active, and changed the external result from timeout to
+HTTP `200`. After the persistent state had expired, final re-enablement on
+2026-11-20 reported all four jails in enforcement, an empty volume set,
+`ssh_port_matched=false`, healthy public endpoints and no failed systemd unit.
+Deep reconciliation reported 433 expected and 433 stored private objects with
+zero missing, mismatched or orphaned objects. Healthchecks stayed green and
+normal login, navigation, book access and mutation all passed. The formal
+staging decision is therefore **`ENABLE` for the ten-minute edge-volume ban**,
+with `--disable-volume-enforcement` as the proven independent fail-open switch
+and `--disable-all` retained as the complete recovery path.
 
 ### D7 — Defensive regression harness
 
