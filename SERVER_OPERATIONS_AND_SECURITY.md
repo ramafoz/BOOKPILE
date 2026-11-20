@@ -754,6 +754,28 @@ reconciliation, normal authenticated use and a final re-enable with an empty
 volume set. If any acceptance fails, leave volume in `observe`; do not weaken
 the threshold or activate the jail manually.
 
+#### Accepted staging result — 2026-11-19/20
+
+Host-policy revision `5faa9f0868f4bca1283e7ec0233c48940e7e37e5` passed the
+complete procedure while application revision
+`8681becd72a70be69f96a781e442d06ff324434f` remained unchanged. The first
+fixture returned 1,200 HTTP `200` responses in 57.36 seconds and the following
+request timed out. The resulting ban survived a Fail2ban restart, continued to
+exclude SSH and direct VPS health requests, expired after ten minutes and
+restored HTTP `200`. The journal contained only fixed `edge_volume` ban and
+release labels; replaying the same persisted ban during restart produced a
+second fixed ban entry without exposing the address.
+
+A second 1,200-request fixture completed in 56.0 seconds. The independent
+volume disable switch immediately changed the controlled external result from
+timeout to HTTP `200`, emptied `edge_volume_ipv4`, restored volume observation
+and preserved `live`, `ready` and scanner enforcement. After persistent expiry,
+final re-enablement left all four jails in enforcement and the volume set
+empty. Healthchecks remained green, both public health endpoints were healthy,
+deep reconciliation reported 433 expected and 433 stored private objects with
+zero anomalies, systemd had no failed units, and normal authenticated catalogue
+use passed. Staging therefore accepts `ENABLE` for this ten-minute policy.
+
 PostgreSQL writes only terse operational errors: failing SQL statements,
 parameter values and `DETAIL`/`HINT`/`QUERY`/`CONTEXT` fields are disabled so a
 constraint failure cannot place an email address or catalogue value in the
