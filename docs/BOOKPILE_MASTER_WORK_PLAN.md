@@ -1,6 +1,6 @@
 # BOOKPILE master work plan
 
-Status date: 2026-10-18
+Status date: 2026-11-21
 
 This is the single authoritative source for BOOKPILE delivery status, remaining
 work and release gates. A task is complete only when its checkbox is marked and
@@ -1137,6 +1137,24 @@ implementation task in this section.
   language and ordered contributor roles. Implement every missing schema,
   details/edit/search/import/export and ISBN-review path, with lossless migration
   evidence in both editions.
+- [ ] Inventory every user-visible bibliographic or domain vocabulary in Local
+  and Server before adding further one-off translations. At minimum classify
+  contributor roles, edition/original languages, genres, formats/bindings,
+  reading and loan states, and physical-map terminology as either controlled,
+  recognized free text or wholly user-authored text. Record the canonical
+  source, ownership, editability, import/export representation and localization
+  policy for each value; personal names and other user-authored prose must never
+  be machine-translated merely because the interface locale changes.
+- [ ] Implement one lossless semantic-localization mechanism for the recognized
+  vocabularies, beginning with contributor roles and book languages and later
+  admitting genres only after the genre taxonomy is frozen. A recognized value
+  must have a stable canonical code plus labels in all ten launch languages and
+  must change its displayed label immediately when the interface locale changes.
+  Unknown, misspelled, historical, ambiguous or custom values must remain valid:
+  preserve and display the user's original text in every locale without silently
+  correcting it, inventing a code, rejecting it or showing a warning. Migration,
+  search, filters, ISBN review, import/export and Local/Server round trips must
+  preserve both recognized semantics and literal fallbacks without data loss.
 
 ### P3 — Rich metadata and discovery
 
@@ -1155,7 +1173,9 @@ implementation task in this section.
   editable Local/Server projections.
 - [ ] Replace interim free-text genre storage with structured genres through a
   lossless migration that preserves every existing value and exposes unresolved
-  values for review.
+  values for review. Freeze and version the accepted genre taxonomy before this
+  implementation, then use the shared semantic-localization mechanism from P2;
+  unresolved or custom genres remain literal fallbacks rather than invalid data.
 - [ ] Add free-form tags with normalization, search, import/export and privacy-
   safe Server ownership semantics.
 - [ ] Add an optional personal rating owned by the reader, never shared as
@@ -1213,7 +1233,7 @@ complete disposition. This table is an audit trail, not another task list.
 | Multi-source ISBN enrichment | P2. |
 | Continuous barcode scanning | P2 evaluation. |
 | Advanced OCR | P2 evaluation. |
-| Original/edition language and contributor-role parity | P2 audit and implementation. |
+| Original/edition language, contributor-role parity and localized vocabularies | P2 parity audit plus the shared semantic-localization inventory and implementation; structured genres join only after their taxonomy is frozen. |
 | Server canonical geometry | Completed baseline; Local backport in P1. |
 | Supported PILE tilt | P1 evaluation. |
 | Subjects, structured genres, tags and ratings | P3. |
