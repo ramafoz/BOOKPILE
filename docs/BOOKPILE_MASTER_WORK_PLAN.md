@@ -1122,6 +1122,17 @@ implementation task in this section.
 
 ### P3 — Rich metadata and discovery
 
+- [ ] After the active defensive-security and authorization release blockers
+  are closed, add composable advanced catalogue filters for physical location:
+  bookcase, shelf and container. Options must be library-scoped and dependent
+  (a shelf belongs to the selected bookcase and a container to the selected
+  shelf), combine correctly with existing search, sorting and pagination, and
+  preserve the existing Owner/Viewer map-visibility boundary.
+- [ ] Add contextual “view in catalogue” links to the map inspection panels
+  that currently show an individual book or the books in a selected container.
+  The destination must open the catalogue with the corresponding physical-
+  location filter applied, without exposing location identifiers from another
+  library or granting map information to catalogue-only Viewers.
 - [ ] Add structured subjects with versioned import/export and searchable,
   editable Local/Server projections.
 - [ ] Replace interim free-text genre storage with structured genres through a
