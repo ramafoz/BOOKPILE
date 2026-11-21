@@ -1232,6 +1232,34 @@ Post-reboot listener and independent workstation evidence confirmed only TCP
 IPv6 address was assigned, and key-only SSH remained effective. Public IPv6
 must remain disabled until its firewall acceptance is completed.
 
+### Staging host maintenance acceptance — 2026-11-21
+
+The controlled UTC maintenance window started from application revision
+`8681becd72a70be69f96a781e442d06ff324434f` and verified backup
+`25d0803a-c2c4-424a-8a03-03820b624c7f`. The backup contained all 433 private
+objects and a 263,670-byte database dump. APT reported no held packages; its
+simulation and execution upgraded 24 packages, installed six new kernel
+packages and removed none. Eleven `systemd`/`udev` packages remained deferred
+by Ubuntu phasing and were not forced.
+
+Docker 29.10.0, containerd 2.4.2 and Compose 5.8.0 recovered all application
+containers before the controlled reboot. Rebooting at 10:35 UTC activated
+kernel `6.8.0-151-generic`; the reboot-required marker cleared and no systemd
+unit failed. The database, API, email worker and web container recovered
+automatically. Public live/readiness, Healthchecks, normal login and mutation,
+and deep reconciliation of all 433 private objects passed. All seven BOOKPILE
+timers retained a next run. Fail2ban restored exactly the live, ready, scanner
+and edge-volume enforcement jails, and the dedicated nftables table restored
+the corresponding four ten-minute sets and public-web drop rules without
+matching SSH.
+
+Sentry captured two handled, privacy-redacted email-worker database connection
+failures: one while Docker restarted at 10:30:51 UTC and one when the host
+reboot began at 10:35:14 UTC. Both coincide with intentional PostgreSQL
+unavailability, the durable outbox and worker recovered, and no event recurred
+after the new boot. They are accepted as bounded maintenance effects rather
+than application defects.
+
 Authentication limits are atomic PostgreSQL counters, so API workers share
 them. Stock Caddy has no distributed rate-limit module; do not silently replace
 this with per-process edge counters. Additional volumetric protection may be

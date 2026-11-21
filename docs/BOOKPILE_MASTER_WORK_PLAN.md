@@ -942,6 +942,23 @@ other public listener was present. Effective SSH policy remained public-key
 authentication enabled with password and keyboard-interactive authentication
 disabled.
 
+Additional evidence: the 2026-11-21 UTC maintenance window began with verified
+backup `25d0803a-c2c4-424a-8a03-03820b624c7f`, containing all 433 private
+objects and a 263,670-byte database dump. The simulated and applied plan had no
+held packages or removals: 24 packages were upgraded and six kernel packages
+were added. Eleven phased `systemd`/`udev` updates were deliberately not forced.
+Docker 29.10.0, containerd 2.4.2 and Compose 5.8.0 recovered the application at
+revision `8681becd72a70be69f96a781e442d06ff324434f`; the controlled reboot at
+10:35 UTC activated kernel `6.8.0-151-generic`. No reboot request or failed
+systemd unit remained. All seven BOOKPILE timers were scheduled, all four D6
+policies returned in enforce mode with the reviewed nftables rules, public
+health and Healthchecks were green, normal login and mutation passed, and deep
+reconciliation accounted for 433/433 objects without mismatch, absence or
+orphan. Sentry grouped two handled email-worker connection failures at the
+Docker restart and the host reboot; PostgreSQL was intentionally unavailable at
+those instants, the durable outbox recovered, and no post-reboot recurrence was
+observed.
+
 ### I2 — Reproducible production host
 
 - [ ] Apply the checked-in idempotent host bootstrap to the production VPS from
