@@ -370,6 +370,7 @@ def update_bookcase(
         LibraryNotFoundError,
         LibraryOwnerRequiredError,
         PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
         PhysicalLibraryConflictError,
     ) as exc:
         raise physical_error(exc) from exc
@@ -427,6 +428,7 @@ def create_shelf(
         LibraryNotFoundError,
         LibraryOwnerRequiredError,
         PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
         PhysicalLibraryConflictError,
     ) as exc:
         raise physical_error(exc) from exc
@@ -457,6 +459,7 @@ def update_shelf(
         LibraryNotFoundError,
         LibraryOwnerRequiredError,
         PhysicalLibraryNotFoundError,
+        PhysicalLibraryValidationError,
         PhysicalLibraryConflictError,
     ) as exc:
         raise physical_error(exc) from exc
