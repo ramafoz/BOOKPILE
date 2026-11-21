@@ -942,6 +942,23 @@ other public listener was present. Effective SSH policy remained public-key
 authentication enabled with password and keyboard-interactive authentication
 disabled.
 
+Additional evidence: the 2026-11-21 UTC maintenance window began with verified
+backup `25d0803a-c2c4-424a-8a03-03820b624c7f`, containing all 433 private
+objects and a 263,670-byte database dump. The simulated and applied plan had no
+held packages or removals: 24 packages were upgraded and six kernel packages
+were added. Eleven phased `systemd`/`udev` updates were deliberately not forced.
+Docker 29.10.0, containerd 2.4.2 and Compose 5.8.0 recovered the application at
+revision `8681becd72a70be69f96a781e442d06ff324434f`; the controlled reboot at
+10:35 UTC activated kernel `6.8.0-151-generic`. No reboot request or failed
+systemd unit remained. All seven BOOKPILE timers were scheduled, all four D6
+policies returned in enforce mode with the reviewed nftables rules, public
+health and Healthchecks were green, normal login and mutation passed, and deep
+reconciliation accounted for 433/433 objects without mismatch, absence or
+orphan. Sentry grouped two handled email-worker connection failures at the
+Docker restart and the host reboot; PostgreSQL was intentionally unavailable at
+those instants, the durable outbox recovered, and no post-reboot recurrence was
+observed.
+
 ### I2 — Reproducible production host
 
 - [ ] Apply the checked-in idempotent host bootstrap to the production VPS from
@@ -1088,7 +1105,7 @@ evaluation task closes only with a committed decision record that says
 `ACCEPTED` or `REJECTED`, names the evidence and, when accepted, creates the
 implementation task in this section.
 
-### P1 — Local maintenance and parity
+### P1 — Local maintenance and cross-edition physical parity
 
 - [ ] Add Local interface localization in an isolated maintenance branch while
   preserving the English-only `v1.0.0` artifact; pass clean-install, backup,
@@ -1098,9 +1115,10 @@ implementation task in this section.
   active geometry specification; never test against the populated Local data.
 - [ ] Publish Local manual-recovery and safe-backup-storage instructions and
   rehearse them against an isolated installation.
-- [ ] Evaluate realistic supported-PILE tilt with two contact points, rotated
-  rendering, transformed hitboxes and collision rules; close with an accepted
-  or rejected geometry decision and prototype evidence.
+- [ ] Evaluate realistic supported-PILE tilt in both Local and Server with two
+  contact points, rotated rendering, transformed hitboxes and collision rules;
+  close with an accepted or rejected cross-edition geometry decision and
+  prototype evidence.
 
 ### P2 — Capture and bibliographic enrichment
 
@@ -1122,6 +1140,17 @@ implementation task in this section.
 
 ### P3 — Rich metadata and discovery
 
+- [ ] After the active defensive-security and authorization release blockers
+  are closed, add composable advanced catalogue filters for physical location:
+  bookcase, shelf and container. Options must be library-scoped and dependent
+  (a shelf belongs to the selected bookcase and a container to the selected
+  shelf), combine correctly with existing search, sorting and pagination, and
+  preserve the existing Owner/Viewer map-visibility boundary.
+- [ ] Add contextual “view in catalogue” links to the map inspection panels
+  that currently show an individual book or the books in a selected container.
+  The destination must open the catalogue with the corresponding physical-
+  location filter applied, without exposing location identifiers from another
+  library or granting map information to catalogue-only Viewers.
 - [ ] Add structured subjects with versioned import/export and searchable,
   editable Local/Server projections.
 - [ ] Replace interim free-text genre storage with structured genres through a
