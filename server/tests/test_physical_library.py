@@ -328,6 +328,92 @@ def test_owner_builds_and_renumbers_hierarchy_atomically(
     }
 
 
+def test_physical_dimension_validation_returns_422_and_rolls_back(
+    client: TestClient, session: Session
+) -> None:
+    owner = add_user(session, "physical_validation_owner")
+    library = add_library(session, owner)
+    authenticate(client, session, owner)
+    bookcase = create_bookcase(client, library, "Measured cabinet")
+    shelf = create_shelf(client, library, bookcase["id"], 1)
+
+    layout = client.get(base(library)).json()["layout"]
+    layout["geometry_mode"] = "PHYSICAL"
+    enabled = client.put(f"{base(library)}/layout", json=layout, headers=csrf())
+    assert enabled.status_code == 200, enabled.text
+
+    invalid_shelf = client.put(
+        f"{base(library)}/shelves/{shelf['id']}",
+        json={
+            "shelf_number": 1,
+            "usable_height_mm": 5000,
+            "usable_width_mm": 850,
+            "usable_depth_mm": 220,
+        },
+        headers=csrf(),
+    )
+    assert invalid_shelf.status_code == 422, invalid_shelf.text
+    assert "do not fit inside the furniture" in invalid_shelf.json()["detail"]
+
+    invalid_bookcase = client.put(
+        f"{base(library)}/bookcases/{bookcase['id']}",
+        json={
+            "name": "Measured cabinet",
+            "description": "North wall",
+            "height_mm": 200,
+            "width_mm": 900,
+            "depth_mm": 250,
+        },
+        headers=csrf(),
+    )
+    assert invalid_bookcase.status_code == 422, invalid_bookcase.text
+    assert "do not fit inside the furniture" in invalid_bookcase.json()["detail"]
+
+    invalid_create = client.post(
+        f"{base(library)}/shelves",
+        json={
+            "bookcase_id": bookcase["id"],
+            "shelf_number": 2,
+            "usable_height_mm": 5000,
+            "usable_width_mm": 850,
+            "usable_depth_mm": 220,
+        },
+        headers=csrf(),
+    )
+    assert invalid_create.status_code == 422, invalid_create.text
+    assert "do not fit inside the furniture" in invalid_create.json()["detail"]
+
+    current = client.get(base(library))
+    assert current.status_code == 200, current.text
+    current_bookcase = next(
+        item for item in current.json()["bookcases"] if item["id"] == bookcase["id"]
+    )
+    assert current_bookcase["height_mm"] == 2000
+    assert len(current_bookcase["shelves"]) == 1
+    assert current_bookcase["shelves"][0]["id"] == shelf["id"]
+    assert current_bookcase["shelves"][0]["usable_height_mm"] == 300
+
+    session.expire_all()
+    mutation_events = list(
+        session.scalars(
+            select(LibraryAuditEvent).where(
+                LibraryAuditEvent.library_id == library.id,
+                LibraryAuditEvent.event_type.in_(("bookcase_updated", "shelf_updated")),
+            )
+        )
+    )
+    assert mutation_events == []
+    shelf_creations = list(
+        session.scalars(
+            select(LibraryAuditEvent).where(
+                LibraryAuditEvent.library_id == library.id,
+                LibraryAuditEvent.event_type == "shelf_created",
+            )
+        )
+    )
+    assert len(shelf_creations) == 1
+
+
 def test_map_scope_is_enforced_and_viewers_cannot_write(
     client: TestClient, session: Session
 ) -> None:
