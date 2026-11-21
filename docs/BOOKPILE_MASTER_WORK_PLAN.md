@@ -1105,7 +1105,7 @@ evaluation task closes only with a committed decision record that says
 `ACCEPTED` or `REJECTED`, names the evidence and, when accepted, creates the
 implementation task in this section.
 
-### P1 — Local maintenance and parity
+### P1 — Local maintenance and cross-edition physical parity
 
 - [ ] Add Local interface localization in an isolated maintenance branch while
   preserving the English-only `v1.0.0` artifact; pass clean-install, backup,
@@ -1115,9 +1115,10 @@ implementation task in this section.
   active geometry specification; never test against the populated Local data.
 - [ ] Publish Local manual-recovery and safe-backup-storage instructions and
   rehearse them against an isolated installation.
-- [ ] Evaluate realistic supported-PILE tilt with two contact points, rotated
-  rendering, transformed hitboxes and collision rules; close with an accepted
-  or rejected geometry decision and prototype evidence.
+- [ ] Evaluate realistic supported-PILE tilt in both Local and Server with two
+  contact points, rotated rendering, transformed hitboxes and collision rules;
+  close with an accepted or rejected cross-edition geometry decision and
+  prototype evidence.
 
 ### P2 — Capture and bibliographic enrichment
 
