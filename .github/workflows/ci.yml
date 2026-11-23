@@ -70,6 +70,26 @@ jobs:
       - name: Test Server API
         run: python -m pytest server/tests
 
+  defensive-regression-harness:
+    name: D7 defensive regression harness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13.7"
+          cache: pip
+          cache-dependency-path: server/pyproject.toml
+      - name: Install Server test dependencies
+        run: python -m pip install -e "server[dev]"
+      - name: Run aggregate defensive scenarios
+        run: >-
+          python server/scripts/run-d7-defensive-harness.py
+          --revision "$GITHUB_SHA"
+          --output .bookpile-runtime/d7-ci-report.json
+      - name: Retain the machine-readable report in the revision-linked job log
+        run: python -m json.tool .bookpile-runtime/d7-ci-report.json
+
   frontend:
     name: Frontend tests, lint and both editions
     runs-on: ubuntu-24.04

@@ -1325,6 +1325,34 @@ and 60/library/minute (25% of its thresholds). Roll back only the affected mode
 to `observe` or `off`, recreate the API, and verify live/ready plus the relevant
 normal workflow; do not delete shared counters.
 
+### D7 defensive regression harness
+
+The CI profile consolidates the previously separate defensive regressions into
+eight named scenarios and emits one aggregate JSON result tied to the full Git
+revision. Run it from the repository root with the Server development
+dependencies installed:
+
+```sh
+python server/scripts/run-d7-defensive-harness.py \
+  --revision "$(git rev-parse HEAD)" \
+  --output .bookpile-runtime/d7-ci-report.json
+```
+
+The profile covers ordinary navigation and API bursts, scanner and health
+separation, forged forwarding headers, native IPv6 and IPv4-mapped IPv6,
+fixed-window expiry, lease loss and disconnected exports, multiple users behind
+one client, multiple Owners sharing a library limit, valid foreign identifiers
+and secret/private-value redaction. It continues after an individual failure so
+the report identifies every failed scenario, then exits nonzero if any scenario
+failed. The report is deliberately aggregate-only: it contains scenario names,
+status, target counts, durations and revision, but no test output, address,
+identifier, path, token or private value.
+
+The dedicated GitHub Actions job prints and validates the JSON in its
+revision-linked job log. This is the first D7 profile only. D7 remains open until
+the separately confirmed staging profile runs before and after an enforcement
+change and its machine-readable report is retained with the deployed revision.
+
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
 mandatory. Registry-backed vulnerability scans require explicit authorization
