@@ -392,7 +392,7 @@ def _write_evidence(report: dict[str, object], evidence_root: Path) -> Path:
     evidence_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     metadata = evidence_root.stat()
     if not evidence_root.is_dir() or (
-        hasattr(os, "getuid") and metadata.st_uid != 0
+        hasattr(os, "geteuid") and metadata.st_uid != os.geteuid()
     ):
         raise CheckFailure("Unsafe D7 evidence root")
     os.chmod(evidence_root, 0o700)

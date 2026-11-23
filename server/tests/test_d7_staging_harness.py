@@ -197,11 +197,8 @@ def test_edge_scenario_rejects_an_unexpected_jail() -> None:
     assert edge["status"] == "failed"
 
 
-def test_evidence_is_exclusive_and_contains_its_safe_filename(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_evidence_is_exclusive_and_contains_its_safe_filename(tmp_path: Path) -> None:
     harness = load_harness()
-    monkeypatch.setattr(harness.os, "getuid", lambda: 0, raising=False)
     report = harness.run_harness(context(harness), "before_enforcement_change")
 
     destination = harness._write_evidence(report, tmp_path / "evidence")
