@@ -667,14 +667,20 @@ and `--disable-all` retained as the complete recovery path.
 
 ### D7 — Defensive regression harness
 
-- [ ] Automate normal navigation, API burst, scanner paths, forged forwarding
+- [x] Automate normal navigation, API burst, scanner paths, forged forwarding
   headers, fixed-window expiry, lease loss, slow/disconnected exports, multiple
   users per IP, multiple Owners per library, unauthorized IDs and secret
   redaction.
-- [ ] Cover IPv4, IPv4-mapped IPv6 and native IPv6 parsing even while public
+- [x] Cover IPv4, IPv4-mapped IPv6 and native IPv6 parsing even while public
   IPv6 remains disabled.
 - [ ] Run the harness before and after every enforcement-mode change and retain
   a machine-readable result tied to the deployment revision.
+
+The revision-linked CI profile is active and covers the first two items. The
+staging profile is implemented as a passive, fail-closed host check with secure
+aggregate evidence; the final item remains open until that profile has produced
+passing reports on both sides of a controlled enforcement-mode change and the
+authenticated human workflow has also passed.
 
 Evidence: CI job plus staging report with every scenario passing.
 

@@ -1353,6 +1353,40 @@ revision-linked job log. This is the first D7 profile only. D7 remains open unti
 the separately confirmed staging profile runs before and after an enforcement
 change and its machine-readable report is retained with the deployed revision.
 
+The staging profile is passive: it does not generate scanner, health or volume
+bursts and it does not change a jail or firewall rule. It verifies the deployed
+revision and public health, the public root, the four application containers, a
+deep reconciliation, the exact expected Fail2ban and nftables policy, the seven
+defensive aggregates, required host units and the minimized Caddy log. Run it as
+root because it reads protected host evidence and stores the aggregate report in
+`/var/lib/bookpile/d7-evidence`, a root-owned `0700` directory whose report files
+are `0600`:
+
+```sh
+deployed_revision="$(
+  curl -fsS https://staging.bookpile.gal/health/live |
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["revision"])'
+)"
+
+sudo python3 server/scripts/run-d7-staging-harness.py \
+  --phase baseline \
+  --expected-revision "$deployed_revision"
+```
+
+The allowed phases are `baseline`, `before_enforcement_change` and
+`after_enforcement_change`. Defaults describe the accepted staging policy in
+which live, ready, scanner and volume are all `enforce`; when rehearsing a
+different reviewed state, pass the corresponding `--expected-live`,
+`--expected-ready`, `--expected-scanner` or `--expected-volume` value. A mismatch
+fails closed rather than silently recording the observed state as accepted.
+
+The script executes every scenario even if one fails, writes the complete
+aggregate result, and exits nonzero if any scenario failed. A successful report
+does not replace the short authenticated human check: login, ordinary catalogue
+navigation and one normal mutation must still be confirmed after a deployment
+or enforcement change. Traffic-generating threshold rehearsals remain separate
+and retain their own explicit confirmation phrases.
+
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
 mandatory. Registry-backed vulnerability scans require explicit authorization
