@@ -1,0 +1,286 @@
+{
+  "schema_version": 1,
+  "status": "accepted",
+  "accepted_against_revision": "4c09b58c28c7527c482b591891d3bdcde1d35671",
+  "unresolved_authorization_defects": [],
+  "rows": [
+    {
+      "audit": "A1",
+      "endpoint": "GET /api/v1/libraries/{foreign_library_id}/members; DELETE /api/v1/libraries/{foreign_library_id}; PATCH /api/v1/libraries/{own_library_id}/members/{foreign_user_id}",
+      "actor": "Owner or either Viewer scope holding valid identifiers from another library",
+      "expected": "Generic 404 for reads and Owner attempts; a Viewer mutation may use role-safe 403; no disclosure or state change",
+      "actual": "All attempts returned 403/404 as specified; database, private objects and audit rows were unchanged",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "evidence": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "audit": "A1",
+      "endpoint": "GET|PUT /api/v1/libraries/{own_library_id}/catalogue/{foreign_book_id}; GET|DELETE .../cover",
+      "actor": "Owner or either Viewer scope holding a valid foreign book identifier",
+      "expected": "Generic denial, no foreign metadata or cover bytes disclosed, no state change",
+      "actual": "Reads and Owner writes returned 404; Viewer writes returned 403/404; real foreign cover metadata and bytes remained unchanged",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "evidence": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "audit": "A1",
+      "endpoint": "GET|DELETE .../reading[/sessions/{foreign_session_id}]; GET|DELETE .../loans[/{foreign_loan_id}]",
+      "actor": "Owner or either Viewer scope holding valid foreign reading or loan identifiers",
+      "expected": "Generic denial without borrower, notes, identifiers or state changes",
+      "actual": "All attempts returned 403/404 as specified; private loan markers were absent and snapshots were unchanged",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "evidence": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "audit": "A1",
+      "endpoint": "GET /physical-library; PUT /physical-library/{bookcases|shelves|containers|books/.../placement}/{foreign_id}",
+      "actor": "Owner or either Viewer scope holding valid foreign physical-library identifiers",
+      "expected": "Generic denial and no hierarchy, placement, layout or audit mutation",
+      "actual": "All attempts returned 403/404 as specified and complete physical snapshots were unchanged",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "evidence": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "audit": "A1",
+      "endpoint": "DELETE /invitations/{foreign_invitation_id}; GET|DELETE /imports/{foreign_job_id}; GET /exports/portable",
+      "actor": "Owner or either Viewer scope holding valid foreign invitation, job or library identifiers",
+      "expected": "Generic denial, no identifier disclosure and no state or byte change",
+      "actual": "All attempts returned 403/404 as specified; invitation, job, export and audit state remained unchanged",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "evidence": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "audit": "A2",
+      "endpoint": "GET /catalogue[/{book_id}|/metadata-options|/{book_id}/cover]",
+      "actor": "Owner, catalogue-only Viewer and catalogue-and-map Viewer in the same library",
+      "expected": "Shared catalogue and private cover are readable with a read-only Viewer projection and no storage metadata",
+      "actual": "All actors received 200; Viewer can_edit was false and no storage key, digest or uploader identity was exposed",
+      "revision": "8b33005432411d6bd434fb38f594f4312c1fada8",
+      "evidence": "server/tests/test_catalogue_authorization_audit.py::test_both_viewer_scopes_read_shared_catalogue_but_cannot_change_it"
+    },
+    {
+      "audit": "A2",
+      "endpoint": "POST /catalogue; PUT|DELETE /catalogue/{book_id}; PUT|DELETE /catalogue/{book_id}/cover; GET /catalogue/isbn-lookup",
+      "actor": "Either Viewer scope",
+      "expected": "Generic 404 and no catalogue, contributor, cover-object or audit mutation",
+      "actual": "Every operation returned 404 and exact database, object-byte and audit snapshots remained unchanged",
+      "revision": "8b33005432411d6bd434fb38f594f4312c1fada8",
+      "evidence": "server/tests/test_catalogue_authorization_audit.py::test_both_viewer_scopes_read_shared_catalogue_but_cannot_change_it"
+    },
+    {
+      "audit": "A2",
+      "endpoint": "POST|GET|PUT|DELETE catalogue and private-cover lifecycle endpoints",
+      "actor": "Owner",
+      "expected": "Complete authorized lifecycle with ordered contributors and corresponding audit events",
+      "actual": "Create, update, delete, cover replace/remove/restore and all expected audit events succeeded",
+      "revision": "8b33005432411d6bd434fb38f594f4312c1fada8",
+      "evidence": "server/tests/test_catalogue_authorization_audit.py::test_owner_can_manage_catalogue_contributors_metadata_and_private_cover"
+    },
+    {
+      "audit": "A3",
+      "endpoint": "GET|POST|PUT /catalogue/{book_id}/reading...; GET /reading-overview[/statistics]",
+      "actor": "Owner selecting own or another Owner's reading perspective",
+      "expected": "Own perspective writable; another Owner's perspective read-only; concurrent active reader rejected atomically",
+      "actual": "Own lifecycle succeeded, cross-Owner finish returned 404, competing start returned 409 and state was unchanged",
+      "revision": "2c5e4cee1ec904b64c31dcc1152e020d9ebd90da",
+      "evidence": "server/tests/test_reading_loan_authorization_audit.py::test_reading_perspectives_shared_custody_statistics_and_private_loans"
+    },
+    {
+      "audit": "A3",
+      "endpoint": "GET|PUT /reading-perspective(s); GET reading, overview, statistics and Goodreads projections",
+      "actor": "Either Viewer scope",
+      "expected": "May select and read an Owner perspective but cannot mutate personal reading data",
+      "actual": "Read projections returned 200 and every reading mutation returned 403/404 with unchanged state",
+      "revision": "2c5e4cee1ec904b64c31dcc1152e020d9ebd90da",
+      "evidence": "server/tests/test_reading_loan_authorization_audit.py::test_reading_perspectives_shared_custody_statistics_and_private_loans"
+    },
+    {
+      "audit": "A3",
+      "endpoint": "GET|POST|DELETE /catalogue/{book_id}/loans...; GET /loan-overview[/statistics]",
+      "actor": "Owner and either Viewer scope",
+      "expected": "Owners share custody; Viewers receive aggregate state without borrower or private notes and cannot mutate",
+      "actual": "Owners saw shared private fields; Viewer projections and audit omitted them; every Viewer mutation was denied without state change",
+      "revision": "2c5e4cee1ec904b64c31dcc1152e020d9ebd90da",
+      "evidence": "server/tests/test_reading_loan_authorization_audit.py::test_reading_perspectives_shared_custody_statistics_and_private_loans"
+    },
+    {
+      "audit": "A4",
+      "endpoint": "GET /physical-library; POST /rearrangements/preview; POST /rearrangements/apply",
+      "actor": "Owner",
+      "expected": "Map is editable; preview is read-only; apply performs the reviewed rearrangement",
+      "actual": "Owner projection and apply returned 200, preview changed no state and apply moved the expected books",
+      "revision": "eb0467e57a05c3631008625ff3c377058f4731c8",
+      "evidence": "server/tests/test_physical_library_authorization_audit.py::test_physical_map_and_rearrangement_authorization_matrix"
+    },
+    {
+      "audit": "A4",
+      "endpoint": "GET /physical-library",
+      "actor": "Catalogue-only Viewer; catalogue-and-map Viewer",
+      "expected": "Catalogue-only receives 404; map Viewer receives a non-editable map projection",
+      "actual": "Responses were respectively 404 and 200 with can_edit false",
+      "revision": "eb0467e57a05c3631008625ff3c377058f4731c8",
+      "evidence": "server/tests/test_physical_library_authorization_audit.py::test_physical_map_and_rearrangement_authorization_matrix"
+    },
+    {
+      "audit": "A4",
+      "endpoint": "POST|PUT|DELETE physical furniture, placement, layout and rearrangement endpoints",
+      "actor": "Either Viewer scope",
+      "expected": "Generic 404 and no physical hierarchy, layout, placement or audit mutation",
+      "actual": "Every attempted mutation returned 404 and exact snapshots remained unchanged",
+      "revision": "eb0467e57a05c3631008625ff3c377058f4731c8",
+      "evidence": "server/tests/test_physical_library_authorization_audit.py::test_physical_map_and_rearrangement_authorization_matrix"
+    },
+    {
+      "audit": "A5",
+      "endpoint": "GET /members; POST /invitations; PATCH /members/{user_id}; DELETE /invitations/{invitation_id}",
+      "actor": "Either Viewer scope",
+      "expected": "Catalogue-safe member summary only; all membership management denied without state change",
+      "actual": "Safe summary succeeded; mutations were generically denied and library, membership, invitation and audit snapshots were unchanged",
+      "revision": "6704d2986cec9974fc8a7262a7a5aa97feff4c40",
+      "evidence": "server/tests/test_membership_authorization_audit.py::test_invitation_and_membership_authorization_lifecycle"
+    },
+    {
+      "audit": "A5",
+      "endpoint": "POST /invitations; PATCH /members/{user_id}; DELETE /invitations/{invitation_id}",
+      "actor": "Owner",
+      "expected": "May change Viewer scope, promote, downgrade, remove and revoke while preserving a final Owner",
+      "actual": "Lifecycle succeeded; revoked invitations stayed unusable and the final Owner could not remove itself",
+      "revision": "6704d2986cec9974fc8a7262a7a5aa97feff4c40",
+      "evidence": "server/tests/test_membership_authorization_audit.py::test_invitation_and_membership_authorization_lifecycle"
+    },
+    {
+      "audit": "A5",
+      "endpoint": "Any library endpoint after membership removal; concurrent PATCH /members/{owner_id}",
+      "actor": "Removed Owner with the original established session; two Owners removing each other concurrently",
+      "expected": "Established session loses library authority immediately; concurrent removals leave exactly one Owner",
+      "actual": "Original session was denied; PostgreSQL gate requires one success, one safe rejection and one surviving Owner",
+      "revision": "6704d2986cec9974fc8a7262a7a5aa97feff4c40",
+      "evidence": "server/tests/test_membership_authorization_audit.py::test_invitation_and_membership_authorization_lifecycle"
+    },
+    {
+      "audit": "A6",
+      "endpoint": "POST /imports/local/preflight; GET|DELETE /imports/{job_id}; POST /imports/{job_id}/consolidate; GET /exports/portable",
+      "actor": "Either Viewer scope, unrelated Owner or removed Owner with an established session",
+      "expected": "Generic denial for valid foreign/stale identifiers with no database or staged/exported byte change",
+      "actual": "Every unauthorized operation was denied and exact database and byte snapshots remained unchanged",
+      "revision": "e8dedf7c033a2ac3c7414ecef58d72f394abf8fa",
+      "evidence": "server/tests/test_import_export_authorization_audit.py::test_import_job_and_export_authorization_survive_stale_and_foreign_ids"
+    },
+    {
+      "audit": "A6",
+      "endpoint": "POST /imports/{job_id}/consolidate with Server ZIP identity mapping",
+      "actor": "Destination Owner supplying invalid, omitted or valid personal-data mapping",
+      "expected": "Non-Owner or omitted mapping rejected atomically; explicit destination-Owner mapping accepted",
+      "actual": "Invalid mappings added no books, readings or objects and kept the job ready; valid mapping succeeded",
+      "revision": "e8dedf7c033a2ac3c7414ecef58d72f394abf8fa",
+      "evidence": "server/tests/test_import_export_authorization_audit.py::test_import_job_and_export_authorization_survive_stale_and_foreign_ids"
+    },
+    {
+      "audit": "A7",
+      "endpoint": "POST /api/v1/account/deleted-libraries/{deletion_id}/restore",
+      "actor": "Former Viewer, unrelated user and original Owner after the 48-hour deadline",
+      "expected": "Generic denial and unchanged recovery tombstone",
+      "actual": "All unauthorized or expired restores were denied and the complete tombstone remained unchanged",
+      "revision": "b09a4c8643927b5488940a1e85eeaa499c1837ae",
+      "evidence": "server/tests/test_deletion_recovery_authorization_audit.py::test_deleted_library_recovery_rejects_foreign_and_expired_authority"
+    },
+    {
+      "audit": "A7",
+      "endpoint": "DELETE /api/v1/account; GET /auth/me; POST /auth/account-deletion/restore",
+      "actor": "Deleting account with two established sessions and holder of an expired genuine recovery token",
+      "expected": "All sessions revoked immediately; expired token rejected and unconsumed; cleanup removes identity/private object material",
+      "actual": "Both sessions returned 401, expired restore failed without consumption, and finalization removed all specified material",
+      "revision": "b09a4c8643927b5488940a1e85eeaa499c1837ae",
+      "evidence": "server/tests/test_deletion_recovery_authorization_audit.py::test_account_deletion_revokes_sessions_and_expired_token_cannot_avoid_cleanup"
+    },
+    {
+      "audit": "A8",
+      "endpoint": "GET /api/v1/account; GET|PUT /api/v1/account/profile; GET|PUT /api/v1/account/profile/image",
+      "actor": "Current account and anonymous caller",
+      "expected": "Current account sees only documented private fields; anonymous caller receives 401; no object metadata leaks",
+      "actual": "Projection contained only five documented identity fields, anonymous requests returned 401 and image keys/digests were absent",
+      "revision": "128573f1600c76cb9cc3e65c6df3832b690369aa",
+      "evidence": "server/tests/test_profile_storage_authorization_audit.py::test_private_account_identity_is_never_a_discovery_projection"
+    },
+    {
+      "audit": "A8",
+      "endpoint": "GET /api/v1/profiles/{user_id}[ /image]",
+      "actor": "Co-Owner, both Viewer scopes, foreign Owner, unrelated authenticated user and anonymous caller",
+      "expected": "Only explicit visibility groups receive the projection; private/inactive/absent resources share a 404 shape",
+      "actual": "Every visibility combination matched policy; private images returned indistinguishable 404 and denied reads changed no state",
+      "revision": "128573f1600c76cb9cc3e65c6df3832b690369aa",
+      "evidence": "server/tests/test_profile_storage_authorization_audit.py::test_profile_projection_and_image_follow_only_explicit_visibility"
+    },
+    {
+      "audit": "A8",
+      "endpoint": "GET /api/v1/account/storage",
+      "actor": "Owner, Viewer, unrelated authenticated user and anonymous caller",
+      "expected": "Private aggregate ratios only; Owner sees owned libraries, others no allocations, anonymous receives 401",
+      "actual": "Projection followed ownership and omitted raw bytes, plan codes and foreign identities",
+      "revision": "128573f1600c76cb9cc3e65c6df3832b690369aa",
+      "evidence": "server/tests/test_profile_storage_authorization_audit.py::test_storage_overview_is_account_private_and_aggregate_only"
+    },
+    {
+      "audit": "A9",
+      "endpoint": "Every unsafe /api/v1 route discovered from the FastAPI route table",
+      "actor": "Authenticated user without a valid CSRF pair",
+      "expected": "Every authenticated mutation requires CSRF except the seven public lifecycle routes; preview remains read-only",
+      "actual": "Dynamic route inventory found no mutation without an explicit CSRF decision",
+      "revision": "053d743350b09d0be32c7efb638685520b9d9c5b",
+      "evidence": "server/tests/test_session_membership_authorization_audit.py::test_every_authenticated_mutation_has_an_explicit_csrf_decision"
+    },
+    {
+      "audit": "A9",
+      "endpoint": "POST /auth/login; POST /auth/session/rotate; PUT /auth/locale",
+      "actor": "Attacker fixing root-path cookies and user holding old/mixed session and CSRF values",
+      "expected": "Login replaces and expires shadowing cookies; rotation rejects every stale or mixed secret pair",
+      "actual": "Attacker values were not stored; old/old, old/new and new/old pairs failed while the new/new pair succeeded",
+      "revision": "053d743350b09d0be32c7efb638685520b9d9c5b",
+      "evidence": "server/tests/test_session_membership_authorization_audit.py::test_login_rotation_rejects_fixed_mixed_and_stale_session_secrets"
+    },
+    {
+      "audit": "A9",
+      "endpoint": "POST /auth/sessions/revoke-all; subsequent GET /auth/me and authenticated mutations",
+      "actor": "Account with two independently established session/CSRF pairs",
+      "expected": "Revocation invalidates both pairs before any further read or mutation",
+      "actual": "Both sessions returned 401 and their subsequent mutations were rejected",
+      "revision": "053d743350b09d0be32c7efb638685520b9d9c5b",
+      "evidence": "server/tests/test_session_membership_authorization_audit.py::test_revoke_all_invalidates_every_established_session_and_csrf_pair"
+    },
+    {
+      "audit": "A9",
+      "endpoint": "POST /libraries/{library_id}/catalogue after authentication but concurrent membership removal",
+      "actor": "Owner whose established request loses membership between authentication and resource authorization",
+      "expected": "Request rechecks membership, returns generic 404 and creates no book while account session remains valid",
+      "actual": "Deterministic interleaving returned 404, created no book and preserved account authentication without library access",
+      "revision": "053d743350b09d0be32c7efb638685520b9d9c5b",
+      "evidence": "server/tests/test_session_membership_authorization_audit.py::test_in_flight_request_rechecks_membership_after_authentication"
+    }
+  ],
+  "findings": [
+    {
+      "id": "AUTH-001",
+      "kind": "implementation_defect",
+      "summary": "A root-path session cookie could shadow the genuine /api/v1 session cookie during login or logout.",
+      "disposition": "fixed",
+      "revision": "7ffa5f046315231429aba923c384dffbfb032cd8",
+      "regression": "server/tests/test_session_membership_authorization_audit.py::test_login_rotation_rejects_fixed_mixed_and_stale_session_secrets"
+    },
+    {
+      "id": "AUDIT-001",
+      "kind": "test_defect",
+      "summary": "The cross-library cover fixture originally exercised nonexistent covers, allowing an unscoped lookup to resemble a safe 404.",
+      "disposition": "fixed",
+      "revision": "8f56027273a21bc8b4be1eeb5d0ebc48bc28e831",
+      "regression": "server/tests/test_authorization_cross_library_matrix.py::test_valid_foreign_uuids_are_generically_denied_without_state_change"
+    },
+    {
+      "id": "AUDIT-002",
+      "kind": "test_defect",
+      "summary": "The removed-Owner check originally created a fresh post-removal session instead of retaining the pre-removal session.",
+      "disposition": "fixed",
+      "revision": "6704d2986cec9974fc8a7262a7a5aa97feff4c40",
+      "regression": "server/tests/test_membership_authorization_audit.py::test_invitation_and_membership_authorization_lifecycle"
+    }
+  ]
+}

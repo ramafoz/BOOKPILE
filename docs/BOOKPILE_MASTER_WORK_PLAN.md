@@ -395,13 +395,22 @@ catalogue use all passed afterward. The remaining D5 task is the future
   before deciding whether to enable its 10-minute ban. The staging decision is
   `ENABLE`, subject to the separately reviewed, reversible activation gate
   and real-ban rehearsal documented below.
-- [ ] Keep authentication and ambiguous API `401/404/422` signals alert-only
-  until the Owner/Viewer and malformed-input baselines are complete.
-- [ ] Prove equivalent rules before enabling public IPv6. Until then, record
-  public IPv6 as disabled.
+- [x] Keep authentication and ambiguous API `401/404/422` signals alert-only.
+  The completed Owner/Viewer audit and malformed-input baseline do not justify
+  an IP ban: authentication failures and validation errors can be legitimate,
+  several users can share one address, and a route-safe `404` is deliberately
+  ambiguous. D5 may aggregate and alert on these outcomes, but D6 must not feed
+  them to Fail2ban or nftables.
+- [x] Reject public IPv6 for the beta. Staging has no global IPv6 address and
+  the public origin has no `AAAA` record. Equivalent, independently rehearsed
+  IPv6 sets and rules remain a hard prerequisite for any future enablement;
+  assigning global IPv6 before that work must fail the D6 host checks.
 
 Evidence: configuration, distinct health fixtures and decisions, dry-run counts,
 ban/unban/restart transcript and health-monitor continuity.
+
+The alert-only and IPv6 decisions above close D6 without claiming unsupported
+IPv6 enforcement. **D6 is complete for the IPv4-only beta architecture.**
 
 **D6 lote 1 staging evidence — 2026-11-02.** Revision
 `31b8d665c61b0c06d4a4e5eed1487da4e1548b3a` emitted five schema-validated
@@ -837,9 +846,23 @@ directly; hiding a UI control is not evidence.
   Focused authentication, membership and PostgreSQL coverage passes 12 tests
   with only the environment-dependent PostgreSQL gate skipped locally; the
   complete local server suite passes 479 tests with the same single skip.
-- [ ] A10: Convert every discovered defect into a regression test and publish a
+- [x] A10: Convert every discovered defect into a regression test and publish a
   matrix containing endpoint, actor, expected result, actual result, revision
   and evidence. Zero unresolved authorization defects are permitted.
+
+  Evidence: `docs/OWNER_VIEWER_AUTHORIZATION_MATRIX.json` publishes 28
+  traceable rows covering A1-A9 against revision
+  `4c09b58c28c7527c482b591891d3bdcde1d35671`. Every row names the endpoint or
+  endpoint family, actor, expected and actual result, accepting revision and
+  exact test function. Its findings ledger records the fixed root-cookie
+  implementation defect and the two corrected audit-fixture defects; each has
+  a live regression and the unresolved-defect list is empty.
+  `test_authorization_audit_matrix.py` fails if an audit section disappears, a
+  revision is not immutable, an evidence file/function no longer exists, a
+  finding is not fixed or any unresolved authorization defect is added. The
+  focused authorization suite and complete server suite are required to pass
+  before this acceptance is merged. **The Owner/Viewer authorization audit is
+  complete.**
 
 ## 6. `SYSTEM_ADMIN` console
 
