@@ -249,3 +249,8 @@ def test_deployment_contract_has_no_arbitrary_source_or_export_argument() -> Non
     assert 'parser.add_argument("--ip"' not in source
     assert 'choices=("list", "reveal")' in source
     assert "os.geteuid() != 0" in source
+    assert (
+        'INSTALLED_VALIDATOR = Path("/usr/local/libexec/bookpile/validate-caddy-defensive-log")'
+        in source
+    )
+    assert "running_path == INSTALLED_COMMAND" in source

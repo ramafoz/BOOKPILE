@@ -81,12 +81,15 @@ count, but never the retained client IP. The eventual installation sequence is:
 1. finish and accept SYSTEM_ADMIN A3;
 2. install the reviewed audit recorder and prove its database role cannot
    update or delete existing rows;
-3. create a random key of at least 32 bytes as root, owned `root:root` and mode
+3. verify the reviewed defensive-log validator is installed root-owned and not
+   group/other-writable at
+   `/usr/local/libexec/bookpile/validate-caddy-defensive-log`;
+4. create a random key of at least 32 bytes as root, owned `root:root` and mode
    `0600` at `/etc/bookpile/raw-evidence-hmac.key`;
-4. install the reviewed evidence command as root-owned mode `0755` at
+5. install the reviewed evidence command as root-owned mode `0755` at
    `/usr/local/sbin/bookpile-raw-evidence-access`;
-5. run a synthetic fixture first, then one bounded retained-evidence rehearsal;
-6. verify the attempted/result rows and audit-chain integrity before accepting
+6. run a synthetic fixture first, then one bounded retained-evidence rehearsal;
+7. verify the attempted/result rows and audit-chain integrity before accepting
    the host path.
 
 After those prerequisites, the intended operator flow is:

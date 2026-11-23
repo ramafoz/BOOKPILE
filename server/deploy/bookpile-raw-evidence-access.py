@@ -23,6 +23,8 @@ from typing import Any
 SOURCE = Path("/var/log/bookpile/defensive-events.log")
 KEY_PATH = Path("/etc/bookpile/raw-evidence-hmac.key")
 AUDIT_COMMAND = Path("/usr/local/sbin/bookpile-admin-audit")
+INSTALLED_COMMAND = Path("/usr/local/sbin/bookpile-raw-evidence-access")
+INSTALLED_VALIDATOR = Path("/usr/local/libexec/bookpile/validate-caddy-defensive-log")
 MAX_WINDOW = timedelta(minutes=15)
 MAX_EVENTS = 20
 INCIDENT = re.compile(r"INC-[A-Z0-9][A-Z0-9-]{2,63}")
@@ -34,10 +36,24 @@ class EvidenceAccessError(ValueError):
     """Raised before any evidence is disclosed when the contract is unsafe."""
 
 
+def _validator_path() -> Path:
+    running_path = Path(__file__).resolve()
+    if running_path == INSTALLED_COMMAND:
+        validator = INSTALLED_VALIDATOR
+        if validator.is_symlink() or not validator.is_file():
+            raise EvidenceAccessError("installed defensive-log validator is unavailable")
+        details = validator.stat()
+        if details.st_uid != 0 or stat.S_IMODE(details.st_mode) & 0o022:
+            raise EvidenceAccessError("installed defensive-log validator is unsafe")
+        return validator
+    repository_validator = running_path.with_name("validate-caddy-defensive-log.py")
+    if repository_validator.is_symlink() or not repository_validator.is_file():
+        raise EvidenceAccessError("repository defensive-log validator is unavailable")
+    return repository_validator
+
+
 def _load_event_validator() -> tuple[Callable[[object], dict[str, object]], type[Exception]]:
-    namespace = runpy.run_path(
-        str(Path(__file__).with_name("validate-caddy-defensive-log.py"))
-    )
+    namespace = runpy.run_path(str(_validator_path()))
     return namespace["validate_event"], namespace["DefensiveLogValidationError"]
 
 
