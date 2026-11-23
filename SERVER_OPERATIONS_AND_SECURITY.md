@@ -889,6 +889,17 @@ this accepts Caddy expiry, bounded journald and retained-event redaction. It
 does not accept raw-evidence access or the future console-mediated IP reveal;
 that separate gate remains open pending immutable admin audit and A3/A4.
 
+The dormant host-side half of that gate is now defined by
+`server/deploy/bookpile-raw-evidence-access.py` and the detailed procedure in
+`docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md`. It is not installed by normal
+deployment and must not be installed manually yet. The command requires the A3
+root-owned immutable-audit recorder before reading a log, allows only a
+15-minute interval and 20 normalized results, and reveals at most one retained
+IP selected by its keyed opaque event ID. A missing or rejecting recorder means
+no log read and no disclosure; journald or a local append-only file is not an
+acceptable replacement. Staging acceptance remains blocked until A3/A4 are
+implemented and the documented host and console rehearsals both pass.
+
 Inspect recent scanner evidence on the host without copying the full file:
 
 ```bash
