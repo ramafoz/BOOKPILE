@@ -47,3 +47,66 @@ events and, after WebAuthn step-up, reveal the single retained IP field of one
 event in one open incident. It must not provide raw-log access, arbitrary IP
 search, bulk listing or export. That console rehearsal remains open until A3
 and A4 exist; this policy does not claim that capability is implemented.
+
+## Dormant host-access control
+
+`server/deploy/bookpile-raw-evidence-access.py` defines the reviewed host-side
+boundary but is not installed by application deployment. It is intentionally
+unusable until `/usr/local/sbin/bookpile-admin-audit` implements the A3
+insert-only, hash-chained `append-host-evidence-access` contract. Substituting a
+plain file, journald or a shell transcript does not satisfy that dependency.
+
+The command is fixed to `/var/log/bookpile/defensive-events.log` and its
+validated compressed rolls. It runs only as root, verifies the supplied
+operator against `SUDO_USER`, requires an incident identifier and a printable
+reason, and accepts only a timezone-aware interval no longer than 15 minutes.
+It reads no evidence until the immutable recorder accepts an `attempted` event.
+It emits nothing until that recorder also accepts the final `succeeded` event;
+failures are recorded without a client address.
+
+Two operations exist:
+
+- `list` returns at most 20 normalized event summaries without a client IP.
+  Each summary receives a 64-hex HMAC identifier derived with the root-owned
+  `/etc/bookpile/raw-evidence-hmac.key`; the key prevents an exposed identifier
+  from becoming an offline IP guessing oracle.
+- `reveal` accepts exactly one such event identifier and returns exactly that
+  retained event's client IP. No IP value can be used as a search argument.
+
+There is no configurable source path, arbitrary text query, output-file option
+or export mode. The immutable audit payload contains operator, action, reason,
+incident, UTC timestamp, bounded interval, opaque target, result and result
+count, but never the retained client IP. The eventual installation sequence is:
+
+1. finish and accept SYSTEM_ADMIN A3;
+2. install the reviewed audit recorder and prove its database role cannot
+   update or delete existing rows;
+3. create a random key of at least 32 bytes as root, owned `root:root` and mode
+   `0600` at `/etc/bookpile/raw-evidence-hmac.key`;
+4. install the reviewed evidence command as root-owned mode `0755` at
+   `/usr/local/sbin/bookpile-raw-evidence-access`;
+5. run a synthetic fixture first, then one bounded retained-evidence rehearsal;
+6. verify the attempted/result rows and audit-chain integrity before accepting
+   the host path.
+
+After those prerequisites, the intended operator flow is:
+
+```bash
+sudo /usr/local/sbin/bookpile-raw-evidence-access list \
+  --operator bookpileadmin \
+  --incident INC-YYYY-NNNN \
+  --reason 'Investigate the correlated defensive alert window.' \
+  --from 'YYYY-MM-DDTHH:MM:SSZ' \
+  --until 'YYYY-MM-DDTHH:MM:SSZ'
+
+sudo /usr/local/sbin/bookpile-raw-evidence-access reveal \
+  --operator bookpileadmin \
+  --incident INC-YYYY-NNNN \
+  --reason 'Attribute the single retained event for abuse response.' \
+  --from 'YYYY-MM-DDTHH:MM:SSZ' \
+  --until 'YYYY-MM-DDTHH:MM:SSZ' \
+  --event-id '<64-hex identifier returned by list>'
+```
+
+These commands are specification examples, not current deployment instructions.
+Running them before A3 must fail because the immutable recorder is absent.

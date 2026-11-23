@@ -108,14 +108,31 @@ otherwise.
 - [x] Verify that no retained event contains cookies, authorization headers,
   CSRF values, reset/invitation tokens, request bodies, email content, object
   keys or catalogue data.
-- [ ] Document and test the host-only procedure for access to raw log files.
-  Separately test the console's mediated reveal of one retained client-IP field
-  from one normalized security event. Both paths require operator, reason,
-  incident, timestamp and result in the immutable admin audit; the console path
-  must not permit raw-log access, bulk IP listing, arbitrary search or export.
+- [x] Implement and test the dormant host-only raw-evidence access boundary.
+  `bookpile-raw-evidence-access.py` is fixed to the minimized D6 source, root
+  execution, a maximum 15-minute window and at most 20 normalized results. It
+  has no source-path, IP-search or output-file argument. Listing omits client
+  addresses; revealing requires the keyed opaque ID of exactly one retained
+  event. An immutable `attempted` record must succeed before the source is even
+  opened and an immutable `succeeded` record must succeed before output; audit
+  failure therefore discloses nothing. The command remains deliberately
+  uninstalled and unusable until the A3 insert-only audit recorder exists.
+- [ ] Rehearse the host procedure against retained staging evidence and
+  separately test the console's mediated reveal of one retained client-IP field
+  from one normalized security event after A3/A4 exist. Both paths require
+  operator, reason, incident, timestamp and result in the immutable admin audit;
+  the console path must not permit raw-log access, bulk IP listing, arbitrary
+  search or export.
 
 Evidence: committed retention table and runbook; staging rotation transcript;
 redaction tests; one audited raw-evidence access rehearsal.
+
+Host-foundation evidence: `test_raw_evidence_access.py` proves audit-before-read,
+audit-before-disclosure, exact single-event reveal, IP-free normalized listing,
+bounded windows/results, strict active/compressed-roll validation, fixed source
+and absence of arbitrary search/export controls. This does not claim the final
+staging rehearsal or console gate; D3-L remains open until A3/A4 provide the
+reviewed immutable recorder and mediated console path.
 
 Retention-table evidence: commit `62a68f9` adds the binding field, purpose,
 duration, deletion, role and legal-policy matrix. Staging revision
