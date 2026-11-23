@@ -673,16 +673,23 @@ and `--disable-all` retained as the complete recovery path.
   redaction.
 - [x] Cover IPv4, IPv4-mapped IPv6 and native IPv6 parsing even while public
   IPv6 remains disabled.
-- [ ] Run the harness before and after every enforcement-mode change and retain
+- [x] Run the harness before and after every enforcement-mode change and retain
   a machine-readable result tied to the deployment revision.
 
-The revision-linked CI profile is active and covers the first two items. The
-staging profile is implemented as a passive, fail-closed host check with secure
-aggregate evidence; the final item remains open until that profile has produced
-passing reports on both sides of a controlled enforcement-mode change and the
-authenticated human workflow has also passed.
+The revision-linked CI profile covers the first two items. On 2026-11-23 the
+staging profile from harness revision
+`2df848c5cd498b339599b37ff2e62305add2736f` ran against deployed revision
+`ed20b1b3a8d59a1022e3353bcc3dd4e1685f4aca`. Its baseline and four reports
+surrounding an `enforce -> observe -> enforce` edge-volume rehearsal each passed
+all eight scenarios. The final state restored live, ready, scanner and volume to
+`enforce`, with the exact four jails, healthy public endpoints, four running
+containers, seven privacy-safe metrics, no failed host units and consistent
+private objects. The root-owned evidence directory is mode `0700`; all five
+revision-linked reports are mode `0600`. Healthchecks stayed green and the human
+login, catalogue navigation and ordinary mutation check passed after recovery.
+**D7 is complete.**
 
-Evidence: CI job plus staging report with every scenario passing.
+Evidence: CI job plus revision-linked staging reports with every scenario passing.
 
 ## 5. Owner/Viewer authorization audit
 

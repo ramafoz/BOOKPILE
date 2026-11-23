@@ -1349,9 +1349,8 @@ status, target counts, durations and revision, but no test output, address,
 identifier, path, token or private value.
 
 The dedicated GitHub Actions job prints and validates the JSON in its
-revision-linked job log. This is the first D7 profile only. D7 remains open until
-the separately confirmed staging profile runs before and after an enforcement
-change and its machine-readable report is retained with the deployed revision.
+revision-linked job log. The separately confirmed staging profile below supplies
+the host-side evidence required around enforcement changes.
 
 The staging profile is passive: it does not generate scanner, health or volume
 bursts and it does not change a jail or firewall rule. It verifies the deployed
@@ -1386,6 +1385,17 @@ does not replace the short authenticated human check: login, ordinary catalogue
 navigation and one normal mutation must still be confirmed after a deployment
 or enforcement change. Traffic-generating threshold rehearsals remain separate
 and retain their own explicit confirmation phrases.
+
+The first complete staging rehearsal was accepted on 2026-11-23. Harness
+revision `2df848c5cd498b339599b37ff2e62305add2736f` checked deployed revision
+`ed20b1b3a8d59a1022e3353bcc3dd4e1685f4aca` at baseline and before and after
+both sides of an edge-volume `enforce -> observe -> enforce` transition. All five
+reports passed all eight scenarios. The final state had the four reviewed jails
+and all four policies in `enforce`; public health, Healthchecks, private-object
+reconciliation and the authenticated human workflow were healthy. The evidence
+directory was verified as `root:root 0700` and every report as `root:root 0600`.
+This closes the initial D7 acceptance. Future enforcement-mode changes must
+continue producing their own before/after reports and human confirmation.
 
 Dependabot checks pinned npm, pip, GitHub Actions and Docker dependencies weekly.
 No update is auto-merged: CI, migration compatibility and release review remain
