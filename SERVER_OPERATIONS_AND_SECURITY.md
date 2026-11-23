@@ -258,6 +258,23 @@ on an unsupported OS, missing/malformed defensive log or global IPv6 address.
 Public IPv6 remains disabled until equivalent rules are implemented and
 proved.
 
+For the IPv4-only beta this is a recorded `REJECT`, not a dormant enablement:
+the staging host must have no globally scoped IPv6 address and the public DNS
+origin must have no `AAAA` record. The installer continues to fail closed if a
+global IPv6 address appears. Public IPv6 may be reconsidered only after
+equivalent IPv6 sets and rules have their own review and external ban,
+expiration, persistence and emergency-disable rehearsal.
+
+Authentication failures and ambiguous application `401`, route-safe `404` and
+validation `422` outcomes are deliberately alert-only. They may contribute to
+the aggregate D5 metrics, but must not be consumed by a D6 Fail2ban jail or
+nftables action. These outcomes include ordinary mistakes and intentionally
+indistinguishable authorization denials, and one public address can represent
+several legitimate users. The immutable Owner/Viewer acceptance matrix is
+`docs/OWNER_VIEWER_AUTHORIZATION_MATRIX.json`; it ties each authorization claim
+to the exact regression and accepting revision and records no unresolved
+authorization defects.
+
 On a host where Fail2ban is already installed, the installer aborts rather
 than overwrite an existing authorized policy. On a fresh host it masks the
 service while installing the package, explicitly disables the distribution's
