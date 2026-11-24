@@ -2,13 +2,13 @@ name: bookpile-production
 
 x-api-environment: &api-environment
   env_file:
-    - ${BOOKPILE_ENV_FILE:-.env.production}
+    # During the explicit A3 transition the deployment wrapper selects a
+    # sanitized runtime-only file. Compose never selects it merely because an
+    # application URL has been staged in the deployment environment.
+    - ${BOOKPILE_RUNTIME_ENV_FILE:-${BOOKPILE_ENV_FILE:-.env.production}}
   environment:
     BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
     BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
-    # A3 separates the everyday application credential from the migration
-    # superuser. The legacy fallback exists only for the reviewed transition.
-    BOOKPILE_SERVER_DATABASE_URL: ${BOOKPILE_SERVER_APP_DATABASE_URL:-${BOOKPILE_SERVER_DATABASE_URL}}
 
 x-container-logging: &container-logging
   # Long-lived service output is retained by the host journal under the

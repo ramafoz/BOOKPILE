@@ -63,7 +63,7 @@ health_request_timeout_seconds="${BOOKPILE_DEPLOY_HEALTH_REQUEST_TIMEOUT_SECONDS
 
 cd "${repository_root}"
 
-for command_name in awk curl docker flock git grep mktemp sed; do
+for command_name in awk curl docker flock git grep mktemp sed stat; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "Required command is unavailable: ${command_name}" >&2
     exit 1
@@ -130,8 +130,6 @@ short_revision="$(git rev-parse --short=12 HEAD)"
 api_image="bookpile-api:git-${short_revision}"
 web_image="bookpile-web:git-${short_revision}"
 backup_image="bookpile-backup:git-${short_revision}"
-compose=(docker compose --env-file "${environment_file}" -f "${compose_file}")
-
 read_env_value() {
   local file="$1"
   local key="$2"
@@ -144,6 +142,65 @@ read_env_value() {
     }
   ' "${file}"
 }
+
+resolve_environment_path() {
+  local value="$1"
+  if [[ "${value}" = /* ]]; then
+    printf '%s\n' "${value}"
+  else
+    printf '%s\n' "${repository_root}/server/${value}"
+  fi
+}
+
+a3_enabled="$(read_env_value "${environment_file}" BOOKPILE_A3_DATABASE_ROLES_ENABLED)"
+if [[ -n "$(read_env_value "${environment_file}" BOOKPILE_RUNTIME_ENV_FILE)" ]]; then
+  echo "BOOKPILE_RUNTIME_ENV_FILE is deployment-controlled; remove it from ${environment_file}." >&2
+  exit 1
+fi
+unset BOOKPILE_RUNTIME_ENV_FILE
+if [[ "${a3_enabled}" == "true" ]]; then
+  a3_runtime_reference="$(
+    read_env_value "${environment_file}" BOOKPILE_A3_RUNTIME_ENV_FILE
+  )"
+  app_database_url="$(
+    read_env_value "${environment_file}" BOOKPILE_SERVER_APP_DATABASE_URL
+  )"
+  migrator_database_url="$(
+    read_env_value "${environment_file}" BOOKPILE_SERVER_MIGRATOR_DATABASE_URL
+  )"
+  if [[ -z "${a3_runtime_reference}" || -z "${app_database_url}" \
+    || -z "${migrator_database_url}" \
+    || "${app_database_url}" == "${migrator_database_url}" ]]; then
+    echo "A3 requires a runtime env file and distinct app/migrator URLs." >&2
+    exit 1
+  fi
+  BOOKPILE_RUNTIME_ENV_FILE="$(resolve_environment_path "${a3_runtime_reference}")"
+  export BOOKPILE_RUNTIME_ENV_FILE
+  if [[ ! -f "${BOOKPILE_RUNTIME_ENV_FILE}" \
+    || -L "${BOOKPILE_RUNTIME_ENV_FILE}" \
+    || ! -r "${BOOKPILE_RUNTIME_ENV_FILE}" \
+    || "$(stat -c '%a' "${BOOKPILE_RUNTIME_ENV_FILE}")" != "600" ]]; then
+    echo "A3 runtime environment must be a readable regular file with mode 0600." >&2
+    exit 1
+  fi
+  runtime_database_url="$(
+    read_env_value "${BOOKPILE_RUNTIME_ENV_FILE}" BOOKPILE_SERVER_DATABASE_URL
+  )"
+  if [[ "${runtime_database_url}" != "${app_database_url}" ]]; then
+    echo "A3 runtime environment does not contain the reviewed app database URL." >&2
+    exit 1
+  fi
+  if grep -Eq '^(BOOKPILE_POSTGRES_PASSWORD|BOOKPILE_SERVER_APP_DATABASE_URL|BOOKPILE_SERVER_MIGRATOR_DATABASE_URL|BOOKPILE_DATABASE_MIGRATOR_URL|BOOKPILE_DATABASE_.*_PASSWORD|BOOKPILE_RUNTIME_ENV_FILE)=' \
+    "${BOOKPILE_RUNTIME_ENV_FILE}"; then
+    echo "A3 runtime environment contains a deployment or privileged database secret." >&2
+    exit 1
+  fi
+elif [[ -n "${a3_enabled}" && "${a3_enabled}" != "false" ]]; then
+  echo "BOOKPILE_A3_DATABASE_ROLES_ENABLED must be exactly true or false." >&2
+  exit 1
+fi
+
+compose=(docker compose --env-file "${environment_file}" -f "${compose_file}")
 
 public_base_url="$(read_env_value "${environment_file}" BOOKPILE_SERVER_PUBLIC_BASE_URL)"
 previous_revision="$(read_env_value "${environment_file}" BOOKPILE_SERVER_DEPLOYMENT_REVISION)"
@@ -203,12 +260,17 @@ chmod 600 "${saved_environment}" "${saved_backup_environment}"
 
 configuration_changed=false
 deployment_succeeded=false
+application_recreation_started=false
 
 restore_previous_application() {
   echo "Restoring the previous application configuration..." >&2
   cp -p "${saved_environment}" "${environment_file}"
   cp -p "${saved_backup_environment}" "${backup_environment_file}"
-  "${compose[@]}" up -d --no-deps --force-recreate api email-worker web >&2 || true
+  if [[ "${application_recreation_started}" == "true" ]]; then
+    "${compose[@]}" up -d --no-deps --force-recreate api email-worker web >&2 || true
+  else
+    echo "Application recreation had not started; existing containers were left untouched." >&2
+  fi
   echo "Database migrations were not downgraded. Inspect service health and logs." >&2
 }
 
@@ -309,6 +371,7 @@ echo "Migrating legacy Caddy access-log rolls..."
   --entrypoint /usr/local/bin/migrate-caddy-access-log-rolls web
 
 echo "Recreating application services..."
+application_recreation_started=true
 "${compose[@]}" up -d --no-deps --force-recreate api email-worker web
 
 wait_for_public_health() {

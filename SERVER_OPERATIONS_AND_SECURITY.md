@@ -948,14 +948,22 @@ them into chat or command-line arguments.
    `root:root`, mode `0600`; fill the writer/verifier/retention URLs and the
    role-provisioning secrets.
 2. Add distinct `BOOKPILE_SERVER_APP_DATABASE_URL` and
-   `BOOKPILE_SERVER_MIGRATOR_DATABASE_URL` values to `.env.staging`. Keep
-   `BOOKPILE_A3_DATABASE_ROLES_ENABLED=false` until every file is validated.
+   `BOOKPILE_SERVER_MIGRATOR_DATABASE_URL` values to `.env.staging`. Prepare
+   `.env.staging.runtime` as a mode-`0600`, non-symlink copy of the application
+   settings whose `BOOKPILE_SERVER_DATABASE_URL` is the app URL. It must omit
+   `BOOKPILE_POSTGRES_PASSWORD`, both APP/MIGRATOR aliases, every database-role
+   password and `BOOKPILE_RUNTIME_ENV_FILE`. Keep
+   `BOOKPILE_A3_DATABASE_ROLES_ENABLED=false` until every file is validated;
+   merely staging the two URLs must not switch the running application.
 3. Pre-create `/run/bookpile-admin-audit` as UID/GID 10001 mode `0700` and
    install the reviewed bridge as `root:root` mode `0755`.
 4. Set the A3 switch to `true` and run the normal deployment. Its order is
-   migration, fixed LOGIN provisioning, an automatic least-privilege identity
-   check, then application recreation. If provisioning or the identity check
-   fails, application recreation does not begin.
+   sanitized-runtime validation, migration, fixed LOGIN provisioning, an
+   automatic least-privilege identity check, then application recreation. The
+   deployment wrapper alone exports `BOOKPILE_RUNTIME_ENV_FILE`; API, worker
+   and maintenance therefore never receive the PostgreSQL bootstrap password
+   or migrator URL. If validation, provisioning or the identity check fails,
+   application recreation does not begin.
 5. Re-run `check-bookpile-database-roles.py` inside the API and worker images
    as post-deployment evidence.
    Acceptance requires `superuser=false`, `runtime_member=true` and
