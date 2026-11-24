@@ -944,9 +944,14 @@ console access, and prepare rollback snapshots. Generate independent, URL-safe
 random passwords for application, writer, verifier and retention. Never paste
 them into chat or command-line arguments.
 
-1. Copy the four new `.env.*.example` files to their non-example names, owner
-   `root:root`, mode `0600`; fill the writer/verifier/retention URLs and the
-   role-provisioning secrets.
+1. Copy the four new `.env.*.example` files to their non-example names, owned
+   by the non-root deployment operator (`bookpileadmin` on staging) with mode
+   `0600`; fill the writer/verifier/retention URLs and the role-provisioning
+   secrets. Docker Compose reads these files before asking the daemon to create
+   a container, so `root:root 0600` would make the documented non-root
+   deployment fail. Root-run verifier and retention units can still read the
+   operator-owned files. The real secret files and sanitized runtime files are
+   explicitly ignored by Git and must never be force-added.
 2. Add distinct `BOOKPILE_SERVER_APP_DATABASE_URL` and
    `BOOKPILE_SERVER_MIGRATOR_DATABASE_URL` values to `.env.staging`. Prepare
    `.env.staging.runtime` as a mode-`0600`, non-symlink copy of the application
