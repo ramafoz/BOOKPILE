@@ -2,7 +2,9 @@
 Description=Verify the BOOKPILE immutable administration audit every 15 minutes
 
 [Timer]
-OnCalendar=*-*-* *:02/15:00 UTC
+# Stagger this lightweight verifier away from the other quarter-hour jobs and
+# from the daily 02:17 UTC encrypted backup.
+OnCalendar=*-*-* *:09/15:00 UTC
 RandomizedDelaySec=30
 Persistent=true
 Unit=bookpile-admin-audit-verifier.service
