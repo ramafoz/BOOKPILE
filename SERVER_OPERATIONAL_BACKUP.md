@@ -84,6 +84,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE bookpile IN SCHEMA public
   GRANT SELECT ON SEQUENCES TO bookpile_backup;
 ```
 
+A fresh disaster-recovery PostgreSQL cluster must recreate this operational
+`bookpile_backup` LOGIN from its independently stored secret before normal
+schedules resume. The restore command itself reconstructs the non-login A3
+groups, audit ownership and ACLs omitted by the portable dump; it never invents
+or recovers LOGIN passwords.
+
 ## Create, verify and retain
 
 The one-shot Compose profile is suitable for a systemd timer:

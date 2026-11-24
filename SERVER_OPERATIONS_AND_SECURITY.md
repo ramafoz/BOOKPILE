@@ -900,6 +900,106 @@ no log read and no disclosure; journald or a local append-only file is not an
 acceptable replacement. Staging acceptance remains blocked until A3/A4 are
 implemented and the documented host and console rehearsals both pass.
 
+### Dormant A3 immutable administration audit
+
+The repository contains the A3 implementation, but merging it does not change
+an existing host. Do not enable it during an ordinary deployment. The current
+`bookpile` PostgreSQL bootstrap identity is a migration superuser; the API and
+worker must move together to the separate `bookpile_app` LOGIN before A3 can be
+accepted as immutable.
+
+The ledger lives in the private `admin_audit` schema. `append_entry` obtains a
+row lock, allocates a contiguous sequence, uses database UTC time, hashes a
+canonical payload with the preceding hash and commits the row plus chain state
+atomically. The NOLOGIN roles are deliberately disjoint:
+
+- `bookpile_runtime` operates ordinary application tables and has no audit
+  schema access;
+- `bookpile_admin_audit_writer` executes only `append_entry`;
+- `bookpile_admin_audit_reader` selects normalized rows for future A4;
+- `bookpile_admin_audit_backup` supplies all three ledger tables only to the
+  existing encrypted-backup LOGIN;
+- `bookpile_admin_audit_verifier` executes only `verify_chain`;
+- `bookpile_admin_audit_retention` executes only fixed 365-day prefix expiry.
+
+“Immutable” here is the reviewed application boundary: the API, worker,
+writer, reader, verifier and retention identities cannot rewrite accepted
+rows, and a broken chain is detected. A PostgreSQL superuser or root operator
+remains a documented break-glass trust root and could defeat an in-database
+ledger; A3 does not claim external WORM storage or protection from a fully
+compromised host. Restricted migrator credentials, verifier alerts and
+off-host encrypted backups provide the corresponding operational evidence.
+
+`admin-audit` is an isolated non-root container with only the writer LOGIN. It
+serves a mode-0600 Unix socket under `/run/bookpile-admin-audit`; the API and web
+containers do not mount that socket. The installed root-owned
+`/usr/local/sbin/bookpile-admin-audit` bridge accepts only
+`append-host-evidence-access`, which is the fixed dependency used by D3-L.
+Verifier and retention jobs use independent env files and one-shot containers.
+
+#### Staging transition (not yet authorized or accepted)
+
+Before running these steps, create and verify an off-site backup, retain IONOS
+console access, and prepare rollback snapshots. Generate independent, URL-safe
+random passwords for application, writer, verifier and retention. Never paste
+them into chat or command-line arguments.
+
+1. Copy the four new `.env.*.example` files to their non-example names, owner
+   `root:root`, mode `0600`; fill the writer/verifier/retention URLs and the
+   role-provisioning secrets.
+2. Add distinct `BOOKPILE_SERVER_APP_DATABASE_URL` and
+   `BOOKPILE_SERVER_MIGRATOR_DATABASE_URL` values to `.env.staging`. Prepare
+   `.env.staging.runtime` as a mode-`0600`, non-symlink copy of the application
+   settings whose `BOOKPILE_SERVER_DATABASE_URL` is the app URL. It must omit
+   `BOOKPILE_POSTGRES_PASSWORD`, both APP/MIGRATOR aliases, every database-role
+   password and `BOOKPILE_RUNTIME_ENV_FILE`. Keep
+   `BOOKPILE_A3_DATABASE_ROLES_ENABLED=false` until every file is validated;
+   merely staging the two URLs must not switch the running application.
+3. Pre-create `/run/bookpile-admin-audit` as UID/GID 10001 mode `0700` and
+   install `server/deploy/tmpfiles.d/bookpile-admin-audit.conf` as
+   `/etc/tmpfiles.d/bookpile-admin-audit.conf` (`root:root`, mode `0644`). Run
+   `systemd-tmpfiles --create /etc/tmpfiles.d/bookpile-admin-audit.conf` and
+   install the reviewed bridge as `root:root` mode `0755`. The tmpfiles rule
+   recreates this volatile socket directory with the same ownership after each
+   boot.
+   Install the reviewed maintenance, operations-check and deep-check units with
+   their explicit `BOOKPILE_RUNTIME_ENV_FILE` setting; staging substitutes the
+   corresponding absolute `.env.staging.runtime` path.
+4. Set the A3 switch to `true` and run the normal deployment. Its order is
+   sanitized-runtime validation, migration, fixed LOGIN provisioning, an
+   automatic least-privilege identity check, then application recreation. The
+   migration preserves the existing `bookpile_backup` login's read access to
+   the new ledger before this optional switch is enabled, so pre-deployment and
+   scheduled full-database backups remain available during the transition. The
+   deployment wrapper alone exports `BOOKPILE_RUNTIME_ENV_FILE`; API, worker
+   and maintenance therefore never receive the PostgreSQL bootstrap password
+   or migrator URL. If validation, provisioning or the identity check fails,
+   application recreation does not begin.
+   Disaster-recovery restores re-create the NOLOGIN groups, ownership and ACL
+   contract after `pg_restore`, because portable per-database dumps deliberately
+   omit cluster roles and privileges.
+5. Re-run `check-bookpile-database-roles.py` inside the API and worker images
+   as post-deployment evidence.
+   Acceptance requires `superuser=false`, `runtime_member=true` and
+   `admin_audit_access=false` for both.
+6. Start only the `admin-audit` service under the `administration` profile;
+   verify socket owner UID 10001 and mode `0600`. Install the verifier and
+   retention units/timers plus the dedicated Healthchecks curl files.
+7. Append synthetic attempted/succeeded/failed entries, run the verifier,
+   prove writer and runtime LOGIN identities cannot select/update/delete or
+   truncate, and confirm an encrypted backup includes the audit schema.
+8. Run one bounded D3-L fixture and then one retained-event rehearsal. Confirm
+   that audit rows contain no IP, secret or private catalogue content.
+9. Confirm Healthchecks recovery, application health, deep reconciliation and
+   normal human use before recording A3 acceptance.
+
+The verifier runs every 15 minutes. It emits only health, row count and final
+sequence; hashes and database errors remain local. Any malformed output,
+missing sequence, changed row/link/state, unavailable database or failed
+external signal fails the oneshot and sends the dedicated critical failure
+signal. Retention runs daily and first verifies the whole chain; it cannot take
+an operator-supplied cutoff or delete a non-contiguous subset.
+
 Inspect recent scanner evidence on the host without copying the full file:
 
 ```bash

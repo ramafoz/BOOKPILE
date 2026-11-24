@@ -6,5 +6,6 @@ After=docker.service network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/bookpile
+Environment=BOOKPILE_RUNTIME_ENV_FILE=/opt/bookpile/server/.env.production.runtime
 ExecStart=/usr/bin/docker compose --env-file server/.env.production -f server/compose.production.yaml --profile operations run --rm maintenance
 TimeoutStartSec=1h

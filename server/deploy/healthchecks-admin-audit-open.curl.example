@@ -1,0 +1,7 @@
+# Copy to /etc/bookpile/healthchecks-admin-audit-open.curl as root:root 0600.
+url = "https://hc-ping.com/replace-with-admin-audit-check-uuid/fail"
+request = "POST"
+fail
+silent
+show-error
+max-time = 10

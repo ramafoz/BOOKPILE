@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from bookpile_server.api import dependencies as api_dependencies
@@ -55,6 +55,7 @@ from bookpile_server.models import (
     VisualOutsideArea,
     VisualShelfLayout,
 )
+from bookpile_server.operational_backup import PostgresTools
 from bookpile_server.repositories.account_actions import AccountActionRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
@@ -87,6 +88,7 @@ from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
+RESTORE_TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_RESTORE_TEST_DATABASE_URL")
 
 
 def _request_general_api_limit_from_process(
@@ -199,7 +201,7 @@ def _request_mutation_limit_from_process(
     not TEST_DATABASE_URL,
     reason="BOOKPILE_SERVER_TEST_DATABASE_URL is not configured",
 )
-def test_postgresql_migration_and_tenant_scope() -> None:
+def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
     assert TEST_DATABASE_URL is not None
     url = make_url(TEST_DATABASE_URL)
     assert url.get_backend_name() == "postgresql"
@@ -280,7 +282,38 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 text("UPDATE books SET goodreads_url = NULL WHERE id = :id"),
                 {"id": first_book_id},
             )
+            connection.execute(
+                text(
+                    "DO $backup$ BEGIN "
+                    "IF NOT EXISTS ("
+                    "SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup'"
+                    ") THEN "
+                    "CREATE ROLE bookpile_backup NOLOGIN NOSUPERUSER "
+                    "NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; "
+                    "END IF; END $backup$"
+                )
+            )
         command.upgrade(alembic, "head")
+        with engine.connect() as connection:
+            assert connection.scalar(
+                text(
+                    "SELECT pg_has_role("
+                    "'bookpile_backup', 'bookpile_admin_audit_backup', 'MEMBER'"
+                    ")"
+                )
+            )
+            assert connection.scalar(
+                text(
+                    "SELECT has_schema_privilege("
+                    "'bookpile_backup', 'admin_audit', 'USAGE')"
+                )
+            )
+            assert connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'bookpile_backup', 'admin_audit.entries', 'SELECT')"
+                )
+            )
         assert "goodreads_url" not in {
             column["name"] for column in inspect(engine).get_columns("books")
         }
@@ -325,6 +358,216 @@ def test_postgresql_migration_and_tenant_scope() -> None:
         assert {"smtp_response_code", "provider_queue_id"} <= email_outbox_columns
         user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
         assert "preferred_locale" in user_columns
+
+        # A3's writer can append through one function but cannot read, rewrite,
+        # delete or truncate the immutable ledger. Concurrent writes must form
+        # one contiguous chain, and privileged tampering must be detectable.
+        def append_admin_audit(index: int) -> int:
+            with engine.begin() as audit_connection:
+                audit_connection.execute(
+                    text("SET LOCAL ROLE bookpile_admin_audit_writer")
+                )
+                return int(
+                    audit_connection.scalar(
+                        text(
+                            "SELECT sequence_id FROM admin_audit.append_entry("
+                            ":operator, :action, :target, :reason, :correlation, "
+                            ":result)"
+                        ),
+                        {
+                            "operator": "postgres-test",
+                            "action": "host_evidence.list",
+                            "target": f"event-{index}",
+                            "reason": "Exercise the immutable administration ledger.",
+                            "correlation": "INC-POSTGRES-A3",
+                            "result": "succeeded",
+                        },
+                    )
+                )
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            audit_sequences = sorted(executor.map(append_admin_audit, range(16)))
+        assert audit_sequences == list(range(1, 17))
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_writer")
+            )
+            rolled_back_sequence = audit_connection.scalar(
+                text(
+                    "SELECT sequence_id FROM admin_audit.append_entry("
+                    "'postgres-test', 'host_evidence.list', 'rolled-back', "
+                    "'Exercise a transaction rollback without a chain gap.', "
+                    "'INC-POSTGRES-A3', 'failed')"
+                )
+            )
+            assert rolled_back_sequence == 17
+            transaction.rollback()
+        assert append_admin_audit(17) == 17
+
+        for statement in (
+            "SELECT * FROM admin_audit.entries",
+            "UPDATE admin_audit.entries SET reason = 'tampered'",
+            "DELETE FROM admin_audit.entries",
+            "TRUNCATE admin_audit.entries",
+        ):
+            with engine.connect() as audit_connection:
+                transaction = audit_connection.begin()
+                audit_connection.execute(
+                    text("SET LOCAL ROLE bookpile_admin_audit_writer")
+                )
+                with pytest.raises(DBAPIError):
+                    audit_connection.execute(text(statement))
+                transaction.rollback()
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            assert audit_connection.scalar(text("SELECT count(*) FROM books")) == 2
+            with pytest.raises(DBAPIError):
+                audit_connection.execute(text("SELECT * FROM admin_audit.entries"))
+            transaction.rollback()
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            with pytest.raises(DBAPIError):
+                audit_connection.execute(
+                    text("UPDATE alembic_version SET version_num = 'forged'")
+                )
+            transaction.rollback()
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_verifier")
+            )
+            verification = audit_connection.execute(
+                text(
+                    "SELECT rows_verified, last_sequence_id "
+                    "FROM admin_audit.verify_chain()"
+                )
+            ).one()
+            assert verification == (17, 17)
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_retention")
+            )
+            retention = audit_connection.execute(
+                text(
+                    "SELECT rows_deleted, pruned_through_sequence_id "
+                    "FROM admin_audit.prune_expired()"
+                )
+            ).one()
+            assert retention == (0, 0)
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(
+                text(
+                    "UPDATE admin_audit.entries SET reason = "
+                    "'Privileged but detectable tampering.' WHERE sequence_id = 8"
+                )
+            )
+            with pytest.raises(DBAPIError, match="row hash failed"):
+                audit_connection.execute(
+                    text("SELECT * FROM admin_audit.verify_chain()")
+                ).all()
+            transaction.rollback()
+
+        with engine.begin() as audit_connection:
+            verification = audit_connection.execute(
+                text(
+                    "SELECT rows_verified, last_sequence_id "
+                    "FROM admin_audit.verify_chain()"
+                )
+            ).one()
+            assert verification == (17, 17)
+
+        if RESTORE_TEST_DATABASE_URL:
+            restore_url = make_url(RESTORE_TEST_DATABASE_URL)
+            assert (restore_url.database or "").endswith("_test")
+            assert restore_url != url
+            dump_path = tmp_path / "a3-recovery.dump"
+            with engine.connect() as snapshot_connection:
+                transaction = snapshot_connection.begin()
+                snapshot_connection.execute(
+                    text(
+                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+                    )
+                )
+                snapshot = snapshot_connection.scalar(
+                    text("SELECT pg_export_snapshot()")
+                )
+                assert isinstance(snapshot, str)
+                PostgresTools(TEST_DATABASE_URL).dump(dump_path, snapshot=snapshot)
+                transaction.rollback()
+
+            PostgresTools(RESTORE_TEST_DATABASE_URL).restore(dump_path)
+            restore_engine = create_engine(RESTORE_TEST_DATABASE_URL)
+            try:
+                with restore_engine.connect() as restored:
+                    assert restored.scalar(text("SELECT count(*) FROM books")) == 2
+                    assert restored.scalar(
+                        text("SELECT count(*) FROM admin_audit.entries")
+                    ) == 17
+                    assert restored.scalar(
+                        text(
+                            "SELECT nspowner::regrole::text = "
+                            "'bookpile_admin_audit_owner' "
+                            "FROM pg_namespace WHERE nspname = 'admin_audit'"
+                        )
+                    )
+                    assert restored.scalar(
+                        text(
+                            "SELECT pg_has_role("
+                            "'bookpile_runtime', 'bookpile_runtime', 'MEMBER')"
+                        )
+                    )
+                    assert restored.scalar(
+                        text(
+                            "SELECT has_table_privilege("
+                            "'bookpile_runtime', 'public.books', "
+                            "'SELECT,INSERT,UPDATE,DELETE')"
+                        )
+                    )
+                    assert not restored.scalar(
+                        text(
+                            "SELECT has_schema_privilege("
+                            "'bookpile_runtime', 'admin_audit', 'USAGE')"
+                        )
+                    )
+                    restored_groups = {
+                        row[0]
+                        for row in restored.execute(
+                            text(
+                                "SELECT rolname FROM pg_roles "
+                                "WHERE rolname LIKE 'bookpile_admin_audit_%'"
+                            )
+                        )
+                    }
+                    assert restored_groups == {
+                        "bookpile_admin_audit_owner",
+                        "bookpile_admin_audit_writer",
+                        "bookpile_admin_audit_reader",
+                        "bookpile_admin_audit_backup",
+                        "bookpile_admin_audit_verifier",
+                        "bookpile_admin_audit_retention",
+                    }
+            finally:
+                restore_engine.dispose()
+
+        with pytest.raises(RuntimeError, match="must be preserved"):
+            command.downgrade(alembic, "0024_operation_leases")
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(text("TRUNCATE admin_audit.entries"))
+            audit_connection.execute(
+                text(
+                    "UPDATE admin_audit.chain_state SET last_sequence_id = 0, "
+                    "last_hash = repeat('0', 64)"
+                )
+            )
         command.downgrade(alembic, "0021_email_outbox")
         downgraded_user_columns = {
             column["name"] for column in inspect(engine).get_columns("users")

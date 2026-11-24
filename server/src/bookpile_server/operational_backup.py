@@ -10,6 +10,8 @@ from tempfile import TemporaryDirectory
 from typing import Callable
 from uuid import UUID, uuid4
 
+import psycopg
+from psycopg import sql
 from sqlalchemy.engine import make_url
 
 from .backup_crypto import decrypt_file, encrypt_file
@@ -19,6 +21,54 @@ from .private_object_operations import ExpectedPrivateObject, audit_private_obje
 
 
 FORMAT_VERSION = 1
+
+
+_ADMIN_AUDIT_RESTORE_CONTRACT = """
+ALTER SCHEMA admin_audit OWNER TO bookpile_admin_audit_owner;
+ALTER TABLE admin_audit.entries OWNER TO bookpile_admin_audit_owner;
+ALTER TABLE admin_audit.chain_state OWNER TO bookpile_admin_audit_owner;
+ALTER TABLE admin_audit.retention_checkpoint OWNER TO bookpile_admin_audit_owner;
+ALTER FUNCTION admin_audit.append_entry(text, text, text, text, text, text)
+    OWNER TO bookpile_admin_audit_owner;
+ALTER FUNCTION admin_audit.verify_chain() OWNER TO bookpile_admin_audit_owner;
+ALTER FUNCTION admin_audit.prune_expired() OWNER TO bookpile_admin_audit_owner;
+REVOKE ALL ON SCHEMA admin_audit FROM PUBLIC;
+REVOKE ALL ON ALL TABLES IN SCHEMA admin_audit FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA admin_audit FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA admin_audit FROM PUBLIC;
+GRANT USAGE ON SCHEMA admin_audit TO
+    bookpile_admin_audit_writer,
+    bookpile_admin_audit_reader,
+    bookpile_admin_audit_backup,
+    bookpile_admin_audit_verifier,
+    bookpile_admin_audit_retention;
+GRANT EXECUTE ON FUNCTION
+    admin_audit.append_entry(text, text, text, text, text, text)
+    TO bookpile_admin_audit_writer;
+GRANT SELECT ON admin_audit.entries TO bookpile_admin_audit_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA admin_audit
+    TO bookpile_admin_audit_backup;
+GRANT EXECUTE ON FUNCTION admin_audit.verify_chain()
+    TO bookpile_admin_audit_verifier;
+GRANT EXECUTE ON FUNCTION admin_audit.prune_expired()
+    TO bookpile_admin_audit_retention;
+GRANT USAGE ON SCHEMA public TO bookpile_runtime;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
+    TO bookpile_runtime;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bookpile_runtime;
+REVOKE INSERT, UPDATE, DELETE ON alembic_version FROM bookpile_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO bookpile_runtime;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO bookpile_runtime;
+DO $backup_compatibility$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup') THEN
+        GRANT bookpile_admin_audit_backup TO bookpile_backup;
+    END IF;
+END
+$backup_compatibility$;
+"""
 
 
 @dataclass(frozen=True)
@@ -47,6 +97,9 @@ def file_digest(path: Path) -> str:
 class PostgresTools:
     def __init__(self, database_url: str) -> None:
         url = make_url(database_url)
+        self._database_url = database_url.replace(
+            "postgresql+psycopg://", "postgresql://", 1
+        )
         self._database = url.database or ""
         self._environment = {
             "PGHOST": url.host or "",
@@ -96,6 +149,48 @@ class PostgresTools:
                 str(source),
             ]
         )
+        self._restore_admin_audit_contract()
+
+    def _restore_admin_audit_contract(self) -> None:
+        """Rebuild cluster roles and ACLs omitted from portable DB dumps."""
+        with psycopg.connect(self._database_url) as connection:
+            with connection.cursor() as cursor:
+                if cursor.execute(
+                    "SELECT to_regnamespace('admin_audit') IS NOT NULL"
+                ).fetchone() != (True,):
+                    return
+                roles = (
+                    "bookpile_runtime",
+                    "bookpile_admin_audit_owner",
+                    "bookpile_admin_audit_writer",
+                    "bookpile_admin_audit_reader",
+                    "bookpile_admin_audit_backup",
+                    "bookpile_admin_audit_verifier",
+                    "bookpile_admin_audit_retention",
+                )
+                for role in roles:
+                    exists = cursor.execute(
+                        "SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)
+                    ).fetchone()
+                    if not exists:
+                        cursor.execute(
+                            sql.SQL(
+                                "CREATE ROLE {} NOLOGIN NOSUPERUSER NOCREATEDB "
+                                "NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS"
+                            ).format(sql.Identifier(role))
+                        )
+                unsafe = cursor.execute(
+                    "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s) AND "
+                    "(rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR "
+                    "rolreplication OR rolbypassrls)",
+                    (list(roles),),
+                ).fetchall()
+                if unsafe:
+                    raise RuntimeError(
+                        "restored A3 group roles have unsafe attributes: "
+                        + ", ".join(sorted(row[0] for row in unsafe))
+                    )
+                cursor.execute(_ADMIN_AUDIT_RESTORE_CONTRACT)
 
 
 class OperationalBackupService:

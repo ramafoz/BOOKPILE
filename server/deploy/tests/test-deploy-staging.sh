@@ -91,11 +91,16 @@ EOF
 #!/usr/bin/env bash
 exit 0
 EOF
+  cat >"${fixture}/fake-bin/stat" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 600
+EOF
   chmod +x \
     "${fixture}/fake-bin/git" \
     "${fixture}/fake-bin/docker" \
     "${fixture}/fake-bin/curl" \
-    "${fixture}/fake-bin/flock"
+    "${fixture}/fake-bin/flock" \
+    "${fixture}/fake-bin/stat"
   printf '%s\n' "${fixture}"
 }
 
@@ -255,5 +260,52 @@ grep -q 'WARNING: Pre-deployment backup explicitly skipped.' "${skip_output}"
 grep -q '^pre_deployment_backup_id=SKIPPED$' \
   "${skip_fixture}/.bookpile-runtime/deployments/staging-current"
 grep -q 'data restoration is unavailable' "${skip_output}"
+
+a3_fixture="$(make_fixture a3-separated-runtime)"
+a3_log="${a3_fixture}/docker.log"
+cat >>"${a3_fixture}/server/.env.staging" <<'EOF'
+BOOKPILE_A3_DATABASE_ROLES_ENABLED=true
+BOOKPILE_A3_RUNTIME_ENV_FILE=.env.staging.runtime
+BOOKPILE_SERVER_APP_DATABASE_URL=postgresql+psycopg://bookpile_app:fixture-app@db:5432/bookpile
+BOOKPILE_SERVER_MIGRATOR_DATABASE_URL=postgresql+psycopg://bookpile:fixture-migrator@db:5432/bookpile
+EOF
+cat >"${a3_fixture}/server/.env.staging.runtime" <<'EOF'
+BOOKPILE_SERVER_DATABASE_URL=postgresql+psycopg://bookpile_app:fixture-app@db:5432/bookpile
+BOOKPILE_SERVER_PUBLIC_BASE_URL=https://staging.example.test
+EOF
+chmod 600 "${a3_fixture}/server/.env.staging.runtime"
+PATH="${a3_fixture}/fake-bin:${PATH}" \
+FAKE_DOCKER_LOG="${a3_log}" \
+FAKE_CURL_LOG="${a3_fixture}/curl.log" \
+BOOKPILE_DEPLOY_LOCK_FILE="${a3_fixture}/deploy.lock" \
+  bash "${a3_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null
+grep -q 'run --rm database-role-provisioner' "${a3_log}"
+grep -q -- '--entrypoint /usr/local/bin/bookpile-database-role-check api' "${a3_log}"
+
+unsafe_a3_fixture="$(make_fixture a3-unsafe-runtime)"
+unsafe_a3_log="${unsafe_a3_fixture}/docker.log"
+cat >>"${unsafe_a3_fixture}/server/.env.staging" <<'EOF'
+BOOKPILE_A3_DATABASE_ROLES_ENABLED=true
+BOOKPILE_A3_RUNTIME_ENV_FILE=.env.staging.runtime
+BOOKPILE_SERVER_APP_DATABASE_URL=postgresql+psycopg://bookpile_app:fixture-app@db:5432/bookpile
+BOOKPILE_SERVER_MIGRATOR_DATABASE_URL=postgresql+psycopg://bookpile:fixture-migrator@db:5432/bookpile
+EOF
+cat >"${unsafe_a3_fixture}/server/.env.staging.runtime" <<'EOF'
+BOOKPILE_SERVER_DATABASE_URL=postgresql+psycopg://bookpile_app:fixture-app@db:5432/bookpile
+BOOKPILE_SERVER_MIGRATOR_DATABASE_URL=postgresql+psycopg://bookpile:leaked@db:5432/bookpile
+EOF
+chmod 600 "${unsafe_a3_fixture}/server/.env.staging.runtime"
+if PATH="${unsafe_a3_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${unsafe_a3_log}" \
+  BOOKPILE_DEPLOY_LOCK_FILE="${unsafe_a3_fixture}/deploy.lock" \
+    bash "${unsafe_a3_fixture}/server/deploy/deploy-staging.sh" --check \
+      >/dev/null 2>&1; then
+  echo "Expected a privileged secret in the A3 runtime env to fail preflight." >&2
+  exit 1
+fi
+if [[ -e "${unsafe_a3_log}" ]]; then
+  echo "Unsafe A3 runtime env reached Docker unexpectedly." >&2
+  exit 1
+fi
 
 echo "Staging deployment script tests passed."

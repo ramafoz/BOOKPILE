@@ -583,6 +583,28 @@ def test_postgres_tools_keep_password_out_of_process_arguments(monkeypatch, tmp_
     assert captured["environment"]["PGSSLMODE"] == "require"
 
 
+def test_postgres_restore_reapplies_the_admin_audit_contract(monkeypatch, tmp_path: Path) -> None:
+    commands: list[list[str]] = []
+    repaired: list[bool] = []
+
+    monkeypatch.setattr(
+        "bookpile_server.operational_backup.subprocess.run",
+        lambda command, **_kwargs: commands.append(command),
+    )
+    monkeypatch.setattr(
+        PostgresTools,
+        "_restore_admin_audit_contract",
+        lambda _self: repaired.append(True),
+    )
+
+    PostgresTools(
+        "postgresql+psycopg://restore:private-password@db:5432/bookpile"
+    ).restore(tmp_path / "database.dump")
+
+    assert commands[0][0] == "pg_restore"
+    assert repaired == [True]
+
+
 def test_backup_freshness_requires_recent_completion_marker(tmp_path: Path) -> None:
     now = datetime.now(UTC)
     service, _, recent = create_snapshot(tmp_path / "recent", now=now - timedelta(hours=24))

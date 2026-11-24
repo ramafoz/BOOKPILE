@@ -914,15 +914,33 @@ This entire section is a **production blocker**.
 
 ### A3 — Immutable audit
 
-- [ ] Store admin audit rows through a database role that can insert but cannot
-  update or delete. Include operator, action, target opaque ID, reason,
-  correlation ID, timestamp and result; never include secrets or private
-  library content.
-- [ ] Hash-chain audit rows and include them in encrypted off-site backups.
-- [ ] Implement and schedule an integrity verifier; a broken chain or missing
-  sequence raises a critical external alert.
-- [ ] Prove application, worker and administrator roles cannot modify or delete
-  an existing audit row.
+- [x] Implement the PostgreSQL A3 ledger behind fixed NOLOGIN owner, writer,
+  reader, verifier and retention roles. The writer receives only the
+  `append_entry` function; rows contain operator, allowlisted action, opaque
+  target, reason, correlation ID, database UTC time and result, never secrets
+  or private-library content.
+- [x] Hash-chain every row under a serialized database lock. Encrypted
+  PostgreSQL snapshots include the ledger, and the verifier rejects a changed
+  hash, broken link, missing sequence or chain-state mismatch.
+- [x] Implement the isolated writer service, root-only Unix-socket bridge,
+  separate verifier/retention credentials, 15-minute verifier timer, dedicated
+  critical Healthchecks signal and fixed 365-day prefix retention checkpoint.
+- [x] Add PostgreSQL acceptance proving concurrent sequence continuity, writer
+  denial for SELECT/UPDATE/DELETE/TRUNCATE, ordinary runtime denial for the
+  audit schema, tamper detection and refusal to downgrade a non-empty ledger.
+- [ ] Perform the reviewed staging credential transition: migrate first,
+  provision the fixed LOGIN identities, run API/worker as the non-superuser
+  `bookpile_runtime` member, install/start the writer bridge and timers, and
+  prove all process identities and encrypted backup inclusion on the real host.
+- [ ] Rehearse one D3-L list/reveal incident through the installed A3 recorder,
+  verify attempted/result entries and critical-alert recovery, then record A3
+  staging acceptance. No web console may consume the reader role before A4.
+
+The host implementation is deliberately dormant after merge. Existing staging
+deployments continue through the compatibility database URL until
+`BOOKPILE_A3_DATABASE_ROLES_ENABLED=true` is set with the reviewed independent
+credentials. This avoids changing a live database trust boundary as a side
+effect of an ordinary application deployment.
 
 ### A4 — Allowed console capabilities
 
