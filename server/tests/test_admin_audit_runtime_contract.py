@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+REPOSITORY_ROOT = ROOT.parent
 
 
 def test_compose_separates_runtime_migrator_and_audit_credentials() -> None:
@@ -75,3 +76,17 @@ def test_audit_socket_runtime_directory_is_recreated_at_boot() -> None:
         encoding="utf-8"
     )
     assert rule.strip() == "d /run/bookpile-admin-audit 0700 10001 10001 -"
+
+
+def test_a3_runtime_and_role_secret_files_are_ignored() -> None:
+    ignored = set(
+        (REPOSITORY_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    )
+    assert {
+        "server/.env.staging.runtime",
+        "server/.env.production.runtime",
+        "server/.env.database-roles",
+        "server/.env.admin-audit",
+        "server/.env.admin-audit-verifier",
+        "server/.env.admin-audit-retention",
+    } <= ignored
