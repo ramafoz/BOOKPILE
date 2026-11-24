@@ -1,0 +1,11 @@
+[Unit]
+Description=Expire eligible BOOKPILE administration audit prefixes daily
+
+[Timer]
+OnCalendar=*-*-* 03:37:00 UTC
+RandomizedDelaySec=5m
+Persistent=true
+Unit=bookpile-admin-audit-retention.service
+
+[Install]
+WantedBy=timers.target

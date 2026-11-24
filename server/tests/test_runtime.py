@@ -114,7 +114,9 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
     assert "BOOKPILE_SERVER_ALLOWED_HOSTS" in compose
     assert compose.count("networks: [backend, egress]") == 4
     assert "backend:\n    internal: true" in compose
-    assert compose.count("logging: *container-logging") == 4
+    # Four long-lived application services plus the isolated A3 writer and its
+    # three one-shot verifier/retention/provisioning jobs remain in journald.
+    assert compose.count("logging: *container-logging") == 8
     assert (
         "BOOKPILE_DEPLOYMENT_REVISION: "
         "${BOOKPILE_SERVER_DEPLOYMENT_REVISION:?Set "

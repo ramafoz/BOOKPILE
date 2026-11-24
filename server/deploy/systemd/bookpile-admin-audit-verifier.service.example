@@ -1,0 +1,15 @@
+[Unit]
+Description=BOOKPILE immutable administration audit integrity verification
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/bookpile-admin-audit-verifier
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=/home/bookpileadmin/b /etc/bookpile

@@ -26,6 +26,8 @@ RUN python -m venv /opt/bookpile \
 WORKDIR /app
 COPY --chown=bookpile:bookpile server/alembic.ini ./alembic.ini
 COPY --chown=bookpile:bookpile server/migrations ./migrations
+COPY --chmod=0755 server/deploy/provision-bookpile-database-roles.py /usr/local/bin/bookpile-database-roles
+COPY --chmod=0755 server/deploy/check-bookpile-database-roles.py /usr/local/bin/bookpile-database-role-check
 
 USER 10001:10001
 EXPOSE 8100

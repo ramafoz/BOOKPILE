@@ -27,6 +27,23 @@ def table_counts(connection) -> dict[str, int]:
     for name in sorted(Base.metadata.tables):
         counts[name] = int(connection.execute(text(f'SELECT count(*) FROM "{name}"')).scalar_one())
     counts["alembic_version"] = int(connection.execute(text("SELECT count(*) FROM alembic_version")).scalar_one())
+    audit_schema_exists = connection.dialect.name == "postgresql" and connection.scalar(
+        text("SELECT to_regnamespace('admin_audit') IS NOT NULL")
+    )
+    if audit_schema_exists and connection.scalar(
+        text("SELECT has_schema_privilege(current_user, 'admin_audit', 'USAGE')")
+    ):
+        counts["admin_audit.entries"] = int(
+            connection.scalar(text("SELECT count(*) FROM admin_audit.entries"))
+        )
+        counts["admin_audit.chain_state"] = int(
+            connection.scalar(text("SELECT count(*) FROM admin_audit.chain_state"))
+        )
+        counts["admin_audit.retention_checkpoint"] = int(
+            connection.scalar(
+                text("SELECT count(*) FROM admin_audit.retention_checkpoint")
+            )
+        )
     return counts
 
 

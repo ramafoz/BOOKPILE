@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify the BOOKPILE immutable administration audit every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:02/15:00 UTC
+RandomizedDelaySec=30
+Persistent=true
+Unit=bookpile-admin-audit-verifier.service
+
+[Install]
+WantedBy=timers.target

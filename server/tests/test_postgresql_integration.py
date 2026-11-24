@@ -20,7 +20,7 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from bookpile_server.api import dependencies as api_dependencies
@@ -325,6 +325,143 @@ def test_postgresql_migration_and_tenant_scope() -> None:
         assert {"smtp_response_code", "provider_queue_id"} <= email_outbox_columns
         user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
         assert "preferred_locale" in user_columns
+
+        # A3's writer can append through one function but cannot read, rewrite,
+        # delete or truncate the immutable ledger. Concurrent writes must form
+        # one contiguous chain, and privileged tampering must be detectable.
+        def append_admin_audit(index: int) -> int:
+            with engine.begin() as audit_connection:
+                audit_connection.execute(
+                    text("SET LOCAL ROLE bookpile_admin_audit_writer")
+                )
+                return int(
+                    audit_connection.scalar(
+                        text(
+                            "SELECT sequence_id FROM admin_audit.append_entry("
+                            ":operator, :action, :target, :reason, :correlation, "
+                            ":result)"
+                        ),
+                        {
+                            "operator": "postgres-test",
+                            "action": "host_evidence.list",
+                            "target": f"event-{index}",
+                            "reason": "Exercise the immutable administration ledger.",
+                            "correlation": "INC-POSTGRES-A3",
+                            "result": "succeeded",
+                        },
+                    )
+                )
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            audit_sequences = sorted(executor.map(append_admin_audit, range(16)))
+        assert audit_sequences == list(range(1, 17))
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_writer")
+            )
+            rolled_back_sequence = audit_connection.scalar(
+                text(
+                    "SELECT sequence_id FROM admin_audit.append_entry("
+                    "'postgres-test', 'host_evidence.list', 'rolled-back', "
+                    "'Exercise a transaction rollback without a chain gap.', "
+                    "'INC-POSTGRES-A3', 'failed')"
+                )
+            )
+            assert rolled_back_sequence == 17
+            transaction.rollback()
+        assert append_admin_audit(17) == 17
+
+        for statement in (
+            "SELECT * FROM admin_audit.entries",
+            "UPDATE admin_audit.entries SET reason = 'tampered'",
+            "DELETE FROM admin_audit.entries",
+            "TRUNCATE admin_audit.entries",
+        ):
+            with engine.connect() as audit_connection:
+                transaction = audit_connection.begin()
+                audit_connection.execute(
+                    text("SET LOCAL ROLE bookpile_admin_audit_writer")
+                )
+                with pytest.raises(DBAPIError):
+                    audit_connection.execute(text(statement))
+                transaction.rollback()
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            assert audit_connection.scalar(text("SELECT count(*) FROM books")) == 2
+            with pytest.raises(DBAPIError):
+                audit_connection.execute(text("SELECT * FROM admin_audit.entries"))
+            transaction.rollback()
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            with pytest.raises(DBAPIError):
+                audit_connection.execute(
+                    text("UPDATE alembic_version SET version_num = 'forged'")
+                )
+            transaction.rollback()
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_verifier")
+            )
+            verification = audit_connection.execute(
+                text(
+                    "SELECT rows_verified, last_sequence_id "
+                    "FROM admin_audit.verify_chain()"
+                )
+            ).one()
+            assert verification == (17, 17)
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(
+                text("SET LOCAL ROLE bookpile_admin_audit_retention")
+            )
+            retention = audit_connection.execute(
+                text(
+                    "SELECT rows_deleted, pruned_through_sequence_id "
+                    "FROM admin_audit.prune_expired()"
+                )
+            ).one()
+            assert retention == (0, 0)
+
+        with engine.connect() as audit_connection:
+            transaction = audit_connection.begin()
+            audit_connection.execute(
+                text(
+                    "UPDATE admin_audit.entries SET reason = "
+                    "'Privileged but detectable tampering.' WHERE sequence_id = 8"
+                )
+            )
+            with pytest.raises(DBAPIError, match="row hash failed"):
+                audit_connection.execute(
+                    text("SELECT * FROM admin_audit.verify_chain()")
+                ).all()
+            transaction.rollback()
+
+        with engine.begin() as audit_connection:
+            verification = audit_connection.execute(
+                text(
+                    "SELECT rows_verified, last_sequence_id "
+                    "FROM admin_audit.verify_chain()"
+                )
+            ).one()
+            assert verification == (17, 17)
+
+        with pytest.raises(RuntimeError, match="must be preserved"):
+            command.downgrade(alembic, "0024_operation_leases")
+
+        with engine.begin() as audit_connection:
+            audit_connection.execute(text("TRUNCATE admin_audit.entries"))
+            audit_connection.execute(
+                text(
+                    "UPDATE admin_audit.chain_state SET last_sequence_id = 0, "
+                    "last_hash = repeat('0', 64)"
+                )
+            )
         command.downgrade(alembic, "0021_email_outbox")
         downgraded_user_columns = {
             column["name"] for column in inspect(engine).get_columns("users")

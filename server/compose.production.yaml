@@ -6,6 +6,9 @@ x-api-environment: &api-environment
   environment:
     BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
     BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
+    # A3 separates the everyday application credential from the migration
+    # superuser. The legacy fallback exists only for the reviewed transition.
+    BOOKPILE_SERVER_DATABASE_URL: ${BOOKPILE_SERVER_APP_DATABASE_URL:-${BOOKPILE_SERVER_DATABASE_URL}}
 
 x-container-logging: &container-logging
   # Long-lived service output is retained by the host journal under the
@@ -53,6 +56,8 @@ services:
       context: ..
       dockerfile: server/docker/api.Dockerfile
     <<: *api-environment
+    environment:
+      BOOKPILE_SERVER_DATABASE_URL: ${BOOKPILE_SERVER_MIGRATOR_DATABASE_URL:-${BOOKPILE_SERVER_DATABASE_URL}}
     command: ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
     depends_on:
       db:
@@ -150,6 +155,94 @@ services:
         condition: service_healthy
     networks: [backend, egress]
     restart: "no"
+
+  admin-audit:
+    profiles: ["administration"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    build:
+      context: ..
+      dockerfile: server/docker/api.Dockerfile
+    env_file:
+      - path: ${BOOKPILE_ADMIN_AUDIT_ENV_FILE:-.env.admin-audit.example}
+        required: true
+    command:
+      - "bookpile-admin-audit"
+      - "serve"
+      - "--socket"
+      - "/run/bookpile-admin-audit/audit.sock"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - type: bind
+        source: /run/bookpile-admin-audit
+        target: /run/bookpile-admin-audit
+        bind:
+          create_host_path: false
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: unless-stopped
+    logging: *container-logging
+
+  admin-audit-verifier:
+    profiles: ["administration"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    env_file:
+      - path: ${BOOKPILE_ADMIN_AUDIT_VERIFIER_ENV_FILE:-.env.admin-audit-verifier.example}
+        required: true
+    command: ["bookpile-admin-audit", "verify"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+    logging: *container-logging
+
+  admin-audit-retention:
+    profiles: ["administration"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    env_file:
+      - path: ${BOOKPILE_ADMIN_AUDIT_RETENTION_ENV_FILE:-.env.admin-audit-retention.example}
+        required: true
+    command: ["bookpile-admin-audit", "retain"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+    logging: *container-logging
+
+  database-role-provisioner:
+    profiles: ["administration"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    env_file:
+      - path: ${BOOKPILE_DATABASE_ROLES_ENV_FILE:-.env.database-roles.example}
+        required: true
+    command:
+      - "/usr/local/bin/bookpile-database-roles"
+      - "--confirm"
+      - "PROVISION-BOOKPILE-SEPARATE-DATABASE-ROLES"
+    user: "0:0"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    restart: "no"
+    logging: *container-logging
 
   web:
     image: ${BOOKPILE_WEB_IMAGE:-bookpile-web:phase9}

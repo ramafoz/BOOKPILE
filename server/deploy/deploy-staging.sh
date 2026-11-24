@@ -296,6 +296,14 @@ echo "Validating the release configuration..."
 echo "Running explicit database migrations..."
 "${compose[@]}" run --rm migrate
 
+if grep -qx 'BOOKPILE_A3_DATABASE_ROLES_ENABLED=true' "${environment_file}"; then
+  echo "Provisioning separate A3 database login roles..."
+  "${compose[@]}" --profile administration run --rm database-role-provisioner
+  echo "Verifying the least-privilege A3 application identity..."
+  "${compose[@]}" run --rm --no-deps \
+    --entrypoint /usr/local/bin/bookpile-database-role-check api
+fi
+
 echo "Migrating legacy Caddy access-log rolls..."
 "${compose[@]}" run --rm --no-deps \
   --entrypoint /usr/local/bin/migrate-caddy-access-log-rolls web
