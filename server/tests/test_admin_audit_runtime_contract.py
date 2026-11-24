@@ -13,6 +13,7 @@ def test_compose_separates_runtime_migrator_and_audit_credentials() -> None:
     assert "database-role-provisioner" in compose
     assert 'profiles: ["administration"]' in compose
     assert "BOOKPILE_RUNTIME_ENV_FILE" in compose
+    assert "BOOKPILE_SERVER_DEPLOYMENT_REVISION: ${BOOKPILE_SERVER_DEPLOYMENT_REVISION}" in compose
     api_anchor = compose.split("x-api-environment:", 1)[1].split(
         "x-container-logging:", 1
     )[0]
@@ -54,3 +55,16 @@ def test_retention_selects_only_the_contiguous_expired_prefix() -> None:
     assert "SELECT min(recent.sequence_id)" in migration
     assert "recent.occurred_at >= v_cutoff" in migration
     assert "entry.sequence_id < COALESCE" in migration
+
+
+def test_scheduled_application_jobs_use_the_sanitized_runtime_environment() -> None:
+    for name in (
+        "bookpile-maintenance.service.example",
+        "bookpile-operations-check.service.example",
+        "bookpile-deep-check.service.example",
+    ):
+        unit = (ROOT / "deploy" / "systemd" / name).read_text(encoding="utf-8")
+        assert (
+            "Environment=BOOKPILE_RUNTIME_ENV_FILE="
+            "/opt/bookpile/server/.env.production.runtime"
+        ) in unit

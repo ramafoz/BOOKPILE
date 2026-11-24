@@ -957,6 +957,9 @@ them into chat or command-line arguments.
    merely staging the two URLs must not switch the running application.
 3. Pre-create `/run/bookpile-admin-audit` as UID/GID 10001 mode `0700` and
    install the reviewed bridge as `root:root` mode `0755`.
+   Install the reviewed maintenance, operations-check and deep-check units with
+   their explicit `BOOKPILE_RUNTIME_ENV_FILE` setting; staging substitutes the
+   corresponding absolute `.env.staging.runtime` path.
 4. Set the A3 switch to `true` and run the normal deployment. Its order is
    sanitized-runtime validation, migration, fixed LOGIN provisioning, an
    automatic least-privilege identity check, then application recreation. The

@@ -9,6 +9,9 @@ x-api-environment: &api-environment
   environment:
     BOOKPILE_SERVER_IMPORT_STAGING_ROOT: /var/lib/bookpile/import-staging
     BOOKPILE_SERVER_EXPORT_STAGING_ROOT: /var/lib/bookpile/export-staging
+    # The revision is deployment metadata, not a secret. Keeping it as an
+    # override prevents a prepared runtime file from reporting the prior build.
+    BOOKPILE_SERVER_DEPLOYMENT_REVISION: ${BOOKPILE_SERVER_DEPLOYMENT_REVISION}
 
 x-container-logging: &container-logging
   # Long-lived service output is retained by the host journal under the
