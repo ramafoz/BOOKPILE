@@ -376,6 +376,18 @@ def upgrade() -> None:
             TO bookpile_admin_audit_reader;
         GRANT SELECT ON ALL TABLES IN SCHEMA admin_audit
             TO bookpile_admin_audit_backup;
+        DO $backup_compatibility$
+        BEGIN
+            -- Existing installations already use this LOGIN for scheduled
+            -- full-database backups.  Keep those backups working while the
+            -- optional A3 credential split is still disabled.
+            IF EXISTS (
+                SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup'
+            ) THEN
+                GRANT bookpile_admin_audit_backup TO bookpile_backup;
+            END IF;
+        END
+        $backup_compatibility$;
         GRANT EXECUTE ON FUNCTION admin_audit.verify_chain()
             TO bookpile_admin_audit_verifier;
         GRANT EXECUTE ON FUNCTION admin_audit.prune_expired()

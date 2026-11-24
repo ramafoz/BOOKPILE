@@ -963,6 +963,9 @@ them into chat or command-line arguments.
 4. Set the A3 switch to `true` and run the normal deployment. Its order is
    sanitized-runtime validation, migration, fixed LOGIN provisioning, an
    automatic least-privilege identity check, then application recreation. The
+   migration preserves the existing `bookpile_backup` login's read access to
+   the new ledger before this optional switch is enabled, so pre-deployment and
+   scheduled full-database backups remain available during the transition. The
    deployment wrapper alone exports `BOOKPILE_RUNTIME_ENV_FILE`; API, worker
    and maintenance therefore never receive the PostgreSQL bootstrap password
    or migrator URL. If validation, provisioning or the identity check fails,

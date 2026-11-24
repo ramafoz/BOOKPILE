@@ -280,7 +280,38 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 text("UPDATE books SET goodreads_url = NULL WHERE id = :id"),
                 {"id": first_book_id},
             )
+            connection.execute(
+                text(
+                    "DO $backup$ BEGIN "
+                    "IF NOT EXISTS ("
+                    "SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup'"
+                    ") THEN "
+                    "CREATE ROLE bookpile_backup NOLOGIN NOSUPERUSER "
+                    "NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; "
+                    "END IF; END $backup$"
+                )
+            )
         command.upgrade(alembic, "head")
+        with engine.connect() as connection:
+            assert connection.scalar(
+                text(
+                    "SELECT pg_has_role("
+                    "'bookpile_backup', 'bookpile_admin_audit_backup', 'MEMBER'"
+                    ")"
+                )
+            )
+            assert connection.scalar(
+                text(
+                    "SELECT has_schema_privilege("
+                    "'bookpile_backup', 'admin_audit', 'USAGE')"
+                )
+            )
+            assert connection.scalar(
+                text(
+                    "SELECT has_table_privilege("
+                    "'bookpile_backup', 'admin_audit.entries', 'SELECT')"
+                )
+            )
         assert "goodreads_url" not in {
             column["name"] for column in inspect(engine).get_columns("books")
         }
