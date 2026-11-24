@@ -6,6 +6,7 @@ import subprocess
 
 ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "deploy" / "run-admin-audit-verifier.py"
+TIMER = ROOT / "deploy" / "systemd" / "bookpile-admin-audit-verifier.timer.example"
 
 
 def _module():
@@ -14,6 +15,13 @@ def _module():
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def test_verifier_timer_is_staggered_from_existing_host_jobs() -> None:
+    timer = TIMER.read_text(encoding="utf-8")
+
+    assert "OnCalendar=*-*-* *:09/15:00 UTC" in timer
+    assert "*:02/15:00" not in timer
 
 
 def test_verifier_emits_only_aggregate_evidence(monkeypatch, capsys) -> None:

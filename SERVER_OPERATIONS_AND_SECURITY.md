@@ -998,11 +998,12 @@ them into chat or command-line arguments.
 9. Confirm Healthchecks recovery, application health, deep reconciliation and
    normal human use before recording A3 acceptance.
 
-The verifier runs every 15 minutes. It emits only health, row count and final
-sequence; hashes and database errors remain local. Any malformed output,
-missing sequence, changed row/link/state, unavailable database or failed
-external signal fails the oneshot and sends the dedicated critical failure
-signal. Retention runs daily and first verifies the whole chain; it cannot take
+The verifier runs every 15 minutes at `09,24,39,54` UTC, staggered from the
+other quarter-hour checks and the daily encrypted backup. It emits only health,
+row count and final sequence; hashes and database errors remain local. Any
+malformed output, missing sequence, changed row/link/state, unavailable database
+or failed external signal fails the oneshot and sends the dedicated critical
+failure signal. Retention runs daily and first verifies the whole chain; it cannot take
 an operator-supplied cutoff or delete a non-contiguous subset.
 
 Inspect recent scanner evidence on the host without copying the full file:
