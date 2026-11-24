@@ -108,21 +108,23 @@ otherwise.
 - [x] Verify that no retained event contains cookies, authorization headers,
   CSRF values, reset/invitation tokens, request bodies, email content, object
   keys or catalogue data.
-- [x] Implement and test the dormant host-only raw-evidence access boundary.
+- [x] Implement and test the host-only raw-evidence access boundary.
   `bookpile-raw-evidence-access.py` is fixed to the minimized D6 source, root
   execution, a maximum 15-minute window and at most 20 normalized results. It
   has no source-path, IP-search or output-file argument. Listing omits client
   addresses; revealing requires the keyed opaque ID of exactly one retained
   event. An immutable `attempted` record must succeed before the source is even
   opened and an immutable `succeeded` record must succeed before output; audit
-  failure therefore discloses nothing. The command remains deliberately
-  uninstalled and unusable until the A3 insert-only audit recorder exists.
-- [ ] Rehearse the host procedure against retained staging evidence and
-  separately test the console's mediated reveal of one retained client-IP field
-  from one normalized security event after A3/A4 exist. Both paths require
-  operator, reason, incident, timestamp and result in the immutable admin audit;
-  the console path must not permit raw-log access, bulk IP listing, arbitrary
-  search or export.
+  failure therefore discloses nothing. Installation remains conditional on the
+  A3 insert-only audit recorder; staging now satisfies that prerequisite.
+- [x] Rehearse the host procedure against retained staging evidence through the
+  installed A3 recorder. The bounded list omitted client addresses and the
+  reveal selected exactly one retained event by its keyed opaque identifier;
+  attempted and succeeded rows were committed before disclosure.
+- [ ] Test the A4 console's mediated reveal of one retained client-IP field from
+  one normalized security event. It must require operator, reason, incident,
+  timestamp and result in the immutable audit, and permit no raw-log access,
+  bulk IP listing, arbitrary search or export.
 
 Evidence: committed retention table and runbook; staging rotation transcript;
 redaction tests; one audited raw-evidence access rehearsal.
@@ -130,9 +132,14 @@ redaction tests; one audited raw-evidence access rehearsal.
 Host-foundation evidence: `test_raw_evidence_access.py` proves audit-before-read,
 audit-before-disclosure, exact single-event reveal, IP-free normalized listing,
 bounded windows/results, strict active/compressed-roll validation, fixed source
-and absence of arbitrary search/export controls. This does not claim the final
-staging rehearsal or console gate; D3-L remains open until A3/A4 provide the
-reviewed immutable recorder and mediated console path.
+and absence of arbitrary search/export controls. Staging revision
+`55953a7e4eb12ddee0a8569960a7bae5f92dec44` installed the reviewed command and
+root-only HMAC key on 2026-11-24. A one-event retained window returned an
+IP-free normalized list, then revealed exactly that event without copying the
+address into the acceptance transcript. The immutable chain advanced from
+sequence 3 to 7 and verified all seven rows; an aggregate privacy query found
+zero forbidden field names. The host half is accepted. D3-L remains open only
+for the A4 mediated console path.
 
 Retention-table evidence: commit `62a68f9` adds the binding field, purpose,
 duration, deletion, role and legal-policy matrix. Staging revision
@@ -154,7 +161,7 @@ through journald with route templates, keyed 16-hex client pseudonyms and no
 raw address, query, header, body or private catalogue content. The final deep
 check reconciled 440 expected and stored private objects with zero missing,
 mismatched or orphaned objects. The remaining raw-evidence checkbox stays open:
-its console half depends on A3/A4 and cannot be accepted by host evidence alone.
+its console half depends on A4 and cannot be accepted by host evidence alone.
 
 ### D4-G — General API IP ceiling
 
@@ -928,19 +935,42 @@ This entire section is a **production blocker**.
 - [x] Add PostgreSQL acceptance proving concurrent sequence continuity, writer
   denial for SELECT/UPDATE/DELETE/TRUNCATE, ordinary runtime denial for the
   audit schema, tamper detection and refusal to downgrade a non-empty ledger.
-- [ ] Perform the reviewed staging credential transition: migrate first,
+- [x] Perform the reviewed staging credential transition: migrate first,
   provision the fixed LOGIN identities, run API/worker as the non-superuser
   `bookpile_runtime` member, install/start the writer bridge and timers, and
   prove all process identities and encrypted backup inclusion on the real host.
-- [ ] Rehearse one D3-L list/reveal incident through the installed A3 recorder,
+- [x] Rehearse one D3-L list/reveal incident through the installed A3 recorder,
   verify attempted/result entries and critical-alert recovery, then record A3
   staging acceptance. No web console may consume the reader role before A4.
 
-The host implementation is deliberately dormant after merge. Existing staging
-deployments continue through the compatibility database URL until
-`BOOKPILE_A3_DATABASE_ROLES_ENABLED=true` is set with the reviewed independent
-credentials. This avoids changing a live database trust boundary as a side
-effect of an ordinary application deployment.
+The host implementation remains disabled by default after merge. Staging was
+enabled only through the reviewed transition below; production continues
+through the compatibility database URL until
+`BOOKPILE_A3_DATABASE_ROLES_ENABLED=true` is deliberately set with independent
+credentials. This prevents an ordinary application deployment from changing a
+live database trust boundary.
+
+Staging accepted A3 on 2026-11-24 at revision
+`55953a7e4eb12ddee0a8569960a7bae5f92dec44`. API and email worker both reported
+`bookpile_app`, `superuser=false`, runtime membership and no audit-schema
+access. The writer login could execute only `append_entry`; neither writer nor
+runtime had SELECT, UPDATE, DELETE or TRUNCATE on the ledger. Three synthetic
+rows plus the audited D3-L list/reveal produced a healthy seven-row chain with
+zero forbidden privacy fields. Backup `2ae2a384-56d4-4be8-8f02-e6ad4539dadb`
+was verified with all three audit tables in its authenticated manifest. The
+dedicated critical check passed controlled DOWN/UP delivery, and verifier and
+retention timers are active at the reviewed schedules. Deep reconciliation
+remained healthy at 433 expected and stored objects, edge enforcement remained
+active, systemd had no failed units and normal human use passed.
+
+The first transition also exposed an operational anomaly: after the deployment
+had written a successful target marker, a later process restored the printed
+rollback environment and recreated the previous containers. No matching shell
+command or exported override was found, so the cause is not attributed. The
+new identities and images were independently validated, the non-secret release
+references were realigned, and one controlled recreation completed acceptance.
+Production rollout remains blocked until the post-deployment rollback path is
+made explicitly confirmed or otherwise hardened against accidental execution.
 
 ### A4 — Allowed console capabilities
 

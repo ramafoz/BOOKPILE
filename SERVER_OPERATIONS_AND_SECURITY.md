@@ -885,28 +885,27 @@ gap and a fresh public probe produced real `/health/live` and `/health/ready`
 events with route templates, status, duration, revision and keyed 16-hex client
 pseudonyms. The retained rows contained no raw address, query, header, body or
 private catalogue value. Together with the exhaustive synthetic-secret tests,
-this accepts Caddy expiry, bounded journald and retained-event redaction. It
-does not accept raw-evidence access or the future console-mediated IP reveal;
-that separate gate remains open pending immutable admin audit and A3/A4.
+this accepts Caddy expiry, bounded journald and retained-event redaction. It did
+not at that time accept raw-evidence access or the future console-mediated IP
+reveal.
 
-The dormant host-side half of that gate is now defined by
+The host-side half of that gate is defined by
 `server/deploy/bookpile-raw-evidence-access.py` and the detailed procedure in
-`docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md`. It is not installed by normal
-deployment and must not be installed manually yet. The command requires the A3
+`docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md`. The command requires the A3
 root-owned immutable-audit recorder before reading a log, allows only a
 15-minute interval and 20 normalized results, and reveals at most one retained
 IP selected by its keyed opaque event ID. A missing or rejecting recorder means
 no log read and no disclosure; journald or a local append-only file is not an
-acceptable replacement. Staging acceptance remains blocked until A3/A4 are
-implemented and the documented host and console rehearsals both pass.
+acceptable replacement. The host path was installed and accepted with A3 on
+2026-11-24. The A4 console-mediated path remains unimplemented.
 
-### Dormant A3 immutable administration audit
+### A3 immutable administration audit
 
 The repository contains the A3 implementation, but merging it does not change
-an existing host. Do not enable it during an ordinary deployment. The current
-`bookpile` PostgreSQL bootstrap identity is a migration superuser; the API and
-worker must move together to the separate `bookpile_app` LOGIN before A3 can be
-accepted as immutable.
+an existing host. Do not enable it during an ordinary deployment. Production
+still uses the compatibility database identity until its own reviewed rollout;
+staging moved API and worker together to the separate `bookpile_app` LOGIN and
+accepted the immutable boundary on 2026-11-24.
 
 The ledger lives in the private `admin_audit` schema. `append_entry` obtains a
 row lock, allocates a contiguous sequence, uses database UTC time, hashes a
@@ -937,7 +936,7 @@ containers do not mount that socket. The installed root-owned
 `append-host-evidence-access`, which is the fixed dependency used by D3-L.
 Verifier and retention jobs use independent env files and one-shot containers.
 
-#### Staging transition (not yet authorized or accepted)
+#### Reviewed host transition procedure
 
 Before running these steps, create and verify an off-site backup, retain IONOS
 console access, and prepare rollback snapshots. Generate independent, URL-safe
@@ -1005,6 +1004,44 @@ malformed output, missing sequence, changed row/link/state, unavailable database
 or failed external signal fails the oneshot and sends the dedicated critical
 failure signal. Retention runs daily and first verifies the whole chain; it cannot take
 an operator-supplied cutoff or delete a non-contiguous subset.
+
+#### Staging A3 acceptance — 2026-11-24
+
+Revision `55953a7e4eb12ddee0a8569960a7bae5f92dec44` enabled the reviewed
+credential split. API and email worker both ran as `bookpile_app`, were members
+of `bookpile_runtime`, were not superusers and had no `admin_audit` schema
+access. The isolated writer socket was UID/GID 10001 mode `0600`; its LOGIN had
+only schema usage and execution of `append_entry`, with no SELECT, UPDATE,
+DELETE or TRUNCATE privilege. The runtime LOGIN could not enter the schema.
+
+Three synthetic attempted/succeeded/failed entries produced a healthy chain.
+The installed D3-L command then listed one retained event without an IP and
+revealed exactly that event by its 64-hex keyed identifier; the address was
+validated but omitted from the transcript. A later operator-facing repeat
+confirmed that a root administrator can deliberately see the selected address;
+the value was again not copied into the acceptance record. The immutable audit
+therefore controls and records disclosure rather than pretending to constrain
+the host's root account. The first rehearsal finished at sequence 7, all seven
+rows verified and an aggregate inspection found zero forbidden privacy-field
+names.
+
+Encrypted backup `2ae2a384-56d4-4be8-8f02-e6ad4539dadb` verified 433 private
+objects and an authenticated manifest containing three ledger rows plus one
+chain-state and one retention-checkpoint row. The dedicated critical
+Healthchecks signal passed one controlled failure and recovery. Verifier and
+retention timers were enabled, retention deleted zero current rows, deep
+reconciliation reported 433 expected and stored objects, all D6 policies
+remained enforced, systemd reported no failed units and normal authenticated
+use passed.
+
+After the normal deployment wrote its successful target marker, a later process
+restored the printed rollback environment and recreated the previous release.
+No matching shell-history command or exported Compose override was found, so
+the cause is deliberately not attributed. Operators independently validated
+the new image and `bookpile_app` credential, realigned only the non-secret
+release references and performed one controlled recreation. Before production,
+replace or harden the copy-pasteable rollback instructions with an explicitly
+confirmed rollback path and rehearse that path separately.
 
 Inspect recent scanner evidence on the host without copying the full file:
 
