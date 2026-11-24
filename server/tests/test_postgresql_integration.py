@@ -55,6 +55,7 @@ from bookpile_server.models import (
     VisualOutsideArea,
     VisualShelfLayout,
 )
+from bookpile_server.operational_backup import PostgresTools
 from bookpile_server.repositories.account_actions import AccountActionRepository
 from bookpile_server.repositories.account_invitations import (
     AccountInvitationRepository,
@@ -87,6 +88,7 @@ from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
 TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_TEST_DATABASE_URL")
+RESTORE_TEST_DATABASE_URL = os.getenv("BOOKPILE_SERVER_RESTORE_TEST_DATABASE_URL")
 
 
 def _request_general_api_limit_from_process(
@@ -199,7 +201,7 @@ def _request_mutation_limit_from_process(
     not TEST_DATABASE_URL,
     reason="BOOKPILE_SERVER_TEST_DATABASE_URL is not configured",
 )
-def test_postgresql_migration_and_tenant_scope() -> None:
+def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
     assert TEST_DATABASE_URL is not None
     url = make_url(TEST_DATABASE_URL)
     assert url.get_backend_name() == "postgresql"
@@ -481,6 +483,79 @@ def test_postgresql_migration_and_tenant_scope() -> None:
                 )
             ).one()
             assert verification == (17, 17)
+
+        if RESTORE_TEST_DATABASE_URL:
+            restore_url = make_url(RESTORE_TEST_DATABASE_URL)
+            assert (restore_url.database or "").endswith("_test")
+            assert restore_url != url
+            dump_path = tmp_path / "a3-recovery.dump"
+            with engine.connect() as snapshot_connection:
+                transaction = snapshot_connection.begin()
+                snapshot_connection.execute(
+                    text(
+                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+                    )
+                )
+                snapshot = snapshot_connection.scalar(
+                    text("SELECT pg_export_snapshot()")
+                )
+                assert isinstance(snapshot, str)
+                PostgresTools(TEST_DATABASE_URL).dump(dump_path, snapshot=snapshot)
+                transaction.rollback()
+
+            PostgresTools(RESTORE_TEST_DATABASE_URL).restore(dump_path)
+            restore_engine = create_engine(RESTORE_TEST_DATABASE_URL)
+            try:
+                with restore_engine.connect() as restored:
+                    assert restored.scalar(text("SELECT count(*) FROM books")) == 2
+                    assert restored.scalar(
+                        text("SELECT count(*) FROM admin_audit.entries")
+                    ) == 17
+                    assert restored.scalar(
+                        text(
+                            "SELECT nspowner::regrole::text = "
+                            "'bookpile_admin_audit_owner' "
+                            "FROM pg_namespace WHERE nspname = 'admin_audit'"
+                        )
+                    )
+                    assert restored.scalar(
+                        text(
+                            "SELECT pg_has_role("
+                            "'bookpile_runtime', 'bookpile_runtime', 'MEMBER')"
+                        )
+                    )
+                    assert restored.scalar(
+                        text(
+                            "SELECT has_table_privilege("
+                            "'bookpile_runtime', 'public.books', "
+                            "'SELECT,INSERT,UPDATE,DELETE')"
+                        )
+                    )
+                    assert not restored.scalar(
+                        text(
+                            "SELECT has_schema_privilege("
+                            "'bookpile_runtime', 'admin_audit', 'USAGE')"
+                        )
+                    )
+                    restored_groups = {
+                        row[0]
+                        for row in restored.execute(
+                            text(
+                                "SELECT rolname FROM pg_roles "
+                                "WHERE rolname LIKE 'bookpile_admin_audit_%'"
+                            )
+                        )
+                    }
+                    assert restored_groups == {
+                        "bookpile_admin_audit_owner",
+                        "bookpile_admin_audit_writer",
+                        "bookpile_admin_audit_reader",
+                        "bookpile_admin_audit_backup",
+                        "bookpile_admin_audit_verifier",
+                        "bookpile_admin_audit_retention",
+                    }
+            finally:
+                restore_engine.dispose()
 
         with pytest.raises(RuntimeError, match="must be preserved"):
             command.downgrade(alembic, "0024_operation_leases")

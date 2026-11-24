@@ -956,7 +956,12 @@ them into chat or command-line arguments.
    `BOOKPILE_A3_DATABASE_ROLES_ENABLED=false` until every file is validated;
    merely staging the two URLs must not switch the running application.
 3. Pre-create `/run/bookpile-admin-audit` as UID/GID 10001 mode `0700` and
-   install the reviewed bridge as `root:root` mode `0755`.
+   install `server/deploy/tmpfiles.d/bookpile-admin-audit.conf` as
+   `/etc/tmpfiles.d/bookpile-admin-audit.conf` (`root:root`, mode `0644`). Run
+   `systemd-tmpfiles --create /etc/tmpfiles.d/bookpile-admin-audit.conf` and
+   install the reviewed bridge as `root:root` mode `0755`. The tmpfiles rule
+   recreates this volatile socket directory with the same ownership after each
+   boot.
    Install the reviewed maintenance, operations-check and deep-check units with
    their explicit `BOOKPILE_RUNTIME_ENV_FILE` setting; staging substitutes the
    corresponding absolute `.env.staging.runtime` path.
@@ -970,6 +975,9 @@ them into chat or command-line arguments.
    and maintenance therefore never receive the PostgreSQL bootstrap password
    or migrator URL. If validation, provisioning or the identity check fails,
    application recreation does not begin.
+   Disaster-recovery restores re-create the NOLOGIN groups, ownership and ACL
+   contract after `pg_restore`, because portable per-database dumps deliberately
+   omit cluster roles and privileges.
 5. Re-run `check-bookpile-database-roles.py` inside the API and worker images
    as post-deployment evidence.
    Acceptance requires `superuser=false`, `runtime_member=true` and

@@ -68,3 +68,10 @@ def test_scheduled_application_jobs_use_the_sanitized_runtime_environment() -> N
             "Environment=BOOKPILE_RUNTIME_ENV_FILE="
             "/opt/bookpile/server/.env.production.runtime"
         ) in unit
+
+
+def test_audit_socket_runtime_directory_is_recreated_at_boot() -> None:
+    rule = (ROOT / "deploy" / "tmpfiles.d" / "bookpile-admin-audit.conf").read_text(
+        encoding="utf-8"
+    )
+    assert rule.strip() == "d /run/bookpile-admin-audit 0700 10001 10001 -"
