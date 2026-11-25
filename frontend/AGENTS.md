@@ -4,8 +4,14 @@ These rules apply to `frontend/` and supplement the repository root guidance.
 
 - One workspace builds two explicit editions. Keep Local and Server entry
   points, API assumptions, tests and output directories separate.
+- Keep their visual language, interaction patterns and reusable presentation
+  components as consistent as their product contracts allow. Deliberate future
+  Local work may adopt suitable Server interface improvements; product
+  separation is not a reason to preserve avoidable visual divergence.
 - A shared component change must be checked in both editions. Do not expose a
-  Server-only control in Local or assume Server authentication in Local.
+  Server-only control in Local or assume Server authentication in Local. Do not
+  expand Local scope incidentally while implementing a Server task: schedule
+  edition-specific adaptation explicitly and preserve Local compatibility.
 - Preserve authorization in the API; hiding or disabling a frontend control is
   not a security boundary.
 - Keep responsive desktop/mobile behaviour and keyboard/touch interaction in
