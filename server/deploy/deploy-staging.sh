@@ -451,13 +451,9 @@ printf '%s\n' \
   "  Application rollback snapshots:" \
   "    ${saved_environment}" \
   "    ${saved_backup_environment}" \
-  "  Assisted application rollback (does not downgrade database migrations):" \
-  "    cp -p '${saved_environment}' '${environment_file}'" \
-  "    cp -p '${saved_backup_environment}' '${backup_environment_file}'" \
-  "    docker compose --env-file '${environment_file}' -f '${compose_file}' --profile operations config --quiet" \
-  "    docker compose --env-file '${environment_file}' -f '${compose_file}' up -d --no-deps --force-recreate api email-worker web" \
-  "    curl --fail --show-error '${public_base_url}/health/live'" \
-  "    curl --fail --show-error '${public_base_url}/health/ready'"
+  "  Confirmed application rollback (does not downgrade database migrations):" \
+  "    bash server/deploy/rollback-staging.sh" \
+  "    The assistant displays both revisions and requires typing ROLLBACK."
 if [[ "${skip_backup}" == "true" ]]; then
   echo "  No pre-deployment backup was created; data restoration is unavailable for this deployment." >&2
 else

@@ -963,14 +963,19 @@ retention timers are active at the reviewed schedules. Deep reconciliation
 remained healthy at 433 expected and stored objects, edge enforcement remained
 active, systemd had no failed units and normal human use passed.
 
-The first transition also exposed an operational anomaly: after the deployment
-had written a successful target marker, a later process restored the printed
-rollback environment and recreated the previous containers. No matching shell
-command or exported override was found, so the cause is not attributed. The
-new identities and images were independently validated, the non-secret release
-references were realigned, and one controlled recreation completed acceptance.
-Production rollout remains blocked until the post-deployment rollback path is
-made explicitly confirmed or otherwise hardened against accidental execution.
+The first transition also exposed an operational hazard: after the deployment
+had written a successful target marker, the printed multi-command recovery
+recipe was plausibly pasted back into the shell with the deployment transcript,
+restoring the previous environment and containers. No deployment defect was
+established and no further causal investigation is required. The new identities
+and images were independently validated, the non-secret release references
+were realigned, and one controlled recreation completed acceptance. The raw
+recipe is now replaced by `rollback-staging.sh`, which derives both revisions
+from the protected deployment marker, validates the snapshots, displays the
+transition and requires an exact interactive `ROLLBACK`. A failed confirmed
+rollback restores the forward configuration. Production rollout remains
+blocked until this assistant passes one real rollback and forward deployment
+rehearsal in staging.
 
 ### A4 — Allowed console capabilities
 
