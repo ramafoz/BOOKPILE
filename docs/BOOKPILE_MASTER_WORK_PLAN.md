@@ -984,9 +984,14 @@ were realigned, and one controlled recreation completed acceptance. The raw
 recipe is now replaced by `rollback-staging.sh`, which derives both revisions
 from the protected deployment marker, validates the snapshots, displays the
 transition and requires an exact interactive `ROLLBACK`. A failed confirmed
-rollback restores the forward configuration. Production rollout remains
-blocked until this assistant passes one real rollback and forward deployment
-rehearsal in staging.
+rollback restores the forward configuration.
+
+- [x] Rehearse a confirmed application rollback and normal forward deployment
+  on BOOKPILE Server staging. On 2026-11-25 the operator rolled back from
+  `5f0fe5c` to `55953a7`, verified the restored revision and all 433 private
+  objects, then redeployed `5f0fe5c`. All eight D7 baseline scenarios and the
+  human checks passed. See the [staging rehearsal record](server/SERVER_OPERATIONS_AND_SECURITY.md#staging-rollback-and-forward-deployment-on-2026-11-25).
+  This closes the staging rehearsal only. The production gates remain open.
 
 ### A4 — Allowed console capabilities
 

@@ -1056,8 +1056,7 @@ nothing until the operator types `ROLLBACK` exactly. It recreates only API,
 email worker and web, verifies revision-linked public health and the deep check,
 and never downgrades migrations or restores data. If any confirmed rollback
 step fails, it restores the saved forward environment and recreates the forward
-application. Rehearse one real rollback and normal forward deployment in
-staging before accepting this boundary for production.
+application.
 
 Inspect recent scanner evidence on the host without copying the full file:
 
@@ -1076,6 +1075,36 @@ Install copies without the `.example` suffix, correct `WorkingDirectory`, run
 `systemctl daemon-reload`, enable the timers, and connect unit failure to the
 chosen paging route. Monitoring evaluates exit status; a verified backup older
 than 25 hours is unhealthy.
+
+#### Staging rollback and forward deployment on 2026-11-25
+
+The operator recorded the following results on BOOKPILE Server staging.
+
+1. **Initial deployment.** Staging started at
+   `55953a7e4eb12ddee0a8569960a7bae5f92dec44`. The operator deployed
+   `5f0fe5c7b704c9c8ec648c74650e48db757810ca` with `deploy-staging.sh`.
+   The script created and verified pre-deployment backup
+   `99b14654-0f13-4333-872d-bd86f027072c`. Public liveness, readiness and
+   the deep check passed. Reconciliation found all 433 expected private objects.
+2. **Confirmed rollback.** The operator ran `bash server/deploy/rollback-staging.sh`.
+   The assistant displayed `5f0fe5c` as current and `55953a7` as the restore
+   target. The operator typed exactly `ROLLBACK`. The assistant restored API,
+   email-worker and web without restoring the database or downgrading migrations.
+   The restored A3 identity reported `application_role=bookpile_app`,
+   `healthy=true`, `runtime_member=true`, `superuser=false` and
+   `admin_audit_access=false`. Both `/health/live` and `/health/ready` reported
+   `55953a7`. The deep check passed with 433 expected and 433 stored private
+   objects, zero missing, zero mismatched and zero orphaned.
+3. **Forward deployment.** Preflight identified `55953a7` as current and
+   `5f0fe5c` as the target. The second deployment created and verified
+   pre-deployment backup `3b425ff8-9df9-4aef-9350-3ca43aa8b3af` and
+   returned staging to `5f0fe5c`.
+4. **Checks after redeployment.** The D7 baseline reported `healthy=true` on
+   `5f0fe5c`. All eight scenarios passed (deployment identity and health,
+   public navigation, application containers, deep reconciliation, edge
+   enforcement, defensive metrics, host services and privacy sources).
+   D6 live, ready, scanner and volume policies remained in `enforce` mode.
+   The operator signed in, browsed the catalogue and made a normal edit.
 
 ### External backup dead-man switch (staging)
 
