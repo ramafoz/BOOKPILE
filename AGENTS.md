@@ -80,9 +80,9 @@ Use the runbook's exact typed confirmations such as `DEPLOY` and `ROLLBACK`.
 ## Documentation
 
 - Keep the root README a concise landing page, not a second work plan.
-- Put operational procedures in the relevant root runbook, architecture
-  decisions in `docs/adr/`, and behavioural contracts in
-  `docs/specifications/`.
+- Put Local user/release guidance in `docs/local/`, Server operational
+  procedures in `docs/server/`, architecture decisions in `docs/adr/`, and
+  behavioural contracts in `docs/specifications/`.
 - Record task status only in the master plan. Archive superseded narrative in
   `docs/old/` without presenting it as current guidance.
 - Keep links relative and update affected documentation in the same pull

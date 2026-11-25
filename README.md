@@ -18,10 +18,11 @@ not databases, migrations, credentials, runtime state or release lifecycles.
 
 ### BOOKPILE Local
 
-New Local users should follow the [installation guide](INSTALLATION.md), then
-read the [user guide](USER_GUIDE.md). Before changing or moving an existing
-catalogue, read [backup and recovery](BACKUP_AND_RECOVERY.md) and
-[migration recovery](MIGRATION_RECOVERY.md).
+New Local users should follow the
+[installation guide](docs/local/INSTALLATION.md), then read the
+[user guide](docs/local/USER_GUIDE.md). Before changing or moving an existing
+catalogue, read [backup and recovery](docs/local/BACKUP_AND_RECOVERY.md) and
+[migration recovery](docs/local/MIGRATION_RECOVERY.md).
 
 Local developers work in `backend/` and the Local frontend edition. The broad
 quality gate is:
@@ -38,9 +39,9 @@ npm run build:local
 
 Server developers should begin with [`server/README.md`](server/README.md).
 Hosted deployment, recovery and security procedures live in
-[the operations runbook](SERVER_OPERATIONS_AND_SECURITY.md), while
-[the production rehearsal runbook](SERVER_PRODUCTION_RUNBOOK.md) defines the
-application deployment boundary.
+[the operations runbook](docs/server/SERVER_OPERATIONS_AND_SECURITY.md), while
+[the production rehearsal runbook](docs/server/SERVER_PRODUCTION_RUNBOOK.md)
+defines the application deployment boundary.
 
 The broad Server quality gate is:
 
@@ -62,7 +63,10 @@ migrations, staging, backup, rollback or host changes.
 | `backend/` | BOOKPILE Local FastAPI/SQLite backend and tests |
 | `server/` | BOOKPILE Server application, migrations, deployment assets and tests |
 | `frontend/` | React/TypeScript workspace with explicit Local and Server editions |
-| `docs/` | Master plan, active policies, ADRs and specifications |
+| `docs/local/` | BOOKPILE Local installation, use, recovery and release guides |
+| `docs/server/` | BOOKPILE Server operational contracts and runbooks |
+| `docs/adr/` | Accepted architectural decisions |
+| `docs/specifications/` | Active cross-edition and domain specifications |
 | `docs/old/` | Preserved historical plans, audits, checklists and snapshots |
 | `maintenance/` | Repository maintenance utilities |
 
@@ -78,10 +82,10 @@ infer current status from historical plans or old README snapshots.
 Use the [documentation map](docs/README.md) to find active contracts, ADRs,
 runbooks and preserved history. Important active references include:
 
-- [Cross-edition data model](CROSS_EDITION_DATA_MODEL.md)
-- [Server private object storage](SERVER_PRIVATE_OBJECT_STORAGE.md)
-- [Server email outbox](SERVER_EMAIL_OUTBOX.md)
-- [Server operational backup and recovery](SERVER_OPERATIONAL_BACKUP.md)
+- [Cross-edition data model](docs/specifications/CROSS_EDITION_DATA_MODEL.md)
+- [Server private object storage](docs/server/SERVER_PRIVATE_OBJECT_STORAGE.md)
+- [Server email outbox](docs/server/SERVER_EMAIL_OUTBOX.md)
+- [Server operational backup and recovery](docs/server/SERVER_OPERATIONAL_BACKUP.md)
 - [Defensive metric catalogue](docs/DEFENSIVE_METRIC_CATALOGUE.md)
 - [Log retention and investigation policy](docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md)
 

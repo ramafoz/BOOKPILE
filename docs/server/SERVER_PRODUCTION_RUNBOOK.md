@@ -62,7 +62,7 @@ The staging file selects both paths for Compose. In every command below replace
 `server/.env.production` with `server/.env.staging`. Never copy staging secrets
 into the later production files. The completed initial staging acceptance is
 preserved in the historical
-[`SERVER_STAGING_PROVISIONING_CHECKLIST.md`](docs/old/SERVER_STAGING_PROVISIONING_CHECKLIST.md);
+[`SERVER_STAGING_PROVISIONING_CHECKLIST.md`](../old/SERVER_STAGING_PROVISIONING_CHECKLIST.md);
 use `SERVER_OPERATIONS_AND_SECURITY.md` and the master work plan for current
 operations and gates.
 
