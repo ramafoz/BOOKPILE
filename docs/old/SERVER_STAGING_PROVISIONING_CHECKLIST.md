@@ -1,5 +1,9 @@
 # BOOKPILE isolated staging provisioning checklist
 
+> **Historical document.** This checklist records the completed initial staging
+> provisioning. It is retained as acceptance evidence, not as the current host
+> or deployment procedure. Use the active Server runbooks for operations.
+
 This checklist starts Phase 9F. It creates no production service and imports no
 real member data. Record only account IDs, regions, non-secret resource names,
 timestamps and test results; never paste credentials into this document, Git,

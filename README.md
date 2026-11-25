@@ -1,605 +1,102 @@
 # BOOKPILE
 
-BOOKPILE is a personal library manager for cataloguing books, recording
-reading history, and finding each physical copy in a real room. One monorepo
-now contains two explicitly selected products:
+BOOKPILE is a private library manager for cataloguing books, recording reading
+history and locating every physical copy in a real room.
 
-- **BOOKPILE Local**, the released single-user SQLite application for a
-  Windows PC and devices on the same private Wi-Fi network.
-- **BOOKPILE Server**, the in-development PostgreSQL multi-user product.
+This monorepo contains two deliberately separate products:
 
-They share selected frontend source and domain concepts, but not runtimes,
-databases, migrations, launchers, or release lifecycles. Merely building or
-testing one edition never opens the other edition's data.
+- **BOOKPILE Local** is the released single-user application for Windows and
+  devices on the same private network. It uses SQLite.
+- **BOOKPILE Server** is the hosted multi-user edition under active
+  development and staging acceptance. It uses PostgreSQL and supports shared
+  libraries with Owner and Viewer roles.
 
-BOOKPILE Local v1 is distributed as source with a guided Windows installer.
-New users should begin with [INSTALLATION.md](INSTALLATION.md), then read the
-[user guide](USER_GUIDE.md) and [backup guide](BACKUP_AND_RECOVERY.md).
+They share selected frontend code, visual language and domain concepts, but
+not databases, migrations, credentials, runtime state or release lifecycles.
 
-## BOOKPILE Local capabilities
+## Start here
 
-### Catalogue and reading history
+### BOOKPILE Local
 
-- Create, edit, delete, search, sort, and filter books.
-- Keep the immediate search focused on title, author, and series, with ISBN and
-  optional metadata available through **Sort & Advanced Search**.
-- Track `Pending`, `Reading...`, `Re-Reading…`, and `Read` display states.
-- Record acquisition, reading-started, and finished-reading dates.
-- Preserve a chronological history of first readings and re-reads while the
-  legacy summary dates remain synchronized with the active or latest session.
-- Add, edit, cancel, and delete reading sessions with overlap, unknown-date,
-  and destructive-change safeguards.
-- Represent original-collection books whose acquisition date is unknown.
-- Represent read books whose exact finished-reading date is unknown.
-- Validate chronological consistency between lifecycle dates.
-- Sort by title, author, physical position, or lifecycle dates in either
-  direction.
-- Filter by status, physical hierarchy, date ranges, known or unknown dates,
-  and catalogue-quality checks.
-- Combine exact existing metadata values across language, genre, publisher,
-  fiction category, binding, publication type, and series; combine several
-  values within a category and apply inclusive page/year ranges.
-- Use quick views for missing covers, missing locations, and incomplete dates.
-- See how many books pass the current filters.
-- Open a read-only complete-information card for any catalogue book without
-  crowding the main list with additional metadata. This card displays reading
-  history but contains no catalogue-editing actions.
-- Manage chronological reading sessions only from **Edit book**, with a
-  responsive editor for known or explicitly unknown historical dates.
-- Add books individually or through Batch Add, retaining the selected
-  container and advancing positions upward or downward.
-- Loan and return books without changing their reading status or losing their
-  saved shelf position. Keep one active loan plus optional returned history,
-  free-text borrower information, optional expected-return dates, and known or
-  explicitly unknown actual dates.
-- Show `On loan: <borrower>` directly in the catalogue while keeping the
-  retained shelf location available without crowding the row. Loan history is
-  read-only in complete information and editable only through **Edit book**.
-- Filter and sort by loan availability, overdue state, borrower, loan-history
-  scope, and loan/expected-return/returned dates. Quick views expose current
-  and overdue loans.
+New Local users should follow the [installation guide](INSTALLATION.md), then
+read the [user guide](USER_GUIDE.md). Before changing or moving an existing
+catalogue, read [backup and recovery](BACKUP_AND_RECOVERY.md) and
+[migration recovery](MIGRATION_RECOVERY.md).
 
-### Physical library
-
-BOOKPILE models the hierarchy as:
-
-```text
-Bookcase → Shelf → Container → Book position
-```
-
-A container can be a background or foreground row or pile. Rows run from left
-to right; piles stack from top to bottom.
-
-- Create and edit bookcases; create, renumber, inspect, and safely remove
-  shelves and containers from the dedicated Library Layout interface.
-- Insert books into occupied positions by shifting existing books safely.
-- Keep container positions continuous during normal catalogue changes.
-- Preserve a book's retained physical position while it is `Reading...`.
-- Reorganize books using precise controls or directly on the visual map.
-
-Visual rearrangement supports:
-
-- Click/tap selection and continuous press-and-drag.
-- `Collapse` or temporary `Leave gap` behaviour at the old position.
-- `Squeeze`, `Swap`, or chained `Continue` behaviour at the destination.
-- Several completed movement chains in one provisional draft.
-- A projected map and grouped movement history before applying anything,
-  including page-proportional ROW widths and PILE heights.
-- Optional per-move `Release shelf space`, with a five-percent physical
-  compression limit and validation of container collisions and pile support.
-- Atomic Apply, Undo, Cancel, stale-preview protection, and rejection of
-  unfinished chains, persistent gaps, or invalid projected geometry. Book
-  positions and visual-container dimensions are committed together.
-- Explicit status confirmation when moving books into or out of the Reading
-  area.
-
-### Visual library map
-
-- Display furniture, shelves, foreground/background containers, and books as
-  a room-scale visual index.
-- Use a responsive full-screen viewport over an effectively unbounded world,
-  with pan, zoom, vertical fit/reset, compact overlays, and a collapsible colour
-  legend.
-- Pan by dragging the map with a mouse or one finger, zoom with the mouse wheel
-  or trackpad, and use an anchored two-finger pinch on touchscreens. The compact
-  directional and zoom controls remain available from the collapsed camera
-  button in the lower-right corner.
-- Position and resize furniture and the separate Reading and On-loan areas.
-- Edit unbounded top-level coordinates through direct handles or a floating,
-  minimizable editor with explicit Save and Cancel actions.
-- Customize relative shelf heights and each container's position, width, and
-  height.
-- Allow controlled foreground/background overlap while preventing accidental
-  same-layer container overlap.
-- Preserve the visual layout independently from catalogue locations.
-- Open the catalogue filtered by a bookcase, shelf, or container.
-- Click an individual visual book to open its exact catalogue record.
-- Open the map from a catalogue location and highlight one book while fading
-  the rest.
-- Give an active loan visual priority over Reading while keeping both the
-  reading session and the book's reserved physical position intact.
-- Use the map-tools `Show retained shelf spaces` preference to reveal
-  proportional outlined positions for Reading and On-loan books. With the
-  default setting off, their ROW/PILE is only visually reduced; saved layout
-  geometry is not changed. Rearrangement always displays the retained spaces.
-- Show active readings as equal open-book icons on a small reading table,
-  always reserving surface space for one more book. Show On-loan books as
-  page-proportional vertical volumes inside a cloud-like out-of-library area.
-- Colour visual books by:
-  - Reading status.
-  - Acquisition recency.
-  - Finished-reading recency.
-  - Time spent pending.
-  - Reading duration.
-  - Language.
-  - Current-edition or original-publication year.
-  - Fiction/non-fiction, binding, or publication type.
-  - A selected genre, fading books outside the chosen genre.
-  - Reading rate in pages per inclusive reading day.
-- Use percentile-clipped colour scales and separate missing/not-applicable
-  states so outliers do not flatten the useful range.
-
-### Covers and capture aids
-
-- Add, replace, and remove optimized cover photographs from desktop or mobile.
-- Accept JPEG, PNG, WebP, and iPhone HEIC input within the configured size
-  limit.
-- Type or paste an ISBN and retrieve reviewed bibliographic candidates.
-- Photograph a barcode temporarily on a phone and decode book ISBNs while
-  rejecting non-book barcodes.
-- Photograph a front cover temporarily and use optional OCR to prepare
-  title/author text for review.
-- Check recognized candidates against the existing catalogue before offering
-  to add a book.
-- Keep manual entry fully available when recognition or an external provider
-  is unavailable.
-
-ISBN lookup and barcode evidence can fill field-by-field reviewed identifiers
-and bibliographic metadata in Add Book, Edit Book, and Batch Add. Direct
-provider values are selected by default; inferred genre/category/publication
-type suggestions are visibly marked and start unchecked. Stored identifiers
-are normalized and used for exact-edition matching while intentional duplicate
-copies remain allowed. Provider results with several explicit authors prepare
-an ordered multiple-author record for review, with a reminder to exclude
-translators, editors, and illustrators. OCR still supplies reviewed Title and
-Author text only.
-The user's own cover photograph remains authoritative; external cover images
-are not imported.
-
-### Suggestions and statistics
-
-- Suggest a random pending book, the oldest pending book, or a book based on
-  time spent pending.
-- Exclude already-shown suggestions and open the selected catalogue record.
-- Show read-only yearly and monthly acquisition/reading totals.
-- Show known reading and pending-duration statistics with excluded-data
-  counts.
-- Filter statistics by the same optional metadata used by advanced catalogue
-  search.
-- Estimate pages read by year or month and pages per week/month by spreading a
-  book's pages across its inclusive reading interval. When the start date is
-  unknown, assign the pages to the known finish day and report that estimate.
-- Compare individual, average, and median per-book pages/day for the selected
-  year and metadata filters, with estimated one-day readings clearly marked.
-- Compare original-collection and later-acquisition status totals.
-- Show active, overdue, and completed loan totals, known loans by year, and
-  the most frequently loaned books under the same metadata selection.
-- Start or finish reading through confirmation prompts without losing the
-  physical position.
-- Exclude books currently on loan from reading suggestions and reject a new
-  reading or re-reading until the book is returned.
-
-### Backup, restore, and export
-
-- Download a verified full ZIP backup containing:
-  - The SQLite catalogue.
-  - Every stored cover.
-  - Integrity metadata and format version.
-  - SHA-256 checksums.
-- Inspect and validate a backup before restoration.
-- Create an automatic safety backup before replacing the current catalogue.
-- Restore the database and covers atomically with rollback protection.
-- Export catalogue data, dates, links, and physical locations as an
-  Excel-friendly CSV.
-- Export reading history as a separate Excel-friendly CSV with one row per
-  session, including re-reads, dates, duration, state, and pages/day where
-  page-count metadata exists.
-- Export active-loan fields with the books CSV and the complete loan history
-  as a separate Excel-friendly CSV. The full ZIP remains the only restorable
-  format.
-
-## Technology
-
-- Local backend: FastAPI, SQLite, Pillow, and pillow-heif.
-- Server backend: FastAPI, PostgreSQL, SQLAlchemy, and Alembic.
-- Frontend: React, TypeScript, and Vite.
-- Barcode decoding: ZXing in the browser.
-- Temporary cover OCR: Tesseract.js in the browser.
-
-## Running BOOKPILE
-
-### First installation
-
-Install 64-bit Python 3.11+ and Node.js 20+, extract the complete release ZIP,
-then run from its permanent folder:
+Local developers work in `backend/` and the Local frontend edition. The broad
+quality gate is:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process RemoteSigned
-.\install-bookpile.ps1
-```
-
-The installer creates private dependencies, builds the frontend, initializes
-an empty catalogue only when needed, and creates Start/Stop desktop shortcuts.
-It does not overwrite existing catalogue data. Full prerequisites and update
-instructions are in [INSTALLATION.md](INSTALLATION.md).
-
-### Recommended launcher
-
-From the project root:
-
-```powershell
-.\start-bookpile.ps1
-```
-
-The launcher starts the backend and optimized frontend, then displays the LAN
-URL for this computer and other devices on the same Wi-Fi. Without an active
-home network it falls back to localhost for use on the computer itself.
-
-For future starts, install the desktop shortcuts once:
-
-```powershell
-.\install-desktop-shortcuts.ps1
-```
-
-Then use:
-
-- **Start BOOKPILE** to launch the application in the background, display the
-  mobile URL, and copy it to the clipboard.
-- **Stop BOOKPILE** to stop only BOOKPILE's processes.
-
-Runtime logs are stored locally in `.bookpile-runtime/`.
-
-### Use from a phone
-
-Open the LAN address shown by the launcher, for example:
-
-```text
-http://192.168.1.50:5173
-```
-
-The phone and host computer must be on the same private Wi-Fi. The optimized
-frontend proxies API requests to the backend, so no phone-side configuration
-is required. If Windows asks about network access, allow it for private
-networks only.
-
-BOOKPILE currently uses local HTTP. Browser features that require a trusted
-HTTPS context, such as continuous live-camera streams, remain deferred.
-
-### Manual Local development start
-
-Backend:
-
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-The API is available at <http://localhost:8000> and its interactive
-documentation at <http://localhost:8000/docs>.
-
-Frontend, in a second terminal:
-
-```powershell
-cd frontend
-npm install
-npm run dev:local
-```
-
-Open <http://localhost:5173>.
-
-## Data and safety
-
-The live SQLite catalogue and cover images are intentionally excluded from
-Git. The main local data lives under `backend/data/`.
-
-Use **Settings → Data & backups → Download full backup** before major catalogue
-work or application upgrades. A full ZIP is safer than copying only the SQLite
-file because it also preserves covers and includes integrity information.
-
-Generated backups under `backend/backups/`, runtime files, reports, and local
-project context are also excluded from the repository where appropriate.
-
-## Catalogue maintenance checks
-
-The maintenance utilities are read-only and never modify the catalogue.
-Double-click either launcher:
-
-- `check-bookpile-dates.cmd` audits lifecycle chronology, unexplained missing
-  dates, original-collection conflicts, and suspicious future dates.
-- `check-bookpile-goodreads.cmd` checks URL uniqueness and helps compare
-  Goodreads pages with BOOKPILE title and author data.
-
-Reports are written as Excel-friendly CSV files under `maintenance/reports/`.
-Goodreads review can open links one at a time in the default signed-in browser
-and retain the decisions made so far.
-
-For a network-only Goodreads report:
-
-```powershell
-backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py
-```
-
-For an immediate offline duplicate-URL check:
-
-```powershell
-backend\.venv\Scripts\python.exe maintenance\check_goodreads_links.py --duplicates-only
-```
-
-## Verification
-
-Local backend tests:
-
-```powershell
-cd backend
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Edition-specific frontend checks:
-
-```powershell
+python -m pytest backend/tests
 cd frontend
 npm run test:local
-npm run test:server
 npm run lint
-npm run build:all
+npm run build:local
 ```
 
-The generated frontends are kept separately under `frontend/dist/local/` and
-`frontend/dist/server/`. Compatibility aliases intentionally select Server:
-`npm run dev`, `npm run build`, and `npm run preview`. Prefer the explicit
-edition command in scripts and documentation.
+### BOOKPILE Server
 
-The development proxies default to Local port 8000 and Server port 8100.
-Isolated parallel tests may set `BOOKPILE_LOCAL_BACKEND_URL` or
-`BOOKPILE_SERVER_BACKEND_URL`; normal users do not need these overrides.
+Server developers should begin with [`server/README.md`](server/README.md).
+Hosted deployment, recovery and security procedures live in
+[the operations runbook](SERVER_OPERATIONS_AND_SECURITY.md), while
+[the production rehearsal runbook](SERVER_PRODUCTION_RUNBOOK.md) defines the
+application deployment boundary.
 
-Server setup and its isolated backend test commands are documented in
-[`server/README.md`](server/README.md).
+The broad Server quality gate is:
 
-Automated provider tests use mocked responses and do not depend on live
-third-party services.
+```powershell
+python -m pytest server/tests
+cd frontend
+npm run test:server
+npm run lint
+npm run build:server
+```
 
-## Project documentation
+These examples are development entry points. Follow the relevant runbook for
+migrations, staging, backup, rollback or host changes.
 
-- `INSTALLATION.md` is the end-user installation, update, and uninstall guide.
-- `USER_GUIDE.md` explains normal catalogue, reading, loan, map, and statistics
-  workflows.
-- `BACKUP_AND_RECOVERY.md` defines the practical backup and restore routine.
-- `TROUBLESHOOTING.md` covers common installation, startup, and LAN problems.
-- `LIMITATIONS.md` states the security and product boundaries of Local v1.
-- `RELEASE_NOTES.md` summarizes the Local v1.0.0 release for end users.
-- `RELEASE_CHECKLIST.md` records automated and manual release gates.
-- `docs/BOOKPILE_MASTER_WORK_PLAN.md` is the single authoritative source for
-  current work, release blockers and go/no-go status. `TODO.md` is only a
-  stable pointer to it.
-- `docs/README.md` defines the documentation hierarchy. Completed phase and
-  feature plans are retained under `docs/old/` as non-authoritative history.
-- `MIGRATION_RECOVERY.md` documents versioned schema changes, isolated
-  rehearsals, mandatory pre-migration backups, and recovery.
-- `docs/old/MULTIUSER_IMPLEMENTATION_PLAN.md` preserves the hosted product's
-  historical identity, tenancy, privacy, quota, migration and deployment plan.
-- `docs/old/SERVER_PHASE5_READING_PLAN.md` records the completed personal-reading phase:
-  per-Owner sessions and Goodreads links, shared custody, migration safety,
-  API boundaries, frontend increments, and acceptance gates.
-- `docs/old/SERVER_PHASE6_LOAN_PLAN.md` defines the completed shared-loan model, Owner-only
-  borrower privacy, migration protocol, concurrency rules, frontend increments,
-  and completed acceptance gates.
-- `docs/old/SERVER_PHASE7_QUOTA_PROFILE_DELETION_PLAN.md` records private profiles,
-  entitlement-ready accounting, co-Owner allocation, safe library/account
-  deletion, earned beta invitations and empty-library map onboarding. Phase 7
-  is complete through its final compatibility and acceptance gates.
-- `CROSS_EDITION_DATA_MODEL.md` classifies shared and personal data, defines
-  future contributors/languages/dimensions, and specifies versioned conversion
-  from Local ZIPs into Server libraries.
-- `docs/specifications/PHYSICAL_GEOMETRY_SPECIFICATION.md` defines the active
-  approved single-geometry model for
-  manual and millimetre-driven layouts, accordion containers, supports,
-  physical warnings, Server implementation, and later controlled Local work.
-- `docs/adr/` records architectural decisions that must remain traceable as
-  BOOKPILE Server evolves.
-- `server/README.md` documents the isolated Server foundation and its test
-  workflow. This code never opens the Local catalogue database.
-- `BOOKPILE_PROJECT_CONTEXT_LOCAL.md` contains detailed local project history
-  and is intentionally excluded from Git.
+## Repository map
 
-## Near-term roadmap
+| Path | Purpose |
+| --- | --- |
+| `backend/` | BOOKPILE Local FastAPI/SQLite backend and tests |
+| `server/` | BOOKPILE Server application, migrations, deployment assets and tests |
+| `frontend/` | React/TypeScript workspace with explicit Local and Server editions |
+| `docs/` | Master plan, active policies, ADRs and specifications |
+| `docs/old/` | Preserved historical plans, audits, checklists and snapshots |
+| `maintenance/` | Repository maintenance utilities |
 
-The safe database-expansion foundation and incremental schema history are now
-in place:
+Repository and directory-specific working rules are defined in the scoped
+`AGENTS.md` files.
 
-1. Migrations require explicit approval and run transactionally.
-2. Every migration first creates and validates a full automatic backup.
-3. The v1-to-v2 migration was rehearsed and then applied to the populated
-   catalogue with all existing values preserved.
-4. Backups record their detected schema version and recovery is documented in
-   `MIGRATION_RECOVERY.md`.
-5. Schema v2 adds optional normalized ISBN-10/ISBN-13 fields as the first small
-   additive migration; API, Add/Edit/Batch forms, barcode acceptance, search,
-   exact matching, and CSV export now use them.
-6. Schema v3 adds nullable edition metadata, classification, binding,
-   publication type, genre text, and series fields. It was rehearsed and then
-   applied to the populated catalogue with all 432 books and covers preserved.
-7. Schema v4 adds ordered structured authors while retaining the required
-   legacy Author text. It was rehearsed and applied with all 432 books and
-   covers preserved; existing author text was deliberately left untouched for
-   manual review.
-8. Schema v5 adds ordered reading sessions. The migration was rehearsed and
-   applied from a validated v4 backup with all 432 books, 432 covers, and 441
-   structured-author rows preserved. It reconstructed 262 initial sessions,
-   keeps the legacy status/date columns synchronized, and adds re-reading,
-   history management, session-aware statistics, and CSV export.
-9. Schema v6 adds related loan history with at most one active loan per book.
-   The migration was rehearsed from a validated v5 backup with all catalogue
-   and reading-session values preserved. Loans remain independent from reading
-   status and retained physical position, and are included in map, search,
-   statistics, backup validation, and CSV exports. The complete desktop and
-   mobile loan/return/history workflow has been manually validated.
-10. Schema v7 recentres the visual-library world at horizontal coordinate zero
-    and removes the old top-level `0–100` boundary. The migration changes only
-    top-level visual X coordinates, was rehearsed against a validated v6 ZIP,
-    and preserved all 434 books and related catalogue data with successful
-    integrity and foreign-key checks.
-11. Schema v8 adds visual row anchors and explicit pile support on either a
-    shelf or a non-empty same-layer row. The migration was rehearsed against a
-    verified v7 ZIP and applied with all 434 books and 434 covers preserved,
-    successful integrity and foreign-key checks, and 18 shelf-supported plus 9
-    row-supported piles. The map renders book thickness proportionally to page
-    count within each container; missing values use the complete catalogue's
-    arithmetic mean, falling back to 200 only when no page data exists.
-12. Server schemas v9–v11 establish the accepted physical-geometry model
-    without changing Local v1: versioned manual/physical modes, millimetre
-    world coordinates, generic acyclic supports, row anchors, PILE alignment,
-    explicit shelf/frame/separator geometry, per-axis fallbacks, physical
-    projection, and accordion behaviour. The migrations were backed up and
-    rehearsed forwards and backwards with existing Server data preserved.
+## Documentation authority
 
-Later database phases include structured subjects and genres, ratings and
-tags. Multi-user accounts and publication are now active development in the
-separate hosted Server edition; they are not assumptions in released Local v1.
-The agreed separation between stable BOOKPILE Local v1 and the hosted Server
-edition, together with its co-ownership, Viewer privacy, personal reading,
-quota, authentication, migration, and deployment roadmap, is documented in
-[archived multi-user implementation plan](docs/old/MULTIUSER_IMPLEMENTATION_PLAN.md).
+The [BOOKPILE master work plan](docs/BOOKPILE_MASTER_WORK_PLAN.md) is the only
+authority for current status, pending work, blockers and release gates. Do not
+infer current status from historical plans or old README snapshots.
 
-The isolated Server edition has completed its Phase 3 membership foundation
-and Phase 4A–4D shared catalogue and physical-library foundation. Secure accounts can create and
-join libraries as equal co-Owners or scoped read-only Viewers. PostgreSQL has
-library-safe metadata, contributor, hierarchy, dimension, and layout
-structures; the responsive Server catalogue now supports scoped reads,
-Owner-only writes, complete metadata, ordered contributors, search, filters,
-sorting, pagination, and authenticated private cover images. Owners can add,
-replace, and remove covers; Viewers can see them only while signed in as
-members. Uploads are size- and pixel-limited, decoded as real images, stripped
-of metadata, resized, and re-encoded as private WebP objects. Their originals
-are not retained and their storage keys are never exposed as public URLs.
-Server now also provides Owner-maintained physical hierarchy, revisioned layout
-geometry, scoped map access, responsive mouse/touch camera navigation,
-page-proportional rendering, book/container inspection, catalogue-row physical
-locations, per-book placement, and transactional visual rearrangement. The
-rearrangement draft supports Collapse/Leave gap and Squeeze/Swap/Continue,
-multiple completed movement chains, proportional geometry previews, undo,
-explicit Apply, concurrency revision checks, and audit. Phase 4D is complete.
-Its
-schema-v9–v11 foundation, per-axis dimension fallbacks, physical projection,
-explicit shelf/frame/separator model, millimetre editor, generic support
-validation, and manual/physical rendering boundary are implemented and
-accepted. The precise layout editor is integrated as a floating, minimizable
-map panel. Direct editing is selection-first, exposing move/resize handles only
-for the active object and sharing one revisioned preview with the precise
-controls. Entered physical sizes remain locked and clearly labelled, while
-shelf placement remains editable through frames, closures, separators,
-alignment and offset and is projected live in the draft;
-Apply is atomic and Cancel discards the draft. This does not
-alter or replace Local v1. Server personal readings and loans are now complete;
-Server Phase 8 is complete. Local format-1/schema-8 inspection, deterministic
-canonical adaptation, authenticated preflight, atomic consolidation and
-Owner-only portable Server-library export are implemented. Final locked quota
-allocation and private-cover compensation leave failed imports without visible
-residue. Owners can now inspect a Local backup, review warnings and capacity,
-approve an intentional repeated archive, consolidate it atomically, or download
-a portable Server ZIP from `Library settings > Data & portability` on desktop
-and mobile. Consolidation may target the selected library or create a separate
-library in the same transaction, with visible feedback throughout long work.
-Large-catalogue acceptance is complete: unmeasured shelf space is distributed
-automatically, wholly unmeasured containers retain editable visual envelopes,
-rows can fill a shelf explicitly, and statistics book tables scroll internally.
-Server-portable restore is now implemented behind the same isolated preflight
-and atomic quota boundary. It restores hierarchy, map, covers and shared data,
-never recreates memberships, and maps source personal records only through an
-explicit one-to-one selection of current Owners; unmapped personal data requires
-an explicit omission confirmation. Migration `0020`, automated round-trip and
-real-export UX acceptance gates pass; Phase 8 is complete as documented in
-[archived Phase 8 plan](docs/old/SERVER_PHASE8_IMPORT_EXPORT_PLAN.md).
+Use the [documentation map](docs/README.md) to find active contracts, ADRs,
+runbooks and preserved history. Important active references include:
 
-Server barcode capture is implemented, accepted on mobile, and merged. Owners can
-type an ISBN or decode an EAN-13 from a temporary phone photograph while adding
-one book, running Batch Add, or editing an existing record. The photograph is
-decoded locally and discarded; only the ISBN reaches the authenticated,
-library-scoped provider lookup. Every proposed metadata field starts unchecked
-and remains editable after explicit transfer. Mobile Add also exposes scan-first
-single and batch shortcuts; batch scanning preserves placement progression but
-clears book and personal-reading data between records. See
-[archived scanning plan](docs/old/SCANNING_PLAN.md).
+- [Cross-edition data model](CROSS_EDITION_DATA_MODEL.md)
+- [Server private object storage](SERVER_PRIVATE_OBJECT_STORAGE.md)
+- [Server email outbox](SERVER_EMAIL_OUTBOX.md)
+- [Server operational backup and recovery](SERVER_OPERATIONAL_BACKUP.md)
+- [Defensive metric catalogue](docs/DEFENSIVE_METRIC_CATALOGUE.md)
+- [Log retention and investigation policy](docs/LOG_RETENTION_AND_INVESTIGATION_POLICY.md)
 
-Server Phase 9A–9E foundations now provide hardened hosted configuration,
-reproducible non-root images, private S3-compatible objects, an encrypted
-transactional email outbox, encrypted off-site disaster recovery, bounded edge
-behaviour, scheduled retention/finalization work, aggregate health checks and
-backup-freshness monitoring. A local PostgreSQL 17/S3 rehearsal restored 36
-tables and 869 private objects exactly. This is not yet permission to publish:
-provider acceptance, alert delivery and Spanish staging are complete. Capacity,
-production separation and the final go/no-go remain open in the
-[master work plan](docs/BOOKPILE_MASTER_WORK_PLAN.md); the earlier phase design
-is retained in the
-[archived Phase 9 plan](docs/old/SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
-The agreed Spanish/EU staging topology and guarded provisioning sequence are in
-[SERVER_STAGING_PROVIDER_DECISION.md](SERVER_STAGING_PROVIDER_DECISION.md) and
-[SERVER_STAGING_PROVISIONING_CHECKLIST.md](SERVER_STAGING_PROVISIONING_CHECKLIST.md).
+`TODO.md` intentionally contains only a pointer to the master plan.
 
-The compact Server workspace increment is complete and accepted on desktop and
-mobile. It provides anchored top-bar menus, accurate private/shared and
-perspective-aware catalogue headings, atomic physical placement inside Add and
-Edit, iterative Batch Add with retained destination, compact mobile map
-controls, and queued self-expiring success notifications. Its design and
-acceptance record are in
-[archived Server frontend plan](docs/old/SERVER_FRONTEND_UX_PLAN.md).
+## Current product direction
 
-The post-4D architecture checkpoint now gives Local and Server explicit
-frontend entrypoints, commands, test scopes, output directories, proxies, and
-browser titles from one source commit. Local launch/install scripts explicitly
-build `dist/local`; normal Server development explicitly uses the Server
-entrypoint. SQLite and PostgreSQL remain separate, the populated Local database
-was not used as a test target, and full ZIP import remains gated on Server
-reading and loan models. See
-[`ADR 0011`](docs/adr/0011-dual-edition-entrypoints.md).
+BOOKPILE Local remains a supported independent product. Suitable Server
+interface improvements may be adapted deliberately for future Local releases
+while preserving Local compatibility and its offline/private-network model.
 
-Server Phase 5A provides the reversible PostgreSQL foundation for personal
-reading history and per-Owner Goodreads records, plus pure chronology, state,
-duration, rate, and counter rules. Phase 5B adds Owner-scoped session and
-Goodreads services, Viewer-safe projections, authorization, audit and
-concurrency-controlled commands. Phase 5C adds the accepted
-perspective-aware catalogue and reading-history experience, including Single
-and Batch Add integration. Phase 5D is also implemented and accepted: shared
-active-copy custody is represented in the map without losing retained shelf
-positions; advanced filters, suggestions, statistics, status colours,
-date/rate gradients, bibliographic colour modes, and Reading-area inspection
-all follow the selected Owner perspective. Phase 5E completed the compatibility
-transition: a verified backup and isolated migration rehearsal proved the old
-shared Goodreads field empty, and guarded migration `0013` removed it while
-preserving per-Owner reviews. Phase 5 is merged into `main`. Phase 6A now adds
-the guarded `0014_shared_loans` schema and pure loan/custody rules after a
-verified backup-and-restore rehearsal. Phase 6B adds the shared lifecycle,
-locking, redacted audit, and structurally separate Owner-full and Viewer-safe
-book/catalogue API projections. Phases 6C–6D add the accepted responsive
-Owner/Viewer loan workflow, atomic loan-at-creation, advanced loan search,
-On-loan map custody and shared statistics. Phase 6E compatibility, privacy,
-test, lint, build and PostgreSQL gates passed, and Phase 6 is merged into
-`main`.
-The complete implementation boundary and migration gates are defined in
-[archived Phase 5 plan](docs/old/SERVER_PHASE5_READING_PLAN.md).
+BOOKPILE Server remains private until the master plan's production gates are
+explicitly accepted. A successful staging deployment does not authorize
+production publication or migration of real user data.
 
 ## Licence
 
-Copyright © 2026 Javier Ramalleira Fernández.
-
-BOOKPILE is free software licensed under the
-[GNU Affero General Public License, version 3 or later](LICENSE)
-(`AGPL-3.0-or-later`). You may use, study, modify, redistribute, and offer the
-software as a service under the licence terms. Modified network versions must
-offer their corresponding source to users interacting with them remotely.
-
-BOOKPILE is provided without warranty. See [COPYRIGHT](COPYRIGHT) and
-[LICENSE](LICENSE) for the complete notice and legal terms.
+See [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT).

@@ -1447,6 +1447,23 @@ unavailability, the durable outbox and worker recovered, and no event recurred
 after the new boot. They are accepted as bounded maintenance effects rather
 than application defects.
 
+### External readiness incident — 2026-11-25
+
+During provider-reported DNS maintenance, Sentry uptime recorded a public
+readiness timeout before any HTTP status, TCP connection or TLS handshake was
+available. Independently, BOOKPILE's privacy-safe 15-minute metrics recorded
+only `/health/ready` `503` responses with scope `readiness_private_objects`;
+there was no database-readiness group. Affected windows contained between 3
+and 82 responses and returned to zero without an application deployment.
+
+The evidence proves temporary private-object readiness loss and a coincident
+external reachability failure. It is compatible with a shared DNS cause but
+does not establish one conclusively. Public readiness, external monitoring and
+normal authenticated use recovered. Treat a recurrence by comparing the
+bounded readiness scope with provider status and public DNS/TCP/TLS evidence;
+do not infer a database fault from the generic `5xx` view, which includes the
+same `503` events.
+
 Authentication limits are atomic PostgreSQL counters, so API workers share
 them. Stock Caddy has no distributed rate-limit module; do not silently replace
 this with per-process edge counters. Additional volumetric protection may be
