@@ -1237,6 +1237,10 @@ implementation task in this section.
   active geometry specification; never test against the populated Local data.
 - [ ] Publish Local manual-recovery and safe-backup-storage instructions and
   rehearse them against an isolated installation.
+- [ ] Group the BOOKPILE Local Windows scripts from the repository root in a
+  dedicated directory (unscheduled Local maintenance). Verify installation,
+  Start/Stop shortcuts and maintenance commands from a checkout and a freshly
+  extracted release ZIP. This task is outside the Server production gates.
 - [ ] Evaluate realistic supported-PILE tilt in both Local and Server with two
   contact points, rotated rendering, transformed hitboxes and collision rules;
   close with an accepted or rejected cross-edition geometry decision and
