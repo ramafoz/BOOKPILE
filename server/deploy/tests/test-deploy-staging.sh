@@ -14,6 +14,8 @@ make_fixture() {
   local fixture="${temporary_root}/${name}"
   mkdir -p "${fixture}/server/deploy" "${fixture}/fake-bin"
   cp "${source_script}" "${fixture}/server/deploy/deploy-staging.sh"
+  cp "${test_directory}/../rollback-staging.sh" \
+    "${fixture}/server/deploy/rollback-staging.sh"
   : >"${fixture}/server/compose.production.yaml"
   cat >"${fixture}/server/.env.staging" <<'EOF'
 BOOKPILE_ENV_FILE=.env.staging
@@ -81,10 +83,11 @@ if [[ "\${FAKE_PUBLIC_HEALTH_MODE:-ready}" == "fail" \
   exit 7
 fi
 url="\${!#}"
+public_revision="\${FAKE_PUBLIC_REVISION:-${target_revision}}"
 if [[ "\${url}" == */health/live ]]; then
-  printf '%s\\n' '{"status":"alive","revision":"${target_revision}"}'
+  printf '%s\\n' "{\"status\":\"alive\",\"revision\":\"\${public_revision}\"}"
 else
-  printf '%s\\n' '{"status":"ready","revision":"${target_revision}"}'
+  printf '%s\\n' "{\"status\":\"ready\",\"revision\":\"\${public_revision}\"}"
 fi
 EOF
   cat >"${fixture}/fake-bin/flock" <<'EOF'
@@ -95,12 +98,27 @@ EOF
 #!/usr/bin/env bash
 printf '%s\n' 600
 EOF
+  cat >"${fixture}/fake-bin/cp" <<'EOF'
+#!/usr/bin/env bash
+source_path="${@: -2:1}"
+destination_path="${@: -1}"
+if [[ "${FAKE_CP_FAIL_ROLLBACK_BACKUP_ONCE:-false}" == "true" \
+  && "${source_path}" == */rollback-*.backup.env \
+  && "${destination_path}" == */server/.env.staging.backup \
+  && ! -e "${FAKE_CP_FAILURE_MARKER}" ]]; then
+  : >"${FAKE_CP_FAILURE_MARKER}"
+  printf '%s\n' 'partially replaced backup environment' >"${destination_path}"
+  exit 74
+fi
+exec /usr/bin/cp "$@"
+EOF
   chmod +x \
     "${fixture}/fake-bin/git" \
     "${fixture}/fake-bin/docker" \
     "${fixture}/fake-bin/curl" \
     "${fixture}/fake-bin/flock" \
-    "${fixture}/fake-bin/stat"
+    "${fixture}/fake-bin/stat" \
+    "${fixture}/fake-bin/cp"
   printf '%s\n' "${fixture}"
 }
 
@@ -133,9 +151,106 @@ grep -q '^pre_deployment_backup_id=fixture$' \
   "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
 grep -q 'Previous revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${successful_output}"
 grep -q 'Pre-deployment backup: fixture' "${successful_output}"
-grep -q 'Assisted application rollback' "${successful_output}"
+grep -q 'Confirmed application rollback' "${successful_output}"
+grep -q 'bash server/deploy/rollback-staging.sh' "${successful_output}"
+grep -q 'requires typing ROLLBACK' "${successful_output}"
+if grep -q "cp -p .*rollback-${short_revision}" "${successful_output}"; then
+  echo "Deployment output exposed an unconfirmed executable rollback recipe." >&2
+  exit 1
+fi
 test -f "${successful_fixture}/.bookpile-runtime/deployments/rollback-${short_revision}.env"
 test -f "${successful_fixture}/.bookpile-runtime/deployments/rollback-${short_revision}.backup.env"
+
+rollback_cancel_output="${successful_fixture}/rollback-cancel.out"
+if printf '%s\n' 'not-rollback' | PATH="${successful_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${successful_log}" \
+  FAKE_CURL_LOG="${successful_curl_log}" \
+  BOOKPILE_DEPLOY_LOCK_FILE="${successful_fixture}/deploy.lock" \
+    bash "${successful_fixture}/server/deploy/rollback-staging.sh" \
+      >"${rollback_cancel_output}" 2>&1; then
+  echo "A rollback without the exact confirmation unexpectedly succeeded." >&2
+  exit 1
+fi
+grep -q 'Rollback cancelled.' "${rollback_cancel_output}"
+grep -qx "BOOKPILE_SERVER_DEPLOYMENT_REVISION=${target_revision}" \
+  "${successful_fixture}/server/.env.staging"
+
+rollback_output="${successful_fixture}/rollback.out"
+printf '%s\n' 'ROLLBACK' | PATH="${successful_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${successful_log}" \
+  FAKE_CURL_LOG="${successful_curl_log}" \
+  FAKE_PUBLIC_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  BOOKPILE_DEPLOY_LOCK_FILE="${successful_fixture}/deploy.lock" \
+    bash "${successful_fixture}/server/deploy/rollback-staging.sh" \
+      >"${rollback_output}" 2>&1
+grep -q 'Current revision:  0123456789abcdef0123456789abcdef01234567' \
+  "${rollback_output}"
+grep -q 'Restore revision:  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  "${rollback_output}"
+grep -q 'Staging application rollback completed successfully' "${rollback_output}"
+grep -qx 'BOOKPILE_SERVER_DEPLOYMENT_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  "${successful_fixture}/server/.env.staging"
+grep -qx 'revision=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
+grep -qx "previous_revision=${target_revision}" \
+  "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
+grep -Eq '^rollback_environment=.*/forward-0123456789ab-[0-9]{8}T[0-9]{6}Z.env$' \
+  "${successful_fixture}/.bookpile-runtime/deployments/staging-current"
+
+rollback_failure_fixture="$(make_fixture rollback-failure)"
+rollback_failure_log="${rollback_failure_fixture}/docker.log"
+PATH="${rollback_failure_fixture}/fake-bin:${PATH}" \
+FAKE_DOCKER_LOG="${rollback_failure_log}" \
+FAKE_CURL_LOG="${rollback_failure_fixture}/curl.log" \
+BOOKPILE_DEPLOY_LOCK_FILE="${rollback_failure_fixture}/deploy.lock" \
+  bash "${rollback_failure_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null
+if printf '%s\n' 'ROLLBACK' | PATH="${rollback_failure_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${rollback_failure_log}" \
+  FAKE_PUBLIC_HEALTH_MODE=fail \
+  BOOKPILE_DEPLOY_HEALTH_ATTEMPTS=1 \
+  BOOKPILE_DEPLOY_HEALTH_RETRY_DELAY_SECONDS=0 \
+  BOOKPILE_DEPLOY_LOCK_FILE="${rollback_failure_fixture}/deploy.lock" \
+    bash "${rollback_failure_fixture}/server/deploy/rollback-staging.sh" \
+      >/dev/null 2>&1; then
+  echo "Expected failed rollback health to restore the forward release." >&2
+  exit 1
+fi
+grep -qx "BOOKPILE_SERVER_DEPLOYMENT_REVISION=${target_revision}" \
+  "${rollback_failure_fixture}/server/.env.staging"
+if [[ "$(grep -c 'up -d --no-deps --force-recreate api email-worker web' \
+  "${rollback_failure_log}")" -ne 3 ]]; then
+  echo "Failed rollback did not recreate the original application state." >&2
+  exit 1
+fi
+
+partial_copy_fixture="$(make_fixture partial-copy-failure)"
+partial_copy_log="${partial_copy_fixture}/docker.log"
+PATH="${partial_copy_fixture}/fake-bin:${PATH}" \
+FAKE_DOCKER_LOG="${partial_copy_log}" \
+FAKE_CURL_LOG="${partial_copy_fixture}/curl.log" \
+BOOKPILE_DEPLOY_LOCK_FILE="${partial_copy_fixture}/deploy.lock" \
+  bash "${partial_copy_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null
+if printf '%s\n' 'ROLLBACK' | PATH="${partial_copy_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${partial_copy_log}" \
+  FAKE_CP_FAIL_ROLLBACK_BACKUP_ONCE=true \
+  FAKE_CP_FAILURE_MARKER="${partial_copy_fixture}/cp-failed" \
+  BOOKPILE_DEPLOY_LOCK_FILE="${partial_copy_fixture}/deploy.lock" \
+    bash "${partial_copy_fixture}/server/deploy/rollback-staging.sh" \
+      >/dev/null 2>&1; then
+  echo "Expected the partial rollback copy failure to fail closed." >&2
+  exit 1
+fi
+grep -qx "BOOKPILE_SERVER_DEPLOYMENT_REVISION=${target_revision}" \
+  "${partial_copy_fixture}/server/.env.staging"
+grep -qx "BOOKPILE_SERVER_DEPLOYMENT_REVISION=${target_revision}" \
+  "${partial_copy_fixture}/server/.env.staging.backup"
+grep -qx "revision=${target_revision}" \
+  "${partial_copy_fixture}/.bookpile-runtime/deployments/staging-current"
+if [[ "$(grep -c 'up -d --no-deps --force-recreate api email-worker web' \
+  "${partial_copy_log}")" -ne 2 ]]; then
+  echo "Partial environment copy failure did not restore the forward application." >&2
+  exit 1
+fi
 
 retry_fixture="$(make_fixture retry)"
 retry_log="${retry_fixture}/docker.log"
@@ -281,6 +396,17 @@ BOOKPILE_DEPLOY_LOCK_FILE="${a3_fixture}/deploy.lock" \
   bash "${a3_fixture}/server/deploy/deploy-staging.sh" --yes >/dev/null
 grep -q 'run --rm database-role-provisioner' "${a3_log}"
 grep -q -- '--entrypoint /usr/local/bin/bookpile-database-role-check api' "${a3_log}"
+printf '%s\n' 'ROLLBACK' | PATH="${a3_fixture}/fake-bin:${PATH}" \
+  FAKE_DOCKER_LOG="${a3_log}" \
+  FAKE_CURL_LOG="${a3_fixture}/curl.log" \
+  FAKE_PUBLIC_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  BOOKPILE_DEPLOY_LOCK_FILE="${a3_fixture}/deploy.lock" \
+    bash "${a3_fixture}/server/deploy/rollback-staging.sh" >/dev/null
+if [[ "$(grep -c -- '--entrypoint /usr/local/bin/bookpile-database-role-check api' \
+  "${a3_log}")" -ne 2 ]]; then
+  echo "Confirmed A3 rollback did not verify the restored application identity." >&2
+  exit 1
+fi
 
 unsafe_a3_fixture="$(make_fixture a3-unsafe-runtime)"
 unsafe_a3_log="${unsafe_a3_fixture}/docker.log"

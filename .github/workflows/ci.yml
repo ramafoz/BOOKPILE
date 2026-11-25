@@ -17,6 +17,7 @@ jobs:
         run: >-
           bash -n
           server/deploy/deploy-staging.sh
+          server/deploy/rollback-staging.sh
           server/deploy/bookpile-edge-firewall.sh
           server/deploy/install-bookpile-edge-defence.sh
           server/deploy/install-bookpile-edge-enforcement.sh

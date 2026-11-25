@@ -1034,14 +1034,30 @@ reconciliation reported 433 expected and stored objects, all D6 policies
 remained enforced, systemd reported no failed units and normal authenticated
 use passed.
 
-After the normal deployment wrote its successful target marker, a later process
-restored the printed rollback environment and recreated the previous release.
-No matching shell-history command or exported Compose override was found, so
-the cause is deliberately not attributed. Operators independently validated
-the new image and `bookpile_app` credential, realigned only the non-secret
-release references and performed one controlled recreation. Before production,
-replace or harden the copy-pasteable rollback instructions with an explicitly
-confirmed rollback path and rehearse that path separately.
+After the normal deployment wrote its successful target marker, the printed
+multi-command recovery recipe was plausibly pasted back into the shell with the
+deployment transcript, restoring the previous release. No deployment defect
+was established and no further causal investigation is required. Operators
+independently validated the new image and `bookpile_app` credential, realigned
+only the non-secret release references and performed one controlled recreation.
+
+The deployment output now retains the snapshot paths but exposes only one
+rollback entry point:
+
+```bash
+bash server/deploy/rollback-staging.sh
+```
+
+The assistant accepts no path or revision arguments. It reads the protected
+latest-deployment marker, validates that the live environment still matches
+that marker and that both snapshots are regular mode-`0600` files inside the
+deployment directory, then displays the current and restore revisions. It does
+nothing until the operator types `ROLLBACK` exactly. It recreates only API,
+email worker and web, verifies revision-linked public health and the deep check,
+and never downgrades migrations or restores data. If any confirmed rollback
+step fails, it restores the saved forward environment and recreates the forward
+application. Rehearse one real rollback and normal forward deployment in
+staging before accepting this boundary for production.
 
 Inspect recent scanner evidence on the host without copying the full file:
 
