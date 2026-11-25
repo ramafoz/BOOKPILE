@@ -1,5 +1,8 @@
 # Phase 4D Local-to-Server reuse audit
 
+> **Historical document.** Phase 4D is complete. This audit is retained to
+> explain the reuse decisions; current status belongs only in the master plan.
+
 Status: implementation guide for `feature/server-physical-map`.
 
 ## Purpose

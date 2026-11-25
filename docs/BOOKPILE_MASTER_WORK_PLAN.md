@@ -1,6 +1,6 @@
 # BOOKPILE master work plan
 
-Status date: 2026-11-21
+Status date: 2026-11-25
 
 This is the single authoritative source for BOOKPILE delivery status, remaining
 work and release gates. A task is complete only when its checkbox is marked and
@@ -382,6 +382,17 @@ application data and removed all temporary files. Public live/readiness, deep
 reconciliation at 433 expected and 433 stored objects, and normal authenticated
 catalogue use all passed afterward. The remaining D5 task is the future
 `SYSTEM_ADMIN` aggregate view.
+
+On 2026-11-25 the diagnostic contract separated an external availability
+incident cleanly: every recorded application `503` was `/health/ready` with
+scope `readiness_private_objects`; no database-readiness scope appeared.
+Fifteen-minute windows ranged from 3 to 82 such responses and later returned to
+zero. Sentry also recorded a public readiness timeout with no HTTP status,
+TCP connection or TLS handshake during provider-reported DNS maintenance.
+Those observations are compatible with one external name-resolution incident
+affecting both public access and the object-store dependency, but do not prove a
+single cause. Service recovered without application changes and subsequent
+readiness and normal use passed.
 
 ### D6 — Edge defence before Python
 

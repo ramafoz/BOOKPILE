@@ -60,8 +60,11 @@ chmod 600 server/.env.staging server/.env.staging.backup
 
 The staging file selects both paths for Compose. In every command below replace
 `server/.env.production` with `server/.env.staging`. Never copy staging secrets
-into the later production files. Follow
-`SERVER_STAGING_PROVISIONING_CHECKLIST.md` before starting the stack.
+into the later production files. The completed initial staging acceptance is
+preserved in the historical
+[`SERVER_STAGING_PROVISIONING_CHECKLIST.md`](docs/old/SERVER_STAGING_PROVISIONING_CHECKLIST.md);
+use `SERVER_OPERATIONS_AND_SECURITY.md` and the master work plan for current
+operations and gates.
 
 Before certificate issuance, point DNS at the host and allow inbound TCP 80/443
 only. Never publish 5432 or 8100.

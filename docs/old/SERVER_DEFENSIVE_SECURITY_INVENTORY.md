@@ -1,5 +1,9 @@
 # BOOKPILE Server defensive-security inventory
 
+> **Historical document.** This D1 snapshot predates completion of the later
+> D2–D7 controls. Use the master work plan and the active operations/security
+> runbook for current status and procedures.
+
 Status: D1 inventory and threat model completed on 2026-10-14. This document
 records what the versioned staging/production stack does today and separates
 accepted controls from the D2-D7 work that remains.
@@ -225,7 +229,7 @@ Subsequent progress:
    explicit scanner responses implemented for staging observation. Exact
    time-based active-log expiry and aggregate thresholds remain open.
 3. **D4/D6 design:** completed in
-   [ADR 0016](docs/adr/0016-defensive-request-limits.md). D4 uses PostgreSQL-backed IP,
+   [ADR 0016](../adr/0016-defensive-request-limits.md). D4 uses PostgreSQL-backed IP,
    account, user, library and costly-operation policies plus shared operation
    leases. D6 keeps Caddy's deterministic controls and reserves persistent
    host-level temporary bans for high-confidence scanner traffic. No process-
@@ -327,6 +331,6 @@ Subsequent progress:
    temporary ban. The D6 general-volume signal remains observation-only for
    seven days. D4 application limits use their policy-specific acceptance gates.
 
-[ADR 0016](docs/adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,
+[ADR 0016](../adr/0016-defensive-request-limits.md) records initial staging thresholds, staged acceptance criteria,
 independent disable switches and rollback. Production values remain subject to
 the resulting staging measurements.

@@ -19,8 +19,14 @@ Other documentation has a narrower role:
 - Root operational documents are live specifications and runbooks for
   deployment, backup, security and recovery. They must not maintain independent
   pending-work lists.
-- `docs/old/` contains historical plans and snapshots. Their checkboxes,
-  progress percentages, providers, quotas and dates are not current status.
+- [`old/`](old/README.md) contains historical plans, completed checklists,
+  superseded inventories and snapshots. Their checkboxes, progress
+  percentages, providers, quotas and dates are not current status.
+
+The repository root [README](../README.md) is the concise product and
+repository landing page. Local user guides and active Server runbooks remain at
+the root so their established links stay stable. Do not expand the root README
+into a feature ledger, release history or second roadmap.
 
 When implementation changes a decision, update the relevant ADR or runbook and
 the master plan in the same pull request. Never create another roadmap.
