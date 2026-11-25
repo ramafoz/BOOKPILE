@@ -17,8 +17,8 @@ databases, migrations, launchers, or release lifecycles. Merely building or
 testing one edition never opens the other edition's data.
 
 BOOKPILE Local v1 is distributed as source with a guided Windows installer.
-New users should begin with [INSTALLATION.md](../../INSTALLATION.md), then read the
-[user guide](../../USER_GUIDE.md) and [backup guide](../../BACKUP_AND_RECOVERY.md).
+New users should begin with [INSTALLATION.md](../local/INSTALLATION.md), then read the
+[user guide](../local/USER_GUIDE.md) and [backup guide](../local/BACKUP_AND_RECOVERY.md).
 
 ## BOOKPILE Local capabilities
 
@@ -235,7 +235,7 @@ Set-ExecutionPolicy -Scope Process RemoteSigned
 The installer creates private dependencies, builds the frontend, initializes
 an empty catalogue only when needed, and creates Start/Stop desktop shortcuts.
 It does not overwrite existing catalogue data. Full prerequisites and update
-instructions are in [INSTALLATION.md](../../INSTALLATION.md).
+instructions are in [INSTALLATION.md](../local/INSTALLATION.md).
 
 ### Recommended launcher
 
@@ -550,7 +550,7 @@ production separation and the final go/no-go remain open in the
 is retained in the
 [archived Phase 9 plan](SERVER_PHASE9_PRODUCTION_OPERATIONS_PLAN.md).
 The agreed Spanish/EU staging topology and guarded provisioning sequence are in
-[SERVER_STAGING_PROVIDER_DECISION.md](../../SERVER_STAGING_PROVIDER_DECISION.md) and
+[SERVER_STAGING_PROVIDER_DECISION.md](../server/SERVER_STAGING_PROVIDER_DECISION.md) and
 [SERVER_STAGING_PROVISIONING_CHECKLIST.md](SERVER_STAGING_PROVISIONING_CHECKLIST.md).
 
 The compact Server workspace increment is complete and accepted on desktop and

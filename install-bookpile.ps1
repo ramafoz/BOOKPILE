@@ -119,4 +119,4 @@ if (-not $SkipDesktopShortcuts) {
 Write-Host "`nBOOKPILE Local v1 is installed." -ForegroundColor Green
 Write-Host "Start it with the 'Start BOOKPILE' desktop shortcut or run:"
 Write-Host "  .\start-bookpile-background.ps1" -ForegroundColor Yellow
-Write-Host "Before importing or entering a large catalogue, read BACKUP_AND_RECOVERY.md."
+Write-Host "Before importing or entering a large catalogue, read docs/local/BACKUP_AND_RECOVERY.md."

@@ -112,7 +112,9 @@ external alerting/capacity checks and staging recovery drills are not complete.
 Phase 9A
 provides strict hosted configuration, health boundaries, privacy-safe request
 logs, CI, pinned non-root images and a private-network Caddy/Compose rehearsal
-topology; see `SERVER_PRODUCTION_RUNBOOK.md`. Owner-only Server
+topology; see
+[`SERVER_PRODUCTION_RUNBOOK.md`](../docs/server/SERVER_PRODUCTION_RUNBOOK.md).
+Owner-only Server
 ZIP export and explicit-mapping restore are implemented and accepted with bounded
 inspection, atomic quota enforcement and object compensation. Phase 8 is
 complete. Application-level storage quota is implemented; provider acceptance,
@@ -121,23 +123,25 @@ staging deployment and measured recovery remain production work.
 Phase 9B's provider-neutral private S3 adapter and guarded filesystem migration
 are implemented without changing authenticated media URLs. Production still
 waits for provider acceptance and staging reconciliation; see
-`SERVER_PRIVATE_OBJECT_STORAGE.md`.
+[`SERVER_PRIVATE_OBJECT_STORAGE.md`](../docs/server/SERVER_PRIVATE_OBJECT_STORAGE.md).
 
 Phase 9C replaces request-bound hosted email with an encrypted transactional
 PostgreSQL outbox and a separately supervised worker. Development deliberately
-keeps immediate Mailpit delivery. See `SERVER_EMAIL_OUTBOX.md`.
+keeps immediate Mailpit delivery. See
+[`SERVER_EMAIL_OUTBOX.md`](../docs/server/SERVER_EMAIL_OUTBOX.md).
 
 Phase 9D adds a separately credentialed, non-root backup image, encrypted
 off-site snapshots, compliance retention and empty-target disaster recovery.
 The complete local PostgreSQL/S3 rehearsal passes; provider and staging gates
-remain. See `SERVER_OPERATIONAL_BACKUP.md`.
+remain. See
+[`SERVER_OPERATIONAL_BACKUP.md`](../docs/server/SERVER_OPERATIONAL_BACKUP.md).
 
 Phase 9E adds bounded edge behaviour, hourly lifecycle maintenance, aggregate
 light/deep integrity checks, backup-freshness monitoring, privacy-safe failure
 correlation, example systemd schedules and an explicit separation between host
 operators and library membership. Provider firewall, paging, capacity and
 privacy-scrubbed external error reporting are accepted in staging. See
-`SERVER_OPERATIONS_AND_SECURITY.md`.
+[`SERVER_OPERATIONS_AND_SECURITY.md`](../docs/server/SERVER_OPERATIONS_AND_SECURITY.md).
 
 ## Development setup
 

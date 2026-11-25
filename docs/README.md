@@ -16,17 +16,18 @@ Other documentation has a narrower role:
   task must be implemented, but task status lives only in the master plan.
 - `docs/specifications/` contains active normative product/domain contracts.
   Specifications define behaviour but do not maintain independent task status.
-- Root operational documents are live specifications and runbooks for
-  deployment, backup, security and recovery. They must not maintain independent
+- [`local/`](local/README.md) contains active Local installation, use, backup,
+  recovery and release documentation.
+- [`server/`](server/README.md) contains active Server deployment, backup,
+  storage, email and security runbooks. They must not maintain independent
   pending-work lists.
 - [`old/`](old/README.md) contains historical plans, completed checklists,
   superseded inventories and snapshots. Their checkboxes, progress
   percentages, providers, quotas and dates are not current status.
 
 The repository root [README](../README.md) is the concise product and
-repository landing page. Local user guides and active Server runbooks remain at
-the root so their established links stay stable. Do not expand the root README
-into a feature ledger, release history or second roadmap.
+repository landing page. Do not expand it into a feature ledger, release
+history or second roadmap.
 
 When implementation changes a decision, update the relevant ADR or runbook and
 the master plan in the same pull request. Never create another roadmap.

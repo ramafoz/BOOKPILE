@@ -27,8 +27,9 @@ These rules apply to `server/` and supplement the repository root guidance.
 
 ## Operations and deployment
 
-- `SERVER_OPERATIONS_AND_SECURITY.md` is the live operational runbook. Follow
-  its staged enable/disable, backup, recovery and evidence procedures exactly.
+- `docs/server/SERVER_OPERATIONS_AND_SECURITY.md` is the live operational
+  runbook. Follow its staged enable/disable, backup, recovery and evidence
+  procedures exactly.
 - Never edit staging or production environment files, systemd units, Fail2ban,
   nftables or host secrets as an incidental implementation step.
 - A deploy requires explicit authorization, a clean `main`, preflight, verified

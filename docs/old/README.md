@@ -14,6 +14,8 @@ Current work and release status exist only in
 
 Notable snapshots include:
 
+- [`CONTEXT-original-conversation.txt`](CONTEXT-original-conversation.txt) — the
+  original conversation that started BOOKPILE.
 - [`README-pre-housekeeping-2026-11-25.md`](README-pre-housekeeping-2026-11-25.md)
   — the former 605-line root README preserved before documentation cleanup.
 - [`SERVER_STAGING_PROVISIONING_CHECKLIST.md`](SERVER_STAGING_PROVISIONING_CHECKLIST.md)
