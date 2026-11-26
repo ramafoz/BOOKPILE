@@ -905,12 +905,20 @@ This entire section is a **production blocker**.
 
 ### A1 — Authorization and enrolment
 
-- [ ] Add a platform-role model independent of library membership. No username,
+- [x] Add a platform-role model independent of library membership. No username,
   email address or library role may imply `SYSTEM_ADMIN`.
+  Migration `0026_platform_roles` creates an empty assignment table keyed by
+  user ID and role. The application runtime can read assignments. A populated
+  table blocks migration downgrade. An assigned account can also hold its
+  usual Owner or Viewer membership, which continues to govern library access.
 - [ ] Implement an offline host command that explicitly enrols or revokes an
   administrator and emits an immutable audit event.
-- [ ] Prove that an administrator without membership receives the same denial
+- [x] Prove that an administrator without membership receives the same denial
   as any other non-member for every private-library endpoint.
+  `server/tests/test_authorization_cross_library_matrix.py` compares status
+  and response body on every registered library-scoped route and on private
+  library recovery. It checks that both non-members see empty library lists
+  and that an existing Owner keeps the same access after explicit assignment.
 
 ### A2 — Strong authentication
 

@@ -63,8 +63,15 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO bookpile_runtime;
 DO $backup_compatibility$
 BEGIN
+    IF to_regclass('public.platform_roles') IS NOT NULL THEN
+        REVOKE ALL ON public.platform_roles FROM PUBLIC, bookpile_runtime;
+        GRANT SELECT ON public.platform_roles TO bookpile_runtime;
+    END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup') THEN
         GRANT bookpile_admin_audit_backup TO bookpile_backup;
+        IF to_regclass('public.platform_roles') IS NOT NULL THEN
+            GRANT SELECT ON public.platform_roles TO bookpile_backup;
+        END IF;
     END IF;
 END
 $backup_compatibility$;

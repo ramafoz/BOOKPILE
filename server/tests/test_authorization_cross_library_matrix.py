@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,15 +19,18 @@ from bookpile_server.models import (
     Container,
     Library,
     LibraryAuditEvent,
+    LibraryDeletionTombstone,
     LibraryImportJob,
     LibraryInvitation,
     LibraryMembership,
     Loan,
+    PlatformRole,
     ReadingSession,
     Shelf,
     User,
     UserSession,
 )
+from bookpile_server.repositories.platform_roles import has_system_admin_role
 from bookpile_server.security.passwords import hash_password
 from bookpile_server.services.auth import hash_session_secret
 
@@ -76,9 +80,9 @@ class ForeignRequest:
     json: dict[str, Any] | None = None
 
 
-def _user(session: Session, name: str) -> User:
+def _user(session: Session, name: str, *, email: str | None = None) -> User:
     item = User(
-        email=f"{name}@example.test",
+        email=email if email is not None else f"{name}@example.test",
         username=name,
         password_hash=hash_password(PASSWORD),
         state="active",
@@ -310,9 +314,9 @@ def authorization_world(session: Session, tmp_path) -> AuthorizationWorld:
     )
 
 
-def _authenticate(client: TestClient, actor: Actor) -> None:
+def _authenticate(client: TestClient, raw_session: str) -> None:
     settings = get_settings()
-    client.cookies.set(settings.session_cookie_name, actor.raw_session)
+    client.cookies.set(settings.session_cookie_name, raw_session)
     client.cookies.set(settings.csrf_cookie_name, CSRF)
 
 
@@ -527,7 +531,7 @@ def test_valid_foreign_uuids_are_generically_denied_without_state_change(
             for actor in authorization_world.actors
             if actor.user.id == resources.owner.id
         )
-        _authenticate(client, owner)
+        _authenticate(client, owner.raw_session)
         response = client.get(
             f"/api/v1/libraries/{resources.library.id}/catalogue/"
             f"{resources.book.id}/cover"
@@ -539,7 +543,7 @@ def test_valid_foreign_uuids_are_generically_denied_without_state_change(
     exercised: set[tuple[str, str]] = set()
 
     for actor in authorization_world.actors:
-        _authenticate(client, actor)
+        _authenticate(client, actor.raw_session)
         foreign = authorization_world.resources[actor.foreign_library.id]
         private_markers = {
             str(foreign.library.id),
@@ -605,3 +609,196 @@ def test_valid_foreign_uuids_are_generically_denied_without_state_change(
         ("portable-export", "GET"),
         ("foreign-catalogue", "GET"),
     }
+
+
+def test_system_admin_role_requires_an_explicit_assignment(
+    session: Session, authorization_world: AuthorizationWorld
+) -> None:
+    matching_username = _user(session, "system_admin", email="username-case@example.test")
+    matching_email = _user(session, "ordinary", email="system_admin@example.test")
+    library_members = [actor.user for actor in authorization_world.actors]
+    for user in (matching_username, matching_email, *library_members):
+        assert not has_system_admin_role(session, user.id), user.username
+
+    separate_user = _user(session, "platform_operator")
+    session.add(PlatformRole(user_id=separate_user.id, role="SYSTEM_ADMIN"))
+    session.commit()
+    assert has_system_admin_role(session, separate_user.id)
+    assert separate_user.library_memberships == []
+
+
+def test_existing_owner_can_hold_system_admin_and_keep_library_access(
+    client: TestClient, session: Session, authorization_world: AuthorizationWorld
+) -> None:
+    owner = next(actor for actor in authorization_world.actors if actor.role == "OWNER")
+    _authenticate(client, owner.raw_session)
+    own_path = f"/api/v1/libraries/{owner.library.id}/members"
+    foreign_path = f"/api/v1/libraries/{owner.foreign_library.id}/members"
+    before = client.get(own_path)
+    assert before.status_code == 200
+    assert not has_system_admin_role(session, owner.user.id)
+
+    session.add(PlatformRole(user_id=owner.user.id, role="SYSTEM_ADMIN"))
+    session.commit()
+
+    assert has_system_admin_role(session, owner.user.id)
+    after = client.get(own_path)
+    assert after.status_code == 200
+    assert after.json() == before.json()
+    assert client.get(foreign_path).status_code == 404
+
+
+def _private_library_request_options(
+    resources: LibraryResources,
+) -> dict[str, dict[str, Any]]:
+    book = {"title": "Another title", "author": "Another author"}
+    placement = {"container_id": str(resources.container.id), "position": 1}
+    book_with_placement = {"book": book, "placement": placement}
+    rearrangement = {"book_id": str(resources.book.id)}
+    revision = "a" * 64
+    confirmed = {"confirmed": True}
+    loan = {"loaned_to": "Test borrower", "loaned_date": "2026-01-01"}
+    bodies = {
+        "create_book": book,
+        "create_book_with_placement": book_with_placement,
+        "create_book_with_placement_and_loan": {**book_with_placement, "loan": loan},
+        "update_book": book,
+        "update_book_with_placement": book_with_placement,
+        "delete_book": {"confirmation_title": resources.book.title},
+        "delete_library": {
+            "current_password": PASSWORD,
+            "confirmation_name": resources.library.name,
+            "acknowledge_permanent_deletion": True,
+        },
+        "create_invitation": {"role": "VIEWER", "viewer_scope": "CATALOG_ONLY"},
+        "change_member": {"action": "REMOVE", "current_password": PASSWORD},
+        "select_reading_perspective": {"user_id": str(resources.owner.id)},
+        "update_book_placement": placement,
+        "preview_rearrangement": rearrangement,
+        "apply_rearrangement": {**rearrangement, "revision": revision},
+        "update_visual_layout": {
+            "revision": revision,
+            "geometry_mode": "MANUAL",
+            "coordinate_system_version": 2,
+            "bookcases": [],
+            "shelves": [],
+            "containers": [],
+            "outside_areas": [],
+        },
+        "create_bookcase": {"name": "Another case"},
+        "update_bookcase": {"name": "Another case"},
+        "delete_bookcase": confirmed,
+        "create_shelf": {"bookcase_id": str(resources.bookcase.id), "shelf_number": 2},
+        "update_shelf": {"shelf_number": 2},
+        "delete_shelf": confirmed,
+        "create_container": {
+            "shelf_id": str(resources.shelf.id),
+            "container_type": "ROW",
+            "layer": "BACKGROUND",
+            "container_number": 2,
+        },
+        "update_container": {"container_number": 2},
+        "delete_container": confirmed,
+        "start_reading": {"started_date": "2026-01-01"},
+        "finish_reading": {"finished_date": "2026-01-02"},
+        "add_historical_reading": {"dates_unknown": True},
+        "edit_historical_reading": {"dates_unknown": True},
+        "set_my_goodreads_review": {"url": None},
+        "start_loan": loan,
+        "return_loan": {"returned_date": "2026-01-02"},
+        "add_historical_loan": {**loan, "returned_date": "2026-01-02"},
+        "edit_historical_loan": {**loan, "returned_date": "2026-01-02"},
+        "consolidate_import_job": {},
+        "consolidate_import_job_as_new_library": {"name": "Another library"},
+        "restore_library": {"current_password": PASSWORD},
+    }
+    backup = {"backup": ("test.zip", b"test upload", "application/zip")}
+    return {
+        **{name: {"json": body} for name, body in bodies.items()},
+        "get_isbn_lookup": {"params": {"isbn": "9780140328721"}},
+        "put_book_cover": {"files": {"cover": ("cover.webp", b"test", "image/webp")}},
+        "preflight_local_import": {
+            "data": {"reading_owner_user_id": str(resources.owner.id)},
+            "files": backup,
+        },
+        "preflight_server_import": {"files": backup},
+    }
+
+
+def test_system_admin_and_ordinary_nonmembers_receive_identical_library_denials(
+    client: TestClient, session: Session, authorization_world: AuthorizationWorld
+) -> None:
+    ordinary = _user(session, "ordinary_nonmember")
+    administrator = _user(session, "platform_admin_nonmember")
+    session.add(PlatformRole(user_id=administrator.id, role="SYSTEM_ADMIN"))
+    ordinary_session = _session(session, ordinary)
+    admin_session = _session(session, administrator)
+    resources = next(iter(authorization_world.resources.values()))
+    now = datetime.now(UTC)
+    tombstone = LibraryDeletionTombstone(
+        library_id=uuid4(),
+        library_name="Former private library",
+        requested_by_user_id=resources.owner.id,
+        logical_size_bytes=0,
+        membership_snapshot=[{"user_id": str(resources.owner.id), "role": "OWNER"}],
+        allocation_snapshot=[],
+        object_manifest=[],
+        created_at=now,
+        recover_until=now + timedelta(days=2),
+    )
+    session.add(tombstone)
+    session.commit()
+    assert has_system_admin_role(session, administrator.id)
+    assert not has_system_admin_role(session, ordinary.id)
+    assert administrator.library_memberships == ordinary.library_memberships == []
+
+    for raw_session in (ordinary_session, admin_session):
+        _authenticate(client, raw_session)
+        for path in ("/api/v1/libraries", "/api/v1/account/deleted-libraries"):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.json() == []
+
+    path_values = {
+        "library_id": resources.library.id,
+        "book_id": resources.book.id,
+        "target_user_id": resources.viewer.id,
+        "bookcase_id": resources.bookcase.id,
+        "shelf_id": resources.shelf.id,
+        "container_id": resources.container.id,
+        "session_id": resources.reading.id,
+        "loan_id": resources.loan.id,
+        "invitation_id": resources.invitation.id,
+        "import_id": resources.import_job.id,
+        "deletion_id": tombstone.id,
+    }
+    routes = [
+        route for route in client.app.routes
+        if isinstance(route, APIRoute) and (
+            route.path.startswith("/api/v1/libraries/{library_id}")
+            or route.path.startswith("/api/v1/account/deleted-libraries/{deletion_id}")
+        )
+    ]
+    options = _private_library_request_options(resources)
+    assert options.keys() <= {route.name for route in routes}
+    initial = _snapshot(session, authorization_world.storage)
+    for route in routes:
+        for method in route.methods:
+            label = (method, route.path)
+            responses = []
+            for raw_session in (ordinary_session, admin_session):
+                _authenticate(client, raw_session)
+                responses.append(client.request(
+                    method,
+                    route.path.format_map(path_values),
+                    headers={"X-CSRF-Token": CSRF},
+                    **options.get(route.name, {}),
+                ))
+            ordinary_response, admin_response = responses
+            assert ordinary_response.status_code == 404, (label, ordinary_response.text)
+            assert admin_response.status_code == ordinary_response.status_code, label
+            assert admin_response.content == ordinary_response.content, label
+
+    session.expire_all()
+    assert _snapshot(session, authorization_world.storage) == initial
+    assert tombstone.state == "PENDING"
