@@ -942,11 +942,14 @@ This entire section is a **production blocker**.
   the ordinary session. The HTTPS entry point is disabled by default.
 - [ ] Restrict the `/admin-access` browser page to active, verified accounts
   with an explicit `SYSTEM_ADMIN` assignment while admin access is enabled.
-  Direct navigation must show ordinary sign-in to signed-out visitors and a
-  generic unavailable page to signed-in accounts without access, including
-  revoked administrators. Check eligibility on the server before rendering
-  the admin interface. Registration, assertions and admin session endpoints
-  continue to enforce their own authorization checks.
+  Direct navigation must return an actual HTTP `404` with a generic not-found
+  response when the visitor is signed out, lacks the role, has been revoked
+  or admin access is disabled. Make the eligibility
+  check on the server before serving the page and keep personalized responses
+  out of shared caches. Preserve the ordinary session cookie's scope and keep
+  independent authorization checks on the admin API. Test the HTTP status
+  on direct requests and successful entry for an eligible account before
+  WebAuthn registration or sign-in.
 - [ ] Require a WebAuthn step-up performed within the previous five minutes for
   every destructive action.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation
