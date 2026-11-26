@@ -40,6 +40,7 @@ bookpile-error-reporting = "bookpile_server.cli.error_reporting:main"
 bookpile-defensive-limits = "bookpile_server.cli.defensive_limits:main"
 bookpile-defensive-metrics = "bookpile_server.cli.defensive_metrics:main"
 bookpile-admin-audit = "bookpile_server.cli.admin_audit:main"
+bookpile-platform-admin = "bookpile_server.cli.platform_admin:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

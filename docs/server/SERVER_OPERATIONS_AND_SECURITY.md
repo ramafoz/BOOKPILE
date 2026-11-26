@@ -1655,6 +1655,47 @@ events, not arbitrary raw logs, shell, Docker, SQL, environment secrets, tokens,
 email content or user-private library data. Exact controls and acceptance
 evidence are tracked only in `docs/BOOKPILE_MASTER_WORK_PLAN.md`.
 
+### Offline platform role changes
+
+Run this procedure only in an authorized host session, using the reviewed
+compose project and installed API image for the selected environment. Migration
+`0026_platform_roles` and the A3 role transition must already be in place. The
+one-shot `platform-admin` service uses the existing host-only migrator trust root
+for a single transaction that changes the assignment and appends the A3 event.
+It leaves the D3-L writer bridge and API/worker database grants separate.
+
+Provision a mode-`0600` operator-only file from
+[`.env.platform-admin.example`](../../server/.env.platform-admin.example). Put
+the independent operator mailbox and authenticated TLS SMTP settings there.
+Use a mailbox distinct from the target account's email. Keep the file outside
+all application and audit-worker environment files. The Compose deployment
+environment supplies the environment label and the existing explicit migrator
+credential. Verify the project, target account UUID and destination environment
+through the authorized host procedure before starting. Assignments are keyed by
+the account UUID, and an existing Owner keeps ordinary library permissions.
+
+From the reviewed deployment checkout, run this as the authenticated host
+operator, substituting the normal deployment env-file path and the approved
+opaque identifiers.
+
+```bash
+docker compose --env-file "$BOOKPILE_DEPLOY_ENV" -f server/compose.production.yaml run --rm --no-deps --pull never platform-admin enrol "$TARGET_ACCOUNT_UUID" --operator "$OPERATOR_ID" --reason bootstrap
+```
+
+Enrolment requires an active, verified account. Type `ENROL <account UUID>`
+exactly in the terminal, then enter the code sent to the operator mailbox. The
+code is hidden at the prompt, is valid for ten minutes and permits one attempt.
+Use the same form for revocation with `revoke`, the appropriate reason and
+`REVOKE <account UUID>`. Revocation also accepts suspended accounts. The other
+reason codes are `operator-change`, `access-retirement` and `incident-response`.
+Keep the returned correlation reference and verify the result in A3. An
+unconfirmed request or one that would leave the role unchanged records a failed
+result after the typed confirmation. The assignment is committed only if the
+success audit append commits.
+
+This operation changes the account's platform assignment. Console access and
+recovery-code activation are subject to the A2 and A5 gates.
+
 Break-glass access is an off-host custodied operator credential used only when
 normal deployment access is unavailable. It requires provider MFA, a second
 person where feasible, a time-bounded incident record, immediate credential
