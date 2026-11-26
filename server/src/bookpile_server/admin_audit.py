@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 
 OPERATOR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$")
@@ -123,21 +123,25 @@ def parse_host_evidence_access(payload: Any) -> AuditAppend:
 
 def append(engine: Engine, entry: AuditAppend) -> dict[str, object]:
     with engine.begin() as connection:
-        row = connection.execute(
-            text(
-                "SELECT sequence_id, event_id, occurred_at, row_hash "
-                "FROM admin_audit.append_entry("
-                ":operator_id, :action, :target_id, :reason, :correlation_id, :result)"
-            ),
-            {
-                "operator_id": entry.operator_id,
-                "action": entry.action,
-                "target_id": entry.target_id,
-                "reason": entry.reason,
-                "correlation_id": entry.correlation_id,
-                "result": entry.result,
-            },
-        ).mappings().one()
+        return append_in_transaction(connection, entry)
+
+
+def append_in_transaction(connection: Connection, entry: AuditAppend) -> dict[str, object]:
+    row = connection.execute(
+        text(
+            "SELECT sequence_id, event_id, occurred_at, row_hash "
+            "FROM admin_audit.append_entry("
+            ":operator_id, :action, :target_id, :reason, :correlation_id, :result)"
+        ),
+        {
+            "operator_id": entry.operator_id,
+            "action": entry.action,
+            "target_id": entry.target_id,
+            "reason": entry.reason,
+            "correlation_id": entry.correlation_id,
+            "result": entry.result,
+        },
+    ).mappings().one()
     return {
         "event_id": str(row["event_id"]),
         "occurred_at": row["occurred_at"].astimezone(UTC).isoformat(),

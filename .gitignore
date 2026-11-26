@@ -24,6 +24,7 @@ server/.env.database-roles
 server/.env.admin-audit
 server/.env.admin-audit-verifier
 server/.env.admin-audit-retention
+server/.env.platform-admin
 server/.env.*.deploy-*
 .DS_Store
 ._CONTRACTUAL DOCS/

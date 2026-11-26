@@ -911,8 +911,14 @@ This entire section is a **production blocker**.
   user ID and role. The application runtime can read assignments. A populated
   table blocks migration downgrade. An assigned account can also hold its
   usual Owner or Viewer membership, which continues to govern library access.
-- [ ] Implement an offline host command that explicitly enrols or revokes an
+- [x] Implement an offline host command that explicitly enrols or revokes an
   administrator and emits an immutable audit event.
+  The isolated `platform-admin` command requires typed confirmation and a
+  single-use code sent to the independent operator mailbox. The PostgreSQL
+  gate verifies that assignment changes and A3 appends commit together,
+  including during overlapping requests and rollback after an audit failure.
+  The host procedure is in
+  [Server operations and security](server/SERVER_OPERATIONS_AND_SECURITY.md#offline-platform-role-changes).
 - [x] Prove that an administrator without membership receives the same denial
   as any other non-member for every private-library endpoint.
   `server/tests/test_authorization_cross_library_matrix.py` compares status

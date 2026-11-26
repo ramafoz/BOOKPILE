@@ -159,6 +159,24 @@ services:
     networks: [backend, egress]
     restart: "no"
 
+  platform-admin:
+    profiles: ["platform-administration"]
+    image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}
+    env_file:
+      - ${BOOKPILE_PLATFORM_ADMIN_ENV_FILE:-.env.platform-admin.example}
+    environment:
+      BOOKPILE_PLATFORM_ADMIN_DATABASE_URL: ${BOOKPILE_SERVER_MIGRATOR_DATABASE_URL:-}
+      BOOKPILE_PLATFORM_ADMIN_ENVIRONMENT: ${BOOKPILE_SERVER_ENVIRONMENT:-}
+    entrypoint: ["bookpile-platform-admin"]
+    command: ["--help"]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: [backend, egress]
+    restart: "no"
+    logging:
+      driver: "none"
+
   admin-audit:
     profiles: ["administration"]
     image: ${BOOKPILE_API_IMAGE:-bookpile-api:phase9}

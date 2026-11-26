@@ -23,6 +23,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from bookpile_server import platform_enrolment
+from bookpile_server.admin_audit import verify
 from bookpile_server.api import dependencies as api_dependencies
 from bookpile_server.config import Settings, get_settings
 from bookpile_server.database import get_session
@@ -128,6 +130,119 @@ def _request_general_api_limit_from_process(
                 )
             )
     finally:
+        engine.dispose()
+
+
+@pytest.mark.skipif(
+    not TEST_DATABASE_URL,
+    reason="BOOKPILE_SERVER_TEST_DATABASE_URL is not configured",
+)
+def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -> None:
+    assert TEST_DATABASE_URL is not None
+    url = make_url(TEST_DATABASE_URL)
+    assert url.get_backend_name() == "postgresql"
+    assert (url.database or "").endswith("_test")
+    alembic = Config(Path(__file__).resolve().parents[1] / "alembic.ini")
+    alembic.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    engine = create_engine(url)
+    command.upgrade(alembic, "head")
+    target = uuid4()
+    operator_email = "operator@example.com"
+    enrol = platform_enrolment.EnrolmentRequest(
+        "enrol", target, "operator-01", "bootstrap", uuid4()
+    )
+    revoke = platform_enrolment.EnrolmentRequest(
+        "revoke", target, "operator-01", "access-retirement", uuid4()
+    )
+    apply = platform_enrolment.record_enrolment
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO users (id, username, email, password_hash, state, email_verified_at) "
+                    "VALUES (:id, 'synthetic_owner', 'owner@example.test', 'unused', 'active', now())"
+                ),
+                {"id": target},
+            )
+            connection.execute(
+                text("INSERT INTO libraries (id, name, slug) VALUES (:id, 'A1', 'a1-host')"),
+                {"id": target},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO library_memberships (id, library_id, user_id, role) "
+                    "VALUES (:id, :id, :id, 'OWNER')"
+                ),
+                {"id": target},
+            )
+        assert platform_enrolment.target_is_eligible(engine, enrol, operator_email)
+        assert not platform_enrolment.target_is_eligible(engine, enrol, "owner@example.test")
+        assert not apply(engine, enrol, operator_email, confirmed=False)
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
+
+        # Serialize overlapping requests against the same account.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            attempts = [
+                pool.submit(
+                    apply, engine,
+                    platform_enrolment.EnrolmentRequest(
+                        "enrol", target, "operator-01", "bootstrap", uuid4()
+                    ),
+                    operator_email, confirmed=True,
+                )
+                for _ in range(2)
+            ]
+            assert sorted(attempt.result(timeout=10) for attempt in attempts) == [False, True]
+        assert verify(engine)["rows_verified"] == 3
+
+        original_append = platform_enrolment.append_in_transaction
+
+        def fail_after_appending(connection, entry):
+            original_append(connection, entry)
+            connection.execute(text("SELECT 1/0"))
+
+        with monkeypatch.context() as failure:
+            failure.setattr(platform_enrolment, "append_in_transaction", fail_after_appending)
+            with pytest.raises(DBAPIError):
+                apply(engine, revoke, operator_email, confirmed=True)
+        assert verify(engine)["rows_verified"] == 3
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT user_id FROM platform_roles")) == target
+
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE users SET state = 'suspended' WHERE id = :id"), {"id": target})
+        assert not platform_enrolment.target_is_eligible(engine, enrol, operator_email)
+        assert platform_enrolment.target_is_eligible(engine, revoke, operator_email)
+        assert apply(engine, revoke, operator_email, confirmed=True)
+        assert verify(engine)["rows_verified"] == 4
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
+            assert connection.scalar(text("SELECT role FROM library_memberships")) == "OWNER"
+            records = connection.execute(
+                text(
+                    "SELECT operator_id, action, target_id, reason, correlation_id, result "
+                    "FROM admin_audit.entries ORDER BY sequence_id"
+                )
+            ).all()
+        assert records[0] == (
+            "operator-01", "platform_admin.enrol", str(target), "bootstrap",
+            str(enrol.correlation_id), "failed",
+        )
+        assert records[-1] == (
+            "operator-01", "platform_admin.revoke", str(target), "access-retirement",
+            str(revoke.correlation_id), "succeeded",
+        )
+        assert {record.result for record in records[1:3]} == {"failed", "succeeded"}
+    finally:
+        # This integration gate owns a fresh disposable database.
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM platform_roles WHERE user_id = :id"), {"id": target})
+            connection.execute(text("TRUNCATE admin_audit.entries"))
+            connection.execute(text(
+                "UPDATE admin_audit.chain_state SET last_sequence_id = 0, last_hash = repeat('0', 64)"
+            ))
+        command.downgrade(alembic, "base")
         engine.dispose()
 
 

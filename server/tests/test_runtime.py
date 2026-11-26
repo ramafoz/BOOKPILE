@@ -112,7 +112,13 @@ def test_production_compose_preserves_host_validation_and_explicit_egress() -> N
 
     assert "headers={'Host': host}" in compose
     assert "BOOKPILE_SERVER_ALLOWED_HOSTS" in compose
-    assert compose.count("networks: [backend, egress]") == 4
+    services = compose.split("\nservices:\n", 1)[1].split("\nnetworks:\n", 1)[0]
+    service_parts = re.split(r"(?m)^  ([a-z][a-z-]*):\n", services)
+    egress_services = {
+        name for name, definition in zip(service_parts[1::2], service_parts[2::2])
+        if "    networks: [backend, egress]" in definition.splitlines()
+    }
+    assert egress_services == {"api", "email-worker", "backup", "maintenance", "platform-admin"}
     assert "backend:\n    internal: true" in compose
     # Four long-lived application services plus the isolated A3 writer and its
     # three one-shot verifier/retention/provisioning jobs remain in journald.
