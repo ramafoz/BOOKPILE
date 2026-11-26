@@ -293,7 +293,49 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                     "END IF; END $backup$"
                 )
             )
+        platform_user_id = uuid4()
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO users (id, username, email, password_hash) "
+                    "VALUES (:id, 'system_admin', 'system_admin@example.test', 'unused')"
+                ),
+                {"id": platform_user_id},
+            )
         command.upgrade(alembic, "head")
+        with engine.begin() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
+            assignment = text(
+                "INSERT INTO platform_roles (user_id, role) VALUES (:id, :role)"
+            )
+            connection.execute(assignment, {"id": platform_user_id, "role": "SYSTEM_ADMIN"})
+            for user_id, role, sqlstate in (
+                (platform_user_id, "OWNER", "23514"),
+                (uuid4(), "SYSTEM_ADMIN", "23503"),
+                (platform_user_id, "SYSTEM_ADMIN", "23505"),
+            ):
+                with pytest.raises(DBAPIError) as rejection, connection.begin_nested():
+                    connection.execute(assignment, {"id": user_id, "role": role})
+                assert rejection.value.orig.sqlstate == sqlstate
+
+            assert connection.scalar(
+                text("SELECT has_table_privilege('bookpile_backup', 'platform_roles', 'SELECT')")
+            )
+            connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            assert connection.scalar(text("SELECT user_id FROM platform_roles")) == platform_user_id
+            for statement in (
+                "INSERT INTO platform_roles SELECT * FROM platform_roles",
+                "UPDATE platform_roles SET role = 'SYSTEM_ADMIN'",
+                "DELETE FROM platform_roles",
+                "TRUNCATE platform_roles",
+            ):
+                with pytest.raises(DBAPIError) as rejection, connection.begin_nested():
+                    connection.execute(text(statement))
+                assert rejection.value.orig.sqlstate == "42501"
+
+        with pytest.raises(DBAPIError, match="existing platform role assignments"):
+            command.downgrade(alembic, "0025_immutable_admin_audit")
+
         with engine.connect() as connection:
             assert connection.scalar(
                 text(
@@ -508,6 +550,18 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
             try:
                 with restore_engine.connect() as restored:
                     assert restored.scalar(text("SELECT count(*) FROM books")) == 2
+                    assert restored.scalar(text("SELECT user_id FROM platform_roles")) == platform_user_id
+                    for privilege, expected in (
+                        ("SELECT", True), ("INSERT", False), ("UPDATE", False),
+                        ("DELETE", False), ("TRUNCATE", False),
+                    ):
+                        assert restored.scalar(
+                            text(
+                                "SELECT has_table_privilege("
+                                "'bookpile_runtime', 'public.platform_roles', :privilege)"
+                            ),
+                            {"privilege": privilege},
+                        ) is expected
                     assert restored.scalar(
                         text("SELECT count(*) FROM admin_audit.entries")
                     ) == 17
@@ -556,6 +610,12 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                     }
             finally:
                 restore_engine.dispose()
+
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM users WHERE id = :id"), {"id": platform_user_id}
+            )
+            assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
 
         with pytest.raises(RuntimeError, match="must be preserved"):
             command.downgrade(alembic, "0024_operation_leases")

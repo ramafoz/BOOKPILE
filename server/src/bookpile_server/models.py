@@ -99,6 +99,18 @@ class User(Base):
     )
 
 
+class PlatformRole(Base):
+    __tablename__ = "platform_roles"
+    __table_args__ = (
+        CheckConstraint("role = 'SYSTEM_ADMIN'", name="ck_platform_roles_role"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[str] = mapped_column(String(16), primary_key=True)
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
     __table_args__ = (
