@@ -1664,7 +1664,7 @@ one-shot `platform-admin` service uses the existing host-only migrator trust roo
 for a single transaction that changes the assignment and appends the A3 event.
 It leaves the D3-L writer bridge and API/worker database grants separate.
 
-Provision a mode-`0600` operator-only file from
+Provision `server/.env.platform-admin` as a mode-`0600` operator-only file from
 [`.env.platform-admin.example`](../../server/.env.platform-admin.example). Put
 the independent operator mailbox and authenticated TLS SMTP settings there.
 Use a mailbox distinct from the target account's email. Keep the file outside
@@ -1679,7 +1679,7 @@ operator, substituting the normal deployment env-file path and the approved
 opaque identifiers.
 
 ```bash
-docker compose --env-file "$BOOKPILE_DEPLOY_ENV" -f server/compose.production.yaml run --rm --no-deps --pull never platform-admin enrol "$TARGET_ACCOUNT_UUID" --operator "$OPERATOR_ID" --reason bootstrap
+BOOKPILE_PLATFORM_ADMIN_ENV_FILE=.env.platform-admin docker compose --env-file "$BOOKPILE_DEPLOY_ENV" -f server/compose.production.yaml run --rm --no-deps --pull never platform-admin enrol "$TARGET_ACCOUNT_UUID" --operator "$OPERATOR_ID" --reason bootstrap
 ```
 
 Enrolment requires an active, verified account. Type `ENROL <account UUID>`
