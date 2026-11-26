@@ -32,6 +32,17 @@ describe("empty accepted responses", () => {
 });
 
 describe("configured CSRF cookie", () => {
+  it("uses separate ordinary and admin CSRF headers for an admin session", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    await serverApi.adminLogout();
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/admin/access/logout");
+    expect(options?.method).toBe("POST");
+    expect(new Headers(options?.headers).get("X-CSRF-Token")).toBe("account");
+    expect(new Headers(options?.headers).get("X-Admin-CSRF-Token")).toBe("admin");
+  });
+
   it("uses the cookie name advertised by the hosted API", async () => {
     vi.stubGlobal("document", { cookie: "bookpile_staging_csrf=staging-token" });
     const fetchMock = vi.spyOn(globalThis, "fetch")

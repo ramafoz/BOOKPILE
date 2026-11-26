@@ -45,6 +45,7 @@ from bookpile_server.models import (
     LibraryMembership,
     Loan,
     PersonalBookRecord,
+    PlatformAdminAccess,
     OperationLease,
     RateLimitBucket,
     ReadingSession,
@@ -86,6 +87,8 @@ from bookpile_server.services.operation_leases import (
 from bookpile_server.services.readings import ReadingConflictError, ReadingService
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_accounting import calculate_library_logical_bytes
+
+from test_admin_access import Authenticator, CODE, CSRF, ORIGIN, PREFIX, options
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
@@ -210,14 +213,84 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT user_id FROM platform_roles")) == target
 
+        prepare = platform_enrolment.EnrolmentRequest(
+            "prepare-passkey", target, "operator-01", "bootstrap", uuid4()
+        )
+        with monkeypatch.context() as failure:
+            failure.setattr(platform_enrolment, "append_in_transaction", fail_after_appending)
+            with pytest.raises(DBAPIError):
+                platform_enrolment.prepare_first_passkey(engine, prepare, operator_email, CODE, lambda: True)
+        with Session(engine) as session:
+            assert session.get(PlatformAdminAccess, target) is None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            attempts = [pool.submit(
+                platform_enrolment.prepare_first_passkey, engine,
+                platform_enrolment.EnrolmentRequest(
+                    prepare.action, target, prepare.operator, prepare.reason, uuid4(),
+                ), operator_email, CODE, lambda: True,
+            ) for _ in range(2)]
+            assert sorted(attempt.result(timeout=10) for attempt in attempts) == [False, True]
+        assert verify(engine)["rows_verified"] == 5
+
+        now = datetime.now(UTC)
+        with Session(engine) as session, session.begin():
+            access = session.get(PlatformAdminAccess, target)
+            assert access.bootstrap_hash == hash_session_secret(CODE)
+            assert now < access.bootstrap_expires_at <= now + timedelta(minutes=10)
+            session.add(UserSession(
+                user_id=target, token_hash=hash_session_secret("test-normal-session"),
+                csrf_token_hash=hash_session_secret(CSRF), last_seen_at=now,
+                expires_at=now + timedelta(days=1), absolute_expires_at=now + timedelta(days=1),
+            ))
+        with engine.begin() as connection:
+            connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
+            for statement in (
+                "INSERT INTO platform_admin_access SELECT * FROM platform_admin_access",
+                "UPDATE platform_admin_access SET bootstrap_hash = 'forbidden'",
+                "DELETE FROM platform_admin_access",
+            ):
+                with pytest.raises(DBAPIError) as rejection, connection.begin_nested():
+                    connection.execute(text(statement))
+                assert rejection.value.orig.sqlstate == "42501"
+        with pytest.raises(DBAPIError, match="administrator access data"):
+            command.downgrade(alembic, "0026_platform_roles")
+
+        runtime = create_engine(url, connect_args={"options": "-c role=bookpile_runtime"})
+
+        def runtime_session():
+            with Session(runtime, expire_on_commit=False) as session:
+                yield session
+
+        try:
+            with monkeypatch.context() as app_settings:
+                app_settings.setenv("BOOKPILE_SERVER_PUBLIC_BASE_URL", ORIGIN)
+                app_settings.setenv("BOOKPILE_SERVER_ADMIN_WEBAUTHN_ENABLED", "true")
+                get_settings.cache_clear()
+                app = create_app()
+                app.dependency_overrides[get_session] = runtime_session
+                headers = {"Origin": ORIGIN, "X-CSRF-Token": CSRF}
+                cookies = {get_settings().session_cookie_name: "test-normal-session"}
+                key = Authenticator()
+                with TestClient(app, base_url=ORIGIN, headers=headers, cookies=cookies) as browser:
+                    registration = key.proof(options(browser))
+                    assert browser.post(f"{PREFIX}/verify", json={**registration, "confirmation": CODE}).status_code == 200
+                    assertion = key.proof(options(browser))
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        attempts = [pool.submit(browser.post, f"{PREFIX}/verify", json=assertion) for _ in range(2)]
+                        assert sorted(attempt.result(timeout=10).status_code for attempt in attempts) == [200, 403]
+        finally:
+            get_settings.cache_clear()
+            runtime.dispose()
+
         with engine.begin() as connection:
             connection.execute(text("UPDATE users SET state = 'suspended' WHERE id = :id"), {"id": target})
         assert not platform_enrolment.target_is_eligible(engine, enrol, operator_email)
         assert platform_enrolment.target_is_eligible(engine, revoke, operator_email)
         assert apply(engine, revoke, operator_email, confirmed=True)
-        assert verify(engine)["rows_verified"] == 4
+        assert verify(engine)["rows_verified"] == 6
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
+            assert connection.scalar(text("SELECT count(*) FROM platform_admin_access")) == 0
             assert connection.scalar(text("SELECT role FROM library_memberships")) == "OWNER"
             records = connection.execute(
                 text(
@@ -646,6 +719,16 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
             assert (restore_url.database or "").endswith("_test")
             assert restore_url != url
             dump_path = tmp_path / "a3-recovery.dump"
+            with Session(engine) as session, session.begin():
+                now = datetime.now(UTC)
+                session.add(PlatformAdminAccess(
+                    user_id=platform_user_id, bootstrap_hash="a" * 64,
+                    bootstrap_expires_at=now + timedelta(minutes=10), credential_id=b"credential",
+                    public_key=b"public-key", sign_count=5, challenge=b"challenge",
+                    challenge_session_id=uuid4(), challenge_expires_at=now + timedelta(minutes=2),
+                    session_hash="b" * 64, csrf_hash="c" * 64, parent_session_id=uuid4(),
+                    last_active_at=now, absolute_expires_at=now + timedelta(minutes=30),
+                ))
             with engine.connect() as snapshot_connection:
                 transaction = snapshot_connection.begin()
                 snapshot_connection.execute(
@@ -666,6 +749,17 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                 with restore_engine.connect() as restored:
                     assert restored.scalar(text("SELECT count(*) FROM books")) == 2
                     assert restored.scalar(text("SELECT user_id FROM platform_roles")) == platform_user_id
+                    assert restored.execute(text(
+                        "SELECT credential_id, public_key, sign_count, bootstrap_expires_at <= now(), "
+                        "challenge, challenge_session_id, challenge_expires_at, session_hash, csrf_hash, "
+                        "parent_session_id, last_active_at, absolute_expires_at FROM platform_admin_access"
+                    )).one() == (b"credential", b"public-key", 5, True, *([None] * 8))
+                    assert restored.execute(text(
+                        "SELECT has_column_privilege('bookpile_runtime', 'platform_admin_access', "
+                        "'session_hash', 'UPDATE'), has_column_privilege('bookpile_runtime', "
+                        "'platform_admin_access', 'bootstrap_hash', 'UPDATE'), "
+                        "has_table_privilege('bookpile_runtime', 'platform_admin_access', 'INSERT')"
+                    )).one() == (True, False, False)
                     for privilege, expected in (
                         ("SELECT", True), ("INSERT", False), ("UPDATE", False),
                         ("DELETE", False), ("TRUNCATE", False),

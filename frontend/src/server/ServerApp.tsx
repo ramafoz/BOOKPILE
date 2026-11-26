@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type ReactNode, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -48,6 +48,8 @@ import { authenticatedCopy } from "./authenticatedCopy";
 import { type LibraryAdminCopy, libraryAdminCopy } from "./libraryAdminCopy";
 import { friendlyError } from "./friendlyError";
 
+const AdminAccessPage = lazy(() => import("./AdminAccessPage"));
+
 type Route =
   | "login"
   | "register"
@@ -55,7 +57,8 @@ type Route =
   | "resend-verification"
   | "forgot-password"
   | "reset-password"
-  | "restore-account";
+  | "restore-account"
+  | "admin-access";
 
 interface PendingMemberChange {
   member: LibraryMember;
@@ -80,6 +83,7 @@ function routeFromPath(pathname: string): Route {
     || route === "forgot-password"
     || route === "reset-password"
     || route === "restore-account"
+    || route === "admin-access"
   ) return route;
   return "login";
 }
@@ -1222,6 +1226,9 @@ function ServerAppContent() {
   }
   if (bootError !== null) {
     return <div className="server-loading error"><LibraryBig size={38} /><p>{authFriendlyError(bootError, t)}</p><button type="button" onClick={() => window.location.reload()}>{t("tryAgain")}</button></div>;
+  }
+  if (user && route === "admin-access") {
+    return <AuthShell><Suspense fallback={<p role="status">{t("loading")}</p>}><AdminAccessPage /></Suspense></AuthShell>;
   }
   if (user && route !== "verify-email" && route !== "reset-password") {
     return <AccountHome user={user} onSignedOut={() => { setUser(null); navigate("login"); }} />;

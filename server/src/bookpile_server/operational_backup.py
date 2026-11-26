@@ -67,10 +67,26 @@ BEGIN
         REVOKE ALL ON public.platform_roles FROM PUBLIC, bookpile_runtime;
         GRANT SELECT ON public.platform_roles TO bookpile_runtime;
     END IF;
+    IF to_regclass('public.platform_admin_access') IS NOT NULL THEN
+        UPDATE public.platform_admin_access
+        SET bootstrap_expires_at = least(bootstrap_expires_at, now()),
+            challenge = NULL, challenge_session_id = NULL, challenge_expires_at = NULL,
+            session_hash = NULL, csrf_hash = NULL, parent_session_id = NULL,
+            last_active_at = NULL, absolute_expires_at = NULL;
+        REVOKE ALL ON public.platform_admin_access FROM PUBLIC, bookpile_runtime;
+        GRANT SELECT ON public.platform_admin_access TO bookpile_runtime;
+        GRANT UPDATE (credential_id, public_key, sign_count, challenge,
+                      challenge_session_id, challenge_expires_at, session_hash,
+                      csrf_hash, parent_session_id, last_active_at, absolute_expires_at)
+            ON public.platform_admin_access TO bookpile_runtime;
+    END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup') THEN
         GRANT bookpile_admin_audit_backup TO bookpile_backup;
         IF to_regclass('public.platform_roles') IS NOT NULL THEN
             GRANT SELECT ON public.platform_roles TO bookpile_backup;
+        END IF;
+        IF to_regclass('public.platform_admin_access') IS NOT NULL THEN
+            GRANT SELECT ON public.platform_admin_access TO bookpile_backup;
         END IF;
     END IF;
 END

@@ -737,7 +737,27 @@ async function request<T>(
   return JSON.parse(responseText) as T;
 }
 
+function adminCsrfHeaders(): Headers {
+  const headers = new Headers();
+  const token = cookieValue(document.cookie, "__Host-bookpile_admin_csrf");
+  if (token) headers.set("X-Admin-CSRF-Token", token);
+  return headers;
+}
+
 export const serverApi = {
+  adminOptions: () => request<
+    | { ceremony: "registration"; public_key: PublicKeyCredentialCreationOptionsJSON }
+    | { ceremony: "authentication"; public_key: PublicKeyCredentialRequestOptionsJSON }
+  >("/admin/access/options", { method: "POST" }, true),
+  verifyAdminAccess: (credential: unknown, confirmation?: string) => request<{ registered: boolean }>(
+    "/admin/access/verify", { method: "POST", body: JSON.stringify({ credential, confirmation }) }, true,
+  ),
+  adminSession: () => request<{ expires_at: string; absolute_expires_at: string }>(
+    "/admin/access/session", { method: "POST", headers: adminCsrfHeaders() }, true,
+  ),
+  adminLogout: () => request<void>(
+    "/admin/access/logout", { method: "POST", headers: adminCsrfHeaders() }, true,
+  ),
   me: () => request<CurrentUser>("/auth/me").then(rememberCsrfCookieName),
   updatePreferredLocale: (preferredLocale: AppLocale) => request<{ preferred_locale: AppLocale }>(
     "/auth/locale",
