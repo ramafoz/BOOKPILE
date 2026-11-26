@@ -111,6 +111,32 @@ class PlatformRole(Base):
     role: Mapped[str] = mapped_column(String(16), primary_key=True)
 
 
+class PlatformAdminAccess(Base):
+    __tablename__ = "platform_admin_access"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id", "role"], ["platform_roles.user_id", "platform_roles.role"],
+            ondelete="CASCADE",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), server_default="SYSTEM_ADMIN")
+    bootstrap_hash: Mapped[str] = mapped_column(String(64))
+    bootstrap_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    credential_id: Mapped[bytes | None] = mapped_column(LargeBinary, unique=True)
+    public_key: Mapped[bytes | None] = mapped_column(LargeBinary)
+    sign_count: Mapped[int | None] = mapped_column(BigInteger)
+    challenge: Mapped[bytes | None] = mapped_column(LargeBinary)
+    challenge_session_id: Mapped[UUID | None] = mapped_column(Uuid)
+    challenge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    session_hash: Mapped[str | None] = mapped_column(String(64))
+    csrf_hash: Mapped[str | None] = mapped_column(String(64))
+    parent_session_id: Mapped[UUID | None] = mapped_column(Uuid)
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    absolute_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
     __table_args__ = (

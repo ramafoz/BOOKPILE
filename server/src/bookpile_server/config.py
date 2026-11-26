@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     csrf_cookie_name: str = "bookpile_csrf"
     session_cookie_secure: bool = False
     public_base_url: str = "http://127.0.0.1:5174"
+    admin_webauthn_enabled: bool = False
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
     smtp_from_email: str = "BOOKPILE <noreply@bookpile.local>"

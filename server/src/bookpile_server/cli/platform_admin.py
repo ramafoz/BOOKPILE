@@ -19,6 +19,7 @@ from ..email_delivery import EmailDeliveryError, EmailSender, OutgoingEmail, Smt
 from ..platform_enrolment import (
     ENROLMENT_REASONS,
     EnrolmentRequest,
+    prepare_first_passkey,
     record_enrolment,
     target_is_eligible,
 )
@@ -35,7 +36,7 @@ class EnrolmentError(ValueError):
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("enrol", "revoke"))
+    parser.add_argument("action", choices=("enrol", "revoke", "prepare-passkey"))
     parser.add_argument("user_id", type=UUID)
     parser.add_argument("--operator", required=True, help="Opaque operator identifier")
     parser.add_argument("--reason", required=True, choices=ENROLMENT_REASONS)
@@ -68,6 +69,25 @@ def _confirm_by_email(
         return monotonic() < expiry and compare_digest(code.encode(), supplied.encode())
     except (EmailDeliveryError, EOFError, GetPassWarning, KeyboardInterrupt, OSError):
         return False
+
+
+def _send_passkey_confirmation(
+    request: EnrolmentRequest, environment: str, recipient: str, sender: EmailSender, code: str,
+) -> bool:
+    try:
+        sender.send(OutgoingEmail(
+            recipient=recipient,
+            subject="BOOKPILE Server first passkey confirmation",
+            text=(f"Confirm first passkey registration for {environment} on /admin-access.\n"
+                  f"Reference: {request.correlation_id}\n"
+                  f"Single-use code (expires in 10 minutes): {code}\n"
+                  "Ignore this message if you did not initiate this action."),
+            message_key=f"platform-passkey-{request.correlation_id}",
+            purpose="platform_admin_confirmation",
+        ))
+    except EmailDeliveryError:
+        return False
+    return True
 
 
 def main() -> int:
@@ -113,18 +133,24 @@ def main() -> int:
                     "SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = current_user"
                 )):
                     raise EnrolmentError("Use the isolated host migrator credential.")
-            eligible = target_is_eligible(engine, request, operator_email)
-            confirmed = eligible and _confirm_by_email(
-                request, environment, operator_email, SmtpEmailSender(settings)
-            )
-            changed = record_enrolment(engine, request, operator_email, confirmed=confirmed)
+            sender = SmtpEmailSender(settings)
+            if request.action == "prepare-passkey":
+                code = token_urlsafe(32)
+                changed = prepare_first_passkey(
+                    engine, request, operator_email, code,
+                    lambda: _send_passkey_confirmation(request, environment, operator_email, sender, code),
+                )
+            else:
+                eligible = target_is_eligible(engine, request, operator_email)
+                confirmed = eligible and _confirm_by_email(request, environment, operator_email, sender)
+                changed = record_enrolment(engine, request, operator_email, confirmed=confirmed)
         finally:
             engine.dispose()
 
         if not changed:
-            print(f"Platform role unchanged. Audit reference {request.correlation_id}.", file=sys.stderr)
+            print(f"Platform access unchanged. Audit reference {request.correlation_id}.", file=sys.stderr)
             return 1
-        print(f"Platform role updated. Audit reference {request.correlation_id}.")
+        print(f"Platform access updated. Audit reference {request.correlation_id}.")
         return 0
     except EnrolmentError as exc:
         print(str(exc), file=sys.stderr)

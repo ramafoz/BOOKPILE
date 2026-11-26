@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from .api.routes.catalogue import router as catalogue_router
 from .api.routes.auth import router as auth_router
+from .api.routes.admin_access import router as admin_access_router
 from .api.routes.libraries import router as libraries_router
 from .api.routes.loans import overview_router as loans_overview_router, router as loans_router
 from .api.routes.imports import router as imports_router
@@ -98,6 +99,7 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
     app.include_router(
         auth_router, prefix="/api/v1", dependencies=mutation_dependency
     )
+    app.include_router(admin_access_router, prefix="/api/v1")
     app.include_router(
         catalogue_router, prefix="/api/v1", dependencies=mutation_dependency
     )

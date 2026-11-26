@@ -258,6 +258,12 @@ def test_every_unsafe_route_has_an_explicit_mutation_disposition() -> None:
         "login",
         "restore_deleted_account",
         "preview_rearrangement",
+        # Admin authentication has dedicated shared IP/identity limits, and
+        # session maintenance requires an already-authenticated admin session.
+        "admin_webauthn_options",
+        "admin_webauthn_verify",
+        "admin_session",
+        "admin_logout",
     }
     unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
     app = main.create_app()

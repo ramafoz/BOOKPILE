@@ -1,0 +1,211 @@
+from base64 import urlsafe_b64encode
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+import json
+from uuid import uuid4
+
+import cbor2
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import delete
+
+from bookpile_server.api.routes import admin_access
+from bookpile_server.config import get_settings
+from bookpile_server.database import get_session
+from bookpile_server.main import create_app
+from bookpile_server.models import Library, LibraryMembership, PlatformAdminAccess, PlatformRole, User, UserSession
+from bookpile_server.services.auth import hash_session_secret
+
+
+ORIGIN = "https://testserver"
+PREFIX = "/api/v1/admin/access"
+CODE = "synthetic-operator-confirmation"
+CSRF = "synthetic-normal-csrf"
+
+
+def encoded(value: bytes) -> str:
+    return urlsafe_b64encode(value).rstrip(b"=").decode()
+
+
+class Authenticator:
+    """Generate a real P-256 registration and signed WebAuthn assertions."""
+
+    def __init__(self):
+        self.key = ec.generate_private_key(ec.SECP256R1())
+        self.credential_id = uuid4().bytes
+        self.counter = 0
+
+    def proof(self, options, *, origin=ORIGIN, verified=True, cross_origin=False):
+        registration = options["ceremony"] == "registration"
+        client = json.dumps({
+            "type": "webauthn.create" if registration else "webauthn.get",
+            "challenge": options["public_key"]["challenge"],
+            "origin": origin,
+            "crossOrigin": cross_origin,
+        }).encode()
+        rp_hash = sha256(b"testserver").digest()
+        flags = 1 | (4 if verified else 0) | (64 if registration else 0)
+        auth_data = rp_hash + bytes([flags]) + self.counter.to_bytes(4, "big")
+        response = {"clientDataJSON": encoded(client)}
+        if registration:
+            numbers = self.key.public_key().public_numbers()
+            cose_key = cbor2.dumps({1: 2, 3: -7, -1: 1,
+                                   -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")})
+            auth_data += bytes(16) + len(self.credential_id).to_bytes(2, "big") + self.credential_id + cose_key
+            response["attestationObject"] = encoded(cbor2.dumps({"fmt": "none", "attStmt": {}, "authData": auth_data}))
+        else:
+            response["authenticatorData"] = encoded(auth_data)
+            response["signature"] = encoded(self.key.sign(auth_data + sha256(client).digest(), ec.ECDSA(hashes.SHA256())))
+        self.counter += 1
+        return {"credential": {"id": encoded(self.credential_id), "rawId": encoded(self.credential_id),
+                               "type": "public-key", "response": response}}
+
+
+@pytest.fixture
+def operator(session, monkeypatch):
+    monkeypatch.setenv("BOOKPILE_SERVER_PUBLIC_BASE_URL", ORIGIN)
+    monkeypatch.setenv("BOOKPILE_SERVER_ADMIN_WEBAUTHN_ENABLED", "true")
+    get_settings.cache_clear()
+    settings = get_settings()
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: session
+    now = datetime.now(UTC)
+    user = User(username="test_operator", email="operator@example.test", password_hash="unused",
+                state="active", email_verified_at=now)
+    session.add(user)
+    session.flush()
+    library = Library(name="Operator library", slug="operator-library", created_by_user_id=user.id)
+    foreign = Library(name="Other library", slug="other-library")
+    session.add_all([library, foreign])
+    session.flush()
+    session.add(LibraryMembership(user_id=user.id, library_id=library.id, role="OWNER"))
+    session.add_all(UserSession(user_id=user.id, token_hash=hash_session_secret(raw),
+                                csrf_token_hash=hash_session_secret(CSRF), last_seen_at=now,
+                                expires_at=now + timedelta(days=1), absolute_expires_at=now + timedelta(days=1))
+                    for raw in ("primary", "alternate"))
+    session.commit()
+    try:
+        with TestClient(app, base_url=ORIGIN, client=("192.0.2.8", 12345),
+                        headers={"Origin": ORIGIN, "X-CSRF-Token": CSRF}) as browser:
+            browser.cookies.set(settings.session_cookie_name, "primary")
+            yield browser, user.id, library.id, foreign.id
+    finally:
+        get_settings.cache_clear()
+
+
+def prepare(session, user_id):
+    session.add(PlatformRole(user_id=user_id, role="SYSTEM_ADMIN"))
+    session.flush()
+    access = PlatformAdminAccess(user_id=user_id, bootstrap_hash=hash_session_secret(CODE),
+                                 bootstrap_expires_at=datetime.now(UTC) + timedelta(minutes=10))
+    session.add(access)
+    session.commit()
+    return access
+
+
+def options(browser):
+    response = browser.post(f"{PREFIX}/options")
+    assert response.status_code == 200, response.json()
+    return response.json()
+
+
+def open_session(browser):
+    key = Authenticator()
+    registration = key.proof(options(browser))
+    registered = browser.post(f"{PREFIX}/verify", json={**registration, "confirmation": CODE})
+    assert registered.json() == {"registered": True}
+    assert not registered.headers.get_list("set-cookie")
+    assert browser.post(f"{PREFIX}/verify", json={**registration, "confirmation": CODE}).status_code == 403
+    assertion = key.proof(options(browser))
+    authenticated = browser.post(f"{PREFIX}/verify", json=assertion)
+    assert authenticated.json() == {"registered": False}
+    cookie = next(value for value in authenticated.headers.get_list("set-cookie")
+                  if value.startswith(f"{admin_access.ADMIN_COOKIE}="))
+    assert {"HttpOnly", "Secure", "SameSite=strict", "Path=/", "Max-Age=1800"} <= set(cookie.split("; ")[1:])
+    assert browser.post(f"{PREFIX}/verify", json=assertion).status_code == 403
+    return {"X-Admin-CSRF-Token": browser.cookies[admin_access.ADMIN_CSRF_COOKIE]}
+
+
+def test_explicit_role_and_webauthn_preserve_library_permissions(operator, session):
+    browser, user_id, library_id, foreign_id = operator
+    own = f"/api/v1/libraries/{library_id}/members"
+    foreign = f"/api/v1/libraries/{foreign_id}/members"
+    before = browser.get(own)
+    assert before.status_code == 200
+    assert browser.get(foreign).status_code == 404
+    assert browser.post(f"{PREFIX}/options").status_code == 403
+    prepare(session, user_id)
+    assert browser.post(f"{PREFIX}/session").status_code == 401
+    assert browser.post(f"{PREFIX}/options", headers={"Origin": "https://other.example"}).status_code == 403
+    assert browser.post(f"{PREFIX}/options", headers={"X-CSRF-Token": "wrong"}).status_code == 403
+    headers = open_session(browser)
+    assert browser.post(f"{PREFIX}/session").status_code == 403
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+    assert browser.get(own).json() == before.json()
+    assert browser.get(foreign).status_code == 404
+    assert browser.post(f"{PREFIX}/logout", headers=headers).status_code == 204
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 401
+    assert browser.get(own).json() == before.json()
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_admin_session_expires_at_both_limits(operator, session, monkeypatch, absolute):
+    browser, user_id, *_ = operator
+    access = prepare(session, user_id)
+    headers = open_session(browser)
+    started = admin_access.utc_value(access.last_active_at)
+
+    class Clock(datetime):
+        current = started
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(admin_access, "datetime", Clock)
+    Clock.current = started + timedelta(minutes=14)
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+    if absolute:
+        Clock.current = started + timedelta(minutes=28)
+        assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+        Clock.current = started + timedelta(minutes=30)
+    else:
+        Clock.current = started + timedelta(minutes=29)
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 401
+    assert browser.get("/api/v1/auth/me").status_code == 200
+
+
+def test_challenge_and_admin_session_are_bound_to_the_normal_session(operator, session):
+    browser, user_id, *_ = operator
+    prepare(session, user_id)
+    cookie = get_settings().session_cookie_name
+    registration = Authenticator().proof(options(browser))
+    browser.cookies.set(cookie, "alternate")
+    assert browser.post(f"{PREFIX}/verify", json={**registration, "confirmation": CODE}).status_code == 403
+    browser.cookies.set(cookie, "primary")
+    headers = open_session(browser)
+    browser.cookies.set(cookie, "alternate")
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 401
+    browser.cookies.set(cookie, "primary")
+    session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
+    session.commit()
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 403
+
+
+def test_registration_confirmation_and_proof_limits(operator, session):
+    browser, user_id, *_ = operator
+    access = prepare(session, user_id)
+    key = Authenticator()
+    for proof, code in (
+        ({}, "invalid"), ({"origin": "https://different.example"}, CODE),
+        ({"verified": False}, CODE), ({"cross_origin": True}, CODE),
+    ):
+        payload = key.proof(options(browser), **proof)
+        assert browser.post(f"{PREFIX}/verify", json={**payload, "confirmation": code}).status_code == 403
+    assert access.credential_id is None
+    for _ in range(6):
+        assert browser.post(f"{PREFIX}/verify", json={}).status_code == 403
+    # Forwarding headers from an untrusted peer cannot evade the limit.
+    assert browser.post(f"{PREFIX}/verify", json={}, headers={"X-Forwarded-For": "192.0.2.9"}).status_code == 429

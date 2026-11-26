@@ -23,6 +23,7 @@ dependencies = [
   "sentry-sdk==2.66.1",
   "sqlalchemy==2.0.58",
   "uvicorn[standard]==0.34.3",
+  "webauthn==3.0.1",
 ]
 
 [project.optional-dependencies]

@@ -1693,8 +1693,48 @@ unconfirmed request or one that would leave the role unchanged records a failed
 result after the typed confirmation. The assignment is committed only if the
 success audit append commits.
 
-This operation changes the account's platform assignment. Console access and
-recovery-code activation are subject to the A2 and A5 gates.
+The public account registration endpoint rejects reserved usernames in every
+Server environment, including case and whitespace variants. Platform enrolment
+works with an existing, active, verified account UUID and leaves its library
+memberships in place.
+
+### First platform passkey and admin session
+
+Migration `0027_platform_admin_access` must be installed before enabling
+`BOOKPILE_SERVER_ADMIN_WEBAUTHN_ENABLED=true` in the approved API runtime
+configuration. Use the environment's canonical HTTPS origin in
+`BOOKPILE_SERVER_PUBLIC_BASE_URL`. The passkey is scoped to that exact hostname
+and origin, so staging and production use separate enrolments. Keep the
+feature disabled during application rollback or while reconciling platform
+assignments and credentials after a database recovery. Migration downgrade
+refuses to discard populated admin access data. A restored snapshot preserves
+registered keys, while pending confirmations, challenges and sessions expire
+as part of database recovery.
+
+Sign into the target account normally and open `/admin-access` on the approved
+origin in a current browser. From the authorized host session and with the same
+configuration as [offline platform role changes](#offline-platform-role-changes),
+prepare the first credential for its existing `SYSTEM_ADMIN` assignment.
+
+```bash
+BOOKPILE_PLATFORM_ADMIN_ENV_FILE=.env.platform-admin docker compose --env-file "$BOOKPILE_DEPLOY_ENV" -f server/compose.production.yaml run --rm --no-deps --pull never platform-admin prepare-passkey "$TARGET_ACCOUNT_UUID" --operator "$OPERATOR_ID" --reason bootstrap
+```
+
+Type `PREPARE-PASSKEY <account UUID>` exactly. The host records the result in
+A3 and sends a confirmation to the independent operator mailbox. Enter the code
+only on the approved `/admin-access` page within ten minutes. Complete the
+authenticator's PIN or biometric verification. After registration, use the key
+again to open the admin session. Keep the returned host correlation reference
+for audit verification.
+
+Only the first credential can be registered. A new preparation can be issued
+after an unused code expires. Loss or compromise of the registered key requires
+the authorized role revocation procedure, which removes the registered key,
+challenge and session. A subsequent role enrolment requires a new preparation
+and passkey registration. Ending the admin session leaves the normal account
+session open. Successful admin requests extend the idle window to 15 minutes
+within the fixed 30-minute maximum. A new admin sign-in replaces the previous
+admin session for that account.
 
 Break-glass access is an off-host custodied operator credential used only when
 normal deployment access is unavailable. It requires provider MFA, a second

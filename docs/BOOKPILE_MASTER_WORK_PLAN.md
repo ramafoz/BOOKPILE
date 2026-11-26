@@ -928,13 +928,18 @@ This entire section is a **production blocker**.
 
 ### A2 — Strong authentication
 
-- [ ] Require a normal authenticated account plus a registered WebAuthn/FIDO2
+- [x] Require a normal authenticated account plus a registered WebAuthn/FIDO2
   passkey or hardware security key before creating an admin session. SMS is not
-  accepted as a factor.
+  accepted as a factor. The first credential requires audited VPS preparation
+  and a ten-minute, single-use operator-email confirmation. Tests verify signed
+  assertions, challenge replay rejection (including concurrent PostgreSQL
+  requests), explicit role assignment and unchanged Owner permissions.
 - [ ] Provide one-time hashed recovery codes generated at enrolment and require
   offline custody; using a code revokes it and sends an operator alert.
-- [ ] Use a separate HttpOnly, Secure, SameSite=Strict admin-session cookie with
+- [x] Use a separate HttpOnly, Secure, SameSite=Strict admin-session cookie with
   CSRF protection, 15-minute inactivity expiry and 30-minute absolute expiry.
+  Server tests verify both expiry boundaries, both CSRF tokens, and binding to
+  the ordinary session. The HTTPS entry point is disabled by default.
 - [ ] Require a WebAuthn step-up performed within the previous five minutes for
   every destructive action.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation
@@ -943,6 +948,8 @@ This entire section is a **production blocker**.
 - [ ] Rate-limit admin login, WebAuthn assertions, recovery codes and email
   confirmations by validated IP and administrator identity; alert on every
   failed recovery-code or repeated step-up attempt.
+  The registration and sign-in flows enforce shared limits by validated IP
+  and authenticated account. Recovery and step-up alerting remain open.
 
 ### A3 — Immutable audit
 
