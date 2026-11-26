@@ -951,6 +951,30 @@ This entire section is a **production blocker**.
   The registration and sign-in flows enforce shared limits by validated IP
   and authenticated account. Recovery and step-up alerting remain open.
 
+#### Staging passkey and session rehearsal — 2026-11-26
+
+Staging ran revision `d79995d0f1d5fd42582c393c9492a4a52a99d518`.
+An active, verified test Owner received an explicit platform assignment via
+the VPS workflow and registered a Windows passkey using the independent
+operator-mailbox confirmation. An unauthenticated request returned `401` while
+the feature was enabled. The test Owner's ordinary session could manage the
+library but could not open an admin session until WebAuthn succeeded.
+
+The operator created a book through the ordinary library session while the
+admin session was active. The admin session was rejected after the 15-minute
+idle window. In a separate session, a successful check extended the idle
+window. Subsequent checks kept the same absolute deadline, and a check after
+30 minutes was rejected despite recent activity. One sign-in retry after
+expiry displayed a generic error. A subsequent assertion with the same
+passkey succeeded; the cause of the earlier rejection was undetermined.
+
+An audited VPS revocation invalidated an active admin session. The account
+kept its Owner permissions. A3 verified all 16 rows at 21:39 UTC, and a scoped
+lookup confirmed that row 16 was the successful revocation. The API returned
+to healthy after disabling WebAuthn and the public probe returned `404`.
+This rehearsal covers the Windows passkey and session slice. Physical-key
+and full A5 acceptance remain open.
+
 ### A3 — Immutable audit
 
 - [x] Implement the PostgreSQL A3 ledger behind fixed NOLOGIN owner, writer,
