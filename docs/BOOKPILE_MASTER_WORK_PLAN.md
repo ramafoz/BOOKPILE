@@ -940,6 +940,13 @@ This entire section is a **production blocker**.
   CSRF protection, 15-minute inactivity expiry and 30-minute absolute expiry.
   Server tests verify both expiry boundaries, both CSRF tokens, and binding to
   the ordinary session. The HTTPS entry point is disabled by default.
+- [ ] Restrict the `/admin-access` browser page to active, verified accounts
+  with an explicit `SYSTEM_ADMIN` assignment while admin access is enabled.
+  Direct navigation must show ordinary sign-in to signed-out visitors and a
+  generic unavailable page to signed-in accounts without access, including
+  revoked administrators. Check eligibility on the server before rendering
+  the admin interface. Registration, assertions and admin session endpoints
+  continue to enforce their own authorization checks.
 - [ ] Require a WebAuthn step-up performed within the previous five minutes for
   every destructive action.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation
