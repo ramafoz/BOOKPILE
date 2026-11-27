@@ -957,6 +957,15 @@ This entire section is a **production blocker**.
   before first registration and before sign-in with a registered key.
 - [ ] Require a WebAuthn step-up performed within the previous five minutes for
   every destructive action.
+  The reusable Server guard requires the ordinary session, explicit platform
+  role and independent admin session, then checks a separate user-verified
+  assertion with a strict five-minute cutoff. The
+  [API regressions](../server/tests/test_admin_access.py) exercise the guard
+  through a test-only route. The
+  [PostgreSQL rehearsal](../server/tests/test_postgresql_integration.py) checks
+  concurrent consumption under the runtime role and discards step-up state on
+  restore. Keep this criterion open until the applicable A4 routes enforce it
+  and pass acceptance through their actual entry points.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation
   and recovery-code regeneration, require an additional single-use confirmation
   sent to the separately configured operator email, expiring after ten minutes.

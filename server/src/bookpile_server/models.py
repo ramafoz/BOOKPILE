@@ -136,6 +136,11 @@ class PlatformAdminAccess(Base):
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     absolute_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    step_up_session_hash: Mapped[str | None] = mapped_column(String(64))
+    step_up_challenge: Mapped[bytes | None] = mapped_column(LargeBinary)
+    step_up_challenge_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    step_up_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
