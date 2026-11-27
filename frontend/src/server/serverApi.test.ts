@@ -32,6 +32,27 @@ describe("empty accepted responses", () => {
 });
 
 describe("configured CSRF cookie", () => {
+  it("sends the step-up and revocation requests with both CSRF headers", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response('{"public_key":{}}'))
+      .mockResolvedValueOnce(new Response('{"expires_at":"2026-11-27T12:00:00Z"}'))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await serverApi.adminStepUpOptions();
+    await serverApi.verifyAdminStepUp({ id: "assertion" });
+    await serverApi.revokeAdminAccountInvitation("invitation-id");
+    expect(fetchMock.mock.calls.map(([url]) => new URL(String(url), "http://bookpile.test").pathname)).toEqual([
+      "/api/v1/admin/access/step-up/options",
+      "/api/v1/admin/access/step-up/verify",
+      "/api/v1/admin/account-invitations/revoke",
+    ]);
+    for (const [, request] of fetchMock.mock.calls) {
+      expect(new Headers(request?.headers).get("X-CSRF-Token")).toBe("account");
+      expect(new Headers(request?.headers).get("X-Admin-CSRF-Token")).toBe("admin");
+    }
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ invitation_id: "invitation-id" });
+  });
+
   it("uses separate ordinary and admin CSRF headers for an admin session", async () => {
     vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));

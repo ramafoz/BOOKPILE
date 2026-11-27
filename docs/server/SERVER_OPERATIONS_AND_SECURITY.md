@@ -1758,6 +1758,24 @@ Use the `AdminStepUp` dependency on each applicable platform action and keep
 the action in the transaction that holds the admin access row lock. Each route
 also enforces its own authorization, scope, audit and confirmation requirements.
 
+### Revoke an account invitation from the console
+
+Apply migration `0029_admin_invitation_revocation` before exposing invitation
+revocation. Open the administrative session, enter the account invitation ID
+shown by the host's invitation creation command, and select the button to
+verify with the key and revoke the invitation. The console takes the ID printed
+separately by that command. The registration URL contains the invitation token
+and should only go to the invitation recipient.
+
+The API accepts the ID in the body of `POST /api/v1/admin/account-invitations/revoke`.
+The database locks the invitation, checks the reverification deadline again
+and commits the revocation and immutable audit entry together. Repeating a
+successful request returns success without another audit entry. Unknown,
+consumed and expired invitations are unavailable. The application database
+role can execute the dedicated operation and cannot access the audit schema.
+Database recovery re-establishes these permissions. Downgrading `0029` removes
+the console operation and preserves invitation and audit rows.
+
 Break-glass access is an off-host custodied operator credential used only when
 normal deployment access is unavailable. It requires provider MFA, a second
 person where feasible, a time-bounded incident record, immediate credential

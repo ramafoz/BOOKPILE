@@ -964,8 +964,9 @@ This entire section is a **production blocker**.
   through a test-only route. The
   [PostgreSQL rehearsal](../server/tests/test_postgresql_integration.py) checks
   concurrent consumption under the runtime role and discards step-up state on
-  restore. Keep this criterion open until the applicable A4 routes enforce it
-  and pass acceptance through their actual entry points.
+  restore. Account-invitation revocation applies the guard at its real entry
+  point. Keep this criterion open until the remaining applicable A4 routes
+  enforce it and pass acceptance through their actual entry points.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation
   and recovery-code regeneration, require an additional single-use confirmation
   sent to the separately configured operator email, expiring after ten minutes.
@@ -1065,6 +1066,11 @@ rollback restores the forward configuration.
 ### A4 — Allowed console capabilities
 
 - [ ] Create and revoke account invitations.
+  The console can revoke an unused account invitation by ID. Its POST route
+  requires current WebAuthn step-up and commits the revocation and immutable
+  audit entry together. The [PostgreSQL API regression](../server/tests/test_postgresql_integration.py)
+  covers absent and expired step-up, replay, and rollback when audit fails.
+  Console creation and browser/staging acceptance remain open.
 - [ ] List the minimum account identity and state required for administration;
   suspend/reactivate an account and revoke its sessions with reason and step-up.
 - [ ] Display storage entitlements, usage and aggregate capacity without

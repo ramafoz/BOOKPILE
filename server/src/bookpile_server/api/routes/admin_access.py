@@ -275,14 +275,22 @@ def require_admin_session(
 AdminSession = Annotated[PlatformAdminAccess, Depends(require_admin_session)]
 
 
+def step_up_deadline(access: PlatformAdminAccess) -> datetime | None:
+    deadline = session_deadline(access)
+    if deadline is None or access.step_up_verified_at is None:
+        return None
+    return min(deadline, utc_value(access.step_up_verified_at) + STEP_UP_LIFETIME)
+
+
 def require_admin_step_up(access: AdminSession) -> PlatformAdminAccess:
     """Keep the admin row locked through the protected action's transaction."""
     verified_at = access.step_up_verified_at
+    deadline = step_up_deadline(access)
     now = datetime.now(UTC)
     if (
         access.step_up_session_hash != access.session_hash
         or verified_at is None
-        or not utc_value(verified_at) <= now < utc_value(verified_at) + STEP_UP_LIFETIME
+        or deadline is None or not utc_value(verified_at) <= now < deadline
     ):
         raise HTTPException(403, "Recent WebAuthn reverification required")
     return access
