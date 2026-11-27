@@ -26,7 +26,7 @@ from ...services.account_invitations import (
     RegistrationConflictError,
     RegistrationValidationError,
 )
-from ...services.auth import InvalidCredentialsError, LoginResult
+from ...services.auth import InvalidCredentialsError, LoginResult, hash_session_secret
 from ...services.account_deletion import AccountRecoveryUnavailableError
 from ...services.rate_limits import (
     RateLimitExceededError,
@@ -34,6 +34,7 @@ from ...services.rate_limits import (
     RateLimitPolicy,
 )
 from ...security.identities import normalize_account_identifier
+from ..admin_page import PAGE_COOKIE, PAGE_PATH, set_admin_page_cookie
 from ..dependencies import (
     AccountActionServiceDependency,
     AccountDeletionServiceDependency,
@@ -118,10 +119,17 @@ def set_auth_cookies(response: Response, result: LoginResult) -> None:
         httponly=True,
         samesite="lax",
     )
+    set_admin_page_cookie(
+        response, result.session_id, hash_session_secret(result.raw_session_token),
+        result.absolute_expires_at,
+    )
 
 
 def clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
+    response.delete_cookie(
+        PAGE_COOKIE, path=PAGE_PATH, secure=True, httponly=True, samesite="lax",
+    )
     response.delete_cookie(
         key=settings.session_cookie_name,
         path="/api/v1",
@@ -431,7 +439,9 @@ def logout(
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-def current_user(context: CurrentAuthDependency) -> CurrentUserResponse:
+def current_user(response: Response, context: CurrentAuthDependency) -> CurrentUserResponse:
+    session = context.user_session
+    set_admin_page_cookie(response, session.id, session.token_hash, session.absolute_expires_at)
     return CurrentUserResponse(
         user_id=context.user_id,
         username=context.username,

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import delete
 
+from bookpile_server.api.admin_page import PAGE_COOKIE
 from bookpile_server.api.routes import admin_access
 from bookpile_server.config import get_settings
 from bookpile_server.database import get_session
@@ -137,6 +138,10 @@ def test_explicit_role_and_webauthn_preserve_library_permissions(operator, sessi
     assert browser.get(foreign).status_code == 404
     assert browser.post(f"{PREFIX}/options").status_code == 403
     prepare(session, user_id)
+    assert browser.get("/api/v1/auth/me").status_code == 200
+    page_proof = {"Cookie": f"{PAGE_COOKIE}={browser.cookies[PAGE_COOKIE]}"}
+    page_gate = "/internal/admin-page-eligibility"
+    assert browser.get(page_gate, headers=page_proof).status_code == 204
     assert browser.post(f"{PREFIX}/session").status_code == 401
     assert browser.post(f"{PREFIX}/options", headers={"Origin": "https://other.example"}).status_code == 403
     assert browser.post(f"{PREFIX}/options", headers={"X-CSRF-Token": "wrong"}).status_code == 403
@@ -147,6 +152,8 @@ def test_explicit_role_and_webauthn_preserve_library_permissions(operator, sessi
     assert browser.get(foreign).status_code == 404
     assert browser.post(f"{PREFIX}/logout", headers=headers).status_code == 204
     assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 401
+    assert browser.get(page_gate, headers=page_proof).status_code == 204
+    assert options(browser)["ceremony"] == "authentication"
     assert browser.get(own).json() == before.json()
 
 

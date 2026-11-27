@@ -210,6 +210,18 @@ jobs:
         run: >-
           BOOKPILE_CADDY_IMAGE=bookpile-web:ci
           sh server/scripts/rehearse-d6-health-policy-dry-run.sh
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13.7"
+          cache: pip
+          cache-dependency-path: server/pyproject.toml
+      - name: Test admin page navigation through the shipped Caddy version
+        run: |
+          python -m pip install -e "server[dev]"
+          container="$(docker create bookpile-web:ci)"
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/usr/bin/caddy" "$RUNNER_TEMP/caddy"
+          BOOKPILE_TEST_CADDY="$RUNNER_TEMP/caddy" python -m pytest server/tests/test_admin_page.py
       - name: Build operational backup image
         uses: docker/build-push-action@v7
         with:

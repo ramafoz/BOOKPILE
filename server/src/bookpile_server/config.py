@@ -168,6 +168,10 @@ class Settings(BaseSettings):
         return f"{parsed.scheme}://{parsed.netloc}"
 
     @property
+    def admin_access_enabled(self) -> bool:
+        return self.admin_webauthn_enabled and self.public_origin.startswith("https://")
+
+    @property
     def allowed_host_values(self) -> list[str]:
         configured = [item.strip() for item in self.allowed_hosts.split(",") if item.strip()]
         if configured:

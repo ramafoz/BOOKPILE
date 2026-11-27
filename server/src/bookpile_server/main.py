@@ -10,6 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from .api.admin_page import router as admin_page_router
 from .api.routes.catalogue import router as catalogue_router
 from .api.routes.auth import router as auth_router
 from .api.routes.admin_access import router as admin_access_router
@@ -100,6 +101,7 @@ def create_app(*, rate_limit_session_factory=SessionFactory) -> FastAPI:
         auth_router, prefix="/api/v1", dependencies=mutation_dependency
     )
     app.include_router(admin_access_router, prefix="/api/v1")
+    app.include_router(admin_page_router)
     app.include_router(
         catalogue_router, prefix="/api/v1", dependencies=mutation_dependency
     )
