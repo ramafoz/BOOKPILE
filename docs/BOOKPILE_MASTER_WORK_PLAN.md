@@ -1130,6 +1130,9 @@ and full console acceptance.
   pagination, response fields, unknown IDs and missing data. They verified
   that a later failed login did not replace the latest successful login and
   that shared storage exposed only the account's allocated share.
+  The [PostgreSQL rehearsal](../server/tests/test_postgresql_integration.py)
+  also passed both queries under the restricted runtime role on a disposable
+  database ending in `_test`.
 - [ ] Test CSRF, stolen normal session without WebAuthn, replayed assertion,
   expired email confirmation, consumed recovery code and direct object-ID
   manipulation.
