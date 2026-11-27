@@ -1075,8 +1075,19 @@ rollback restores the forward configuration.
   acceptance remain open.
 - [ ] List the minimum account identity and state required for administration;
   suspend/reactivate an account and revoke its sessions with reason and step-up.
+  The Server directory in `/admin-access` lists usernames, account states and
+  explicit platform administrator assignments. The read-only detail adds the
+  latest retained successful login and storage used versus quota. An absent
+  record is shown as **No data**. Inactivity is not evidence of a test account.
+  Books belong to libraries, which may have multiple Owners and Viewers, so
+  the directory omits per-account book and library counts. See the
+  [operator instructions](server/SERVER_OPERATIONS_AND_SECURITY.md#consult-the-account-directory).
 - [ ] Display storage entitlements, usage and aggregate capacity without
   exposing library names, book metadata or object keys.
+  The account detail reports only the logical storage total and quota.
+  Usage combines account data with the existing allocated shares of active
+  libraries. Viewers receive no library storage charge. Service-wide capacity
+  remains open.
 - [ ] Display service/backup/email/deep-check health and D5 aggregates.
 - [ ] Display filtered security cases and normalized events with time, event
   class, outcome, pseudonymous client correlation and deployment revision.
@@ -1113,6 +1124,15 @@ and full console acceptance.
 
 - [ ] Test every route with ordinary user, Owner, Viewer, expired admin session,
   revoked administrator and valid administrator.
+  On 2026-11-27, the [account directory route tests](../server/tests/test_admin_access.py)
+  used disposable accounts and covered both queries for these roles, both
+  expiry boundaries, origin, both CSRF tokens, ordinary-session binding,
+  pagination, response fields, unknown IDs and missing data. They verified
+  that a later failed login did not replace the latest successful login and
+  that shared storage exposed only the account's allocated share.
+  The [PostgreSQL rehearsal](../server/tests/test_postgresql_integration.py)
+  also passed both queries under the restricted runtime role on a disposable
+  database ending in `_test`.
 - [ ] Test CSRF, stolen normal session without WebAuthn, replayed assertion,
   expired email confirmation, consumed recovery code and direct object-ID
   manipulation.

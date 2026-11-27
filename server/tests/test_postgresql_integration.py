@@ -244,6 +244,8 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                 csrf_token_hash=hash_session_secret(CSRF), last_seen_at=now,
                 expires_at=now + timedelta(days=1), absolute_expires_at=now + timedelta(days=1),
             ))
+            session.add(AccountStorageEntitlement(user_id=target))
+            session.add(SecurityEvent(user_id=target, event_type="login_succeeded", occurred_at=now))
         with Session(engine, expire_on_commit=False) as session:
             invitation_id = AccountInvitationService(AccountInvitationRepository(session)).create().invitation_id
         with engine.begin() as connection:
@@ -284,6 +286,20 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                         assert sorted(attempt.result(timeout=10).status_code for attempt in attempts) == [200, 403]
 
                     headers = {"X-Admin-CSRF-Token": browser.cookies[ADMIN_CSRF_COOKIE]}
+                    directory = "/api/v1/admin/accounts"
+                    listing = browser.post(f"{directory}/list", headers=headers, json={})
+                    assert listing.status_code == 200
+                    summary = {
+                        "account_id": str(target), "username": "synthetic_owner", "state": "active",
+                        "is_system_admin": True,
+                    }
+                    assert listing.json() == {"accounts": [summary], "next_offset": None}
+                    detail = browser.post(f"{directory}/detail", headers=headers, json={"account_id": str(target)})
+                    assert detail.status_code == 200
+                    body = detail.json()
+                    assert datetime.fromisoformat(body.pop("last_successful_login_at")) == now
+                    assert body == {**summary, "storage_used_bytes": 0, "storage_limit_bytes": 100_000_000}
+
                     revoke_path = "/api/v1/admin/account-invitations/revoke"
                     payload = {"invitation_id": str(invitation_id)}
                     assert browser.post(revoke_path, headers=headers, json=payload).status_code == 403

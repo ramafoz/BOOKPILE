@@ -214,6 +214,29 @@ button { cursor: pointer; }
 .server-card-links button,
 .server-danger-link { padding: 3px; border: 0; color: #7b4d38; background: transparent; text-decoration: underline; font-size: 13px; }
 .server-card-links button:hover { color: #a44d2c; }
+.server-admin-accounts { margin-block: 22px; padding-block: 16px; border-block: 1px solid #e4dacc; }
+.server-admin-accounts h3 { margin: 0 0 10px; overflow-wrap: anywhere; }
+.server-admin-accounts ul { list-style: none; margin: 0; padding: 0; }
+.server-admin-accounts li + li { margin-top: 6px; }
+.server-admin-accounts button {
+  min-height: 44px;
+  padding: 7px 12px;
+  border: 1px solid #d3c6b4;
+  border-radius: 8px;
+  color: #18342d;
+  background: #fffdf9;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.server-admin-accounts button:hover:not(:disabled) { border-color: #286456; background: #e8f2ed; }
+.server-admin-accounts button:disabled { opacity: .58; }
+.server-admin-accounts li button { display: grid; gap: 3px; width: 100%; }
+.server-admin-accounts li span { font-size: .875em; }
+.server-admin-account-pages { display: flex; flex-wrap: wrap; gap: 6px; }
+.server-admin-account-pages:not(:empty) { margin-top: 10px; }
+.server-admin-account-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.server-admin-account-facts dt { font-weight: 700; }
+.server-admin-account-facts dd { margin: 0; overflow-wrap: anywhere; }
 .server-complete { display: grid; justify-items: center; gap: 15px; color: #285f52; text-align: center; }
 .server-complete p { margin: 0 0 4px; color: #4e625c; line-height: 1.55; }
 .server-complete .server-submit { width: 100%; }

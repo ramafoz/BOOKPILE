@@ -1758,6 +1758,27 @@ Use the `AdminStepUp` dependency on each applicable platform action and keep
 the action in the transaction that holds the admin access row lock. Each route
 also enforces its own authorization, scope, audit and confirmation requirements.
 
+### Consult the account directory
+
+After signing in with the registered key, select **View accounts** in
+`/admin-access`. The alphabetical list shows usernames, account states and
+platform administrator assignments. Select a username to see the most recent
+retained successful sign-in and the account's storage usage and quota. The
+sign-in history is subject to the existing 180-day event cleanup. A missing
+sign-in record or storage entitlement is shown as **No data**. Inactivity
+alone does not identify a test account.
+
+Usage includes the account's logical profile storage and its allocated shares
+of active libraries. For a shared library, the directory uses only the share
+charged to that account. Read-only library membership has no storage charge.
+The directory exposes no email addresses, library details, book counts or
+underlying security event records.
+
+Both read-only queries require the current platform assignment, ordinary and
+admin sessions, the approved origin and both CSRF tokens. Account identifiers
+needed to request a detail stay in the request body. Successful query responses
+are not cacheable. The queries leave the administrative expiry deadline intact.
+
 ### Revoke an account invitation from the console
 
 Apply migration `0029_admin_invitation_revocation` before exposing invitation

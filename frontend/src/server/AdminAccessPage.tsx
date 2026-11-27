@@ -1,4 +1,5 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import AdminAccountDirectory from "./AdminAccountDirectory";
 import { useLocale } from "./LocaleContext";
 import { type AppLocale, intlLocale } from "./locale";
 import { ServerApiError, serverApi } from "./serverApi";
@@ -54,6 +55,12 @@ export default function AdminAccessPage() {
   const [invitationId, setInvitationId] = useState("");
   const [invitationRevoked, setInvitationRevoked] = useState(false);
 
+  useEffect(() => {
+    if (!expires) return;
+    const timer = window.setTimeout(() => setExpires(null), Math.max(0, Date.parse(expires) - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [expires]);
+
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -64,6 +71,17 @@ export default function AdminAccessPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function runAccountQuery(action: () => Promise<void>) {
+    return run(async () => {
+      try {
+        await action();
+      } catch (caught) {
+        if (caught instanceof ServerApiError && [401, 403, 404].includes(caught.status)) setExpires(null);
+        throw caught;
+      }
+    });
   }
 
   const supported = window.isSecureContext && typeof PublicKeyCredential !== "undefined"
@@ -108,6 +126,7 @@ export default function AdminAccessPage() {
     {error && <p className="server-message error" role="alert">{error}</p>}
     {registered && <p className="server-message success" role="status">{words.registered}</p>}
     {expires && <p role="status">{words.expires} {new Date(expires).toLocaleTimeString(intlLocale(locale))}</p>}
+    {expires && <AdminAccountDirectory busy={busy} run={runAccountQuery} />}
     {supported && expires && <form className="server-form" onSubmit={revokeInvitation}>
       <label className="server-field">
         <span>{invitationWords.id}</span>

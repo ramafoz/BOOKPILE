@@ -737,6 +737,21 @@ async function request<T>(
   return JSON.parse(responseText) as T;
 }
 
+export type AdminAccountSummary = {
+  account_id: string;
+  username: string;
+  state: "pending_verification" | "active" | "suspended" | "pending_deletion" | "deleted";
+  is_system_admin: boolean;
+};
+
+export type AdminAccountDetail = AdminAccountSummary & {
+  last_successful_login_at: string | null;
+  storage_used_bytes: number | null;
+  storage_limit_bytes: number | null;
+};
+
+export type AdminAccountPage = { accounts: AdminAccountSummary[]; next_offset: number | null };
+
 function adminCsrfHeaders(): Headers {
   const headers = new Headers();
   const token = cookieValue(document.cookie, "__Host-bookpile_admin_csrf");
@@ -757,6 +772,13 @@ export const serverApi = {
   ),
   adminLogout: () => request<void>(
     "/admin/access/logout", { method: "POST", headers: adminCsrfHeaders() }, true,
+  ),
+  adminAccounts: (offset: number) => request<AdminAccountPage>(
+    "/admin/accounts/list", { method: "POST", headers: adminCsrfHeaders(), body: JSON.stringify({ offset }) }, true,
+  ),
+  adminAccountDetail: (accountId: string) => request<AdminAccountDetail>(
+    "/admin/accounts/detail",
+    { method: "POST", headers: adminCsrfHeaders(), body: JSON.stringify({ account_id: accountId }) }, true,
   ),
   adminStepUpOptions: () => request<{ public_key: PublicKeyCredentialRequestOptionsJSON }>(
     "/admin/access/step-up/options", { method: "POST", headers: adminCsrfHeaders() }, true,
