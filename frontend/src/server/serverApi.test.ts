@@ -32,6 +32,27 @@ describe("empty accepted responses", () => {
 });
 
 describe("configured CSRF cookie", () => {
+  it("uses both CSRF headers and keeps account identifiers in the request body", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response('{"accounts":[],"next_offset":null}'))
+      .mockResolvedValueOnce(new Response('{"account_id":"synthetic-id"}'));
+
+    await serverApi.adminAccounts(25);
+    await serverApi.adminAccountDetail("synthetic-id");
+
+    const [list, detail] = fetchMock.mock.calls;
+    expect(list[0]).toBe("/api/v1/admin/accounts/list");
+    expect(detail[0]).toBe("/api/v1/admin/accounts/detail");
+    expect(JSON.parse(String(list[1]?.body))).toEqual({ offset: 25 });
+    expect(JSON.parse(String(detail[1]?.body))).toEqual({ account_id: "synthetic-id" });
+    for (const [, request] of fetchMock.mock.calls) {
+      expect(request?.method).toBe("POST");
+      expect(new Headers(request?.headers).get("X-CSRF-Token")).toBe("account");
+      expect(new Headers(request?.headers).get("X-Admin-CSRF-Token")).toBe("admin");
+    }
+  });
+
   it("sends the step-up and revocation requests with both CSRF headers", async () => {
     vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
     const fetchMock = vi.spyOn(globalThis, "fetch")

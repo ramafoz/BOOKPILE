@@ -17,8 +17,12 @@ from bookpile_server.api.routes import admin_access
 from bookpile_server.config import get_settings
 from bookpile_server.database import get_session
 from bookpile_server.main import create_app
-from bookpile_server.models import Library, LibraryMembership, PlatformAdminAccess, PlatformRole, User, UserSession
+from bookpile_server.models import (
+    AccountStorageEntitlement, Library, LibraryMembership, LibraryStorageAllocation,
+    PlatformAdminAccess, PlatformRole, SecurityEvent, User, UserProfile, UserSession,
+)
 from bookpile_server.services.auth import hash_session_secret
+from bookpile_server.services.storage_accounting import calculate_account_data_bytes
 
 
 ORIGIN = "https://testserver"
@@ -396,3 +400,117 @@ def test_account_invitation_revocation_checks_role_session_csrf_and_origin(opera
     session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
     session.commit()
     assert browser.post(path, headers=headers, json=payload).status_code == 403
+
+
+@pytest.mark.parametrize("query", ["list", "detail"])
+@pytest.mark.parametrize("absolute", [False, True])
+def test_account_directory_enforces_admin_session_on_each_query(operator, session, monkeypatch, query, absolute):
+    browser, user_id, library_id, _ = operator
+    path = f"/api/v1/admin/accounts/{query}"
+    payload = {} if query == "list" else {"account_id": str(user_id)}
+    normal_cookie = get_settings().session_cookie_name
+    browser.cookies.delete(normal_cookie)
+    assert browser.post(path, json=payload).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+    assert browser.post(path, json=payload).status_code == 403  # Owner
+    membership = session.query(LibraryMembership).filter_by(user_id=user_id, library_id=library_id).one()
+    membership.role = "VIEWER"
+    membership.viewer_scope = "CATALOG_ONLY"
+    session.commit()
+    assert browser.post(path, json=payload).status_code == 403  # Viewer
+    session.delete(membership)
+    session.commit()
+    assert browser.post(path, json=payload).status_code == 403  # Ordinary user without membership
+
+    access = prepare(session, user_id)
+    assert browser.post(path, json=payload).status_code == 401  # Assignment with ordinary session only
+    headers = open_session(browser)
+    assert browser.post(path, json=payload).status_code == 403
+    for invalid in (
+        {"Origin": "https://other.example"}, {"X-CSRF-Token": "wrong"}, {"X-Admin-CSRF-Token": "wrong"},
+    ):
+        assert browser.post(path, headers=headers | invalid, json=payload).status_code == 403
+    browser.cookies.set(normal_cookie, "alternate")
+    assert browser.post(path, headers=headers, json=payload).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+
+    response = browser.post(path, headers=headers, json=payload)
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    session.refresh(access)
+    if absolute:
+        access.last_active_at = admin_access.utc_value(access.absolute_expires_at) - timedelta(minutes=1)
+        session.commit()
+    with monkeypatch.context() as clock:
+        freeze_admin_clock(clock, admin_access.session_deadline(access))
+        assert browser.post(path, headers=headers, json=payload).status_code == 401
+    session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
+    session.commit()
+    assert browser.post(path, headers=headers, json=payload).status_code == 403
+
+
+def test_account_directory_paginates_and_returns_only_account_facts(operator, session):
+    browser, user_id, library_id, inactive_library_id = operator
+    now = datetime.now(UTC).replace(microsecond=0)
+    last_success = now - timedelta(days=2)
+    candidates = [
+        User(username=f"synthetic_{idx:02}", email=f"synthetic_{idx:02}@example.test", password_hash="unused")
+        for idx in range(25)
+    ]
+    owner, viewer = candidates[:2]
+    owner.state = "suspended"
+    session.add_all(candidates)
+    session.get(Library, inactive_library_id).state = "pending_deletion"
+    session.flush()
+    session.add_all([
+        LibraryMembership(user_id=owner.id, library_id=library_id, role="OWNER"),
+        LibraryMembership(user_id=owner.id, library_id=inactive_library_id, role="OWNER"),
+        LibraryMembership(user_id=viewer.id, library_id=library_id, role="VIEWER", viewer_scope="CATALOG_ONLY"),
+        AccountStorageEntitlement(user_id=owner.id, limit_bytes=100_000_000),
+        AccountStorageEntitlement(user_id=viewer.id, limit_bytes=100_000_000),
+        UserProfile(user_id=owner.id, display_name="Synthetic private profile"),
+        SecurityEvent(user_id=owner.id, event_type="login_succeeded", occurred_at=now - timedelta(days=8)),
+        SecurityEvent(user_id=owner.id, event_type="login_succeeded", occurred_at=last_success,
+                      ip_address="192.0.2.10", details={"synthetic_private_detail": True}),
+        SecurityEvent(user_id=owner.id, event_type="login_failed", occurred_at=now),
+        SecurityEvent(user_id=viewer.id, event_type="login_succeeded", occurred_at=now),
+    ])
+    session.flush()
+    session.add_all([
+        LibraryStorageAllocation(user_id=owner.id, library_id=library_id, allocated_bytes=320),
+        LibraryStorageAllocation(user_id=user_id, library_id=library_id, allocated_bytes=680),
+        LibraryStorageAllocation(user_id=owner.id, library_id=inactive_library_id, allocated_bytes=900),
+    ])
+    session.commit()
+    prepare(session, user_id)
+    headers = open_session(browser)
+    directory = "/api/v1/admin/accounts"
+
+    first = browser.post(f"{directory}/list", headers=headers, json={}).json()
+    assert len(first["accounts"]) == first["next_offset"] == 25
+    assert [item["username"] for item in first["accounts"]] == [account.username for account in candidates]
+    assert first["accounts"][0] == {
+        "account_id": str(owner.id), "username": owner.username, "state": "suspended", "is_system_admin": False,
+    }
+    second = browser.post(f"{directory}/list", headers=headers, json={"offset": first["next_offset"]}).json()
+    assert second == {"accounts": [{
+        "account_id": str(user_id), "username": "test_operator", "state": "active", "is_system_admin": True,
+    }], "next_offset": None}
+    assert browser.post(f"{directory}/list", headers=headers, json={"offset": -1}).status_code == 422
+
+    def detail(account_id):
+        return browser.post(f"{directory}/detail", headers=headers, json={"account_id": str(account_id)})
+
+    owner_detail = detail(owner.id).json()
+    assert datetime.fromisoformat(owner_detail["last_successful_login_at"]) == last_success
+    assert owner_detail == {
+        **first["accounts"][0],
+        "last_successful_login_at": owner_detail["last_successful_login_at"],
+        "storage_used_bytes": 320 + calculate_account_data_bytes(session, owner.id),
+        "storage_limit_bytes": 100_000_000,
+    }
+    assert detail(viewer.id).json()["storage_used_bytes"] == calculate_account_data_bytes(session, viewer.id) == 0
+    missing = detail(candidates[2].id).json()
+    assert missing["last_successful_login_at"] is missing["storage_used_bytes"] is missing["storage_limit_bytes"] is None
+    assert detail(uuid4()).status_code == 404
+    assert detail("invalid-id").status_code == 422
