@@ -1070,7 +1070,9 @@ rollback restores the forward configuration.
   requires current WebAuthn step-up and commits the revocation and immutable
   audit entry together. The [PostgreSQL API regression](../server/tests/test_postgresql_integration.py)
   covers absent and expired step-up, replay, and rollback when audit fails.
-  Console creation and browser/staging acceptance remain open.
+  The [staging rehearsal](#staging-invitation-revocation-rehearsal) covered
+  browser revocation with a passkey. Console creation and broader A5
+  acceptance remain open.
 - [ ] List the minimum account identity and state required for administration;
   suspend/reactivate an account and revoke its sessions with reason and step-up.
 - [ ] Display storage entitlements, usage and aggregate capacity without
@@ -1085,6 +1087,27 @@ rollback restores the forward configuration.
   request log.
 - [ ] Provide no shell, Docker control, SQL console, secret viewer, raw-log
   browser, email body/token access, impersonation or private-library browsing.
+
+#### Staging invitation revocation rehearsal
+
+On 2026-11-27 the guarded deployment, including a verified pre-deployment
+backup, completed at revision `d7dd905d1cc42e1e1d74fbd839f91099429ba166`.
+An anonymous request to `/admin-access` returned HTTP `404` before the test.
+The operator temporarily enrolled an active, verified test account, enabled
+admin WebAuthn in the staging API, and registered a passkey using the
+independent operator-mailbox confirmation. After opening the admin session,
+the operator completed a second passkey prompt and the console confirmed
+revocation of an unused synthetic account invitation. The staging A3 verifier
+completed successfully after the action.
+
+The operator then revoked the temporary platform assignment. With WebAuthn
+still enabled and the ordinary session still open, the browser's network panel
+showed HTTP `404` for `/admin-access`. The operator disabled admin WebAuthn,
+recreated only the API, verified HTTPS readiness on the same revision, and
+confirmed that admin access was disabled in the running API. The five-minute
+boundary is covered by automated tests; this browser rehearsal exercised the
+successful step-up path. A2 and A5 still require the remaining route coverage
+and full console acceptance.
 
 ### A5 — Console acceptance
 
