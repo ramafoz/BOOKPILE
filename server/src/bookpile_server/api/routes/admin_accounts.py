@@ -57,7 +57,7 @@ def account_summary_query():
 
 # POST keeps account identifiers out of URLs and lets the browser supply the
 # Origin header required by the existing admin session guard.
-@router.post("/list")
+@router.post("/list", name="admin_list_accounts")
 def list_accounts(payload: AccountPageRequest, _access: AdminSession, session: SessionDependency) -> AccountPage:
     rows = session.execute(
         account_summary_query().order_by(User.username).offset(payload.offset).limit(PAGE_SIZE + 1)
@@ -68,7 +68,7 @@ def list_accounts(payload: AccountPageRequest, _access: AdminSession, session: S
     )
 
 
-@router.post("/detail")
+@router.post("/detail", name="admin_account_detail")
 def account_detail(payload: AccountDetailRequest, _access: AdminSession, session: SessionDependency) -> AccountDetail:
     last_login = select(func.max(SecurityEvent.occurred_at)).where(
         SecurityEvent.user_id == User.id, SecurityEvent.event_type == "login_succeeded",

@@ -267,6 +267,9 @@ def test_every_unsafe_route_has_an_explicit_mutation_disposition() -> None:
         "admin_revoke_account_invitation",
         "admin_session",
         "admin_logout",
+        # These authenticated POST requests only read account data.
+        "admin_list_accounts",
+        "admin_account_detail",
     }
     unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
     app = main.create_app()
