@@ -1712,7 +1712,14 @@ registered keys, while pending confirmations, challenges and sessions expire
 as part of database recovery.
 
 Sign into the target account normally and open `/admin-access` on the approved
-origin in a current browser. From the authorized host session and with the same
+origin in a current browser. If already signed in, first reload the ordinary
+app to obtain the page cookie from the current-account request. Caddy checks
+the current account, session and platform assignment before serving the page.
+An ineligible request or a disabled feature receives a generic HTTP 404.
+The page response is private and non-cacheable. Its Secure, HttpOnly cookie
+is scoped to `/admin-access` and cannot authorize API requests.
+
+From the authorized host session and with the same
 configuration as [offline platform role changes](#offline-platform-role-changes),
 prepare the first credential for its existing `SYSTEM_ADMIN` assignment.
 

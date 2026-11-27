@@ -51,7 +51,7 @@ UV_REQUIRED = UserVerificationRequirement.REQUIRED
 
 def require_admin_origin(request: Request, response: Response) -> None:
     settings = get_settings()
-    if not settings.admin_webauthn_enabled or not settings.public_origin.startswith("https://"):
+    if not settings.admin_access_enabled:
         raise HTTPException(404)
     if request.headers.getlist("origin") != [settings.public_origin]:
         raise HTTPException(403, "Invalid admin request origin")

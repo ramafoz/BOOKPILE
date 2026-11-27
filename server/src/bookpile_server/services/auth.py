@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
 from hmac import compare_digest
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ..models import UserSession
 from ..repositories.auth import AuthRepository
@@ -26,6 +26,7 @@ def hash_session_secret(secret: str) -> str:
 @dataclass(frozen=True)
 class LoginResult:
     user_id: UUID
+    session_id: UUID
     username: str
     preferred_locale: str
     raw_session_token: str
@@ -102,7 +103,7 @@ class AuthService:
         absolute_lifetime = (
             REMEMBER_ABSOLUTE_LIFETIME if remember_me else NORMAL_ABSOLUTE_LIFETIME
         )
-        raw_session_token, raw_csrf_token = self._new_session(
+        session_id, raw_session_token, raw_csrf_token = self._new_session(
             user_id=user.id,
             remember_me=remember_me,
             now=now,
@@ -118,6 +119,7 @@ class AuthService:
         self._repository.commit()
         return LoginResult(
             user_id=user.id,
+            session_id=session_id,
             username=user.username,
             preferred_locale=user.preferred_locale,
             raw_session_token=raw_session_token,
@@ -190,7 +192,7 @@ class AuthService:
         old_session = context.user_session
         absolute_expires_at = utc_value(old_session.absolute_expires_at)
         self._repository.revoke_session(old_session, now)
-        raw_session_token, raw_csrf_token = self._new_session(
+        session_id, raw_session_token, raw_csrf_token = self._new_session(
             user_id=context.user_id,
             remember_me=old_session.remember_me,
             now=now,
@@ -204,6 +206,7 @@ class AuthService:
         self._repository.commit()
         return LoginResult(
             user_id=context.user_id,
+            session_id=session_id,
             username=context.username,
             preferred_locale=context.user_session.user.preferred_locale,
             raw_session_token=raw_session_token,
@@ -264,7 +267,7 @@ class AuthService:
         user_agent: str | None,
         ip_address: str | None,
         absolute_expires_at: datetime | None,
-    ) -> tuple[str, str]:
+    ) -> tuple[UUID, str, str]:
         if absolute_expires_at is None:
             absolute_lifetime = (
                 REMEMBER_ABSOLUTE_LIFETIME
@@ -272,10 +275,12 @@ class AuthService:
                 else NORMAL_ABSOLUTE_LIFETIME
             )
             absolute_expires_at = now + absolute_lifetime
+        session_id = uuid4()
         raw_session_token = token_urlsafe(32)
         raw_csrf_token = token_urlsafe(32)
         self._repository.add_session(
             UserSession(
+                id=session_id,
                 user_id=user_id,
                 token_hash=hash_session_secret(raw_session_token),
                 csrf_token_hash=hash_session_secret(raw_csrf_token),
@@ -288,4 +293,4 @@ class AuthService:
                 ip_address=ip_address,
             )
         )
-        return raw_session_token, raw_csrf_token
+        return session_id, raw_session_token, raw_csrf_token

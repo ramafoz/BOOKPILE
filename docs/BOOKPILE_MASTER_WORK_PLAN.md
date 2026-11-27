@@ -940,7 +940,7 @@ This entire section is a **production blocker**.
   CSRF protection, 15-minute inactivity expiry and 30-minute absolute expiry.
   Server tests verify both expiry boundaries, both CSRF tokens, and binding to
   the ordinary session. The HTTPS entry point is disabled by default.
-- [ ] Restrict the `/admin-access` browser page to active, verified accounts
+- [x] Restrict the `/admin-access` browser page to active, verified accounts
   with an explicit `SYSTEM_ADMIN` assignment while admin access is enabled.
   Direct navigation must return an actual HTTP `404` with a generic not-found
   response when the visitor is signed out, lacks the role, has been revoked
@@ -950,6 +950,11 @@ This entire section is a **production blocker**.
   independent authorization checks on the admin API. Test the HTTP status
   on direct requests and successful entry for an eligible account before
   WebAuthn registration or sign-in.
+  The [HTTPS Caddy regression](../server/tests/test_admin_page.py) exercises
+  direct 404 responses, eligible access and immediate denial after role
+  revocation on a disposable database. The
+  [WebAuthn regression](../server/tests/test_admin_access.py) checks eligibility
+  before first registration and before sign-in with a registered key.
 - [ ] Require a WebAuthn step-up performed within the previous five minutes for
   every destructive action.
 - [ ] For administrator enrolment/revocation, account suspension/reactivation

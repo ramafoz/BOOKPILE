@@ -112,6 +112,19 @@
 		reverse_proxy api:8100
 	}
 
+	@admin_page path /admin-access /admin-access/*
+	handle @admin_page {
+		route {
+			header >Cache-Control "private, no-store"
+			forward_auth api:8100 {
+				uri /internal/admin-page-eligibility?
+			}
+			root * /srv
+			rewrite * /index.html
+			file_server
+		}
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
