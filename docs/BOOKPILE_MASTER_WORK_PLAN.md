@@ -1172,6 +1172,13 @@ leaves the wider A5 acceptance open.
   manipulation.
 - [ ] Complete keyboard, screen-reader, mobile and browser acceptance without
   weakening the authentication boundary.
+  On 2026-11-27, an automated local Chrome rehearsal of revision `956655a`
+  used a virtual passkey and a disposable PostgreSQL `_test` database. It
+  verified creation and clipboard copy, a prefilled registration form with the
+  secret removed from the address bar, and rejection when the same link was
+  reopened in the same tab after registration. It also verified passkey
+  step-up, revocation of a second invitation and rejection of its link. The
+  staging browser rehearsal and wider accessibility acceptance remain open.
 - [ ] Rehearse enrolment, normal use, emergency revocation and audit verification
   in staging.
 
