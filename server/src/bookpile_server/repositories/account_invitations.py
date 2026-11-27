@@ -23,8 +23,8 @@ class AccountInvitationRepository:
     def flush(self) -> None:
         self._session.flush()
 
-    def get(self, invitation_id: UUID) -> AccountInvitation | None:
-        return self._session.get(AccountInvitation, invitation_id)
+    def get_for_update(self, invitation_id: UUID) -> AccountInvitation | None:
+        return self._session.get(AccountInvitation, invitation_id, with_for_update=True, populate_existing=True)
 
     def get_by_token_hash_for_update(
         self, token_hash: str

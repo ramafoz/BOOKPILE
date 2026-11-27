@@ -244,6 +244,8 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                 csrf_token_hash=hash_session_secret(CSRF), last_seen_at=now,
                 expires_at=now + timedelta(days=1), absolute_expires_at=now + timedelta(days=1),
             ))
+        with Session(engine, expire_on_commit=False) as session:
+            invitation_id = AccountInvitationService(AccountInvitationRepository(session)).create().invitation_id
         with engine.begin() as connection:
             connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
             for statement in (
@@ -282,6 +284,9 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                         assert sorted(attempt.result(timeout=10).status_code for attempt in attempts) == [200, 403]
 
                     headers = {"X-Admin-CSRF-Token": browser.cookies[ADMIN_CSRF_COOKIE]}
+                    revoke_path = "/api/v1/admin/account-invitations/revoke"
+                    payload = {"invitation_id": str(invitation_id)}
+                    assert browser.post(revoke_path, headers=headers, json=payload).status_code == 403
                     proof = step_up_proof(browser, headers, key)
                     start = Barrier(2)
 
@@ -302,6 +307,36 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                         assert access.step_up_verified_at is not None
                         assert access.sign_count == key.counter - 1
 
+                    with engine.begin() as connection:
+                        connection.execute(text("""
+                            ALTER TABLE admin_audit.entries ADD CONSTRAINT test_denied_invitation_audit
+                            CHECK (action <> 'account_invitation.revoke') NOT VALID
+                        """))
+                    try:
+                        assert browser.post(revoke_path, headers=headers, json=payload).status_code == 503
+                        with Session(engine) as session:
+                            assert session.get(AccountInvitation, invitation_id).revoked_at is None
+                    finally:
+                        with engine.begin() as connection:
+                            connection.execute(text("""
+                                ALTER TABLE admin_audit.entries DROP CONSTRAINT test_denied_invitation_audit
+                            """))
+                    assert browser.post(revoke_path, headers=headers, json={"invitation_id": str(uuid4())}).status_code == 404
+                    assert browser.post(revoke_path, headers=headers, json=payload).status_code == 204
+                    assert browser.post(revoke_path, headers=headers, json=payload).status_code == 204
+                    with Session(engine) as session:
+                        assert session.get(AccountInvitation, invitation_id).revoked_at is not None
+                        assert session.execute(text("""
+                            SELECT operator_id, target_id, result FROM admin_audit.entries
+                            WHERE action = 'account_invitation.revoke'
+                        """)).one() == (str(target), str(invitation_id), "succeeded")
+                    with engine.begin() as connection:
+                        connection.execute(text("""
+                            UPDATE platform_admin_access SET step_up_verified_at = now() - interval '5 minutes'
+                            WHERE user_id = :user_id
+                        """), {"user_id": target})
+                    assert browser.post(revoke_path, headers=headers, json=payload).status_code == 403
+
                     command.downgrade(alembic, "0027_platform_admin_access")
                     command.upgrade(alembic, "head")
                     with Session(engine) as session:
@@ -319,7 +354,7 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
         assert not platform_enrolment.target_is_eligible(engine, enrol, operator_email)
         assert platform_enrolment.target_is_eligible(engine, revoke, operator_email)
         assert apply(engine, revoke, operator_email, confirmed=True)
-        assert verify(engine)["rows_verified"] == 6
+        assert verify(engine)["rows_verified"] == 7
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
             assert connection.scalar(text("SELECT count(*) FROM platform_admin_access")) == 0
@@ -797,6 +832,13 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                         "'platform_admin_access', 'bootstrap_hash', 'UPDATE'), "
                         "has_table_privilege('bookpile_runtime', 'platform_admin_access', 'INSERT')"
                     )).one() == (True, True, False, False)
+                    assert restored.execute(text("""
+                        SELECT has_function_privilege('bookpile_runtime',
+                                   'platform_actions.revoke_account_invitation(uuid, uuid, timestamptz)', 'EXECUTE'),
+                               has_schema_privilege('bookpile_runtime', 'admin_audit', 'USAGE'),
+                               has_column_privilege('bookpile_admin_audit_owner',
+                                   'public.account_invitations', 'token_hash', 'SELECT')
+                    """)).one() == (True, False, False)
                     for privilege, expected in (
                         ("SELECT", True), ("INSERT", False), ("UPDATE", False),
                         ("DELETE", False), ("TRUNCATE", False),

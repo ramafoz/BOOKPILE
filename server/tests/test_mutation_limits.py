@@ -264,6 +264,7 @@ def test_every_unsafe_route_has_an_explicit_mutation_disposition() -> None:
         "admin_webauthn_verify",
         "admin_step_up_options",
         "admin_step_up_verify",
+        "admin_revoke_account_invitation",
         "admin_session",
         "admin_logout",
     }

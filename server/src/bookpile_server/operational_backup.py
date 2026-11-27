@@ -63,6 +63,18 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO bookpile_runtime;
 DO $backup_compatibility$
 BEGIN
+    IF to_regprocedure('platform_actions.revoke_account_invitation(uuid, uuid, timestamptz)') IS NOT NULL THEN
+        ALTER SCHEMA platform_actions OWNER TO bookpile_admin_audit_owner;
+        ALTER FUNCTION platform_actions.revoke_account_invitation(uuid, uuid, timestamptz)
+            OWNER TO bookpile_admin_audit_owner;
+        REVOKE ALL ON SCHEMA platform_actions FROM PUBLIC;
+        REVOKE ALL ON FUNCTION platform_actions.revoke_account_invitation(uuid, uuid, timestamptz) FROM PUBLIC;
+        GRANT USAGE ON SCHEMA platform_actions TO bookpile_runtime;
+        GRANT EXECUTE ON FUNCTION platform_actions.revoke_account_invitation(uuid, uuid, timestamptz)
+            TO bookpile_runtime;
+        GRANT SELECT (id, consumed_at, revoked_at, expires_at), UPDATE (revoked_at)
+            ON public.account_invitations TO bookpile_admin_audit_owner;
+    END IF;
     IF to_regclass('public.platform_roles') IS NOT NULL THEN
         REVOKE ALL ON public.platform_roles FROM PUBLIC, bookpile_runtime;
         GRANT SELECT ON public.platform_roles TO bookpile_runtime;

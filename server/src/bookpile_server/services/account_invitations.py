@@ -139,7 +139,7 @@ class AccountInvitationService:
         )
 
     def revoke(self, invitation_id: UUID) -> None:
-        invitation = self._repository.get(invitation_id)
+        invitation = self._repository.get_for_update(invitation_id)
         if invitation is None or invitation.consumed_at is not None:
             raise AccountInvitationError("Invitation cannot be revoked.")
         if invitation.revoked_at is None:

@@ -28,15 +28,31 @@ const copy: Record<AppLocale, AccessCopy> = {
   zh: { title: "平台访问", useKey: "使用通行密钥或安全密钥", registerKey: "注册首个密钥", code: "操作员邮件确认码", registered: "密钥已注册。请继续使用该密钥登录。", check: "检查管理会话", end: "结束管理会话", expires: "会话到期时间", browser: "请使用最新版本的浏览器通过 HTTPS 打开此页面。" },
 };
 
+const invitationCopy: Record<AppLocale, { id: string; revoke: string; done: string }> = {
+  en: { id: "Account invitation ID", revoke: "Verify with key and revoke invitation", done: "Invitation revoked." },
+  gl: { id: "ID da invitación de conta", revoke: "Verificar coa chave e revogar a invitación", done: "Invitación revogada." },
+  es: { id: "ID de la invitación de cuenta", revoke: "Verificar con la llave y revocar la invitación", done: "Invitación revocada." },
+  pt: { id: "ID do convite de conta", revoke: "Verificar com a chave e revogar o convite", done: "Convite revogado." },
+  ca: { id: "ID de la invitació de compte", revoke: "Verifica amb la clau i revoca la invitació", done: "Invitació revocada." },
+  it: { id: "ID dell’invito per l’account", revoke: "Verifica con la chiave e revoca l’invito", done: "Invito revocato." },
+  fr: { id: "Identifiant de l’invitation à créer un compte", revoke: "Vérifier avec la clé et révoquer l’invitation", done: "Invitation révoquée." },
+  eu: { id: "Konturako gonbidapenaren IDa", revoke: "Egiaztatu gakoarekin eta baliogabetu gonbidapena", done: "Gonbidapena baliogabetu da." },
+  oc: { id: "ID dera invitacion de compde", revoke: "Verificar damb era clau e revocar era invitacion", done: "Invitacion revocada." },
+  zh: { id: "账户邀请编号", revoke: "使用通行密钥验证并撤销邀请", done: "邀请已撤销。" },
+};
+
 export default function AdminAccessPage() {
   const { locale, t } = useLocale();
   const words = copy[locale];
+  const invitationWords = invitationCopy[locale];
   const [options, setOptions] = useState<Awaited<ReturnType<typeof serverApi.adminOptions>> | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [registered, setRegistered] = useState(false);
   const [expires, setExpires] = useState<string | null>(null);
+  const [invitationId, setInvitationId] = useState("");
+  const [invitationRevoked, setInvitationRevoked] = useState(false);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -71,12 +87,40 @@ export default function AdminAccessPage() {
     });
   }
 
+  function revokeInvitation(event: FormEvent) {
+    event.preventDefault();
+    setInvitationRevoked(false);
+    void run(async () => {
+      const options = await serverApi.adminStepUpOptions();
+      const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(options.public_key);
+      const credential = await navigator.credentials.get({ publicKey });
+      if (!(credential instanceof PublicKeyCredential)) throw new Error();
+      await serverApi.verifyAdminStepUp(credential.toJSON());
+      await serverApi.revokeAdminAccountInvitation(invitationId);
+      setInvitationId("");
+      setInvitationRevoked(true);
+    });
+  }
+
   return <section className="server-auth-card" aria-labelledby="admin-access-heading">
     <h2 id="admin-access-heading">{words.title}</h2>
     {!supported && <p>{words.browser}</p>}
     {error && <p className="server-message error" role="alert">{error}</p>}
     {registered && <p className="server-message success" role="status">{words.registered}</p>}
     {expires && <p role="status">{words.expires} {new Date(expires).toLocaleTimeString(intlLocale(locale))}</p>}
+    {supported && expires && <form className="server-form" onSubmit={revokeInvitation}>
+      <label className="server-field">
+        <span>{invitationWords.id}</span>
+        <input autoComplete="off" required maxLength={36} disabled={busy}
+          pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+          value={invitationId} onChange={(event) => {
+            setInvitationId(event.target.value.trim());
+            setInvitationRevoked(false);
+          }} />
+      </label>
+      <button type="submit" className="server-submit" disabled={busy}>{invitationWords.revoke}</button>
+      {invitationRevoked && <p className="server-message success" role="status">{invitationWords.done}</p>}
+    </form>}
     {supported && (options ? <form className="server-form" onSubmit={submit}>
       {options.ceremony === "registration" && <label className="server-field">
         <span>{words.code}</span>

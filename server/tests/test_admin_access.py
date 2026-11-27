@@ -373,3 +373,26 @@ def test_step_up_challenge_cannot_be_used_for_sign_in_and_expires(operator, sess
     clock.current += admin_access.CHALLENGE_LIFETIME
     assert browser.post(verify, headers=headers, json=proof).status_code == 403
     assert browser.post(f"{PREFIX}/test-protected-action", headers=headers).status_code == 403
+
+
+def test_account_invitation_revocation_checks_role_session_csrf_and_origin(operator, session):
+    browser, user_id, *_ = operator
+    path = "/api/v1/admin/account-invitations/revoke"
+    payload = {"invitation_id": str(uuid4())}
+    normal_cookie = get_settings().session_cookie_name
+    browser.cookies.delete(normal_cookie)
+    assert browser.post(path, json=payload).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+    assert browser.post(path, json=payload).status_code == 403
+    prepare(session, user_id)
+    assert browser.post(path, json=payload).status_code == 401
+    key = Authenticator()
+    headers = open_session(browser, key)
+    assert browser.post(path, headers=headers, json=payload).status_code == 403
+    proof = step_up_proof(browser, headers, key)
+    assert browser.post(f"{PREFIX}/step-up/verify", headers=headers, json=proof).status_code == 200
+    for invalid in ({"Origin": "https://other.example"}, {"X-CSRF-Token": "wrong"}, {"X-Admin-CSRF-Token": "wrong"}):
+        assert browser.post(path, headers=headers | invalid, json=payload).status_code == 403
+    session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
+    session.commit()
+    assert browser.post(path, headers=headers, json=payload).status_code == 403

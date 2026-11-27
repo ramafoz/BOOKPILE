@@ -758,6 +758,17 @@ export const serverApi = {
   adminLogout: () => request<void>(
     "/admin/access/logout", { method: "POST", headers: adminCsrfHeaders() }, true,
   ),
+  adminStepUpOptions: () => request<{ public_key: PublicKeyCredentialRequestOptionsJSON }>(
+    "/admin/access/step-up/options", { method: "POST", headers: adminCsrfHeaders() }, true,
+  ),
+  verifyAdminStepUp: (credential: unknown) => request<{ expires_at: string }>(
+    "/admin/access/step-up/verify",
+    { method: "POST", headers: adminCsrfHeaders(), body: JSON.stringify({ credential }) }, true,
+  ),
+  revokeAdminAccountInvitation: (invitationId: string) => request<void>(
+    "/admin/account-invitations/revoke",
+    { method: "POST", headers: adminCsrfHeaders(), body: JSON.stringify({ invitation_id: invitationId }) }, true,
+  ),
   me: () => request<CurrentUser>("/auth/me").then(rememberCsrfCookieName),
   updatePreferredLocale: (preferredLocale: AppLocale) => request<{ preferred_locale: AppLocale }>(
     "/auth/locale",
