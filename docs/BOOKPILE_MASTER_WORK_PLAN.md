@@ -1208,6 +1208,22 @@ observed.
   recovery action; schema downgrade is never automatic.
 - [ ] Rehearse a no-schema release, an additive-schema release, failed health
   rollout and application rollback in both staging and disposable production.
+- [ ] Rehearse and schedule periodic Docker housekeeping before production.
+  Set a local retention target in the range of 10–15 recent BOOKPILE
+  revisions, counting each revision once across API, web and backup images.
+  Always preserve images in use and the image sets required by the current
+  release and its documented rollback, regardless of age. Set age and disk
+  budgets for unused build cache. Preview the staging cleanup, measure disk
+  use before and after, and verify that services are healthy and the rollback
+  images remain available. Schedule the reviewed cleanup with safeguards
+  against overlapping deployments, and keep persistent volumes and backup
+  data outside its scope.
+
+Staging evidence on 2026-11-27 at revision
+`d7dd905d1cc42e1e1d74fbd839f91099429ba166`: the operator counted 39 other
+BOOKPILE revisions with at least one local image. The one-off build-cache
+cleanup reported 12.18 GB reclaimed, and the root filesystem showed 45% used
+afterward. Image cleanup and periodic scheduling remain pending.
 
 ### I4 — Data separation and portability
 
