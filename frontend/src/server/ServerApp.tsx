@@ -321,6 +321,14 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
     if (accountInvitationFromFragment(window.location.hash) !== null) {
       window.history.replaceState(window.history.state, "", "/register");
     }
+
+    // Opening another invitation on /register changes only the fragment.
+    // Give it a fresh form, as with direct navigation to a registration link.
+    function reloadForInvitation() {
+      if (accountInvitationFromFragment(window.location.hash) !== null) window.location.reload();
+    }
+    window.addEventListener("hashchange", reloadForInvitation);
+    return () => window.removeEventListener("hashchange", reloadForInvitation);
   }, []);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");

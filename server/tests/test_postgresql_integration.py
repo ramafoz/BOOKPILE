@@ -312,7 +312,8 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch, e
                     try:
                         failure = browser.post(create_path, headers=headers)
                         assert failure.status_code == 503
-                        assert failure.json() == {"detail": "Account invitation creation is unavailable"}
+                        if failure.json() != {"detail": "Account invitation creation is unavailable"}:
+                            pytest.fail("Creation failure contains unexpected details", pytrace=False)
                         with engine.connect() as connection:
                             assert connection.scalar(text("SELECT count(*) FROM account_invitations")) == 0
                             assert connection.scalar(text("""
@@ -428,9 +429,15 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch, e
                                                 (revoked_token, "synthetic_revoked")):
                             rejected = register(token, username)
                             assert rejected.status_code == 400
-                            assert rejected.json() == {"detail": "Account invitation is invalid or expired"}
+                            if rejected.json() != {"detail": "Account invitation is invalid or expired"}:
+                                pytest.fail("Registration failure contains unexpected details", pytrace=False)
                         assert len(email_sender.emails) == 1
-                    assert all(token not in caplog.text for token in (usable_token, expired_token, revoked_token))
+                    logs_are_private = all(
+                        token not in caplog.text and hash_invitation_token(token) not in caplog.text
+                        for token in (usable_token, expired_token, revoked_token)
+                    )
+                    caplog.clear()
+                    assert logs_are_private
 
                     command.downgrade(alembic, "0027_platform_admin_access")
                     command.upgrade(alembic, "head")
