@@ -1,8 +1,10 @@
 import { type FormEvent, useEffect, useState } from "react";
 import AdminAccountDirectory from "./AdminAccountDirectory";
+import { authenticatedCopy } from "./authenticatedCopy";
+import { privateAccountInvitationLink } from "./invitationCopy";
 import { useLocale } from "./LocaleContext";
-import { type AppLocale, intlLocale } from "./locale";
-import { ServerApiError, serverApi } from "./serverApi";
+import { type AppLocale, formatLocalDateTime, intlLocale } from "./locale";
+import { type CreatedAdminAccountInvitation, ServerApiError, serverApi } from "./serverApi";
 
 type AccessCopy = {
   title: string;
@@ -46,6 +48,7 @@ export default function AdminAccessPage() {
   const { locale, t } = useLocale();
   const words = copy[locale];
   const invitationWords = invitationCopy[locale];
+  const invitationText = authenticatedCopy(locale);
   const [options, setOptions] = useState<Awaited<ReturnType<typeof serverApi.adminOptions>> | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,12 +57,28 @@ export default function AdminAccessPage() {
   const [expires, setExpires] = useState<string | null>(null);
   const [invitationId, setInvitationId] = useState("");
   const [invitationRevoked, setInvitationRevoked] = useState(false);
+  const [createdInvitation, setCreatedInvitation] = useState<CreatedAdminAccountInvitation | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | null>(null);
 
   useEffect(() => {
     if (!expires) return;
-    const timer = window.setTimeout(() => setExpires(null), Math.max(0, Date.parse(expires) - Date.now()));
+    const timer = window.setTimeout(clearSession, Math.max(0, Date.parse(expires) - Date.now()));
     return () => window.clearTimeout(timer);
   }, [expires]);
+
+  useEffect(() => {
+    function clearRestoredPage(event: PageTransitionEvent) {
+      if (event.persisted) clearSession();
+    }
+    window.addEventListener("pageshow", clearRestoredPage);
+    return () => window.removeEventListener("pageshow", clearRestoredPage);
+  }, []);
+
+  function clearSession() {
+    setExpires(null);
+    setCreatedInvitation(null);
+    setCopyStatus(null);
+  }
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -73,12 +92,12 @@ export default function AdminAccessPage() {
     }
   }
 
-  function runAccountQuery(action: () => Promise<void>) {
+  function runSessionAction(action: () => Promise<void>) {
     return run(async () => {
       try {
         await action();
       } catch (caught) {
-        if (caught instanceof ServerApiError && [401, 403, 404].includes(caught.status)) setExpires(null);
+        if (caught instanceof ServerApiError && [401, 403, 404].includes(caught.status)) clearSession();
         throw caught;
       }
     });
@@ -105,6 +124,32 @@ export default function AdminAccessPage() {
     });
   }
 
+  function createInvitation() {
+    if (!expires) return;
+    setCreatedInvitation(null);
+    setCopyStatus(null);
+    setInvitationRevoked(false);
+    void runSessionAction(async () => {
+      const invitation = await serverApi.createAdminAccountInvitation();
+      if (Date.now() >= Date.parse(expires)) return;
+      setInvitationId(invitation.invitation_id);
+      setCreatedInvitation(invitation);
+    });
+  }
+
+  const invitationLink = createdInvitation
+    ? privateAccountInvitationLink(window.location.origin, createdInvitation.raw_token)
+    : null;
+
+  async function copyInvitation(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   function revokeInvitation(event: FormEvent) {
     event.preventDefault();
     setInvitationRevoked(false);
@@ -115,6 +160,10 @@ export default function AdminAccessPage() {
       if (!(credential instanceof PublicKeyCredential)) throw new Error();
       await serverApi.verifyAdminStepUp(credential.toJSON());
       await serverApi.revokeAdminAccountInvitation(invitationId);
+      if (invitationId === createdInvitation?.invitation_id) {
+        setCreatedInvitation(null);
+        setCopyStatus(null);
+      }
       setInvitationId("");
       setInvitationRevoked(true);
     });
@@ -126,7 +175,23 @@ export default function AdminAccessPage() {
     {error && <p className="server-message error" role="alert">{error}</p>}
     {registered && <p className="server-message success" role="status">{words.registered}</p>}
     {expires && <p role="status">{words.expires} {new Date(expires).toLocaleTimeString(intlLocale(locale))}</p>}
-    {expires && <AdminAccountDirectory busy={busy} run={runAccountQuery} />}
+    {expires && <AdminAccountDirectory busy={busy} run={runSessionAction} />}
+    {supported && expires && <div className="server-form">
+      <button type="button" className="server-submit" disabled={busy} onClick={createInvitation}>
+        {invitationText("createAccountInvitation")}
+      </button>
+      {createdInvitation && invitationLink && <>
+        <p className="server-message success" role="status">{invitationText("invitationReady")}</p>
+        <label className="server-field">
+          <span>{invitationText("invitationLink")}</span>
+          <input readOnly autoComplete="off" value={invitationLink} onFocus={(event) => event.currentTarget.select()} />
+        </label>
+        <button type="button" onClick={() => void copyInvitation(invitationLink)}>{invitationText("copyLinkOnly")}</button>
+        <small>{invitationText("invitationExpires", { date: formatLocalDateTime(createdInvitation.expires_at, locale) })}</small>
+        {copyStatus === "copied" && <p role="status">{invitationText("copied", { label: invitationText("invitationLink") })}</p>}
+        {copyStatus === "failed" && <p role="alert">{invitationText("clipboardFailed")}</p>}
+      </>}
+    </div>}
     {supported && expires && <form className="server-form" onSubmit={revokeInvitation}>
       <label className="server-field">
         <span>{invitationWords.id}</span>
@@ -155,11 +220,11 @@ export default function AdminAccessPage() {
     </button>)}
     <div className="server-card-links">
       <button type="button" disabled={busy} onClick={() => { void run(async () => {
-        setExpires(null);
+        clearSession();
         setExpires((await serverApi.adminSession()).expires_at);
       }); }}>{words.check}</button>
       <button type="button" disabled={busy} onClick={() => { void run(async () => {
-        setExpires(null);
+        clearSession();
         await serverApi.adminLogout();
       }); }}>{words.end}</button>
       <a href="/">BOOKPILE</a>

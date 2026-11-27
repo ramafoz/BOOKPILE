@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import token_urlsafe
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 
@@ -30,8 +30,23 @@ def utc_value(value: datetime) -> datetime:
 @dataclass(frozen=True)
 class CreatedAccountInvitation:
     invitation_id: UUID
-    raw_token: str
+    raw_token: str = field(repr=False)
     expires_at: datetime
+
+
+def prepare_account_invitation(
+    created_by_user_id: UUID | None,
+) -> tuple[AccountInvitation, CreatedAccountInvitation]:
+    now = datetime.now(UTC)
+    raw_token = token_urlsafe(32)
+    invitation = AccountInvitation(
+        id=uuid4(),
+        token_hash=hash_invitation_token(raw_token),
+        created_by_user_id=created_by_user_id,
+        created_at=now,
+        expires_at=now + ACCOUNT_INVITATION_LIFETIME,
+    )
+    return invitation, CreatedAccountInvitation(invitation.id, raw_token, invitation.expires_at)
 
 
 @dataclass(frozen=True)
@@ -73,14 +88,7 @@ class AccountInvitationService:
     def create(
         self, *, created_by_user_id: UUID | None = None
     ) -> CreatedAccountInvitation:
-        now = datetime.now(UTC)
-        raw_token = token_urlsafe(32)
-        invitation = AccountInvitation(
-            token_hash=hash_invitation_token(raw_token),
-            created_by_user_id=created_by_user_id,
-            created_at=now,
-            expires_at=now + ACCOUNT_INVITATION_LIFETIME,
-        )
+        invitation, result = prepare_account_invitation(created_by_user_id)
         self._repository.add(invitation)
         self._repository.flush()
         self._repository.add_event(
@@ -89,11 +97,7 @@ class AccountInvitationService:
             details={"invitation_id": str(invitation.id)},
         )
         self._repository.commit()
-        return CreatedAccountInvitation(
-            invitation_id=invitation.id,
-            raw_token=raw_token,
-            expires_at=invitation.expires_at,
-        )
+        return result
 
     def beta_status(self, user_id: UUID) -> BetaInvitationStatus:
         progress = self._repository.beta_progress(user_id)
@@ -114,16 +118,9 @@ class AccountInvitationService:
         if progress is None or progress.available_credits < 1:
             self._repository.rollback()
             raise NoEarnedInvitationError
-        now = datetime.now(UTC)
-        raw_token = token_urlsafe(32)
-        invitation = AccountInvitation(
-            token_hash=hash_invitation_token(raw_token),
-            created_by_user_id=user_id,
-            created_at=now,
-            expires_at=now + ACCOUNT_INVITATION_LIFETIME,
-        )
+        invitation, result = prepare_account_invitation(user_id)
         progress.available_credits -= 1
-        progress.updated_at = now
+        progress.updated_at = invitation.created_at
         self._repository.add(invitation)
         self._repository.flush()
         self._repository.add_event(
@@ -132,11 +129,7 @@ class AccountInvitationService:
             details={"invitation_id": str(invitation.id)},
         )
         self._repository.commit()
-        return CreatedAccountInvitation(
-            invitation_id=invitation.id,
-            raw_token=raw_token,
-            expires_at=invitation.expires_at,
-        )
+        return result
 
     def revoke(self, invitation_id: UUID) -> None:
         invitation = self._repository.get_for_update(invitation_id)
