@@ -1120,6 +1120,29 @@ boundary is covered by automated tests; this browser rehearsal exercised the
 successful step-up path. A2 and A5 still require the remaining route coverage
 and full console acceptance.
 
+#### Staging account directory rehearsal
+
+On 2026-11-27 the guarded deployment, including a verified pre-deployment
+backup, completed at revision `3ac8e90315bd1ea4ab31045dd7455a6f86e7836a`.
+An external HTTPS check confirmed readiness on that revision and a generic
+HTTP `404` for anonymous access to `/admin-access`. The operator temporarily
+enrolled a verified disposable account, enabled admin WebAuthn for the staging
+API, registered a passkey and opened an administrative session.
+
+The operator opened **View accounts** and checked the disposable account's
+detail in the browser. The active state and administrator assignment matched
+the account, the successful sign-in time matched the ordinary sign-in, and
+the storage used and quota fields were present. The detail exposed no email
+addresses, book titles or library names.
+
+The operator revoked the temporary assignment and confirmed HTTP `404` with
+the ordinary session still open and WebAuthn still enabled. After disabling
+WebAuthn and recreating only the API, the operator confirmed that the running
+API had admin access disabled and that the staging audit integrity verifier
+completed successfully. External HTTPS readiness still reported the same
+revision. This covers the directory's functional browser rehearsal and
+leaves the wider A5 acceptance open.
+
 ### A5 — Console acceptance
 
 - [ ] Test every route with ordinary user, Owner, Viewer, expired admin session,
