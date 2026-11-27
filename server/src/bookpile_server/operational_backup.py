@@ -75,6 +75,16 @@ BEGIN
         GRANT SELECT (id, consumed_at, revoked_at, expires_at), UPDATE (revoked_at)
             ON public.account_invitations TO bookpile_admin_audit_owner;
     END IF;
+    IF to_regprocedure('platform_actions.create_account_invitation(uuid, uuid, text, timestamptz, timestamptz, timestamptz)') IS NOT NULL THEN
+        ALTER FUNCTION platform_actions.create_account_invitation(uuid, uuid, text, timestamptz, timestamptz, timestamptz)
+            OWNER TO bookpile_admin_audit_owner;
+        REVOKE ALL ON FUNCTION platform_actions.create_account_invitation(uuid, uuid, text, timestamptz, timestamptz, timestamptz)
+            FROM PUBLIC;
+        GRANT EXECUTE ON FUNCTION platform_actions.create_account_invitation(uuid, uuid, text, timestamptz, timestamptz, timestamptz)
+            TO bookpile_runtime;
+        GRANT INSERT (id, token_hash, created_by_user_id, created_at, expires_at)
+            ON public.account_invitations TO bookpile_admin_audit_owner;
+    END IF;
     IF to_regclass('public.platform_roles') IS NOT NULL THEN
         REVOKE ALL ON public.platform_roles FROM PUBLIC, bookpile_runtime;
         GRANT SELECT ON public.platform_roles TO bookpile_runtime;

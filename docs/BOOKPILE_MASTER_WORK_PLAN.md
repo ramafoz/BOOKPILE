@@ -1066,13 +1066,19 @@ rollback restores the forward configuration.
 ### A4 — Allowed console capabilities
 
 - [ ] Create and revoke account invitations.
-  The console can revoke an unused account invitation by ID. Its POST route
-  requires current WebAuthn step-up and commits the revocation and immutable
-  audit entry together. The [PostgreSQL API regression](../server/tests/test_postgresql_integration.py)
-  covers absent and expired step-up, replay, and rollback when audit fails.
-  The [staging rehearsal](#staging-invitation-revocation-rehearsal) covered
-  browser revocation with a passkey. Console creation and broader A5
-  acceptance remain open.
+  The console creates a seven-day, single-use invitation with a current admin
+  session and displays its private registration link on success. A second
+  passkey check is required to revoke an unused invitation by ID, under the
+  destructive-action rule in [ADR 0017](adr/0017-system-admin-console.md).
+  Each operation commits with its immutable audit entry. The
+  [PostgreSQL API regression](../server/tests/test_postgresql_integration.py)
+  verifies registration, rejection of used, expired and revoked invitations,
+  minimized audit fields, and rollback when audit fails for either operation.
+  It also covers absent and expired step-up and replay for revocation. The
+  [staging revocation rehearsal](#staging-invitation-revocation-rehearsal)
+  covered browser revocation with a passkey. Keep this item open for the
+  staging browser rehearsal of creation, copying and registration. See the
+  [operator instructions](server/SERVER_OPERATIONS_AND_SECURITY.md#create-an-account-invitation-from-the-console).
 - [ ] List the minimum account identity and state required for administration;
   suspend/reactivate an account and revoke its sessions with reason and step-up.
   The Server directory in `/admin-access` lists usernames, account states and
@@ -1156,11 +1162,23 @@ leaves the wider A5 acceptance open.
   The [PostgreSQL rehearsal](../server/tests/test_postgresql_integration.py)
   also passed both queries under the restricted runtime role on a disposable
   database ending in `_test`.
+  The [invitation creation route tests](../server/tests/test_admin_access.py)
+  also cover signed-out, ordinary, Owner and Viewer accounts, lost assignments,
+  both expiry boundaries, origin, both CSRF tokens and ordinary-session binding.
+  The PostgreSQL regression verifies successful creation under the restricted
+  runtime role with synthetic accounts on a disposable `_test` database.
 - [ ] Test CSRF, stolen normal session without WebAuthn, replayed assertion,
   expired email confirmation, consumed recovery code and direct object-ID
   manipulation.
 - [ ] Complete keyboard, screen-reader, mobile and browser acceptance without
   weakening the authentication boundary.
+  On 2026-11-27, an automated local Chrome rehearsal of revision `956655a`
+  used a virtual passkey and a disposable PostgreSQL `_test` database. It
+  verified creation and clipboard copy, a prefilled registration form with the
+  secret removed from the address bar, and rejection when the same link was
+  reopened in the same tab after registration. It also verified passkey
+  step-up, revocation of a second invitation and rejection of its link. The
+  staging browser rehearsal and wider accessibility acceptance remain open.
 - [ ] Rehearse enrolment, normal use, emergency revocation and audit verification
   in staging.
 

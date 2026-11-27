@@ -1779,6 +1779,29 @@ admin sessions, the approved origin and both CSRF tokens. Account identifiers
 needed to request a detail stay in the request body. Successful query responses
 are not cacheable. The queries leave the administrative expiry deadline intact.
 
+### Create an account invitation from the console
+
+Apply migration `0030_admin_invitation_creation` before exposing creation.
+Open `/admin-access` with an active platform assignment and sign in with the
+registered passkey. Choose **Create an account invitation**. Creation requires
+a current administrative session. The additional passkey check applies to
+revocation.
+
+After success, copy the link and share it privately with the intended recipient.
+The link is shown on this screen after creation and BOOKPILE stores only a
+cryptographic digest of its registration secret. If clipboard access is blocked,
+select and copy the displayed link manually. The console fills the invitation ID
+in the revocation field. Keep that ID separately if you need to revoke the
+invitation later. Anyone with the link can use it to open the normal registration
+form. The first successful registration consumes it and starts the usual email
+verification. An unused link expires after seven days.
+
+The database commits the invitation and the `account_invitation.create` entry
+in the immutable audit ledger together. The entry records the operator, the
+invitation ID and the successful outcome. If the ledger rejects the entry,
+creation fails and the console receives no link. Keep links out of operator
+transcripts, screenshots and evidence.
+
 ### Revoke an account invitation from the console
 
 Apply migration `0029_admin_invitation_revocation` before exposing invitation

@@ -402,6 +402,49 @@ def test_account_invitation_revocation_checks_role_session_csrf_and_origin(opera
     assert browser.post(path, headers=headers, json=payload).status_code == 403
 
 
+@pytest.mark.parametrize("absolute", [False, True])
+def test_account_invitation_creation_rejects_unauthorized_requests(operator, session, monkeypatch, absolute):
+    browser, user_id, library_id, _ = operator
+    path = "/api/v1/admin/account-invitations/create"
+    normal_cookie = get_settings().session_cookie_name
+    browser.cookies.delete(normal_cookie)
+    assert browser.post(path).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+    assert browser.post(path).status_code == 403  # Owner
+    membership = session.query(LibraryMembership).filter_by(user_id=user_id, library_id=library_id).one()
+    membership.role = "VIEWER"
+    membership.viewer_scope = "CATALOG_ONLY"
+    session.commit()
+    assert browser.post(path).status_code == 403
+    session.delete(membership)
+    session.commit()
+    assert browser.post(path).status_code == 403  # Ordinary account
+
+    access = prepare(session, user_id)
+    assert browser.post(path).status_code == 401
+    headers = open_session(browser)
+    for invalid in (
+        {"Origin": "https://other.example"}, {"Origin": ""},
+        {"X-CSRF-Token": "wrong"}, {"X-Admin-CSRF-Token": "wrong"},
+    ):
+        assert browser.post(path, headers=headers | invalid).status_code == 403
+    assert browser.post(path).status_code == 403  # Missing admin CSRF header
+    browser.cookies.set(normal_cookie, "alternate")
+    assert browser.post(path, headers=headers).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+
+    session.refresh(access)
+    if absolute:
+        access.last_active_at = admin_access.utc_value(access.absolute_expires_at) - timedelta(minutes=1)
+        session.commit()
+    with monkeypatch.context() as clock:
+        freeze_admin_clock(clock, admin_access.session_deadline(access))
+        assert browser.post(path, headers=headers).status_code == 401
+    session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
+    session.commit()
+    assert browser.post(path, headers=headers).status_code == 403
+
+
 @pytest.mark.parametrize("query", ["list", "detail"])
 @pytest.mark.parametrize("absolute", [False, True])
 def test_account_directory_enforces_admin_session_on_each_query(operator, session, monkeypatch, query, absolute):

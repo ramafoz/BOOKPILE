@@ -74,6 +74,19 @@ describe("configured CSRF cookie", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ invitation_id: "invitation-id" });
   });
 
+  it("creates a platform invitation without sending a body or caching the response", async () => {
+    vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{}', { status: 201 }));
+    await serverApi.createAdminAccountInvitation();
+
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/admin/account-invitations/create");
+    expect(request).toMatchObject({ method: "POST", cache: "no-store", credentials: "include" });
+    expect(request?.body).toBeUndefined();
+    expect(new Headers(request?.headers).get("X-CSRF-Token")).toBe("account");
+    expect(new Headers(request?.headers).get("X-Admin-CSRF-Token")).toBe("admin");
+  });
+
   it("uses separate ordinary and admin CSRF headers for an admin session", async () => {
     vi.stubGlobal("document", { cookie: "bookpile_csrf=account; __Host-bookpile_admin_csrf=admin" });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));

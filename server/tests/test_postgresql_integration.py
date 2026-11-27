@@ -8,11 +8,12 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from json import dumps
 from multiprocessing import get_context
 from pathlib import Path
 from threading import Barrier
 from time import monotonic, sleep
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -75,6 +76,7 @@ from bookpile_server.security.passwords import hash_password
 from bookpile_server.services.account_invitations import (
     AccountInvitationError,
     AccountInvitationService,
+    hash_invitation_token,
 )
 from bookpile_server.services.auth import hash_session_secret
 from bookpile_server.services.libraries import FinalOwnerError, LibraryService
@@ -90,6 +92,7 @@ from bookpile_server.services.readings import ReadingConflictError, ReadingServi
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_accounting import calculate_library_logical_bytes
 
+from test_account_invitations import registration_payload
 from test_admin_access import Authenticator, CODE, CSRF, ORIGIN, PREFIX, options, step_up_proof
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
@@ -142,7 +145,7 @@ def _request_general_api_limit_from_process(
     not TEST_DATABASE_URL,
     reason="BOOKPILE_SERVER_TEST_DATABASE_URL is not configured",
 )
-def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -> None:
+def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch, email_sender, caplog) -> None:
     assert TEST_DATABASE_URL is not None
     url = make_url(TEST_DATABASE_URL)
     assert url.get_backend_name() == "postgresql"
@@ -246,8 +249,6 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
             ))
             session.add(AccountStorageEntitlement(user_id=target))
             session.add(SecurityEvent(user_id=target, event_type="login_succeeded", occurred_at=now))
-        with Session(engine, expire_on_commit=False) as session:
-            invitation_id = AccountInvitationService(AccountInvitationRepository(session)).create().invitation_id
         with engine.begin() as connection:
             connection.execute(text("SET LOCAL ROLE bookpile_runtime"))
             for statement in (
@@ -274,6 +275,7 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                 get_settings.cache_clear()
                 app = create_app()
                 app.dependency_overrides[get_session] = runtime_session
+                app.dependency_overrides[api_dependencies.get_email_sender] = lambda: email_sender
                 headers = {"Origin": ORIGIN, "X-CSRF-Token": CSRF}
                 cookies = {get_settings().session_cookie_name: "test-normal-session"}
                 key = Authenticator()
@@ -300,7 +302,65 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                     assert datetime.fromisoformat(body.pop("last_successful_login_at")) == now
                     assert body == {**summary, "storage_used_bytes": 0, "storage_limit_bytes": 100_000_000}
 
-                    revoke_path = "/api/v1/admin/account-invitations/revoke"
+                    invitation_path = "/api/v1/admin/account-invitations"
+                    create_path = f"{invitation_path}/create"
+                    with engine.begin() as connection:
+                        connection.execute(text("""
+                            ALTER TABLE admin_audit.entries ADD CONSTRAINT test_denied_invitation_creation_audit
+                            CHECK (action <> 'account_invitation.create') NOT VALID
+                        """))
+                    try:
+                        failure = browser.post(create_path, headers=headers)
+                        assert failure.status_code == 503
+                        if failure.json() != {"detail": "Account invitation creation is unavailable"}:
+                            pytest.fail("Creation failure contains unexpected details", pytrace=False)
+                        with engine.connect() as connection:
+                            assert connection.scalar(text("SELECT count(*) FROM account_invitations")) == 0
+                            assert connection.scalar(text("""
+                                SELECT count(*) FROM admin_audit.entries WHERE action = 'account_invitation.create'
+                            """)) == 0
+                    finally:
+                        with engine.begin() as connection:
+                            connection.execute(text("""
+                                ALTER TABLE admin_audit.entries DROP CONSTRAINT test_denied_invitation_creation_audit
+                            """))
+
+                    # Creation works immediately after admin sign-in, before step-up.
+                    def create_invitation():
+                        response = browser.post(create_path, headers=headers)
+                        assert response.status_code == 201
+                        assert response.headers["Cache-Control"] == "no-store"
+                        invitation = response.json()
+                        assert set(invitation) == {"invitation_id", "raw_token", "expires_at"}
+                        invitation_id = UUID(invitation["invitation_id"])
+                        token_hash = hash_invitation_token(invitation["raw_token"])
+                        with Session(engine) as session:
+                            row = session.get(AccountInvitation, invitation_id)
+                            assert row.created_by_user_id == target
+                            if row.token_hash != token_hash:
+                                pytest.fail("Stored invitation digest mismatch", pytrace=False)
+                            assert row.expires_at == datetime.fromisoformat(invitation["expires_at"])
+                            assert row.expires_at - row.created_at == timedelta(days=7)
+                            audit = session.execute(text("""
+                                SELECT operator_id, action, target_id, reason, correlation_id, result
+                                FROM admin_audit.entries WHERE target_id = :target
+                            """), {"target": str(invitation_id)}).one()
+                            assert audit[:4] == (str(target), "account_invitation.create", str(invitation_id),
+                                                 "console-creation")
+                            assert audit.result == "succeeded"
+                            assert all(secret not in dumps(list(audit))
+                                       for secret in (invitation["raw_token"], token_hash))
+                        return invitation_id, invitation["raw_token"]
+
+                    _, usable_token = create_invitation()
+                    expired_id, expired_token = create_invitation()
+                    invitation_id, revoked_token = create_invitation()
+                    with engine.begin() as connection:
+                        connection.execute(text("""
+                            UPDATE account_invitations SET expires_at = now() - interval '1 second' WHERE id = :id
+                        """), {"id": expired_id})
+
+                    revoke_path = f"{invitation_path}/revoke"
                     payload = {"invitation_id": str(invitation_id)}
                     assert browser.post(revoke_path, headers=headers, json=payload).status_code == 403
                     proof = step_up_proof(browser, headers, key)
@@ -353,6 +413,32 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                         """), {"user_id": target})
                     assert browser.post(revoke_path, headers=headers, json=payload).status_code == 403
 
+                    with TestClient(app, base_url=ORIGIN) as invitee:
+                        def register(token, username):
+                            return invitee.post("/api/v1/auth/register", json=registration_payload(
+                                token, email=f"{username}@example.com", username=username,
+                            ))
+
+                        registered = register(usable_token, "synthetic_invitee")
+                        assert registered.status_code == 201
+                        assert registered.json()["state"] == "pending_verification"
+                        assert registered.json()["verification_email_sent"] is True
+                        assert len(email_sender.emails) == 1
+                        for token, username in ((usable_token, "synthetic_reuse"),
+                                                (expired_token, "synthetic_expired"),
+                                                (revoked_token, "synthetic_revoked")):
+                            rejected = register(token, username)
+                            assert rejected.status_code == 400
+                            if rejected.json() != {"detail": "Account invitation is invalid or expired"}:
+                                pytest.fail("Registration failure contains unexpected details", pytrace=False)
+                        assert len(email_sender.emails) == 1
+                    logs_are_private = all(
+                        token not in caplog.text and hash_invitation_token(token) not in caplog.text
+                        for token in (usable_token, expired_token, revoked_token)
+                    )
+                    caplog.clear()
+                    assert logs_are_private
+
                     command.downgrade(alembic, "0027_platform_admin_access")
                     command.upgrade(alembic, "head")
                     with Session(engine) as session:
@@ -370,7 +456,7 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
         assert not platform_enrolment.target_is_eligible(engine, enrol, operator_email)
         assert platform_enrolment.target_is_eligible(engine, revoke, operator_email)
         assert apply(engine, revoke, operator_email, confirmed=True)
-        assert verify(engine)["rows_verified"] == 7
+        assert verify(engine)["rows_verified"] == 10
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM platform_roles")) == 0
             assert connection.scalar(text("SELECT count(*) FROM platform_admin_access")) == 0
@@ -851,10 +937,14 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                     assert restored.execute(text("""
                         SELECT has_function_privilege('bookpile_runtime',
                                    'platform_actions.revoke_account_invitation(uuid, uuid, timestamptz)', 'EXECUTE'),
+                               has_function_privilege('bookpile_runtime',
+                                   'platform_actions.create_account_invitation(uuid, uuid, text, timestamptz, timestamptz, timestamptz)', 'EXECUTE'),
                                has_schema_privilege('bookpile_runtime', 'admin_audit', 'USAGE'),
                                has_column_privilege('bookpile_admin_audit_owner',
-                                   'public.account_invitations', 'token_hash', 'SELECT')
-                    """)).one() == (True, False, False)
+                                   'public.account_invitations', 'token_hash', 'SELECT'),
+                               has_column_privilege('bookpile_admin_audit_owner',
+                                   'public.account_invitations', 'token_hash', 'INSERT')
+                    """)).one() == (True, True, False, False, True)
                     for privilege, expected in (
                         ("SELECT", True), ("INSERT", False), ("UPDATE", False),
                         ("DELETE", False), ("TRUNCATE", False),

@@ -43,7 +43,7 @@ import LocaleProvider from "./LocaleProvider";
 import { type LocaleContextValue, useLocale } from "./LocaleContext";
 import { availableLocales, intlLocale, localeNames } from "./locale";
 import { loadLocaleCatalogues } from "./localeCatalogues";
-import { libraryInvitationMessage } from "./invitationCopy";
+import { accountInvitationFromFragment, libraryInvitationMessage } from "./invitationCopy";
 import { authenticatedCopy } from "./authenticatedCopy";
 import { type LibraryAdminCopy, libraryAdminCopy } from "./libraryAdminCopy";
 import { friendlyError } from "./friendlyError";
@@ -315,8 +315,21 @@ function RestoreAccountPage({
 
 function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
   const { locale, t } = useLocale();
-  const inviteFromUrl = new URLSearchParams(window.location.search).get("invite") ?? "";
-  const [invite, setInvite] = useState(inviteFromUrl);
+  const [invite, setInvite] = useState(() => accountInvitationFromFragment(window.location.hash)
+    ?? new URLSearchParams(window.location.search).get("invite") ?? "");
+  useEffect(() => {
+    if (accountInvitationFromFragment(window.location.hash) !== null) {
+      window.history.replaceState(window.history.state, "", "/register");
+    }
+
+    // Opening another invitation on /register changes only the fragment.
+    // Give it a fresh form, as with direct navigation to a registration link.
+    function reloadForInvitation() {
+      if (accountInvitationFromFragment(window.location.hash) !== null) window.location.reload();
+    }
+    window.addEventListener("hashchange", reloadForInvitation);
+    return () => window.removeEventListener("hashchange", reloadForInvitation);
+  }, []);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -339,6 +352,7 @@ function RegisterPage({ navigate }: { navigate: (route: Route) => void }) {
         preferred_locale: locale,
       });
       window.history.replaceState({}, "", "/register");
+      setInvite("");
       setComplete(result.verification_email_sent ? "registrationEmailSent" : "registrationEmailFailed");
     } catch (caught) {
       setError(caught);

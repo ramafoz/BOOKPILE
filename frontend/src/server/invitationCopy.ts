@@ -33,6 +33,16 @@ export function accountInvitationMessage(locale: AppLocale, url: string): string
   return invitationCatalogue(locale).account(url);
 }
 
+export function privateAccountInvitationLink(origin: string, token: string): string {
+  const url = new URL("/register", origin);
+  url.hash = new URLSearchParams({ invite: token }).toString();
+  return url.href;
+}
+
+export function accountInvitationFromFragment(hash: string): string | null {
+  return new URLSearchParams(hash.slice(1)).get("invite");
+}
+
 export function libraryInvitationMessage(locale: AppLocale, url: string, libraryName: string, role: LibraryInvitationRole, scope: LibraryInvitationScope): string {
   return invitationCatalogue(locale).library(url, libraryName, role, scope);
 }

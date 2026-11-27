@@ -751,6 +751,7 @@ export type AdminAccountDetail = AdminAccountSummary & {
 };
 
 export type AdminAccountPage = { accounts: AdminAccountSummary[]; next_offset: number | null };
+export type CreatedAdminAccountInvitation = { invitation_id: string; raw_token: string; expires_at: string };
 
 function adminCsrfHeaders(): Headers {
   const headers = new Headers();
@@ -786,6 +787,9 @@ export const serverApi = {
   verifyAdminStepUp: (credential: unknown) => request<{ expires_at: string }>(
     "/admin/access/step-up/verify",
     { method: "POST", headers: adminCsrfHeaders(), body: JSON.stringify({ credential }) }, true,
+  ),
+  createAdminAccountInvitation: () => request<CreatedAdminAccountInvitation>(
+    "/admin/account-invitations/create", { method: "POST", headers: adminCsrfHeaders(), cache: "no-store" }, true,
   ),
   revokeAdminAccountInvitation: (invitationId: string) => request<void>(
     "/admin/account-invitations/revoke",
