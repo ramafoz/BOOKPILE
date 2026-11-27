@@ -262,6 +262,8 @@ def test_every_unsafe_route_has_an_explicit_mutation_disposition() -> None:
         # session maintenance requires an already-authenticated admin session.
         "admin_webauthn_options",
         "admin_webauthn_verify",
+        "admin_step_up_options",
+        "admin_step_up_verify",
         "admin_session",
         "admin_logout",
     }

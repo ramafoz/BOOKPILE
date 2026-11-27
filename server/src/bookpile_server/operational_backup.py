@@ -79,6 +79,18 @@ BEGIN
                       challenge_session_id, challenge_expires_at, session_hash,
                       csrf_hash, parent_session_id, last_active_at, absolute_expires_at)
             ON public.platform_admin_access TO bookpile_runtime;
+        IF EXISTS (
+            SELECT 1 FROM pg_attribute
+            WHERE attrelid = 'public.platform_admin_access'::regclass
+              AND attname = 'step_up_session_hash' AND NOT attisdropped
+        ) THEN
+            UPDATE public.platform_admin_access
+            SET step_up_session_hash = NULL, step_up_challenge = NULL,
+                step_up_challenge_expires_at = NULL, step_up_verified_at = NULL;
+            GRANT UPDATE (step_up_session_hash, step_up_challenge,
+                          step_up_challenge_expires_at, step_up_verified_at)
+                ON public.platform_admin_access TO bookpile_runtime;
+        END IF;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'bookpile_backup') THEN
         GRANT bookpile_admin_audit_backup TO bookpile_backup;

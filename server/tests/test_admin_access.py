@@ -7,6 +7,7 @@ from uuid import uuid4
 import cbor2
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi import Response
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import delete
@@ -38,7 +39,7 @@ class Authenticator:
         self.credential_id = uuid4().bytes
         self.counter = 0
 
-    def proof(self, options, *, origin=ORIGIN, verified=True, cross_origin=False):
+    def proof(self, options, *, origin=ORIGIN, rp="testserver", verified=True, cross_origin=False):
         registration = options["ceremony"] == "registration"
         client = json.dumps({
             "type": "webauthn.create" if registration else "webauthn.get",
@@ -46,7 +47,7 @@ class Authenticator:
             "origin": origin,
             "crossOrigin": cross_origin,
         }).encode()
-        rp_hash = sha256(b"testserver").digest()
+        rp_hash = sha256(rp.encode()).digest()
         flags = 1 | (4 if verified else 0) | (64 if registration else 0)
         auth_data = rp_hash + bytes([flags]) + self.counter.to_bytes(4, "big")
         response = {"clientDataJSON": encoded(client)}
@@ -72,6 +73,11 @@ def operator(session, monkeypatch):
     settings = get_settings()
     app = create_app()
     app.dependency_overrides[get_session] = lambda: session
+
+    @app.post(f"{PREFIX}/test-protected-action", status_code=204)
+    def protected_action(_step_up: admin_access.AdminStepUp):
+        return Response(status_code=204)
+
     now = datetime.now(UTC)
     user = User(username="test_operator", email="operator@example.test", password_hash="unused",
                 state="active", email_verified_at=now)
@@ -112,8 +118,8 @@ def options(browser):
     return response.json()
 
 
-def open_session(browser):
-    key = Authenticator()
+def open_session(browser, key=None):
+    key = key or Authenticator()
     registration = key.proof(options(browser))
     registered = browser.post(f"{PREFIX}/verify", json={**registration, "confirmation": CODE})
     assert registered.json() == {"registered": True}
@@ -216,3 +222,154 @@ def test_registration_confirmation_and_proof_limits(operator, session):
         assert browser.post(f"{PREFIX}/verify", json={}).status_code == 403
     # Forwarding headers from an untrusted peer cannot evade the limit.
     assert browser.post(f"{PREFIX}/verify", json={}, headers={"X-Forwarded-For": "192.0.2.9"}).status_code == 429
+
+
+def step_up_proof(browser, headers, key, **kwargs):
+    response = browser.post(f"{PREFIX}/step-up/options", headers=headers)
+    assert response.status_code == 200
+    public_key = response.json()["public_key"]
+    assert public_key["userVerification"] == "required"
+    assert public_key["allowCredentials"] == [{"id": encoded(key.credential_id), "type": "public-key"}]
+    return key.proof(response.json(), **kwargs)
+
+
+def freeze_admin_clock(monkeypatch, start):
+    class Clock(datetime):
+        current = start
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(admin_access, "datetime", Clock)
+    return Clock
+
+
+def test_step_up_requires_its_own_assertion_and_expires_at_five_minutes(operator, session, monkeypatch):
+    browser, user_id, *_ = operator
+    access = prepare(session, user_id)
+    key = Authenticator()
+    protected = f"{PREFIX}/test-protected-action"
+    verify = f"{PREFIX}/step-up/verify"
+    assert browser.post(f"{PREFIX}/step-up/options").status_code == 401
+    assert browser.post(verify, json={}).status_code == 401
+    assert browser.post(protected).status_code == 401
+    headers = open_session(browser, key)
+    started = admin_access.utc_value(access.last_active_at)
+    clock = freeze_admin_clock(monkeypatch, started)
+    assert browser.post(protected, headers=headers).status_code == 403
+    proof = step_up_proof(browser, headers, key)
+    assert browser.post(protected, headers=headers).status_code == 403
+    clock.current += timedelta(seconds=10)
+    verified = browser.post(verify, headers=headers, json=proof)
+    assert verified.status_code == 200
+    assert not verified.headers.get_list("set-cookie")
+    expires = clock.current + timedelta(minutes=5)
+    assert datetime.fromisoformat(verified.json()["expires_at"]) == expires
+    assert browser.post(verify, headers=headers, json=proof).status_code == 403
+    assert browser.post(protected, headers=headers).status_code == 204
+    clock.current = expires - timedelta(microseconds=1)
+    assert browser.get("/api/v1/auth/me").status_code == 200
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+    assert browser.post(protected, headers=headers).status_code == 204
+    clock.current = expires
+    assert browser.post(protected, headers=headers).status_code == 403
+    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+
+
+def test_step_up_enforces_origin_csrf_rp_and_user_verification(operator, session):
+    browser, user_id, *_ = operator
+    prepare(session, user_id)
+    key = Authenticator()
+    headers = open_session(browser, key)
+    verify = f"{PREFIX}/step-up/verify"
+    protected = f"{PREFIX}/test-protected-action"
+    valid = step_up_proof(browser, headers, key)
+    for invalid in ({"Origin": "https://other.example"}, {"X-CSRF-Token": "wrong"}, {"X-Admin-CSRF-Token": "wrong"}):
+        for route in ("step-up/options", "step-up/verify"):
+            assert browser.post(f"{PREFIX}/{route}", headers=headers | invalid, json=valid).status_code == 403
+    assert browser.post(verify, headers=headers, json=valid).status_code == 200
+    for invalid in ({"Origin": "https://other.example"}, {"X-CSRF-Token": "wrong"}, {"X-Admin-CSRF-Token": "wrong"}):
+        assert browser.post(protected, headers=headers | invalid).status_code == 403
+
+    for invalid in ({"origin": "https://other.example"}, {"rp": "other.example"},
+                    {"verified": False}, {"cross_origin": True}):
+        proof = step_up_proof(browser, headers, key, **invalid)
+        assert browser.post(verify, headers=headers, json=proof).json()["detail"] == "WebAuthn proof was rejected"
+        assert browser.post(verify, headers=headers, json=proof).json()["detail"] == "WebAuthn challenge is unavailable"
+
+
+def test_step_up_challenge_and_proof_follow_the_admin_session_and_role(operator, session):
+    browser, user_id, *_ = operator
+    prepare(session, user_id)
+    key = Authenticator()
+    headers = open_session(browser, key)
+    verify = f"{PREFIX}/step-up/verify"
+    protected = f"{PREFIX}/test-protected-action"
+    proof = step_up_proof(browser, headers, key)
+    normal_cookie = get_settings().session_cookie_name
+    browser.cookies.set(normal_cookie, "alternate")
+    assert browser.post(verify, headers=headers, json=proof).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+    assert browser.post(verify, headers=headers, json=proof).status_code == 200
+    pending = step_up_proof(browser, headers, key)
+    browser.cookies.set(normal_cookie, "alternate")
+    assert browser.post(protected, headers=headers).status_code == 401
+    browser.cookies.set(normal_cookie, "primary")
+    assert browser.post(f"{PREFIX}/verify", json=key.proof(options(browser))).status_code == 200
+    headers = {"X-Admin-CSRF-Token": browser.cookies[admin_access.ADMIN_CSRF_COOKIE]}
+    assert browser.post(verify, headers=headers, json=pending).status_code == 403
+    assert browser.post(protected, headers=headers).status_code == 403
+    assert browser.post(verify, headers=headers, json=step_up_proof(browser, headers, key)).status_code == 200
+    pending = step_up_proof(browser, headers, key)
+    session.execute(delete(PlatformRole).where(PlatformRole.user_id == user_id))
+    session.commit()
+    assert browser.post(verify, headers=headers, json=pending).status_code == 403
+    assert browser.post(protected, headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize("absolute", [False, True])
+def test_step_up_respects_admin_idle_and_absolute_deadlines(operator, session, monkeypatch, absolute):
+    browser, user_id, *_ = operator
+    access = prepare(session, user_id)
+    key = Authenticator()
+    headers = open_session(browser, key)
+    started = admin_access.utc_value(access.last_active_at)
+    clock = freeze_admin_clock(monkeypatch, started)
+    deadline = started + timedelta(minutes=30 if absolute else 15)
+    if absolute:
+        clock.current = started + timedelta(minutes=14)
+        assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+        clock.current += timedelta(minutes=14)
+        assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
+    last_active_at = admin_access.utc_value(access.last_active_at)
+    clock.current = deadline - timedelta(seconds=30)
+    verify = f"{PREFIX}/step-up/verify"
+    result = browser.post(verify, headers=headers, json=step_up_proof(browser, headers, key))
+    assert result.status_code == 200
+    assert datetime.fromisoformat(result.json()["expires_at"]) == deadline
+    assert admin_access.utc_value(access.last_active_at) == last_active_at
+    pending = step_up_proof(browser, headers, key)
+    protected = f"{PREFIX}/test-protected-action"
+    assert browser.post(protected, headers=headers).status_code == 204
+    clock.current = deadline
+    assert browser.post(protected, headers=headers).status_code == 401
+    assert browser.post(verify, headers=headers, json=pending).status_code == 401
+    assert browser.post(f"{PREFIX}/step-up/options", headers=headers).status_code == 401
+
+
+def test_step_up_challenge_cannot_be_used_for_sign_in_and_expires(operator, session, monkeypatch):
+    browser, user_id, *_ = operator
+    access = prepare(session, user_id)
+    key = Authenticator()
+    headers = open_session(browser, key)
+    clock = freeze_admin_clock(monkeypatch, admin_access.utc_value(access.last_active_at))
+    proof = step_up_proof(browser, headers, key)
+    login_options = options(browser)
+    assert browser.post(f"{PREFIX}/verify", json=proof).status_code == 403
+    verify = f"{PREFIX}/step-up/verify"
+    assert browser.post(verify, headers=headers, json=key.proof(login_options)).status_code == 403
+    proof = step_up_proof(browser, headers, key)
+    clock.current += admin_access.CHALLENGE_LIFETIME
+    assert browser.post(verify, headers=headers, json=proof).status_code == 403
+    assert browser.post(f"{PREFIX}/test-protected-action", headers=headers).status_code == 403

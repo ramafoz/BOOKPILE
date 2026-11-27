@@ -1700,16 +1700,17 @@ memberships in place.
 
 ### First platform passkey and admin session
 
-Migration `0027_platform_admin_access` must be installed before enabling
+Migration `0028_admin_webauthn_step_up` must be installed before enabling
 `BOOKPILE_SERVER_ADMIN_WEBAUTHN_ENABLED=true` in the approved API runtime
 configuration. Use the environment's canonical HTTPS origin in
 `BOOKPILE_SERVER_PUBLIC_BASE_URL`. The passkey is scoped to that exact hostname
 and origin, so staging and production use separate enrolments. Keep the
 feature disabled during application rollback or while reconciling platform
-assignments and credentials after a database recovery. Migration downgrade
-refuses to discard populated admin access data. A restored snapshot preserves
-registered keys, while pending confirmations, challenges and sessions expire
-as part of database recovery.
+assignments and credentials after a database recovery. Apply `0028` before
+starting the new API. Its downgrade drops reverification state. Downgrading
+through `0027_platform_admin_access` refuses to discard populated admin access
+data. A restored snapshot preserves registered keys and discards pending
+confirmations, challenges, sessions and reverifications.
 
 Sign into the target account normally and open `/admin-access` on the approved
 origin in a current browser. If already signed in, first reload the ordinary
@@ -1739,9 +1740,23 @@ after an unused code expires. Loss or compromise of the registered key requires
 the authorized role revocation procedure, which removes the registered key,
 challenge and session. A subsequent role enrolment requires a new preparation
 and passkey registration. Ending the admin session leaves the normal account
-session open. Successful admin requests extend the idle window to 15 minutes
+session open. Checking the admin session extends the idle window to 15 minutes
 within the fixed 30-minute maximum. A new admin sign-in replaces the previous
 admin session for that account.
+
+The Server API issues reverification options at `POST /api/v1/admin/access/step-up/options`
+and accepts the signed assertion as `credential` at `POST /api/v1/admin/access/step-up/verify`.
+Both requests require the canonical origin, ordinary and admin sessions, both
+CSRF tokens and the current platform assignment. Each challenge is specific to
+the admin session, expires after two minutes, and can be used for one assertion
+attempt. Verification uses the registered key and requires authenticator PIN
+or biometric verification. The server measures five minutes from successful
+verification and rejects it at the five-minute boundary or when the admin
+session expires. Checking the session does not refresh reverification.
+
+Use the `AdminStepUp` dependency on each applicable platform action and keep
+the action in the transaction that holds the admin access row lock. Each route
+also enforces its own authorization, scope, audit and confirmation requirements.
 
 Break-glass access is an off-host custodied operator credential used only when
 normal deployment access is unavailable. It requires provider MFA, a second

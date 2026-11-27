@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from multiprocessing import get_context
 from pathlib import Path
+from threading import Barrier
 from time import monotonic, sleep
 from uuid import uuid4
 
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from bookpile_server import platform_enrolment
 from bookpile_server.admin_audit import verify
 from bookpile_server.api import dependencies as api_dependencies
+from bookpile_server.api.routes.admin_access import ADMIN_CSRF_COOKIE
 from bookpile_server.config import Settings, get_settings
 from bookpile_server.database import get_session
 from bookpile_server.general_api_limits import GeneralApiRateLimitMiddleware
@@ -88,7 +90,7 @@ from bookpile_server.services.readings import ReadingConflictError, ReadingServi
 from bookpile_server.services.storage import StorageService
 from bookpile_server.services.storage_accounting import calculate_library_logical_bytes
 
-from test_admin_access import Authenticator, CODE, CSRF, ORIGIN, PREFIX, options
+from test_admin_access import Authenticator, CODE, CSRF, ORIGIN, PREFIX, options, step_up_proof
 from bookpile_server.services.storage_domain import InsufficientSharedCapacity
 
 
@@ -278,6 +280,36 @@ def test_postgresql_host_platform_enrolment_is_atomic_and_audited(monkeypatch) -
                     with ThreadPoolExecutor(max_workers=2) as pool:
                         attempts = [pool.submit(browser.post, f"{PREFIX}/verify", json=assertion) for _ in range(2)]
                         assert sorted(attempt.result(timeout=10).status_code for attempt in attempts) == [200, 403]
+
+                    headers = {"X-Admin-CSRF-Token": browser.cookies[ADMIN_CSRF_COOKIE]}
+                    proof = step_up_proof(browser, headers, key)
+                    start = Barrier(2)
+
+                    def verify_step_up():
+                        start.wait(timeout=5)
+                        return browser.post(f"{PREFIX}/step-up/verify", headers=headers, json=proof)
+
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        attempts = [pool.submit(verify_step_up) for _ in range(2)]
+                        accepted, rejected = sorted((attempt.result(timeout=10) for attempt in attempts),
+                                                    key=lambda response: response.status_code)
+                    assert accepted.status_code == 200
+                    assert rejected.status_code == 403
+                    assert rejected.json()["detail"] == "WebAuthn challenge is unavailable"
+                    with Session(engine) as session:
+                        access = session.get(PlatformAdminAccess, target)
+                        assert access.step_up_challenge is access.step_up_challenge_expires_at is None
+                        assert access.step_up_verified_at is not None
+                        assert access.sign_count == key.counter - 1
+
+                    command.downgrade(alembic, "0027_platform_admin_access")
+                    command.upgrade(alembic, "head")
+                    with Session(engine) as session:
+                        access = session.get(PlatformAdminAccess, target)
+                        assert access.credential_id == key.credential_id
+                        assert access.sign_count == key.counter - 1
+                        assert access.step_up_session_hash is access.step_up_verified_at is None
+                    assert browser.post(f"{PREFIX}/session", headers=headers).status_code == 200
         finally:
             get_settings.cache_clear()
             runtime.dispose()
@@ -728,6 +760,8 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                     challenge_session_id=uuid4(), challenge_expires_at=now + timedelta(minutes=2),
                     session_hash="b" * 64, csrf_hash="c" * 64, parent_session_id=uuid4(),
                     last_active_at=now, absolute_expires_at=now + timedelta(minutes=30),
+                    step_up_session_hash="b" * 64, step_up_challenge=b"reverification-challenge",
+                    step_up_challenge_expires_at=now + timedelta(minutes=2), step_up_verified_at=now,
                 ))
             with engine.connect() as snapshot_connection:
                 transaction = snapshot_connection.begin()
@@ -752,14 +786,17 @@ def test_postgresql_migration_and_tenant_scope(tmp_path: Path) -> None:
                     assert restored.execute(text(
                         "SELECT credential_id, public_key, sign_count, bootstrap_expires_at <= now(), "
                         "challenge, challenge_session_id, challenge_expires_at, session_hash, csrf_hash, "
-                        "parent_session_id, last_active_at, absolute_expires_at FROM platform_admin_access"
-                    )).one() == (b"credential", b"public-key", 5, True, *([None] * 8))
+                        "parent_session_id, last_active_at, absolute_expires_at, step_up_session_hash, "
+                        "step_up_challenge, step_up_challenge_expires_at, step_up_verified_at FROM platform_admin_access"
+                    )).one() == (b"credential", b"public-key", 5, True, *([None] * 12))
                     assert restored.execute(text(
                         "SELECT has_column_privilege('bookpile_runtime', 'platform_admin_access', "
                         "'session_hash', 'UPDATE'), has_column_privilege('bookpile_runtime', "
+                        "'platform_admin_access', 'step_up_verified_at', 'UPDATE'), "
+                        "has_column_privilege('bookpile_runtime', "
                         "'platform_admin_access', 'bootstrap_hash', 'UPDATE'), "
                         "has_table_privilege('bookpile_runtime', 'platform_admin_access', 'INSERT')"
-                    )).one() == (True, False, False)
+                    )).one() == (True, True, False, False)
                     for privilege, expected in (
                         ("SELECT", True), ("INSERT", False), ("UPDATE", False),
                         ("DELETE", False), ("TRUNCATE", False),
